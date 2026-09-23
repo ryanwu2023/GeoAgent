@@ -1,0 +1,25 @@
+{
+  "schema_version": "collectors/1",
+  "collectors": [
+    {"id":"asset-transmission-monitor","name_zh":"资产传导监测","topics":["usiran","ukraine"],"entrypoint":"asset_transmission_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"defense-spend-monitor","name_zh":"军费与补给监测","topics":["usiran"],"entrypoint":"spend_monitor.py","selftest_args":["--selftest"],"output_kind":"records-and-metrics","enabled":true},
+    {"id":"diplomacy-monitor","name_zh":"美伊外交斡旋监测","topics":["usiran"],"entrypoint":"diplomacy_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"eu-domestic-monitor","name_zh":"欧盟内政监测","topics":["ukraine"],"entrypoint":"eu_domestic_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"finance-front-monitor","name_zh":"金融战线监测","topics":["usiran"],"entrypoint":"finance_monitor.py","selftest_args":["--selftest"],"output_kind":"finance-series","enabled":true},
+    {"id":"iran-domestic-monitor","name_zh":"伊朗内政监测","topics":["usiran"],"entrypoint":"iran_domestic_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"iran-escalation-monitor","name_zh":"伊朗升级线索监测","topics":["usiran"],"entrypoint":"iran_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"israel-monitor","name_zh":"以色列动态监测","topics":["usiran"],"entrypoint":"israel_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"market-context-monitor","name_zh":"市场背景补充","topics":["usiran","ukraine"],"entrypoint":"../../scripts/supplement_market.py","selftest_args":[],"output_kind":"geo-v6","enabled":true},
+    {"id":"mideast-monitor","name_zh":"中东地区监测","topics":["usiran"],"entrypoint":"mideast_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"naval-monitor","name_zh":"海军动态监测","topics":["usiran"],"entrypoint":"naval_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"opinion-monitor","name_zh":"美国民意监测","topics":["usiran"],"entrypoint":"opinion_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"readiness-monitor","name_zh":"美伊战备表态监测","topics":["usiran"],"entrypoint":"readiness_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"ru-diplomacy-monitor","name_zh":"俄乌外交斡旋监测","topics":["ukraine"],"entrypoint":"ru_diplomacy_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"russia-domestic-monitor","name_zh":"俄罗斯内政监测","topics":["ukraine"],"entrypoint":"russia_domestic_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"ua-front-monitor","name_zh":"俄乌军事战线监测","topics":["ukraine"],"entrypoint":"ua_front_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"ukraine-aid-monitor","name_zh":"乌克兰后援监测","topics":["ukraine"],"entrypoint":"ukraine_aid_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"xinhua-monitor","name_zh":"新华社冲突动态监测","topics":["usiran","ukraine"],"entrypoint":"xinhua_monitor.py","selftest_args":["--selftest"],"output_kind":"geo-v6","enabled":true},
+    {"id":"taco-monitor","name_zh":"TACO资产压力监测","topics":["usiran"],"entrypoint":"taco_monitor.py","selftest_args":["--selftest"],"output_kind":"taco","enabled":true}
+  ]
+}
+

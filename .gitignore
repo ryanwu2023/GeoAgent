@@ -9,3 +9,14 @@ data/
 *.tsbuildinfo
 .worktrees/
 .superpowers/
+collectors/*/output/
+collectors/**/__pycache__/
+collectors/**/*.pyc
+collectors/**/logs/
+collectors/**/_probe*/
+collectors/**/*.bak*
+*.sqlite
+*.sqlite3
+*.db
+*.bin
+*.argomodel
