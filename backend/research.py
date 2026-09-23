@@ -38,12 +38,25 @@ def metric_view(obs, start="", end=""):
 
 def metrics(snapshot, topic="all", dimension="", start="", end=""):
     topic_series={
-        "usiran":{"brent","wti","gold","dxy","hormuz_total","hormuz_tanker","hormuz_capacity_tanker","hormuz_ma7","hormuz_tanker_share","babelmandeb_total","babelmandeb_tanker","mab_ma7","spr","crude_stocks","xle","ita","ta125","vix","breakeven10","breakeven10_fred","dgs10","real10y_treasury","hy_oas"},
-        "ukraine":{"ttf_gas","natgas","brent","wheat","corn","gold","eurusd","usdrub","usduah","suez_total","cape_total","cape_vs_suez","bdi","sp500","vix","hy_oas","ig_oas","dgs10"},
+        "usiran":{"brent","wti","gold","dxy","djia","hormuz_total","hormuz_tanker","hormuz_capacity_tanker","hormuz_ma7","hormuz_tanker_share","babelmandeb_total","babelmandeb_tanker","mab_ma7","spr","crude_stocks","xle","ita","ta125","vix","breakeven10","breakeven10_fred","dgs10","real10y_treasury","hy_oas"},
+        "ukraine":{"ttf_gas","natgas","brent","wheat","corn","gold","djia","eurusd","usdrub","usduah","suez_total","cape_total","cape_vs_suez","bdi","sp500","vix","hy_oas","ig_oas","dgs10"},
     }
-    return [freshness(metric_view(o, start, end), end or snapshot.get("created_at",now())) for o in snapshot["observations"]
-            if (topic == "all" or o.get("topic") == topic or (o.get("shared_market") and o.get("series") in topic_series.get(topic,set())) or (topic == "usiran" and o.get("topic") is None and not o.get("shared_market")))
-            and (not dimension or o.get("dimension") == dimension)]
+    candidates=[o for o in snapshot["observations"]
+                if (topic == "all" or o.get("topic") == topic or (o.get("shared_market") and o.get("series") in topic_series.get(topic,set())) or (topic == "usiran" and o.get("topic") is None and not o.get("shared_market")))
+                and (not dimension or o.get("dimension") == dimension)]
+    # TACO's INDU input and the shared finance feed are the same market concept.
+    # Prefer the theme-bound TACO series on the US-Iran page and avoid duplicate cards.
+    aliases={"INDU":"djia","RCPPTAPP_approve":"trump_approval","taco_trump_approval":"trump_approval"}
+    selected=[];positions={}
+    for observation in candidates:
+        key=aliases.get(observation.get("series"),observation.get("series") or observation.get("id"))
+        if key in positions:
+            current=selected[positions[key]]
+            if topic!="all" and observation.get("topic")==topic and current.get("topic")!=topic:
+                selected[positions[key]]=observation
+            continue
+        positions[key]=len(selected);selected.append(observation)
+    return [freshness(metric_view(o, start, end), end or snapshot.get("created_at",now())) for o in selected]
 
 def candidates(records, terms, limit=5):
     records=[r for r in records if not r.get("supplemental")]
@@ -65,7 +78,7 @@ def analysis(snapshot, topic="all", dimension="", start="", end=""):
     # Matched material is a retrieval lead, never automatically supporting evidence.
     assets = [{**{k: v for k, v in a.items() if k != "terms"}, "direction": "证据不足", "change": "尚未形成经核验的方向判断", "market": "未接入对应市场验证数据", "evidence_ids": candidates(records, a["terms"]), "evidence_role": "待核验线索；不等同支持证据", "rule_version": RULE_VERSION} for a in ASSETS]
     market_series=metrics(snapshot,topic,"",start,end)
-    market_map={'equity':['sp500','nasdaq','xle','ita'],'rates':['dgs2','dgs10','real10y_treasury','yield_10y2y','breakeven10_fred'],'credit':['hy_oas','ig_oas','hyg','vix'],'commodity':['brent','wti','gold','natgas','spr','hormuz_total'],'fx':['dxy','usdcny','eurusd']}
+    market_map={'equity':['sp500','djia','INDU','nasdaq','xle','ita'],'rates':['dgs2','dgs10','real10y_treasury','yield_10y2y','breakeven10_fred'],'credit':['hy_oas','ig_oas','hyg','vix'],'commodity':['brent','wti','gold','natgas','spr','hormuz_total'],'fx':['dxy','usdcny','eurusd']}
     for asset in assets:
         matched=[m for series in market_map[asset['id']] for m in market_series if m.get('series')==series and m['current'] and m['current']['value'] is not None]
         if matched:

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
@@ -27,12 +27,13 @@ import type {
   Workspace,
 } from "./types";
 import ReviewPanel from "./ReviewPanel";
-import MapView from "./MapView";
 import MetricChart from "./MetricChart";
 import MetricGuide from "./MetricGuide";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { briefPresentation } from "./briefPresentation";
+
+const MapView = lazy(() => import("./MapView"));
 
 const tierName = (tier: string) =>
   ({ T1: "一级来源", T2: "二级来源", T3: "三级来源", T4: "四级来源" })[tier] ||
@@ -40,6 +41,7 @@ const tierName = (tier: string) =>
 const chineseMetric = (s: string) =>
   s
     .replace("Treasury MTS net outlay", "美国财政部月度净支出")
+    .replace("美国总统支持率聚合", "特朗普支持率（Silver Bulletin 聚合）")
     .replace("(FMS)", "（对外军售）")
     .replace("(FMF)", "（对外军事融资）");
 const names: Record<string, string> = {
@@ -49,8 +51,22 @@ const names: Record<string, string> = {
   briefs: "研究简报",
 };
 
-const metricCategory = (m: Metric) =>
-  m.shared_market ? (m.bucket === "shipping" ? "动态" : "经济") : "军事";
+const metricCategory = (m: Metric) => {
+  if (
+    ["RCPPTAPP_approve", "taco_trump_approval"].includes(m.series || "") ||
+    /特朗普.*支持率|总统支持率/.test(m.name)
+  )
+    return "民调";
+  if (m.bucket === "shipping") return "动态";
+  if (
+    m.shared_market ||
+    ["market", "equity", "rates", "credit", "commodity", "fx"].includes(
+      m.bucket || "",
+    )
+  )
+    return "经济";
+  return "军事";
+};
 const movementClass = (m: Metric) =>
   m.delta == null || m.delta === 0 ? "flat" : m.delta > 0 ? "up" : "down";
 export default function App() {
@@ -204,7 +220,7 @@ export default function App() {
         .then(setBriefs)
         .catch(() => {});
     }
-  }, [sid, topic, dimension, start, end]);
+  }, [sid, topic, dimension]);
   useEffect(() => {
     const close = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -539,25 +555,21 @@ export default function App() {
                 "center-view " + (tab === "map" ? "map-view" : "scroll-view")
               }
             >
-              {
+              {tab === "map" &&
                 <div
-                  style={{
-                    display: tab === "map" ? "block" : "none",
-                    height: "100%",
-                    width: "100%",
-                    minWidth: 0,
-                    flex: 1,
-                  }}
+                  style={{ height: "100%", width: "100%", minWidth: 0, flex: 1 }}
                 >
-                  <MapView
-                    records={work.records}
-                    topic={topic}
-                    resetKey={resetKey}
-                    onSelect={(r) => {
-                      openEvidence(r.id);
-                      setAsset(null);
-                    }}
-                  />
+                  <Suspense fallback={<div className="empty"><RefreshCw className="spin" />正在加载地图…</div>}>
+                    <MapView
+                      records={work.records}
+                      topic={topic}
+                      resetKey={resetKey}
+                      onSelect={(r) => {
+                        openEvidence(r.id);
+                        setAsset(null);
+                      }}
+                    />
+                  </Suspense>
                 </div>
               }
               {tab === "evidence" && (
@@ -642,11 +654,11 @@ export default function App() {
                           onClick={() => setMetricGroup(g)}
                         >
                           {g}{" "}
-                          {g === "民调"
-                            ? "待结构化"
-                            : work.metrics.filter(
-                                (m) => g === "全部" || metricCategory(m) === g,
-                              ).length}
+                          {
+                            work.metrics.filter(
+                              (m) => g === "全部" || metricCategory(m) === g,
+                            ).length
+                          }
                         </button>
                       ))}
                     </div>
@@ -654,7 +666,8 @@ export default function App() {
                       红色表示高于前值，绿色表示低于前值；只表示数值方向，不代表资产利好或利空。
                     </small>
                   </div>
-                  {metricGroup === "民调" && (
+                  {metricGroup === "民调" &&
+                    !work.metrics.some((m) => metricCategory(m) === "民调") && (
                     <article className="metric-card">
                       <h3>民调 · 调查口径待补全</h3>
                       <p>

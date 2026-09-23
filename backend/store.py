@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import sqlite3
+from functools import lru_cache
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,7 +45,14 @@ def snapshots():
     with db() as c:
         return [dict(r) for r in c.execute("SELECT id,created_at FROM snapshots ORDER BY created_at DESC")]
 
+@lru_cache(maxsize=2)
 def get_snapshot(sid):
+    """Load an immutable snapshot once per process.
+
+    Snapshot ids are content hashes, so a cached payload can never be changed by
+    a later import.  This avoids repeatedly decoding 20+ MB JSON blobs while a
+    researcher moves between views of the same snapshot.
+    """
     with db() as c:
         row = c.execute("SELECT payload,created_at FROM snapshots WHERE id=?", (sid,)).fetchone()
     if not row:

@@ -75,6 +75,37 @@ def present_record(record,cache=None):
             'title':title,'text':text,
             'source_name':source_name(record['source_name'],cache),'translation_note':review['status']+'。'+('；'.join(review['issues'])+'。' if review['issues'] else '')+'机器译文不等于语义已验证，请对照原文。'}
 
+def present_record_summary(record, cache=None, text_limit=600):
+    """Return the fields needed by lists and the map.
+
+    Full originals, extraction payloads and translation diagnostics remain
+    available from /api/evidence/{id}.  Keeping them out of /api/workspace
+    prevents every menu change from transferring the complete evidence corpus.
+    """
+    cache = translation_cache() if cache is None else cache
+    metadata = event_metadata(record)
+    metadata['points'] = [
+        {**p, 'label': chinese_text(p['label'], cache, '相关地区')}
+        for p in metadata['points']
+    ]
+    title = normalize_terms(record.get('title_zh') or chinese_text(record['title'], cache))
+    body = normalize_terms(record.get('summary_zh') or chinese_text(record['text'], cache))
+    if len(body) > text_limit:
+        body = body[:text_limit].rstrip() + '…'
+    keys = (
+        'id', 'url', 'source_id', 'tier', 'publisher', 'published_at',
+        'fetched_at', 'first_seen', 'event_at', 'party', 'nature',
+        'verification', 'classification', 'topics', 'dimensions', 'scope',
+        'supplemental', 'report_as_of',
+    )
+    return {
+        **{key: record.get(key) for key in keys if key in record},
+        **metadata,
+        'title': title,
+        'text': body,
+        'source_name': source_name(record['source_name'], cache),
+    }
+
 def present_answer(answer):
     cache=translation_cache()
     return {**answer,'facts':[{**f,'text':f['text'].replace(' USD',' 美元')} for f in answer['facts']],'citations':[present_record(r,cache) for r in answer['citations']]}

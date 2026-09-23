@@ -28,6 +28,14 @@ def test_taco_adapter_discards_non_finite_values():
     )
 
 
+def test_taco_adapter_labels_presidential_poll_as_trump_approval():
+    records, observations, sources = {}, [], []
+    load_taco(FIXTURE, records, observations, sources)
+    poll = next(x for x in observations if x["series"] == "RCPPTAPP_approve")
+    assert poll["name"] == "特朗普支持率（Silver Bulletin 聚合）"
+    assert poll["unit"] == "%"
+
+
 def test_taco_methodology_record_links_frozen_raw_file():
     records, observations, sources, manifests = {}, [], [], []
 

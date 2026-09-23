@@ -16,7 +16,7 @@ from .store import ROOT, snapshots, get_snapshot, save_snapshot, db, data_dir
 from .adapters import load_bundle
 from .research import filtered_records, metrics, analysis, coverage, answer, create_brief, model_status
 from .catalog import RULE_VERSION
-from .chinese import present_record, present_answer, translation_cache, source_name, start_translation, translation_status, localize_brief_markdown
+from .chinese import present_record, present_record_summary, present_answer, translation_cache, source_name, start_translation, translation_status, localize_brief_markdown
 from .paths import collector_read_root
 
 def load_env():
@@ -99,7 +99,7 @@ def workspace(snapshot_id: str, topic: Topic = "all", dimension: str = "", start
     a = analysis(s, topic, dimension, start, end)
     cache=translation_cache()
     reviews=review_index(snapshot_id)
-    return {"snapshot": {"id": s["id"], "created_at": s["created_at"], "stats": s["import_stats"], "errors": s["errors"]}, "topics": coverage(s, start, end), "records": [apply_review(present_record(r,cache), reviews.get(r["id"])) for r in records], "metrics": metrics(s, topic, dimension, start, end), "projects":s.get("projects",[]), "sources": [{**x,'name':source_name(x['name'],cache)} for x in s["sources"]], **a}
+    return {"snapshot": {"id": s["id"], "created_at": s["created_at"], "stats": s["import_stats"], "errors": s["errors"]}, "topics": coverage(s, start, end), "records": [apply_review(present_record_summary(r,cache), reviews.get(r["id"])) for r in records], "metrics": metrics(s, topic, dimension, start, end), "projects":s.get("projects",[]), "sources": [{**x,'name':source_name(x['name'],cache)} for x in s["sources"]], **a}
 
 @app.get("/api/evidence/{rid}")
 def evidence(rid: str, snapshot_id: str):

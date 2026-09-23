@@ -214,10 +214,15 @@ def test_takeaway_uses_recent_sources_and_excludes_future():
 def test_topic_metrics_are_distinct_but_keep_relevant_overlap():
     from backend.research import metrics
     s={'created_at':'2026-09-21T00:00:00+00:00','observations':[]}
-    for series in ('hormuz_total','ttf_gas','brent'):
+    for series in ('hormuz_total','ttf_gas','brent','djia'):
         s['observations'].append({'id':series,'series':series,'name':series,'unit':'美元','frequency':'日频','scope':'市场','method':'测试','boundary':'','source_ids':['x'],'history':[{'date':'2026-09-20','value':1}],'shared_market':True,'dimension':'financial'})
-    assert {m['series'] for m in metrics(s,'usiran')}=={'hormuz_total','brent'}
-    assert {m['series'] for m in metrics(s,'ukraine')}=={'ttf_gas','brent'}
+    s['observations'].append({'id':'taco:INDU','series':'INDU','name':'道琼斯工业指数','unit':'点','frequency':'日频','scope':'市场','method':'TACO 输入','boundary':'','source_ids':['taco'],'history':[{'date':'2026-09-20','value':1}],'topic':'usiran','dimension':'financial'})
+    s['observations'].append({'id':'shared-poll','series':'taco_trump_approval','name':'特朗普支持率','unit':'%','frequency':'日频','scope':'市场','method':'共享源','boundary':'','source_ids':['shared'],'history':[{'date':'2026-09-20','value':40}],'shared_market':True,'dimension':'financial'})
+    s['observations'].append({'id':'taco-poll','series':'RCPPTAPP_approve','name':'特朗普支持率','unit':'%','frequency':'日频','scope':'市场','method':'TACO 输入','boundary':'','source_ids':['taco'],'history':[{'date':'2026-09-20','value':40}],'topic':'usiran','dimension':'financial'})
+    assert {m['series'] for m in metrics(s,'usiran')}=={'hormuz_total','brent','INDU','RCPPTAPP_approve'}
+    assert {m['series'] for m in metrics(s,'ukraine')}=={'ttf_gas','brent','djia'}
+    assert len([m for m in metrics(s,'all') if m['series'] in {'djia','INDU'}])==1
+    assert len([m for m in metrics(s,'all') if m['series'] in {'taco_trump_approval','RCPPTAPP_approve'}])==1
 
 def test_huatai_brief_is_high_trust_supplemental_source(tmp_path):
     root=tmp_path/'crawlers';root.mkdir()

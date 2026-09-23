@@ -11,7 +11,7 @@ from pathlib import Path
 SERIES = {
     "USGG10YR": ("美国10年期国债收益率", "%", "FRED DGS10 原始水平"),
     "USSWIT1_proxy_T5YIE": ("美国5年期盈亏平衡通胀率代理", "%", "FRED T5YIE；作为原模型通胀互换的公开代理"),
-    "RCPPTAPP_approve": ("美国总统支持率聚合", "%", "Silver Bulletin / Datawrapper 聚合值"),
+    "RCPPTAPP_approve": ("特朗普支持率（Silver Bulletin 聚合）", "%", "Silver Bulletin / Datawrapper 聚合值"),
     "INDU": ("道琼斯工业指数", "点", "公开市场指数水平"),
     "CO1_Brent": ("布伦特原油期货", "美元/桶", "ICE首月连续合约公开行情"),
     "TACO_Index_T": ("TACO资产压力指数", "z", "5 因子等权 z 分数合成后取7日均线"),

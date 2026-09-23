@@ -14,7 +14,7 @@ REQUIREMENTS = {
 
 def enrich(assets, metrics):
     by={m.get('series'):m for m in metrics if m.get('current') and m.get('previous') and m.get('delta') is not None and not m.get('quality_issue') and m.get('freshness') in (None,'可用')}
-    groups={'equity':['sp500','nasdaq','xle','ita'],'rates':['dgs2','dgs10'],'credit':['hy_oas','ig_oas'],'commodity':['brent','wti','gold','natgas'],'fx':['dxy','usdcny','eurusd']}
+    groups={'equity':['sp500','djia','INDU','nasdaq','xle','ita'],'rates':['dgs2','dgs10'],'credit':['hy_oas','ig_oas'],'commodity':['brent','wti','gold','natgas'],'fx':['dxy','usdcny','eurusd']}
     for a in assets:
         selected=[by[s] for s in groups[a['id']] if s in by]
         a['missing_data']=GAPS[a['id']]

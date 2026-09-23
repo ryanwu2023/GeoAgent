@@ -1,6 +1,7 @@
 import type {Metric} from './types';
 
 type Guide={meaning:string;reading:string;impact:string;limit:string};
+const displayName=(m:Metric)=>m.series==='RCPPTAPP_approve'?'特朗普支持率（Silver Bulletin 聚合）':m.name;
 const g=(meaning:string,reading:string,impact:string,limit:string):Guide=>({meaning,reading,impact,limit});
 const guides:Record<string,Guide>={};
 const add=(keys:string[],guide:Guide)=>keys.forEach(k=>guides[k]=guide);
@@ -34,6 +35,7 @@ add(['brent_vol20'],g('设计上应为近20个交易日日收益率标准差的�
 add(['brent_wti_spread'],g('布伦特原油价格减西得州中质原油价格。','扩大表示布伦特相对更贵；缩小表示两者价差收窄。','可能与地区供应、出口能力、运输和品质差异相关。','价差变化不能直接归因于某一冲突；需对齐合约与收盘时间。'));
 add(['oil_vs_energy'],g('布伦特20期涨幅减能源板块基金20期涨幅。','正值表示该窗口油价涨幅更高，负值表示能源股涨幅更高。','用于观察油价与能源股表现是否出现分化，追踪利润、成本与估值解释。','差值不是套利收益；两类资产暴露不同，当前缺少数据时不计算。'));
 add(['sp_drawdown60'],g('标普指数相对近60个观测期最高值的回撤比例。','通常为零或负值；越负代表距窗口高点越远，接近零代表回撤收复。','辅助观察权益市场压力与修复程度。','这是相对滚动窗口高点的当前回撤，不是窗口最大回撤或未来损失预测。'));
+add(['RCPPTAPP_approve','taco_trump_approval'],g('特朗普支持率的公开聚合序列，当前采用 Silver Bulletin / Datawrapper 的平滑聚合值。','上升表示聚合支持率提高，下降表示降低；页面变化只描述该聚合序列本身。','支持率变化可能影响政府推动军事行动、财政安排和外交政策的政治空间，并通过政策预期影响风险偏好；需要结合国会约束、具体议题民调和实际政策行动。','聚合值不是单次调查，也不代表所有选民或对某场冲突的支持率。上游可能修订历史值，周末前值填充不等于产生新调查。'));
 
 export function metricGuide(m:Metric):Guide{
   if(m.series&&guides[m.series])return guides[m.series];
@@ -43,5 +45,5 @@ export function metricGuide(m:Metric):Guide{
 
 export default function MetricGuide({metric:m}:{metric:Metric}){
  const guide=metricGuide(m);
- return <section className="metric-guide"><h2>{m.name} · 指标解读</h2><small>研究解释 · 条件作用，不是已确认的资产预测</small>{[['指标含义',guide.meaning],['如何看变化',guide.reading],['可能影响',guide.impact],['解释边界',guide.limit]].map(([title,text])=><div key={title}><h3>{title}</h3><p>{text}</p></div>)}<h3>统计与计算口径</h3><p>{m.scope} · {m.frequency||'频率未提供'} · {m.unit==='USD'?'美元（页面折算为亿美元）':m.unit}</p><p>{m.method.replace('Treasury MTS net outlay','美国财政部月度净支出')}</p><p>当前观测：{m.current?.date||'缺失'}；比较基准：{m.previous?.date||'历史不足'}，前 {m.comparison_step||1} 个观测期。</p>{m.boundary&&<p>{m.boundary}</p>}{m.quality_issue&&<p className="alert">{m.quality_issue}</p>}<h3>以下为来源记录与原始文件</h3></section>;
+ return <section className="metric-guide"><h2>{displayName(m)} · 指标解读</h2><small>研究解释 · 条件作用，不是已确认的资产预测</small>{[['指标含义',guide.meaning],['如何看变化',guide.reading],['可能影响',guide.impact],['解释边界',guide.limit]].map(([title,text])=><div key={title}><h3>{title}</h3><p>{text}</p></div>)}<h3>统计与计算口径</h3><p>{m.scope} · {m.frequency||'频率未提供'} · {m.unit==='USD'?'美元（页面折算为亿美元）':m.unit}</p><p>{m.method.replace('Treasury MTS net outlay','美国财政部月度净支出')}</p><p>当前观测：{m.current?.date||'缺失'}；比较基准：{m.previous?.date||'历史不足'}，前 {m.comparison_step||1} 个观测期。</p>{m.boundary&&<p>{m.boundary}</p>}{m.quality_issue&&<p className="alert">{m.quality_issue}</p>}<h3>以下为来源记录与原始文件</h3></section>;
 }
