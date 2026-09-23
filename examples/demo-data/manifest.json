@@ -1,7 +1,102 @@
 {
   "schema_version": "demo-data/1",
-  "record_count": 0,
-  "max_records_per_collector": 0,
-  "files": []
+  "record_count": 964,
+  "max_records_per_collector": 60,
+  "files": [
+    {
+      "path": "asset-transmission-monitor/output/ALL-records.jsonl",
+      "bytes": 53311,
+      "sha256": "f3fa66fc6787b2210ba6231eef22ecd7edc2aab5b6da4027566d1515d01d24fd"
+    },
+    {
+      "path": "defense-spend-monitor/output/ALL-records.jsonl",
+      "bytes": 53925,
+      "sha256": "c3a11339fea861c3d9218e7eba954484a669926375e52fd5c8252f97381315f5"
+    },
+    {
+      "path": "diplomacy-monitor/output/ALL-records.jsonl",
+      "bytes": 61173,
+      "sha256": "14fa1bd7ece0dd674e680c24bf542cdb024aa9bf55d622172ac59b709434680d"
+    },
+    {
+      "path": "eu-domestic-monitor/output/ALL-records.jsonl",
+      "bytes": 64215,
+      "sha256": "4f386680a61c03946b1b1afdc546724c17f32448376acec5f040f4549f467e7d"
+    },
+    {
+      "path": "iran-domestic-monitor/output/ALL-records.jsonl",
+      "bytes": 57611,
+      "sha256": "062e8ce0531a07f831f2049c7a4d255bbb0b4f9f2216c3ea3690a1a96d3ee800"
+    },
+    {
+      "path": "iran-escalation-monitor/output/ALL-records.jsonl",
+      "bytes": 86206,
+      "sha256": "ee8648d1ca6329538691232f456358e0e42f59fe7f802fa5d0fe1606cd3cd4a5"
+    },
+    {
+      "path": "israel-monitor/output/ALL-records.jsonl",
+      "bytes": 63669,
+      "sha256": "fbc3aa46fddcba1de51d923f46ce17b76c0648d0fdb7c03834999baca9fc6b1b"
+    },
+    {
+      "path": "mideast-monitor/output/ALL-records.jsonl",
+      "bytes": 54075,
+      "sha256": "a6432e2cac9836c348bb8c00a8e64fe024b499e71ba93e3161412ef8634e0317"
+    },
+    {
+      "path": "naval-monitor/output/ALL-records.jsonl",
+      "bytes": 208528,
+      "sha256": "2b182134b7131c275d948d9d3e6a4f324123d4e80ad1901bb3df4ff56caf7a20"
+    },
+    {
+      "path": "opinion-monitor/output/ALL-records.jsonl",
+      "bytes": 59302,
+      "sha256": "b6c2165c74cae60fba095d5c0512e73f158f50c5b10465152d08a40749d0193f"
+    },
+    {
+      "path": "readiness-monitor/output/ALL-records.jsonl",
+      "bytes": 78087,
+      "sha256": "d6c0a1cae019df790c48e1b38dea687979a4c2b51db2767ea463368bd26d363f"
+    },
+    {
+      "path": "ru-diplomacy-monitor/output/ALL-records.jsonl",
+      "bytes": 62223,
+      "sha256": "3bb8a645188f790d4d037f3696d63e7c84be23eebbf411e1cd78291a67c681b9"
+    },
+    {
+      "path": "russia-domestic-monitor/output/ALL-records.jsonl",
+      "bytes": 64625,
+      "sha256": "36b01256b9ba5f8af957adbac346d68204bd3c8e98589c032538d71b77337b6c"
+    },
+    {
+      "path": "ua-front-monitor/output/ALL-records.jsonl",
+      "bytes": 62465,
+      "sha256": "aece0398413b2ef757fbd5df77c716d924f187b4a8e866f7979ecc47ae60f2da"
+    },
+    {
+      "path": "ukraine-aid-monitor/output/ALL-records.jsonl",
+      "bytes": 58724,
+      "sha256": "7c95eaeb3062672f9ff32e0351d7cc1e52eb8e26688bfdd399da0c5e32d4eb1a"
+    },
+    {
+      "path": "market-context-monitor/output/geo-v6.json",
+      "bytes": 60361,
+      "sha256": "630043bba4ab56937b4f0e7d90f7412b6da44899e14f4dffbd0394d67b32d1ec"
+    },
+    {
+      "path": "xinhua-monitor/output/geo-v6.json",
+      "bytes": 162926,
+      "sha256": "c99bd2961f99f8409e4875521bac939b55ad0f36f8973c72230827949fd12b03"
+    },
+    {
+      "path": "taco-monitor/output/taco-latest.csv",
+      "bytes": 35913,
+      "sha256": "97515610ac8195bd89d345151e451b0423d34c7b0a3b72f716caa45afb38a473"
+    },
+    {
+      "path": "taco-monitor/output/_source_status.json",
+      "bytes": 12562,
+      "sha256": "0dfcb3bfe4227d0fc9e2303a9c3415edb61689f8c3b40d80543662ac0241c5af"
+    }
+  ]
 }
-

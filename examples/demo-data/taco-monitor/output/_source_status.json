@@ -1,0 +1,493 @@
+{
+  "run_date": "2026-09-23",
+  "gate_passed": true,
+  "statuses": [
+    {
+      "id": "USGG10YR",
+      "role": "index_input",
+      "provider": "FRED",
+      "tier": "official",
+      "status": "OK",
+      "n": 680,
+      "last_date": "2026-09-21",
+      "last_value": 4.96,
+      "channel": "curl",
+      "ua": "curl/8.19.0",
+      "elapsed": 1.0965304374694824,
+      "error": null,
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd=2024-01-01",
+      "http": 200,
+      "bytes": 11263,
+      "sha256_16": "b6e5cdaeeea86b7e",
+      "first_date": "2024-01-02",
+      "parse_meta": {
+        "n": 680,
+        "first_date": "2024-01-02",
+        "last_date": "2026-09-21",
+        "last_value": 4.96,
+        "header": [
+          "observation_date",
+          "DGS10"
+        ],
+        "skipped": 30
+      },
+      "proxy_decision": {
+        "reason": "direct-tested-ok",
+        "proxy": null,
+        "tested": true,
+        "env_RM_PROXY": null,
+        "env_proxy_vars_ignored": []
+      }
+    },
+    {
+      "id": "USSWIT1_proxy_T5YIE",
+      "role": "index_input",
+      "provider": "FRED",
+      "tier": "official",
+      "status": "OK",
+      "n": 681,
+      "last_date": "2026-09-22",
+      "last_value": 2.32,
+      "channel": "curl",
+      "ua": "curl/8.19.0",
+      "elapsed": 1.0111415386199951,
+      "error": null,
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T5YIE&cosd=2024-01-01",
+      "http": 200,
+      "bytes": 11279,
+      "sha256_16": "a2f41f47cb69cd09",
+      "first_date": "2024-01-02",
+      "parse_meta": {
+        "n": 681,
+        "first_date": "2024-01-02",
+        "last_date": "2026-09-22",
+        "last_value": 2.32,
+        "header": [
+          "observation_date",
+          "T5YIE"
+        ],
+        "skipped": 30
+      },
+      "proxy_decision": {
+        "reason": "direct-tested-ok",
+        "proxy": null,
+        "tested": true,
+        "env_RM_PROXY": null,
+        "env_proxy_vars_ignored": []
+      }
+    },
+    {
+      "id": "RCPPTAPP",
+      "role": "index_input",
+      "provider": "Silver Bulletin / Datawrapper",
+      "tier": "aggregator",
+      "status": "OK",
+      "n": 609,
+      "last_date": "2026-09-21",
+      "last_value": 38.59664,
+      "channel": "curl",
+      "ua": "curl/8.19.0",
+      "elapsed": 0.5274815559387207,
+      "error": null,
+      "url": "https://static.dwcdn.net/data/kSCt4.csv",
+      "http": 200,
+      "bytes": 39132,
+      "sha256_16": "80478df5e7eae1c2",
+      "first_date": "2025-01-21",
+      "parse_meta": {
+        "n": 609,
+        "first_date": "2025-01-21",
+        "last_date": "2026-09-21",
+        "last_value": 38.59664,
+        "fields": [
+          "modeldate",
+          "approve",
+          "disapprove",
+          "approve_lo",
+          "approve_hi",
+          "disapprove_lo",
+          "disapprove_hi"
+        ],
+        "bad_dates": 0
+      },
+      "proxy_decision": {
+        "reason": "direct-tested-ok",
+        "proxy": null,
+        "tested": true,
+        "env_RM_PROXY": null,
+        "env_proxy_vars_ignored": []
+      }
+    },
+    {
+      "id": "INDU",
+      "role": "index_input",
+      "provider": "FRED",
+      "tier": "official",
+      "status": "OK",
+      "n": 683,
+      "last_date": "2026-09-22",
+      "last_value": 51863.69,
+      "channel": "curl",
+      "ua": "curl/8.19.0",
+      "elapsed": 1.0435676574707031,
+      "error": null,
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DJIA&cosd=2024-01-01",
+      "http": 200,
+      "bytes": 14018,
+      "sha256_16": "fb4334994d498239",
+      "first_date": "2024-01-02",
+      "parse_meta": {
+        "n": 683,
+        "first_date": "2024-01-02",
+        "last_date": "2026-09-22",
+        "last_value": 51863.69,
+        "header": [
+          "observation_date",
+          "DJIA"
+        ],
+        "skipped": 28
+      },
+      "proxy_decision": {
+        "reason": "direct-tested-ok",
+        "proxy": null,
+        "tested": true,
+        "env_RM_PROXY": null,
+        "env_proxy_vars_ignored": []
+      }
+    },
+    {
+      "id": "CO1",
+      "role": "index_input",
+      "provider": "Yahoo Finance（NYMEX BZ=F）",
+      "tier": "aggregator",
+      "status": "OK",
+      "n": 1257,
+      "last_date": "2026-09-22",
+      "last_value": 99.25,
+      "channel": "curl",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+      "elapsed": 4.146721124649048,
+      "error": null,
+      "url": "https://query1.finance.yahoo.com/v8/finance/chart/BZ=F?range=5y&interval=1d",
+      "http": 200,
+      "bytes": 131826,
+      "sha256_16": "44b070f2f509825e",
+      "first_date": "2021-09-23",
+      "parse_meta": {
+        "n": 1257,
+        "rows_raw": 1260,
+        "dropped_null": 2,
+        "dropped_inprogress": 1,
+        "bad_rows": 0,
+        "value_field": "close",
+        "symbol": "BZ=F",
+        "exchange": "NYM",
+        "full_exchange": "NY Mercantile",
+        "instrument_type": "FUTURE",
+        "currency": "USD",
+        "timezone": "America/New_York",
+        "regular_market_price": 98.18,
+        "regular_market_time": 1790138415,
+        "first_date": "2021-09-23",
+        "last_date": "2026-09-22",
+        "last_value": 99.25
+      },
+      "proxy_decision": {
+        "reason": "direct-tested-ok",
+        "proxy": null,
+        "tested": true,
+        "env_RM_PROXY": null,
+        "env_proxy_vars_ignored": []
+      }
+    },
+    {
+      "id": "CO1_fred_crosscheck",
+      "role": "context_only",
+      "provider": "FRED",
+      "tier": "official",
+      "status": "OK",
+      "n": 685,
+      "last_date": "2026-09-15",
+      "last_value": 130.8,
+      "channel": "curl",
+      "ua": "curl/8.19.0",
+      "elapsed": 0.9961178302764893,
+      "error": null,
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILBRENTEU&cosd=2024-01-01",
+      "http": 200,
+      "bytes": 11988,
+      "sha256_16": "5b3de5af80a5e87e",
+      "first_date": "2024-01-02",
+      "parse_meta": {
+        "n": 685,
+        "first_date": "2024-01-02",
+        "last_date": "2026-09-15",
+        "last_value": 130.8,
+        "header": [
+          "observation_date",
+          "DCOILBRENTEU"
+        ],
+        "skipped": 21
+      },
+      "proxy_decision": {
+        "reason": "direct-tested-ok",
+        "proxy": null,
+        "tested": true,
+        "env_RM_PROXY": null,
+        "env_proxy_vars_ignored": []
+      }
+    },
+    {
+      "id": "CO1_sina_crosscheck",
+      "role": "context_only",
+      "provider": "新浪财经（外盘期货）",
+      "tier": "aggregator",
+      "status": "OK",
+      "n": 2585,
+      "last_date": "2026-09-22",
+      "last_value": 94.72,
+      "channel": "curl",
+      "ua": "curl/8.19.0",
+      "elapsed": 0.6599898338317871,
+      "error": null,
+      "url": "https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20t=/GlobalFuturesService.getGlobalFuturesDailyKLine?symbol=OIL",
+      "http": 200,
+      "bytes": 337211,
+      "sha256_16": "82e34f70d82bdae7",
+      "first_date": "2016-09-23",
+      "parse_meta": {
+        "n": 2585,
+        "rows_raw": 2586,
+        "dropped_inprogress": 1,
+        "value_field": "close",
+        "first_date": "2016-09-23",
+        "last_date": "2026-09-22",
+        "last_value": 94.72
+      },
+      "proxy_decision": {
+        "reason": "direct-tested-ok",
+        "proxy": null,
+        "tested": true,
+        "env_RM_PROXY": null,
+        "env_proxy_vars_ignored": []
+      }
+    },
+    {
+      "id": "TRHBCCCD",
+      "role": "context_only",
+      "provider": "IMF PortWatch",
+      "tier": "official",
+      "status": "OK",
+      "n": 1000,
+      "last_date": "2026-09-20",
+      "last_value": 1,
+      "channel": "curl",
+      "ua": "curl/8.19.0",
+      "elapsed": 0.7493939399719238,
+      "error": null,
+      "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query?where=portid%3D%27chokepoint6%27&outFields=date%2Cn_total%2Cn_tanker%2Ccapacity&f=json&resultRecordCount=1000&orderByFields=date%20DESC",
+      "http": 200,
+      "bytes": 83145,
+      "sha256_16": "7d3ce63693f3b9c7",
+      "first_date": "2023-12-26",
+      "parse_meta": {
+        "n": 1000,
+        "dropped": 0,
+        "first_date": "2023-12-26",
+        "last_date": "2026-09-20",
+        "fields": [
+          "n_total",
+          "n_tanker",
+          "capacity"
+        ],
+        "exceeded_transfer_limit": true,
+        "last_record": {
+          "n_total": 1,
+          "n_tanker": 0,
+          "capacity": 48165
+        },
+        "last_value": 1
+      },
+      "recent": [
+        {
+          "date": "2026-09-20",
+          "n_total": 1,
+          "n_tanker": 0,
+          "capacity": 48165
+        },
+        {
+          "date": "2026-09-19",
+          "n_total": 6,
+          "n_tanker": 1,
+          "capacity": 30815
+        },
+        {
+          "date": "2026-09-18",
+          "n_total": 7,
+          "n_tanker": 2,
+          "capacity": 144871
+        },
+        {
+          "date": "2026-09-17",
+          "n_total": 3,
+          "n_tanker": 0,
+          "capacity": 66754
+        },
+        {
+          "date": "2026-09-16",
+          "n_total": 1,
+          "n_tanker": 0,
+          "capacity": 51573
+        },
+        {
+          "date": "2026-09-15",
+          "n_total": 2,
+          "n_tanker": 1,
+          "capacity": 53291
+        },
+        {
+          "date": "2026-09-14",
+          "n_total": 2,
+          "n_tanker": 0,
+          "capacity": 0
+        },
+        {
+          "date": "2026-09-13",
+          "n_total": 8,
+          "n_tanker": 1,
+          "capacity": 71701
+        },
+        {
+          "date": "2026-09-12",
+          "n_total": 2,
+          "n_tanker": 1,
+          "capacity": 84568
+        },
+        {
+          "date": "2026-09-11",
+          "n_total": 8,
+          "n_tanker": 3,
+          "capacity": 96001
+        }
+      ],
+      "proxy_decision": {
+        "reason": "direct-tested-ok",
+        "proxy": null,
+        "tested": true,
+        "env_RM_PROXY": null,
+        "env_proxy_vars_ignored": []
+      }
+    }
+  ],
+  "staleness": [
+    {
+      "id": "USGG10YR",
+      "ok": true,
+      "lag_days": 2,
+      "max_lag": 5,
+      "last_date": "2026-09-21",
+      "reason": "fresh"
+    },
+    {
+      "id": "USSWIT1_proxy_T5YIE",
+      "ok": true,
+      "lag_days": 1,
+      "max_lag": 5,
+      "last_date": "2026-09-22",
+      "reason": "fresh"
+    },
+    {
+      "id": "RCPPTAPP",
+      "ok": true,
+      "lag_days": 2,
+      "max_lag": 5,
+      "last_date": "2026-09-21",
+      "reason": "fresh"
+    },
+    {
+      "id": "INDU",
+      "ok": true,
+      "lag_days": 1,
+      "max_lag": 5,
+      "last_date": "2026-09-22",
+      "reason": "fresh"
+    },
+    {
+      "id": "CO1",
+      "ok": true,
+      "lag_days": 1,
+      "max_lag": 3,
+      "last_date": "2026-09-22",
+      "reason": "fresh"
+    },
+    {
+      "id": "CO1_fred_crosscheck",
+      "ok": true,
+      "lag_days": 8,
+      "max_lag": 10,
+      "last_date": "2026-09-15",
+      "reason": "fresh"
+    },
+    {
+      "id": "CO1_sina_crosscheck",
+      "ok": true,
+      "lag_days": 1,
+      "max_lag": 3,
+      "last_date": "2026-09-22",
+      "reason": "fresh"
+    },
+    {
+      "id": "TRHBCCCD",
+      "ok": true,
+      "lag_days": 3,
+      "max_lag": 14,
+      "last_date": "2026-09-20",
+      "reason": "fresh"
+    }
+  ],
+  "proxy_decision": {
+    "reason": "direct-tested-ok",
+    "proxy": null,
+    "tested": true,
+    "env_RM_PROXY": null,
+    "env_proxy_vars_ignored": []
+  },
+  "our_vs_dongwu": [
+    {
+      "label": "全期",
+      "n": 563,
+      "corr": 0.9306867704581778,
+      "rank_corr": 0.8964045117900634,
+      "mean_abs_diff": 0.18494214580953824,
+      "max_abs_diff": 0.758597877032519
+    },
+    {
+      "label": "近一年",
+      "n": 355,
+      "corr": 0.9770020765297127,
+      "rank_corr": 0.9685857288081948,
+      "mean_abs_diff": 0.1356401881671285,
+      "max_abs_diff": 0.45057726249455743
+    },
+    {
+      "label": "2026 年内",
+      "n": 253,
+      "corr": 0.9851723252614752,
+      "rank_corr": 0.9844261068156994,
+      "mean_abs_diff": 0.11672113841428373,
+      "max_abs_diff": 0.3328124105804975
+    },
+    {
+      "label": "近 90 日",
+      "n": 80,
+      "corr": 0.9860621434564819,
+      "rank_corr": 0.9874824191279887,
+      "mean_abs_diff": 0.11292777332943031,
+      "max_abs_diff": 0.2955628973138217
+    }
+  ],
+  "write_fallbacks": [],
+  "write_promotions": [],
+  "prune_failures": [],
+  "inplace_writes": []
+}

@@ -1,0 +1,1127 @@
+{
+ "ok": [
+  {
+   "id": "abna24",
+   "zone": "iran-official",
+   "tier": "T2",
+   "url": "https://en.abna24.com/rss",
+   "http": 200,
+   "items": 30,
+   "latest": "Thu, 17 Sep 2026 18:00:43 GMT",
+   "server": "nginx"
+  },
+  {
+   "id": "aei",
+   "zone": "think",
+   "tier": "T2",
+   "url": "https://www.aei.org/feed/",
+   "http": 200,
+   "items": 24,
+   "latest": "Thu, 17 Sep 2026 19:56:08 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "aljazeera",
+   "zone": "third",
+   "tier": "T3",
+   "url": "https://www.aljazeera.com/xml/rss/all.xml",
+   "http": 200,
+   "items": 25,
+   "latest": "Fri, 18 Sep 2026 07:54:49 +0000",
+   "server": "nginx"
+  },
+  {
+   "id": "almonitor",
+   "zone": "third",
+   "tier": "T3",
+   "url": "https://www.al-monitor.com/rss",
+   "http": 200,
+   "items": 20,
+   "latest": "2026-09-18T01:46:33-0400",
+   "server": "nginx"
+  },
+  {
+   "id": "arabnews",
+   "zone": "energy",
+   "tier": "T3",
+   "url": "https://www.arabnews.com/rss.xml",
+   "http": 200,
+   "items": 50,
+   "latest": "Fri, 18 Sep 2026 08:22:22 GMT",
+   "server": "cloudflare"
+  },
+  {
+   "id": "armscontrol",
+   "zone": "nuclear",
+   "tier": "T2",
+   "url": "https://www.armscontrol.org/rss.xml",
+   "http": 200,
+   "items": 10,
+   "latest": "Wed, 16 Sep 2026 13:54:06 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "armscontrolwonk",
+   "zone": "nuclear",
+   "tier": "T2",
+   "url": "https://www.armscontrolwonk.com/feed/",
+   "http": 200,
+   "items": 10,
+   "latest": "Thu, 16 Jul 2026 15:42:46 +0000",
+   "server": "ESF"
+  },
+  {
+   "id": "atlanticcouncil",
+   "zone": "think",
+   "tier": "T2",
+   "url": "https://www.atlanticcouncil.org/feed/",
+   "http": 200,
+   "items": 100,
+   "latest": "Thu, 17 Sep 2026 21:09:47 +0000",
+   "server": "nginx"
+  },
+  {
+   "id": "baird-maritime",
+   "zone": "maritime",
+   "tier": "T3",
+   "url": "https://www.bairdmaritime.com/feed",
+   "http": 200,
+   "items": 2,
+   "latest": "Fri, 18 Sep 2026 05:14:20 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "bbc-me",
+   "zone": "third",
+   "tier": "T3",
+   "url": "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
+   "http": 200,
+   "items": 30,
+   "latest": "Thu, 17 Sep 2026 20:34:30 GMT",
+   "server": "Belfrage"
+  },
+  {
+   "id": "capacitymedia",
+   "zone": "cable",
+   "tier": "T3",
+   "url": "https://www.capacitymedia.com/rss",
+   "http": 200,
+   "items": 10,
+   "latest": "Thu, 17 Sep 2026 14:04:29 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "crisisgroup",
+   "zone": "think",
+   "tier": "T2",
+   "url": "https://www.crisisgroup.org/rss",
+   "http": 200,
+   "items": 10,
+   "latest": "Monday, September 14, 2026 - 17:03",
+   "server": "cloudflare"
+  },
+  {
+   "id": "datacenterdynamics",
+   "zone": "cable",
+   "tier": "T3",
+   "url": "https://www.datacenterdynamics.com/en/rss/",
+   "http": 200,
+   "items": 20,
+   "latest": "Fri, 18 Sep 2026 07:00:00 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "defapress",
+   "zone": "iran-official",
+   "tier": "T1",
+   "url": "https://defapress.ir/fa/rss/allnews",
+   "http": 200,
+   "items": 100,
+   "latest": "18 Sep 2026 11:58:48 +0330",
+   "server": ""
+  },
+  {
+   "id": "defensenews-naval",
+   "zone": "naval",
+   "tier": "T3",
+   "url": "https://www.defensenews.com/arc/outboundfeeds/rss/category/naval/",
+   "http": 200,
+   "items": 25,
+   "latest": "Thu, 17 Sep 2026 14:13:21 +0000",
+   "server": "openresty"
+  },
+  {
+   "id": "dod-news",
+   "zone": "us-official",
+   "tier": "T1",
+   "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=60",
+   "http": 200,
+   "items": 60,
+   "latest": "Thu, 17 Sep 2026 23:14:00 GMT",
+   "server": ""
+  },
+  {
+   "id": "dod-releases",
+   "zone": "us-official",
+   "tier": "T1",
+   "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=9&Site=945&max=60",
+   "http": 200,
+   "items": 60,
+   "latest": "Thu, 17 Sep 2026 22:15:00 GMT",
+   "server": ""
+  },
+  {
+   "id": "dvids-centcom",
+   "zone": "us-official",
+   "tier": "T1",
+   "url": "https://www.dvidshub.net/rss/unit/72",
+   "http": 200,
+   "items": 45,
+   "latest": "Thu, 17 Sep 2026 14:08:41 -0400",
+   "server": "Apache"
+  },
+  {
+   "id": "fas-feed",
+   "zone": "nuclear",
+   "tier": "T2",
+   "url": "https://fas.org/feed/",
+   "http": 200,
+   "items": 1,
+   "latest": "Tue, 14 Feb 2023 13:25:17 +0000",
+   "server": "nginx"
+  },
+  {
+   "id": "france24-me",
+   "zone": "third",
+   "tier": "T3",
+   "url": "https://www.france24.com/en/middle-east/rss",
+   "http": 200,
+   "items": 30,
+   "latest": "Fri, 18 Sep 2026 06:29:47 GMT",
+   "server": ""
+  },
+  {
+   "id": "freightwaves",
+   "zone": "maritime",
+   "tier": "T3",
+   "url": "https://www.freightwaves.com/feed",
+   "http": 200,
+   "items": 50,
+   "latest": "Fri, 18 Sep 2026 03:47:37 +0000",
+   "server": "nginx"
+  },
+  {
+   "id": "gcaptain",
+   "zone": "maritime",
+   "tier": "T3",
+   "url": "https://gcaptain.com/feed/",
+   "http": 200,
+   "items": 12,
+   "latest": "Thu, 17 Sep 2026 21:36:57 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "gnews-abqaiq",
+   "zone": "energy",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=(Abqaiq+OR+%22Ras+Tanura%22+OR+Kharg+Island)+attack+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 87,
+   "latest": "Wed, 09 Sep 2026 07:00:00 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-babelmandeb",
+   "zone": "chokepoint",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=%22Bab+el-Mandeb%22+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 100,
+   "latest": "Fri, 11 Sep 2026 13:39:52 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-cable",
+   "zone": "cable",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=(%22undersea+cable%22+OR+%22submarine+cable%22)+cut+Red+Sea+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 4,
+   "latest": "Thu, 03 Sep 2026 07:00:00 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-cable-redsea",
+   "zone": "cable",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=submarine+cable+Red+Sea+damage+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 20,
+   "latest": "Thu, 10 Sep 2026 14:43:51 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-cable2",
+   "zone": "cable",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=%22undersea+cable%22+OR+%22submarine+cable%22+cut+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 27,
+   "latest": "Thu, 20 Aug 2026 07:00:00 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-centcom",
+   "zone": "us-official",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=site%3Acentcom.mil&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 100,
+   "latest": "Sat, 05 Sep 2026 07:00:00 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-gulf-energy",
+   "zone": "energy",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=Saudi+OR+UAE+OR+Kuwait+oil+facility+attack+Iran+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 96,
+   "latest": "Tue, 08 Sep 2026 07:00:00 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-hormuz",
+   "zone": "chokepoint",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=%22Strait+of+Hormuz%22+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 100,
+   "latest": "Tue, 15 Sep 2026 13:39:00 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-hormuz-closure",
+   "zone": "chokepoint",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=Iran+%22close+the+Strait%22+OR+%22blockade+Hormuz%22+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 44,
+   "latest": "Sun, 30 Aug 2026 07:00:00 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-houthi",
+   "zone": "chokepoint",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=Houthi+attack+shipping+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 92,
+   "latest": "Sat, 12 Sep 2026 05:57:08 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-iran-escalation",
+   "zone": "chokepoint",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=Iran+escalation+military+readiness+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 58,
+   "latest": "Wed, 16 Sep 2026 09:00:14 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-iran-irgc-navy",
+   "zone": "naval",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=IRGC+navy+OR+%22Iranian+Navy%22+drill+OR+attack+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 51,
+   "latest": "Tue, 08 Sep 2026 07:00:00 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-iran-missile",
+   "zone": "nuclear",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=Iran+ballistic+missile+test+OR+launch+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 62,
+   "latest": "Thu, 10 Sep 2026 16:34:00 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-iran-nuclear-test",
+   "zone": "nuclear",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=Iran+nuclear+test+OR+weaponization+OR+%22nuclear+device%22+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 100,
+   "latest": "Sat, 22 Aug 2026 07:00:00 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-iran-usnavy",
+   "zone": "naval",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=Iran+US+warship+OR+carrier+OR+destroyer+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 100,
+   "latest": "Tue, 08 Sep 2026 07:00:00 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-nuclear",
+   "zone": "nuclear",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=Iran+nuclear+(test+OR+enrichment+OR+IAEA)+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 100,
+   "latest": "Mon, 14 Sep 2026 21:21:33 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-oilattack",
+   "zone": "energy",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=oil+facility+drone+strike+Gulf+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 53,
+   "latest": "Thu, 17 Sep 2026 16:30:47 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "gnews-redsea",
+   "zone": "chokepoint",
+   "tier": "T3",
+   "url": "https://news.google.com/rss/search?q=%22Red+Sea%22+shipping+attack+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+   "http": 200,
+   "items": 82,
+   "latest": "Wed, 16 Sep 2026 04:30:32 GMT",
+   "server": "ESF"
+  },
+  {
+   "id": "hellenic-shipping",
+   "zone": "maritime",
+   "tier": "T3",
+   "url": "https://www.hellenicshippingnews.com/feed/",
+   "http": 200,
+   "items": 20,
+   "latest": "Thu, 17 Sep 2026 21:00:59 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "iaea-news",
+   "zone": "nuclear",
+   "tier": "T1",
+   "url": "https://www.iaea.org/feeds/news",
+   "http": 200,
+   "items": 150,
+   "latest": "Thu, 17 Sep 26 17:39:01 +0200",
+   "server": "cloudflare"
+  },
+  {
+   "id": "irna-en",
+   "zone": "iran-official",
+   "tier": "T1",
+   "url": "https://en.irna.ir/rss",
+   "http": 200,
+   "items": 30,
+   "latest": "Fri, 18 Sep 2026 08:27:03 GMT",
+   "server": "ArvanCloud"
+  },
+  {
+   "id": "isna-en",
+   "zone": "iran-official",
+   "tier": "T2",
+   "url": "https://en.isna.ir/rss",
+   "http": 200,
+   "items": 30,
+   "latest": "Fri, 18 Sep 2026 08:00:57 GMT",
+   "server": "ArvanCloud"
+  },
+  {
+   "id": "jpost",
+   "zone": "third",
+   "tier": "T3",
+   "url": "https://www.jpost.com/rss/rssfeedsfrontpage.aspx",
+   "http": 200,
+   "items": 26,
+   "latest": "Fri, 18 Sep 2026 09:33:52 GMT",
+   "server": "nginx/1.26.1"
+  },
+  {
+   "id": "kayhan",
+   "zone": "iran-official",
+   "tier": "T2",
+   "url": "https://kayhan.ir/fa/rss/allnews",
+   "http": 200,
+   "items": 100,
+   "latest": "16 Sep 2026 21:35:30 +0330",
+   "server": "Apache2"
+  },
+  {
+   "id": "lightreading",
+   "zone": "cable",
+   "tier": "T3",
+   "url": "https://www.lightreading.com/rss.xml",
+   "http": 200,
+   "items": 50,
+   "latest": "Fri, 18 Sep 2026 05:00:00 GMT",
+   "server": "cloudflare"
+  },
+  {
+   "id": "marinelink",
+   "zone": "maritime",
+   "tier": "T3",
+   "url": "https://www.marinelink.com/rss",
+   "http": 200,
+   "items": 10,
+   "latest": "Thu, 17 Sep 2026 19:27:59 Z",
+   "server": "Microsoft-IIS/10.0"
+  },
+  {
+   "id": "maritime-exec",
+   "zone": "maritime",
+   "tier": "T3",
+   "url": "https://www.maritime-executive.com/articles.rss",
+   "http": 200,
+   "items": 94,
+   "latest": "2026-09-17T22:44:00-04:00",
+   "server": "cloudflare"
+  },
+  {
+   "id": "mashreghnews",
+   "zone": "iran-official",
+   "tier": "T1",
+   "url": "https://www.mashreghnews.ir/rss",
+   "http": 200,
+   "items": 30,
+   "latest": "Fri, 18 Sep 2026 08:08:42 GMT",
+   "server": "nginx"
+  },
+  {
+   "id": "mehr-en",
+   "zone": "iran-official",
+   "tier": "T2",
+   "url": "https://en.mehrnews.com/rss",
+   "http": 200,
+   "items": 30,
+   "latest": "Fri, 18 Sep 2026 07:39:39 GMT",
+   "server": "MizbanCloud"
+  },
+  {
+   "id": "mei-edu",
+   "zone": "think",
+   "tier": "T2",
+   "url": "https://www.mei.edu/rss",
+   "http": 200,
+   "items": 1,
+   "latest": "Mon, 05 May 2025 18:41:22 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "mideasteye",
+   "zone": "third",
+   "tier": "T3",
+   "url": "https://www.middleeasteye.net/rss",
+   "http": 200,
+   "items": 20,
+   "latest": "Fri, 18 Sep 2026 09:25:59 +0100",
+   "server": ""
+  },
+  {
+   "id": "naval-news",
+   "zone": "naval",
+   "tier": "T3",
+   "url": "https://www.navalnews.com/feed/",
+   "http": 200,
+   "items": 10,
+   "latest": "Thu, 17 Sep 2026 14:50:33 +0000",
+   "server": "o2switch-PowerBoost-v3"
+  },
+  {
+   "id": "offshore-energy",
+   "zone": "maritime",
+   "tier": "T3",
+   "url": "https://www.offshore-energy.biz/feed/",
+   "http": 200,
+   "items": 10,
+   "latest": "Thu, 17 Sep 2026 15:27:24 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "oilprice",
+   "zone": "energy",
+   "tier": "T3",
+   "url": "https://oilprice.com/rss/main",
+   "http": 200,
+   "items": 15,
+   "latest": "Fri, 18 Sep 2026 03:30:27 -0500",
+   "server": "Apache/2.4.68 () PHP/8.2.33"
+  },
+  {
+   "id": "parstoday",
+   "zone": "iran-official",
+   "tier": "T1",
+   "url": "https://parstoday.ir/en/rss",
+   "http": 200,
+   "items": 120,
+   "latest": "Fri, 18 Sep 2026 07:09:29 GMT",
+   "server": "cloudflare"
+  },
+  {
+   "id": "presstv",
+   "zone": "iran-official",
+   "tier": "T2",
+   "url": "https://www.presstv.ir/rss.xml",
+   "http": 200,
+   "items": 107,
+   "latest": null,
+   "server": "nginx"
+  },
+  {
+   "id": "seapower",
+   "zone": "naval",
+   "tier": "T3",
+   "url": "https://seapowermagazine.org/feed/",
+   "http": 200,
+   "items": 10,
+   "latest": "Thu, 17 Sep 2026 17:51:06 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "sepahnews",
+   "zone": "iran-official",
+   "tier": "T1",
+   "url": "https://sepahnews.ir/fa/rss/allnews",
+   "http": 200,
+   "items": 100,
+   "latest": "18 Sep 2026 04:12:09 +0330",
+   "server": ""
+  },
+  {
+   "id": "splash247",
+   "zone": "maritime",
+   "tier": "T3",
+   "url": "https://splash247.com/feed/",
+   "http": 200,
+   "items": 10,
+   "latest": "Fri, 18 Sep 2026 08:22:30 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "state-press",
+   "zone": "us-official",
+   "tier": "T1",
+   "url": "https://www.state.gov/rss-feed/press-releases/feed/",
+   "http": 200,
+   "items": 10,
+   "latest": "Thu, 17 Sep 2026 19:46:53 +0000",
+   "server": "Apache"
+  },
+  {
+   "id": "stimson",
+   "zone": "think",
+   "tier": "T2",
+   "url": "https://www.stimson.org/feed/",
+   "http": 200,
+   "items": 12,
+   "latest": "Tue, 08 Sep 2026 22:09:37 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "subtelforum",
+   "zone": "cable",
+   "tier": "T3",
+   "url": "https://subtelforum.com/feed/",
+   "http": 200,
+   "items": 10,
+   "latest": "Thu, 17 Sep 2026 16:00:00 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "tehrantimes",
+   "zone": "iran-official",
+   "tier": "T2",
+   "url": "https://www.tehrantimes.com/rss",
+   "http": 200,
+   "items": 30,
+   "latest": "Fri, 18 Sep 2026 08:23:32 GMT",
+   "server": "MizbanCloud"
+  },
+  {
+   "id": "timesofisrael",
+   "zone": "third",
+   "tier": "T3",
+   "url": "https://www.timesofisrael.com/feed/",
+   "http": 200,
+   "items": 15,
+   "latest": "Fri, 18 Sep 2026 07:39:27 +0000",
+   "server": "cloudflare"
+  },
+  {
+   "id": "totaltele",
+   "zone": "cable",
+   "tier": "T3",
+   "url": "https://www.totaltele.com/rss",
+   "http": 200,
+   "items": 10,
+   "latest": "Thu, 17 Sep 2026 15:34:18 +0000",
+   "server": "nginx"
+  },
+  {
+   "id": "twz",
+   "zone": "naval",
+   "tier": "T3",
+   "url": "https://www.twz.com/feed",
+   "http": 200,
+   "items": 49,
+   "latest": "Thu, 17 Sep 2026 17:46:47 -0400",
+   "server": "nginx"
+  },
+  {
+   "id": "usni-news",
+   "zone": "naval",
+   "tier": "T3",
+   "url": "https://news.usni.org/feed",
+   "http": 200,
+   "items": 30,
+   "latest": "Thu, 17 Sep 2026 21:07:30 +0000",
+   "server": "cloudflare"
+  }
+ ],
+ "warn": [
+  {
+   "id": "brookings",
+   "zone": "think",
+   "tier": "T2",
+   "url": "https://www.brookings.edu/feed/",
+   "http": 200,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "200 但解析出 0 条目（疑似 HTML/JS 页）: <!DOCTYPE html> <html lang=\"en-US\">  <head> \t<meta charset=\""
+  },
+  {
+   "id": "carnegie",
+   "zone": "think",
+   "tier": "T2",
+   "url": "https://carnegieendowment.org/rss",
+   "http": 200,
+   "items": 0,
+   "latest": null,
+   "server": "envoy",
+   "why": "200 但解析出 0 条目（疑似 HTML/JS 页）: <!DOCTYPE html><html dir=\"ltr\" lang=\"en\"><head><meta charSet"
+  },
+  {
+   "id": "centcom-afpims",
+   "zone": "us-official",
+   "tier": "T1",
+   "url": "https://www.centcom.mil/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=1060&max=60",
+   "http": 200,
+   "items": 0,
+   "latest": null,
+   "server": "",
+   "why": "★ HTTP 200 + 空响应体（最像正常的失败）"
+  },
+  {
+   "id": "farsnews-direct",
+   "zone": "iran-official",
+   "tier": "T1",
+   "url": "https://www.farsnews.ir/rss",
+   "http": 200,
+   "items": 0,
+   "latest": null,
+   "server": "ninja",
+   "why": "200 但解析出 0 条目（疑似 HTML/JS 页）: <!DOCTYPE html><html data-project=\"fars\" data-native=\"false\""
+  },
+  {
+   "id": "farsnews-en",
+   "zone": "iran-official",
+   "tier": "T1",
+   "url": "https://www.farsnews.ir/en/rss",
+   "http": 200,
+   "items": 0,
+   "latest": null,
+   "server": "ninja",
+   "why": "200 但解析出 0 条目（疑似 HTML/JS 页）: <!DOCTYPE html><html data-project=\"fars\" data-native=\"false\""
+  },
+  {
+   "id": "iranintl",
+   "zone": "iran-opp",
+   "tier": "T3",
+   "url": "https://www.iranintl.com/en/rss",
+   "http": 200,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "200 但解析出 0 条目（疑似 HTML/JS 页）: <!DOCTYPE html><html data-dpl-id=\"dpl_4T5hWQD7kLMwNJ3W6HfQyR"
+  },
+  {
+   "id": "iranintl2",
+   "zone": "iran-opp",
+   "tier": "T3",
+   "url": "https://www.iranintl.com/en/rss.xml",
+   "http": 200,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "200 但解析出 0 条目（疑似 HTML/JS 页）: <!DOCTYPE html><html data-dpl-id=\"dpl_4T5hWQD7kLMwNJ3W6HfQyR"
+  },
+  {
+   "id": "nti-feed",
+   "zone": "nuclear",
+   "tier": "T2",
+   "url": "https://www.nti.org/feed/",
+   "http": 200,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "200 但解析出 0 条目（疑似 HTML/JS 页）: <?xml version=\"1.0\" encoding=\"UTF-8\"?><rss version=\"2.0\" \txm"
+  },
+  {
+   "id": "radiofarda",
+   "zone": "iran-opp",
+   "tier": "T3",
+   "url": "https://www.rferl.org/rss",
+   "http": 200,
+   "items": 0,
+   "latest": null,
+   "server": "",
+   "why": "200 但解析出 0 条目（疑似 HTML/JS 页）: Invalid url"
+  },
+  {
+   "id": "radiofarda2",
+   "zone": "iran-opp",
+   "tier": "T3",
+   "url": "https://www.rferl.org/api/zrqiteuuir",
+   "http": 200,
+   "items": 0,
+   "latest": null,
+   "server": "",
+   "why": "200 但解析出 0 条目（疑似 HTML/JS 页）: <?xml version=\"1.0\" encoding=\"UTF-8\"?><rss version=\"2.0\" xml"
+  },
+  {
+   "id": "safety4sea",
+   "zone": "maritime",
+   "tier": "T3",
+   "url": "https://safety4sea.com/feed/",
+   "http": 200,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "200 但解析出 0 条目（疑似 HTML/JS 页）: <!doctype html> <!--[if lt IE 7]> <html class=\"no-js lt-ie9 "
+  }
+ ],
+ "dead": [
+  {
+   "id": "amwaj",
+   "zone": "third",
+   "tier": "T3",
+   "url": "https://amwaj.media/rss",
+   "http": 429,
+   "items": 0,
+   "latest": null,
+   "server": "Vercel",
+   "why": "HTTP 429"
+  },
+  {
+   "id": "chathamhouse",
+   "zone": "think",
+   "tier": "T2",
+   "url": "https://www.chathamhouse.org/rss",
+   "http": 403,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 403"
+  },
+  {
+   "id": "csis-analysis",
+   "zone": "think",
+   "tier": "T2",
+   "url": "https://www.csis.org/rss/analysis",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 404"
+  },
+  {
+   "id": "dvids-navcent",
+   "zone": "naval",
+   "tier": "T1",
+   "url": "https://www.dvidshub.net/rss/unit/232",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "Apache",
+   "why": "HTTP 404"
+  },
+  {
+   "id": "iaea-pressrss",
+   "zone": "nuclear",
+   "tier": "T1",
+   "url": "https://www.iaea.org/news/rss",
+   "http": 403,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 403"
+  },
+  {
+   "id": "iranpress",
+   "zone": "iran-official",
+   "tier": "T1",
+   "url": "https://iranpress.com/rss",
+   "http": null,
+   "items": 0,
+   "latest": null,
+   "server": "",
+   "why": "URLError: <urlopen error [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] ssl/tls alert handshake failure (_ssl.c:1032)>"
+  },
+  {
+   "id": "iranwatch",
+   "zone": "nuclear",
+   "tier": "T2",
+   "url": "https://www.iranwatch.org/rss",
+   "http": 403,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 403"
+  },
+  {
+   "id": "isis-online",
+   "zone": "nuclear",
+   "tier": "T2",
+   "url": "https://isis-online.org/rss",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 404"
+  },
+  {
+   "id": "isis-online2",
+   "zone": "nuclear",
+   "tier": "T2",
+   "url": "https://isis-online.org/rss/",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 404"
+  },
+  {
+   "id": "isw",
+   "zone": "think",
+   "tier": "T2",
+   "url": "https://www.understandingwar.org/rss.xml",
+   "http": 403,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 403"
+  },
+  {
+   "id": "khamenei-en",
+   "zone": "iran-official",
+   "tier": "T1",
+   "url": "https://english.khamenei.ir/rss",
+   "http": 403,
+   "items": 0,
+   "latest": null,
+   "server": "",
+   "why": "HTTP 403"
+  },
+  {
+   "id": "marad-msci",
+   "zone": "maritime",
+   "tier": "T1",
+   "url": "https://www.maritime.dot.gov/msci/2026-000-advisories-rss.xml",
+   "http": 403,
+   "items": 0,
+   "latest": null,
+   "server": "AkamaiGHost",
+   "why": "HTTP 403"
+  },
+  {
+   "id": "marad-rss",
+   "zone": "maritime",
+   "tier": "T1",
+   "url": "https://www.maritime.dot.gov/rss.xml",
+   "http": 403,
+   "items": 0,
+   "latest": null,
+   "server": "AkamaiGHost",
+   "why": "HTTP 403"
+  },
+  {
+   "id": "naval-technology",
+   "zone": "naval",
+   "tier": "T3",
+   "url": "https://www.naval-technology.com/feed/",
+   "http": 403,
+   "items": 0,
+   "latest": null,
+   "server": "Varnish",
+   "why": "HTTP 403"
+  },
+  {
+   "id": "navyrecognition",
+   "zone": "naval",
+   "tier": "T3",
+   "url": "https://www.navyrecognition.com/index.php?format=feed&type=rss",
+   "http": 403,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 403"
+  },
+  {
+   "id": "porttechnology",
+   "zone": "maritime",
+   "tier": "T3",
+   "url": "https://www.porttechnology.org/feed/",
+   "http": 403,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 403"
+  },
+  {
+   "id": "rusi",
+   "zone": "think",
+   "tier": "T2",
+   "url": "https://rusi.org/rss",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "AmazonS3",
+   "why": "HTTP 404"
+  },
+  {
+   "id": "seatrade-maritime",
+   "zone": "maritime",
+   "tier": "T3",
+   "url": "https://www.seatrade-maritime.com/rss",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 404"
+  },
+  {
+   "id": "submarinenetworks",
+   "zone": "cable",
+   "tier": "T3",
+   "url": "https://www.submarinenetworks.com/rss",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "nginx",
+   "why": "HTTP 404"
+  },
+  {
+   "id": "tasnim-direct",
+   "zone": "iran-official",
+   "tier": "T1",
+   "url": "https://www.tasnimnews.com/en/rss/feed/0/7/0/all-news",
+   "http": null,
+   "items": 0,
+   "latest": null,
+   "server": "",
+   "why": "URLError: <urlopen error Tunnel connection failed: 502 Bad Gateway>"
+  },
+  {
+   "id": "tasnim-direct2",
+   "zone": "iran-official",
+   "tier": "T1",
+   "url": "https://www.tasnimnews.com/en/rss/feed/0/7/0/all-news",
+   "http": null,
+   "items": 0,
+   "latest": null,
+   "server": "",
+   "why": "URLError: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:103"
+  },
+  {
+   "id": "telegeography",
+   "zone": "cable",
+   "tier": "T2",
+   "url": "https://www.telegeography.com/rss",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "Apache",
+   "why": "HTTP 404"
+  },
+  {
+   "id": "thebulletin",
+   "zone": "nuclear",
+   "tier": "T2",
+   "url": "https://thebulletin.org/feed/",
+   "http": 403,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 403"
+  },
+  {
+   "id": "thenational-ae",
+   "zone": "energy",
+   "tier": "T3",
+   "url": "https://www.thenationalnews.com/rss",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "openresty",
+   "why": "HTTP 404"
+  },
+  {
+   "id": "treasury-ofac",
+   "zone": "us-official",
+   "tier": "T1",
+   "url": "https://home.treasury.gov/rss/press-releases.xml",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "nginx",
+   "why": "HTTP 404"
+  },
+  {
+   "id": "ukmto",
+   "zone": "maritime",
+   "tier": "T1",
+   "url": "https://www.ukmto.org/rss",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 404"
+  },
+  {
+   "id": "ukmto-news",
+   "zone": "maritime",
+   "tier": "T1",
+   "url": "https://www.ukmto.org/news",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "cloudflare",
+   "why": "HTTP 404"
+  },
+  {
+   "id": "washinstitute",
+   "zone": "think",
+   "tier": "T2",
+   "url": "https://www.washingtoninstitute.org/rss.xml",
+   "http": 404,
+   "items": 0,
+   "latest": null,
+   "server": "nginx",
+   "why": "HTTP 404"
+  }
+ ]
+}

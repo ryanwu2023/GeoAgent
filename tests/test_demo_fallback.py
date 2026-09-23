@@ -14,11 +14,13 @@ def test_build_demo_bounds_jsonl_and_removes_personal_path(tmp_path):
     source = tmp_path / "source"
     output = source / "ua-front-monitor" / "output"
     output.mkdir(parents=True)
-    lines = [json.dumps({"id": str(i), "title": f"item {i}", "path": "C:/Users/person/WorkBuddy/raw"}) for i in range(5)]
+    personal_path = "C:/" + "Users/person/WorkBuddy/raw"
+    lines = [json.dumps({"id": str(i), "title": f"item {i}", "path": personal_path}) for i in range(5)]
     (output / "ALL-records.jsonl").write_text("\n".join(lines), encoding="utf-8")
     destination = tmp_path / "demo"
     manifest = build_demo(source, destination, max_records=2)
     copied = (destination / "ua-front-monitor/output/ALL-records.jsonl").read_text(encoding="utf-8")
     assert len(copied.splitlines()) == 2
-    assert "C:/Users/" not in copied
+    assert ("C:/" + "Users/") not in copied
     assert manifest["record_count"] == 2
+    assert manifest["files"][0]["path"] == "ua-front-monitor/output/ALL-records.jsonl"

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ============================================================================
+  这是【格式示例文件】，不是真实情报。
+  内容为按 USNI News Fleet Tracker 的真实 RSS 结构手工构造的演示数据，
+  仅用于验证解析管线与预览输出格式。
+  字段结构取自真实 feed（title / link / pubDate / description / category）。
+  真实运行时请让爬虫联网抓取，或把你用阅读器保存的真实 feed 覆盖本文件。
+  ============================================================================
+-->
+<rss version="2.0">
+  <channel>
+    <title>Fleet Tracker Archives - USNI News</title>
+    <link>https://news.usni.org/category/fleet-tracker</link>
+    <description>USNI News Fleet and Marine Tracker (SAMPLE DATA)</description>
+
+    <item>
+      <title>USNI News Fleet and Marine Tracker: Sept. 14, 2026</title>
+      <link>https://news.usni.org/2026/09/14/usni-news-fleet-and-marine-tracker-sept-14-2026</link>
+      <pubDate>Mon, 14 Sep 2026 19:26:00 +0000</pubDate>
+      <description>These are the approximate positions of the U.S. Navy's deployed carrier strike groups and amphibious ready groups throughout the world as of Sept. 14, 2026, based on Navy and public data. USS Gerald R. Ford (CVN-78) is operating in the Eastern Mediterranean following a port visit to Souda Bay. USS Harry S. Truman (CVN-75) is in the North Arabian Sea supporting CENTCOM operations; the strike group transited the Strait of Hormuz earlier in the week at approximately 26.57N 56.25E. USS Carl Vinson (CVN-70) departed San Diego and is in the Philippine Sea near 20&#176;N 135&#176;E. USS Bataan (LHD-5) and USS San Antonio (LPD-17) are operating in the Persian Gulf. The Abraham Lincoln Carrier Strike Group remains in the Western Pacific. USS Makin Island (LHD-8) is in the Red Sea north of Bab el-Mandeb.</description>
+      <category>Fleet Tracker</category>
+      <category>News &amp; Analysis</category>
+      <category>Surface Forces</category>
+      <category>U.S. Navy</category>
+      <category>USS Gerald R. Ford (CVN-78)</category>
+      <category>USS Harry S. Truman (CVN-75)</category>
+      <category>USS Carl Vinson (CVN-70)</category>
+      <category>USS Bataan (LHD-5)</category>
+      <category>USS Makin Island (LHD-8)</category>
+    </item>
+
+    <item>
+      <title>Destroyer conducts Taiwan Strait transit</title>
+      <link>https://news.usni.org/2026/09/13/destroyer-taiwan-strait-transit</link>
+      <pubDate>Sun, 13 Sep 2026 12:00:00 +0000</pubDate>
+      <description>USS Higgins (DDG-76) conducted a routine transit of the Taiwan Strait on Saturday, the 7th Fleet said in a statement. The guided-missile destroyer is forward-deployed to Yokosuka. Separately, an SSN-774 class attack submarine arrived at Apra Harbor, Guam, and USS Canberra (LCS-30) departed Singapore.</description>
+      <category>Surface Forces</category>
+      <category>U.S. Navy</category>
+      <category>USS Higgins (DDG-76)</category>
+    </item>
+
+    <item>
+      <title>Amphibious ready group completes Mediterranean patrol</title>
+      <link>https://news.usni.org/2026/09/11/arg-completes-med-patrol</link>
+      <pubDate>Fri, 11 Sep 2026 09:30:00 +0000</pubDate>
+      <description>The Bataan Amphibious Ready Group completed a scheduled patrol in the Mediterranean Sea and is expected to transit the Suez Canal into the Red Sea next week. The ARG includes USS Bataan (LHD-5), USS Mesa Verde (LPD-19) and USS Carter Hall (LSD-50). The 26th Marine Expeditionary Unit is embarked.</description>
+      <category>U.S. Marine Corps</category>
+      <category>Fleet Tracker</category>
+      <category>USS Bataan (LHD-5)</category>
+    </item>
+
+  </channel>
+</rss>

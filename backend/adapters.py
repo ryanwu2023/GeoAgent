@@ -93,7 +93,11 @@ def load_bundle(root: Path):
         target = folder / (key + path.suffix)
         if not target.exists():
             target.write_bytes(content)
-        manifests.append({"file": str(path.relative_to(root)), "hash": key, "archive": target.name})
+        try:
+            label = str(path.relative_to(root))
+        except ValueError:
+            label = "knowledge/" + path.name
+        manifests.append({"file": label, "hash": key, "archive": target.name})
         return content.decode("utf-8-sig") if decode else content
 
     def merge(record, archive):
@@ -235,6 +239,9 @@ def load_bundle(root: Path):
 
     from .report_adapter import load_reports
     load_reports(root,read,manifests,records,sources)
+    from .paths import collector_read_root, knowledge_root
+    if root.resolve() == collector_read_root().resolve() and knowledge_root().is_dir():
+        load_reports(knowledge_root(), read, manifests, records, sources)
     projects=[]
     for project in sorted(root.glob('*')):
         output=project/'output'

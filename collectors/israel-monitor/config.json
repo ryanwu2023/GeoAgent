@@ -1,0 +1,1081 @@
+{
+ "project": "israel-monitor",
+ "topic": "美伊冲突 x 以色列动向（大选与组阁/内塔尼亚胡/黎巴嫩·叙利亚·西岸·加沙四域军事/对伊第二战线）",
+ "schema_ver": "1.0",
+ "parse_ver": 1,
+ "window_days": 14,
+ "per_source_max": 60,
+ "summary_max_chars": 1200,
+ "min_interval_per_host": 1.2,
+ "request_timeout": 30,
+ "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+ "sources": [
+  {
+   "id": "toi-feed",
+   "type": "rss",
+   "url": "https://www.timesofisrael.com/feed/",
+   "tier": "T3",
+   "publisher": "The Times of Israel",
+   "tier_note": "以色列英文大报（对 IDF/官方发布的报道加工层）",
+   "enabled": true,
+   "note": "实测 200 RSS 24KB (2026-09-19)"
+  },
+  {
+   "id": "jpost-rss",
+   "type": "rss",
+   "url": "https://www.jpost.com/rss/rssfeedsfrontpage.aspx",
+   "tier": "T3",
+   "publisher": "Jerusalem Post",
+   "tier_note": "以色列英文大报（无 <?xml 声明的 RSS，探测判定已适配）",
+   "enabled": true,
+   "note": "实测 200 RSS 41KB (2026-09-19)；/rss 返回 HTML 假 200 已弃用"
+  },
+  {
+   "id": "jns-feed",
+   "type": "rss",
+   "url": "https://www.jns.org/feed/",
+   "tier": "T3",
+   "publisher": "JNS",
+   "tier_note": "亲官方立场英文媒体（与 TOI/左翼互验）",
+   "enabled": true,
+   "note": "实测 200 RSS 157KB (2026-09-19) | 2026-09-20：主路径返回 HTTP 202（反爬握手），备用源 /feed/ 实测 200/30 条；已配 alt_urls 自动切换。"
+  },
+  {
+   "id": "aljazeera-all",
+   "type": "rss",
+   "url": "https://www.aljazeera.com/xml/rss/all.xml",
+   "tier": "T3",
+   "publisher": "Al Jazeera",
+   "tier_note": "卡塔尔系区域视角（与以方媒体对照当事方立场；对同一事件的数字常不同口径）",
+   "enabled": true,
+   "note": "实测 200 RSS 17KB (2026-09-19)"
+  },
+  {
+   "id": "mee-rss",
+   "type": "rss",
+   "url": "https://www.middleeasteye.net/rss",
+   "tier": "T3",
+   "publisher": "Middle East Eye",
+   "tier_note": "区域批评视角媒体",
+   "enabled": true,
+   "note": "实测 200 RSS 71KB (2026-09-19)"
+  },
+  {
+   "id": "aawsat-feed",
+   "type": "rss",
+   "url": "https://english.aawsat.com/feed",
+   "tier": "T3",
+   "publisher": "Asharq Al-Awsat",
+   "tier_note": "沙特系英文（黎巴嫩官方伤亡数字的另一转述渠道）",
+   "enabled": true,
+   "note": "实测 200 RSS 209KB (2026-09-19)；/rss 404 弃用"
+  },
+  {
+   "id": "almonitor-rss",
+   "type": "rss",
+   "url": "https://www.al-monitor.com/rss",
+   "tier": "T3",
+   "publisher": "Al-Monitor",
+   "tier_note": "中东专业媒体（政策分析层）",
+   "enabled": true,
+   "note": "实测 200 RSS 16KB (2026-09-19)"
+  },
+  {
+   "id": "bbci-mideast",
+   "type": "rss",
+   "url": "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
+   "tier": "T3",
+   "publisher": "BBC",
+   "tier_note": "国际主流媒体（第三方视角）",
+   "enabled": true,
+   "note": "实测 200 RSS 23KB (2026-09-19)"
+  },
+  {
+   "id": "guardian-mideast",
+   "type": "rss",
+   "url": "https://www.theguardian.com/world/middleeast/rss",
+   "tier": "T3",
+   "publisher": "The Guardian",
+   "tier_note": "国际主流媒体（第三方视角）",
+   "enabled": true,
+   "note": "实测 200 RSS 75KB (2026-09-19)"
+  },
+  {
+   "id": "nyt-mideast",
+   "type": "rss",
+   "url": "https://rss.nytimes.com/services/xml/rss/nyt/MiddleEast.xml",
+   "tier": "T3",
+   "publisher": "NYT",
+   "tier_note": "国际主流媒体（第三方视角）",
+   "enabled": true,
+   "note": "实测 200 RSS 84KB (2026-09-19)"
+  },
+  {
+   "id": "rstatecraft",
+   "type": "rss",
+   "url": "https://responsiblestatecraft.org/feed",
+   "tier": "T3",
+   "publisher": "Responsible Statecraft",
+   "tier_note": "军控/外交政策分析（智库层）",
+   "enabled": true,
+   "note": "实测 200 RSS 327KB (2026-09-19)"
+  },
+  {
+   "id": "un-press",
+   "type": "rss",
+   "url": "https://press.un.org/en/rss.xml",
+   "tier": "T1",
+   "publisher": "United Nations",
+   "tier_note": "UN 新闻稿一手（秘书长表态/安理会）",
+   "enabled": true,
+   "note": "实测 200 RSS 6KB (2026-09-19)"
+  },
+  {
+   "id": "gn-netanyahu",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=Netanyahu+(trial+OR+election+OR+UNGA)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "关键词聚合转述层",
+   "enabled": true,
+   "note": "实测 200 RSS 139KB (2026-09-19)"
+  },
+  {
+   "id": "gn-election-polls",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=Israel+election+poll+Knesset&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "大选民调通道（开票前唯一结果预测层）",
+   "enabled": true,
+   "note": "实测 200 RSS 143KB (2026-09-19)"
+  },
+  {
+   "id": "gn-election-parties",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=Israel+election+(Eisenkot+OR+Bennett+OR+Lapid+OR+Golan)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "主要竞选人动向",
+   "enabled": true,
+   "note": "实测 200 RSS 142KB (2026-09-19)"
+  },
+  {
+   "id": "gn-eisenkot",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=Eisenkot+Yashar+poll&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "艾森科特个人通道",
+   "enabled": true,
+   "note": "实测 200 RSS 142KB (2026-09-19)"
+  },
+  {
+   "id": "gn-idf-lebanon",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=IDF+Lebanon+Hezbollah+strike&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "黎巴嫩军事动向",
+   "enabled": true,
+   "note": "实测 200 RSS 138KB (2026-09-19)"
+  },
+  {
+   "id": "gn-idf-syria",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=Israel+Syria+strike+buffer+zone&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "叙利亚军事动向",
+   "enabled": true,
+   "note": "实测 200 RSS 151KB (2026-09-19)"
+  },
+  {
+   "id": "gn-westbank",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=IDF+%22West+Bank%22+raid+arrest&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "约旦河西岸军事动向",
+   "enabled": true,
+   "note": "实测 200 RSS 159KB (2026-09-19)"
+  },
+  {
+   "id": "gn-gaza",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=Gaza+ceasefire+IDF+buffer&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "加沙停火与缓冲区",
+   "enabled": true,
+   "note": "实测 200 RSS 66KB (2026-09-19)"
+  },
+  {
+   "id": "gn-knesset",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=Knesset+coalition+government+talks&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "组阁动向（开票后主通道）",
+   "enabled": true,
+   "note": "实测 200 RSS 99KB (2026-09-19)"
+  },
+  {
+   "id": "gn-katz",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=Israel+Katz+defense+minister&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "防长表态通道",
+   "enabled": true,
+   "note": "实测 200 RSS 143KB (2026-09-19)"
+  },
+  {
+   "id": "gn-hostages",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=Gaza+hostages+ceasefire+deal&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "人质/停火协议通道",
+   "enabled": true,
+   "note": "实测 200 RSS 144KB (2026-09-19)"
+  },
+  {
+   "id": "gn-annexation",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=Israel+annexation+%22West+Bank%22+settlement&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "吞并/定居点政治动向",
+   "enabled": true,
+   "note": "实测 200 RSS 143KB (2026-09-19)"
+  },
+  {
+   "id": "gn-iran-front",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=Israel+Iran+strike+warn&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "对伊第二战线预警",
+   "enabled": true,
+   "note": "实测 200 RSS 144KB (2026-09-19)"
+  },
+  {
+   "id": "haaretz-rss",
+   "type": "rss",
+   "url": "https://www.haaretz.com/rss",
+   "tier": "T3",
+   "publisher": "Haaretz",
+   "tier_note": "-",
+   "enabled": false,
+   "note": "停用留档 2026-09-19：404；cmlink 历史路径返回 831KB HTML 假 200。替代：toi/jpost/almonitor + gn 通道"
+  },
+  {
+   "id": "ynetnews-rss",
+   "type": "rss",
+   "url": "https://www.ynetnews.com/feed/",
+   "tier": "T3",
+   "publisher": "Ynetnews",
+   "tier_note": "-",
+   "enabled": false,
+   "note": "停用留档 2026-09-19：404；L-3084 历史路径亦 404。替代：toi/jpost"
+  },
+  {
+   "id": "arutzsheva-rss",
+   "type": "rss",
+   "url": "https://www.israelnationalnews.com/rss",
+   "tier": "T3",
+   "publisher": "Arutz Sheva",
+   "tier_note": "-",
+   "enabled": false,
+   "note": "停用留档 2026-09-19：返回 51KB HTML 假 200；RssFeed.ashx 404。替代：jns（同右翼光谱）"
+  },
+  {
+   "id": "i24-rss",
+   "type": "rss",
+   "url": "https://www.i24news.tv/en/rss",
+   "tier": "T3",
+   "publisher": "i24NEWS",
+   "tier_note": "-",
+   "enabled": false,
+   "note": "停用留档 2026-09-19：/rss 与 /en/feed 均返回 HTML。替代：bbci/toi"
+  },
+  {
+   "id": "cradle-rss",
+   "type": "rss",
+   "url": "https://thecradle.co/feed",
+   "tier": "T3",
+   "publisher": "The Cradle",
+   "tier_note": "-",
+   "enabled": false,
+   "note": "停用留档 2026-09-19：403（CDN 拦截，不做风控绕过）。替代：mee/aljazeera"
+  },
+  {
+   "id": "wafa-rss",
+   "type": "rss",
+   "url": "https://english.wafa.ps/rss.xml",
+   "tier": "T1",
+   "publisher": "WAFA",
+   "tier_note": "-",
+   "enabled": false,
+   "note": "停用留档 2026-09-19：404（/page/rss 亦 404）。巴方官方通讯社无可用 RSS；替代：gn-westbank/annexation 转述层"
+  },
+  {
+   "id": "unifil-rss",
+   "type": "rss",
+   "url": "https://unifil.unmissions.org/rss.xml",
+   "tier": "T1",
+   "publisher": "UNIFIL",
+   "tier_note": "-",
+   "enabled": false,
+   "note": "停用留档 2026-09-19：404（/en/rss.xml 亦 404）。替代：gn-idf-lebanon + aawsat 黎官方数字转述"
+  },
+  {
+   "id": "ochaopt",
+   "type": "rss",
+   "url": "https://www.ochaopt.org/rss.xml",
+   "tier": "T1",
+   "publisher": "OCHA oPt",
+   "tier_note": "-",
+   "enabled": false,
+   "note": "停用留档 2026-09-19：404（/feed 亦 404）。西岸/加沙人道数据需走其数据门户 API（后续可探测）"
+  },
+  {
+   "id": "idf-site",
+   "type": "html",
+   "url": "https://www.idf.il/en/",
+   "tier": "T1",
+   "publisher": "IDF",
+   "tier_note": "-",
+   "enabled": false,
+   "note": "停用留档 2026-09-19：返回 959B 壳 HTML（JS 渲染站，无 SSR 内容可抓）。替代：toi/jpost/jns 的 IDF 发言人引述层"
+  },
+  {
+   "id": "pmo-govil",
+   "type": "rss",
+   "url": "https://www.gov.il/en/departments/israelgovernment_rss",
+   "tier": "T1",
+   "publisher": "Israeli PMO",
+   "tier_note": "-",
+   "enabled": false,
+   "note": "停用留档 2026-09-19：403。替代：gn-netanyahu"
+  },
+  {
+   "id": "aawsat-rss-old",
+   "type": "rss",
+   "url": "https://english.aawsat.com/rss",
+   "tier": "T3",
+   "publisher": "Asharq Al-Awsat",
+   "tier_note": "-",
+   "enabled": false,
+   "note": "停用留档 2026-09-19：404。替代：aawsat-feed（/feed 实测 200）"
+  },
+  {
+   "id": "haaretz-sitemaps",
+   "type": "rss",
+   "url": "https://www.haaretz.com/sitemaps/rss.xml",
+   "tier": "T3",
+   "publisher": "Haaretz",
+   "tier_note": "-",
+   "enabled": false,
+   "note": "停用留档 2026-09-19：404。替代：toi/jpost/almonitor"
+  },
+  {
+   "id": "globaltimes",
+   "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+   "tier": "T3",
+   "publisher": "Global Times 环球时报英文版",
+   "enabled": false,
+   "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担",
+   "type": "rss",
+   "tier_note": "中国官媒（转述层：官方立场经其报道加工）"
+  },
+  {
+   "id": "cgtn-world",
+   "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+   "tier": "T3",
+   "publisher": "CGTN 中国环球电视网",
+   "enabled": true,
+   "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）（israel-monitor 项目加注）",
+   "type": "rss",
+   "tier_note": "中国官媒（转述层：官方立场经其报道加工）"
+  }
+ ],
+ "buckets": {
+  "election_polls": {
+   "label": "大选民调/席位预测",
+   "require_all": [
+    [
+     "poll",
+     "survey",
+     "polling",
+     "projection",
+     "exit poll",
+     "pollster",
+     "seats"
+    ],
+    [
+     "election",
+     "knesset",
+     "coalition",
+     "bloc",
+     "vote",
+     "ballot",
+     "campaign",
+     "netanyahu",
+     "eisenkot",
+     "bennett",
+     "lapid"
+    ]
+   ]
+  },
+  "election_campaign": {
+   "label": "大选与组阁动向",
+   "entity_group": "campaign",
+   "require_all": [
+    [
+     "election",
+     "knesset",
+     "coalition",
+     "campaign",
+     "primary",
+     "candidate",
+     "ballot",
+     "seat",
+     "bloc",
+     "mandate",
+     "government",
+     "minister",
+     "party",
+     "poll"
+    ]
+   ]
+  },
+  "netanyahu_trial": {
+   "label": "内塔尼亚胡·司法/法律",
+   "entity_group": "netanyahu",
+   "require_all": [
+    [
+     "trial",
+     "court",
+     "hearing",
+     "case 4000",
+     "case 1000",
+     "case 2000",
+     "bribery",
+     "fraud",
+     "breach of trust",
+     "testimony",
+     "witness",
+     "prosecution",
+     "verdict",
+     "pardon",
+     "icc",
+     "interpol",
+     "indictment",
+     "corruption"
+    ]
+   ]
+  },
+  "lebanon": {
+   "label": "黎巴嫩战线",
+   "require_all": [
+    [
+     "lebanon",
+     "lebanese",
+     "hezbollah",
+     "nabatieh",
+     "southern lebanon",
+     "beirut",
+     "kfar rumman",
+     "mansouri",
+     "ali al-taher",
+     "mount dov",
+     "litani",
+     "unifil",
+     "blue line",
+     "grey line"
+    ],
+    [
+     "idf",
+     "strike",
+     "airstrike",
+     "shelling",
+     "shell",
+     "rocket",
+     "drone",
+     "raid",
+     "troop",
+     "offensive",
+     "gunfire",
+     "kill",
+     "wound",
+     "injure",
+     "casualty",
+     "buffer",
+     "demilitarize",
+     "disarm",
+     "ceasefire",
+     "outpost",
+     "seize",
+     "explosion",
+     "blast",
+     "detonate",
+     "attack",
+     "destroy",
+     "bomb",
+     "threaten",
+     "operation",
+     "incursion",
+     "arrest",
+     "detain",
+     "clash"
+    ]
+   ]
+  },
+  "syria": {
+   "label": "叙利亚战线",
+   "require_all": [
+    [
+     "syria",
+     "syrian",
+     "damascus",
+     "golan heights",
+     "mount hermon",
+     "beit jinn",
+     "maariya",
+     "sweida",
+     "southwestern syria"
+    ],
+    [
+     "idf",
+     "strike",
+     "airstrike",
+     "shelling",
+     "shell",
+     "rocket",
+     "drone",
+     "raid",
+     "troop",
+     "offensive",
+     "gunfire",
+     "kill",
+     "wound",
+     "injure",
+     "casualty",
+     "buffer",
+     "demilitarize",
+     "disarm",
+     "ceasefire",
+     "outpost",
+     "seize",
+     "explosion",
+     "blast",
+     "detonate",
+     "attack",
+     "destroy",
+     "bomb",
+     "threaten",
+     "operation",
+     "incursion",
+     "arrest",
+     "detain",
+     "clash"
+    ]
+   ]
+  },
+  "westbank": {
+   "label": "约旦河西岸",
+   "require_all": [
+    [
+     "west bank",
+     "judea and samaria",
+     "samaria",
+     "nablus",
+     "jenin",
+     "tulkarem",
+     "kabatiya",
+     "talfit",
+     "settlement",
+     "settler",
+     "annexation",
+     "palestinian authority",
+     "temple mount",
+     "al-aqsa"
+    ],
+    [
+     "idf",
+     "strike",
+     "airstrike",
+     "shelling",
+     "shell",
+     "rocket",
+     "drone",
+     "raid",
+     "troop",
+     "offensive",
+     "gunfire",
+     "kill",
+     "wound",
+     "injure",
+     "casualty",
+     "buffer",
+     "demilitarize",
+     "disarm",
+     "ceasefire",
+     "outpost",
+     "seize",
+     "explosion",
+     "blast",
+     "detonate",
+     "attack",
+     "destroy",
+     "bomb",
+     "threaten",
+     "operation",
+     "incursion",
+     "arrest",
+     "detain",
+     "clash"
+    ]
+   ]
+  },
+  "gaza": {
+   "label": "加沙战线",
+   "require_all": [
+    [
+     "gaza",
+     "rafah",
+     "khan yunis",
+     "gaza city",
+     "hamas",
+     "philadelphi corridor",
+     "netzarim",
+     "hostage",
+     "nuseirat",
+     "bureij"
+    ],
+    [
+     "idf",
+     "strike",
+     "airstrike",
+     "shelling",
+     "shell",
+     "rocket",
+     "drone",
+     "raid",
+     "troop",
+     "offensive",
+     "gunfire",
+     "kill",
+     "wound",
+     "injure",
+     "casualty",
+     "buffer",
+     "demilitarize",
+     "disarm",
+     "ceasefire",
+     "outpost",
+     "seize",
+     "explosion",
+     "blast",
+     "detonate",
+     "attack",
+     "destroy",
+     "bomb",
+     "threaten",
+     "operation",
+     "incursion",
+     "arrest",
+     "detain",
+     "clash"
+    ]
+   ]
+  },
+  "iran_front": {
+   "label": "对伊第二战线",
+   "require_all": [
+    [
+     "iran",
+     "iranian",
+     "tehran",
+     "irgc",
+     "revolutionary guard",
+     "enriched uranium",
+     "houthi",
+     "yemen"
+    ]
+   ]
+  },
+  "protest": {
+   "label": "街头行动/抗议",
+   "require_all": [
+    [
+     "protest",
+     "rally",
+     "demonstration",
+     "march",
+     "gather",
+     "vigil",
+     "mobilize",
+     "demonstrator"
+    ]
+   ]
+  }
+ },
+ "entities": {
+  "netanyahu": {
+   "Benjamin Netanyahu": [
+    "Benjamin Netanyahu",
+    "Netanyahu"
+   ]
+  },
+  "campaign": {
+   "Benjamin Netanyahu": [
+    "Benjamin Netanyahu",
+    "Netanyahu"
+   ],
+   "Gadi Eisenkot": [
+    "Gadi Eisenkot",
+    "Eisenkot",
+    "Gadi Eizenkot",
+    "Eizenkot"
+   ],
+   "Naftali Bennett": [
+    "Naftali Bennett",
+    "Bennett"
+   ],
+   "Yair Lapid": [
+    "Yair Lapid",
+    "Lapid"
+   ],
+   "Yair Golan": [
+    "Yair Golan"
+   ],
+   "Avigdor Lieberman": [
+    "Avigdor Lieberman",
+    "Lieberman",
+    "Liberman"
+   ],
+   "Aryeh Deri": [
+    "Aryeh Deri",
+    "Deri"
+   ],
+   "Itamar Ben-Gvir": [
+    "Itamar Ben-Gvir",
+    "Ben-Gvir",
+    "Ben Gvir"
+   ],
+   "Bezalel Smotrich": [
+    "Bezalel Smotrich",
+    "Smotrich"
+   ],
+   "Gideon Sa'ar": [
+    "Gideon Sa'ar",
+    "Sa'ar"
+   ],
+   "Benny Gantz": [
+    "Benny Gantz",
+    "Gantz"
+   ],
+   "Mansour Abbas": [
+    "Mansour Abbas"
+   ],
+   "Yitzhak Goldknopf": [
+    "Goldknopf"
+   ],
+   "Yossi Fuchs": [
+    "Yossi Fuchs"
+   ]
+  },
+  "officials": {
+   "Israel Katz": [
+    "Israel Katz",
+    "Defense Minister Katz",
+    "Katz"
+   ],
+   "Isaac Herzog": [
+    "Isaac Herzog",
+    "Herzog"
+   ],
+   "Gali Baharav-Miara": [
+    "Baharav-Miara",
+    "Baharav Miara"
+   ],
+   "Eyal Zamir": [
+    "Eyal Zamir",
+    "Zamir"
+   ],
+   "Joseph Aoun": [
+    "Joseph Aoun",
+    "President Aoun"
+   ],
+   "Nawaf Salam": [
+    "Nawaf Salam",
+    "President Salam"
+   ],
+   "Ahmed al-Sharaa": [
+    "al-Sharaa",
+    "al-Shara"
+   ]
+  }
+ },
+ "stance": {
+  "anti": [
+   "oppose",
+   "against",
+   "condemn",
+   "criticize",
+   "criticism",
+   "slam",
+   "blast",
+   "denounce",
+   "corruption",
+   "bribery",
+   "resign",
+   "quit",
+   "unfit",
+   "replace",
+   "unseat",
+   "downfall",
+   "landslide defeat",
+   "must go",
+   "step down",
+   "backlash",
+   "outrage",
+   "furious",
+   "failure",
+   "fail",
+   "fiasco",
+   "blunder",
+   "betray",
+   "distrust",
+   "untrustworthy",
+   "protest",
+   "demonstrat"
+  ],
+  "pro": [
+   "support",
+   "defend",
+   "praise",
+   "applaud",
+   "endorse",
+   "commend",
+   "hail",
+   "approve",
+   "back",
+   "standing behind",
+   "resolve",
+   "deterrence",
+   "victory",
+   "vindicate",
+   "justif",
+   "necessary",
+   "firm",
+   "determine"
+  ]
+ },
+ "kind_rules": {
+  "fact_poll": "election_polls 桶命中 且 抽出至少一个百分比数字（发布值=事实）",
+  "fact_vote": "开票/组阁结果词命中（exit poll/results/ballots counted/mandate/coalition agreement）且 election 桶命中",
+  "fact_event": "事件动词命中（军事打击/突袭/逮捕/会晤/辞职/宣判等，可核验）",
+  "opinion_statement": "实体命中 或 引语标记（said/vowed/warned/...）；『他说了X』是事实、X 是观点",
+  "opinion_analysis": "以上皆不中时的默认（分析/转述）"
+ },
+ "election_baseline": [
+  {
+   "date": "2026-10-27",
+   "item": "第 26 届议会选举投票日",
+   "value": "120 席、61 席过半；已登记 38 份名单，门槛 3.25%",
+   "tier": "T1",
+   "src": "Knesset 基本法（Wikipedia/中央选举委员会 转写 2026-09-19）",
+   "note": "第 25 届议会系 1988 年以来首个任满 4 年整的议会；双重信封票 10-29 计、官方结果 11-04、随后总统授权组阁"
+  },
+  {
+   "date": "2026-09-15",
+   "item": "10 家民调均值（名单席次）",
+   "value": "Yashar(Eisenkot) 23 / Likud 23 / Together(Bennett&Lapid) 12 / Democrats(Golan) 9 / Shas 8 / UTJ 8 / YB 8 / Otzma Yehudit 7 / Joint List 7 / RZ 6 / Ra'am 5",
+   "tier": "T3",
+   "src": "The Petek 民调聚合（2026-09-19）",
+   "note": "阵营合计：反对派 52 vs 执政联盟 52，均不过 61"
+  },
+  {
+   "date": "2026-09-05",
+   "item": "Channel 12 (Lazar) 民调",
+   "value": "Yashar 25 / Likud 21 / Together 13 / Democrats 10 / YB 9 / UTJ 8 / Shas 7 / Otzma 6 / RZ 5；阿拉伯政党合计 11",
+   "tier": "T3",
+   "src": "Channel 12 经 arrahmah 转写（2026-09-19）",
+   "note": "反对派 68（含阿拉伯政党 11），但犹太反对派领袖均拒绝与阿拉伯政党合作组阁"
+  },
+  {
+   "date": "2026-09-10",
+   "item": "Channel 13 总理人选偏好",
+   "value": "Eisenkot 45% vs Netanyahu 36%",
+   "tier": "T3",
+   "src": "Channel 13 经 global1.news 转写（2026-09-19）",
+   "note": "同民调：Netanyahu 阵营 54 席 vs 犹太反对派 52 + 阿拉伯政党 14"
+  },
+  {
+   "date": "2026-06-30",
+   "item": "内塔尼亚胡支持率轨迹",
+   "value": "40.5%（3 月初）→ 29.4%（6 月底）；72.5% 不信其言论；56.4% 认为战争表现失败",
+   "tier": "T3",
+   "src": "新华网/头条转写（2026-09-19）",
+   "note": "美伊 4-8 停火后支持率持续下行；具体机构口径未注明，引用须再回源"
+  },
+  {
+   "date": "2026-08-17",
+   "item": "利库德初选",
+   "value": "Netanyahu 连任党魁",
+   "tier": "T3",
+   "src": "REUTERS/JPost 照片说明转写（2026-09-19）",
+   "note": "大选前党内程序性事件"
+  }
+ ],
+ "netanyahu_baseline": [
+  {
+   "date": "2026-06-24",
+   "item": "本人作证阶段结束",
+   "value": "98 场听证、历时一年半",
+   "tier": "T3",
+   "src": "JPost 转写（2026-09-19）",
+   "note": "案件进入辩护阶段"
+  },
+  {
+   "date": "2026-09-06",
+   "item": "审判夏季休庭后复庭",
+   "value": "耶路撒冷地院；本周 4 天听证；辩护方传唤 Elkin 交叉质证",
+   "tier": "T3",
+   "src": "JPost 转写（2026-09-19）",
+   "note": "选举前预计约 20 场听证；10-04 起改为每周 5 天"
+  },
+  {
+   "date": "2026-09-06",
+   "item": "Case 4000 受贿指控存疑",
+   "value": "法官 6 月即表态证据难以支撑受贿罪、建议检方撤控；检方未撤",
+   "tier": "T3",
+   "src": "JPost/daily8 转写（2026-09-19）",
+   "note": "若定罪最高 10 年；辩护律师威胁传唤数百证人拖延"
+  },
+  {
+   "date": "2026-04-26",
+   "item": "总统拒绝赦免",
+   "value": "赫尔佐格决定暂不赦免，寻求促成认罪协议",
+   "tier": "T3",
+   "src": "百度百科/媒体转写（2026-09-19）",
+   "note": "Haaretz：若胜选将撤换总检察长；若败选或认罪换减刑"
+  },
+  {
+   "date": "2026-08-31",
+   "item": "土耳其请求国际刑警红色通报",
+   "value": "土司法部长宣布已向 Interpol 提交请求",
+   "tier": "T3",
+   "src": "百度百科转写（2026-09-19）",
+   "note": " ICC 逮捕令（2024-11 签发）之外的第二重法律风险"
+  },
+  {
+   "date": "2026-09-23",
+   "item": "联大行程",
+   "value": "9-23 抵纽约、9-24 联大演讲、当晚返以（24 小时旋风式）",
+   "tier": "T3",
+   "src": "百度百科转写（2026-09-19）",
+   "note": "专机绕飞约 600km 规避欧洲部分国家领空（ICC 逮捕令）"
+  }
+ ],
+ "military_baseline": [
+  {
+   "domain": "lebanon",
+   "date": "2026-06-24",
+   "item": "黎以框架协议 + 美伊谅解备忘录",
+   "value": "3 月真主党参战后开始的以军空袭与地面进攻降温",
+   "tier": "T3",
+   "src": "Asharq Al-Awsat/JNS 转写（2026-09-19）",
+   "note": "黎方称 3 月以来 4300+ 死亡（黎卫生部长口径，T3）；真主党 6-20 后再未认领袭击"
+  },
+  {
+   "domain": "lebanon",
+   "date": "2026-09-04",
+   "item": "以军宣布夺取 Ali al-Taher 高地",
+   "value": "36 装甲师清剿指挥隧道；Katz：不解除真主党武装不撤出安全区",
+   "tier": "T3",
+   "src": "JNS 转写 IDF/Katz 声明（2026-09-19）",
+   "note": "安全区纵深约 10km；以媒称正筹划撤至 'Grey Line'（黎境内 3-4km）但未经政治层批准"
+  },
+  {
+   "domain": "lebanon",
+   "date": "2026-09-07",
+   "item": "Kfar Rumman 空袭 12 死",
+   "value": "以方称回应真主党 2 架爆炸无人机袭击安全区部队",
+   "tier": "T3",
+   "src": "Asharq Al-Awsat/AP 转写（2026-09-19）",
+   "note": "黎总统 Aoun 呼吁美国与国际社会干预"
+  },
+  {
+   "domain": "gaza",
+   "date": "2026-01-31",
+   "item": "人质线闭环",
+   "value": "最后 1 名在世被押人质 2025-10 获释；最后一具遗体 2026-01 归还",
+   "tier": "T3",
+   "src": "NEWSru/itsbaba 转写（2026-09-19）",
+   "note": "加沙正式停火生效中；IDF 控制加沙 60%+ 缓冲区，称将打击违反者与定点清除"
+  },
+  {
+   "domain": "gaza",
+   "date": "2026-09-04",
+   "item": "Khan Yunis 定点清除",
+   "value": "Nukhba 连长 al-Qadi 被击毙（参与 10-7 与看押人质）",
+   "tier": "T3",
+   "src": "JPost 转写 IDF 声明（2026-09-19）",
+   "note": "停火期内定点清除仍在进行"
+  },
+  {
+   "domain": "syria",
+   "date": "2026-09-11",
+   "item": "叙利亚西南缓冲区",
+   "value": "以军持续控制叙西南缓冲区并周期性打击；Beit Jinn/Maariya 附近遭炮击",
+   "tier": "T3",
+   "src": "Helm/itsbaba 转写（2026-09-19）",
+   "note": "9-9 内塔尼亚胡访戈兰高地，叙利亚过渡政府谴责'非法入境'"
+  },
+  {
+   "domain": "westbank",
+   "date": "2026-09-04",
+   "item": "纳布卢斯造枪工坊清剿",
+   "value": "两天行动拆除 30+ 造枪车床、捕 10+ 通缉犯；内塔尼亚胡亲自表态",
+   "tier": "T3",
+   "src": "JPost 转写 IDF 声明（2026-09-19）",
+   "note": "9-15 Talfit/Bir Neballa 再有缴械与逮捕；赎罪日前巴区实施封锁"
+  }
+ ],
+ "report": {
+  "title": "美伊冲突·以色列动向监测日报",
+  "known_limitations": [
+   "大选结果未发生（2026-10-27 投票）：开票前所有『席位』均为民调预测值（T3），不是结果；本程序在开票后仅捕获报道转述，官方结果须回源中央选举委员会",
+   "民调数字为『发布值』（一手或转述），程序只定位不加权；以色列各机构口径（含/不含阿拉伯政党、超额选票协议）差异大，跨机构只看方向",
+   "四域军事动向以 IDF 官方声明（经 T3 转述）与对方口径（黎卫生部长/哈马斯卫生部）并存，伤亡数字双方可差数倍，逐条标注口径来源；IDF 官网为 JS 渲染站无法直连，其声明经媒体转述捕获（T3）",
+   "真主党/哈马斯等组织表态无直接采集渠道，全部经 T3 转述，存在延迟与选择性",
+   "『立场分类』是启发式词表判断，只看方向不看强度，逐条附上下文可人工复核",
+   "T4（社交平台自媒体）不采集：不可核验；Google News 通道查全率受查询词覆盖面限制，未见报道≠没有事件"
+  ]
+ },
+ "max_age_days": 365,
+ "glossary": {
+  "he": {
+   "ממשלה": "政府",
+   "בחירות": "选举",
+   "ראש הממשלה": "总理",
+   "כנסת": "议会",
+   "צהל": "以色列国防军",
+   "תקיפה": "袭击/打击",
+   "הסכם": "协议",
+   "הפסקת אש": "停火",
+   "חטופים": "被扣押人员",
+   "עזה": "加沙",
+   "חמאס": "哈马斯",
+   "חיזבאללה": "真主党",
+   "איראן": "伊朗",
+   "טילים": "导弹",
+   "מלחמה": "战争"
+  }
+ }
+}

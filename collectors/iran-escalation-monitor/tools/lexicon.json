@@ -1,0 +1,1839 @@
+{
+ "_note": "六大关注域语料库。★ 词表一律写【基础形】（如 attack 而非 attacked / attackt），词形族由代码按词尾自动派生。★ 需要「动作词 × 目标词」同时命中才成立的桶，用 require_all（二维数组，各组内任一命中即可，组间必须全部命中），这是本主题提精度的关键：单靠 attack 会命中一切攻击新闻。",
+ "zones": [
+  {
+   "id": "naval_platform",
+   "name": "打击美军海上作战平台",
+   "order": 1,
+   "desc": "对美军舰艇/航母/驱逐舰/两栖舰的攻击、交战、拦截、驱离；反舰导弹与无人艇蜂群；美方增援与否认。"
+  },
+  {
+   "id": "chokepoint",
+   "name": "霍尔木兹 / 曼德海峡双线施压",
+   "order": 2,
+   "desc": "威胁封锁或关闭海峡、海峡附近演习、对商船的扣押与袭扰、两线同时施压的表述。"
+  },
+  {
+   "id": "energy_infra",
+   "name": "打击美方盟友关键能源设施",
+   "order": 3,
+   "desc": "对炼油厂/油气田/油码头/管道的打击与打击威胁；点名式设施（Abqaiq、Ras Tanura、Kharg 等）。"
+  },
+  {
+   "id": "cable",
+   "name": "切断海峡海底光缆",
+   "order": 4,
+   "desc": "对海底光缆的切断/破坏威胁；光缆中断事故；点名光缆系统（AAE-1、SEA-ME-WE、FALCON 等）。"
+  },
+  {
+   "id": "nuclear",
+   "name": "核试验与核计划里程碑",
+   "order": 5,
+   "desc": "核试验/核爆；浓缩里程碑（60%→90%→武器级）；IAEA 对峙与退出 NPT；武器化表述。"
+  },
+  {
+   "id": "readiness",
+   "name": "一般战备与军事准备",
+   "order": 6,
+   "desc": "战备状态声明、导弹试射、军事演习、否认与战损承认、威慑与报复威胁。"
+  },
+  {
+   "id": "foresight",
+   "name": "升级前瞻（未来 1–4 周）",
+   "order": 7,
+   "desc": "★ 未来时/条件式/临战式表述：「将会打击」「若不……则」「已进入最后阶段」「随时」。这是本项目的核心增量：不问「已经发生了什么」，而问「下一步要做什么」。"
+  }
+ ],
+ "relevance": {
+  "display_threshold": 3,
+  "strong": [
+   "strait of hormuz",
+   "hormuz",
+   "bab el-mandeb",
+   "bab al-mandeb",
+   "red sea shipping",
+   "aircraft carrier",
+   "carrier strike group",
+   "us navy",
+   "u.s. navy",
+   "warship",
+   "anti-ship missile",
+   "anti-ship ballistic",
+   "asbm",
+   "naval mine",
+   "drone boat",
+   "nuclear test",
+   "nuclear weapon",
+   "nuclear warhead",
+   "uranium enrichment",
+   "weapons grade",
+   "undersea cable",
+   "submarine cable",
+   "subsea cable",
+   "fiber optic cable",
+   "oil refinery",
+   "oil terminal",
+   "abqaiq",
+   "ras tanura",
+   "kharg",
+   "ballistic missile",
+   "cruise missile",
+   "hypersonic",
+   "close the strait",
+   "blockade",
+   "chokepoint",
+   "آمادگی",
+   "تنگه هرمز",
+   "دریای سرخ",
+   "باب‌المندب",
+   "موشک بالستیک",
+   "موشک کروز",
+   "پهپاد",
+   "ناوشکن",
+   "ناو هواپیمابر",
+   "هسته‌ای",
+   "غنی‌سازی",
+   "آزمایش هسته‌ای",
+   "پالایشگاه",
+   "کابل زیردریایی",
+   "رزمایش"
+  ],
+  "medium": [
+   "iran",
+   "iranian",
+   "irgc",
+   "revolutionary guard",
+   "tehran",
+   "persian gulf",
+   "gulf of oman",
+   "centcom",
+   "fifth fleet",
+   "5th fleet",
+   "navcent",
+   "pentagon",
+   "defense department",
+   "houthi",
+   "ansarallah",
+   "yemen",
+   "saudi",
+   "uae",
+   "kuwait",
+   "qatar",
+   "bahrain",
+   "oman",
+   "iraq",
+   "destroyer",
+   "frigate",
+   "amphibious",
+   "marine",
+   "naval",
+   "navy",
+   "missile",
+   "drone",
+   "uav",
+   "refinery",
+   "oil",
+   "gas",
+   "energy infrastructure",
+   "pipeline",
+   "tanker",
+   "shipping",
+   "vessel",
+   "iaea",
+   "enrichment",
+   "nuclear",
+   "centrifuge",
+   "fordow",
+   "natanz",
+   "isfahan",
+   "arak",
+   "cable",
+   "telecom",
+   "internet",
+   "escalation",
+   "retaliation",
+   "strike",
+   "attack",
+   "readiness",
+   "mobilization",
+   "drill",
+   "exercise",
+   "سپاه",
+   "ایران",
+   "خلیج فارس",
+   "نیروی دریایی",
+   "موشک",
+   "پدافند",
+   "رزمی",
+   "تهران",
+   "نفت",
+   "انرژی",
+   "تأسیسات",
+   "هسته‌ای",
+   "مذاکره",
+   "تحریم",
+   "نفتی"
+  ],
+  "anchor": [
+   "iran",
+   "iranian",
+   "irgc",
+   "tehran",
+   "khamenei",
+   "revolutionary guard",
+   "sepah",
+   "hormuz",
+   "gulf",
+   "persian gulf",
+   "bab el-mandeb",
+   "red sea",
+   "suez",
+   "saudi",
+   "emirati",
+   "uae",
+   "kuwait",
+   "qatar",
+   "bahrain",
+   "yemen",
+   "houthi",
+   "us",
+   "u.s.",
+   "american",
+   "centcom",
+   "pentagon",
+   "washington",
+   "ایران",
+   "تهران",
+   "سپاه",
+   "خلیج",
+   "هرمز",
+   "دریای سرخ",
+   "عربستان",
+   "یمن",
+   "یمنی"
+  ],
+  "domain": [
+   "military",
+   "armed forces",
+   "navy",
+   "naval",
+   "air force",
+   "missile",
+   "drone",
+   "uav",
+   "warfare",
+   "combat",
+   "strike",
+   "attack",
+   "weapon",
+   "nuclear",
+   "submarine",
+   "carrier",
+   "warship",
+   "radar",
+   "air defense",
+   "sanctions",
+   "troops",
+   "deployment",
+   "نظامی",
+   "ارتش",
+   "رزم",
+   "موشک",
+   "پهپاد",
+   "هسته‌ای",
+   "دریایی",
+   "رزمی"
+  ],
+  "note": "anchor=当事方/地区词，domain=军事领域词。展示闸门要求【信号命中】且【anchor≥1 或 domain≥1 或该源本身是主题锚定源】。全部记录仍完整写入 JSONL。"
+ },
+ "signals": {
+  "us_naval_attack": {
+   "zone": "naval_platform",
+   "label": "攻击美方海上平台",
+   "weight": 5,
+   "require_all": [
+    [
+     "attack",
+     "strike",
+     "hitting",
+     "hit",
+     "target",
+     "sink",
+     "sunk",
+     "damage",
+     "destroy",
+     "intercept",
+     "repel",
+     "repelled",
+     "fire on",
+     "fired on",
+     "board",
+     "seize",
+     "seizure",
+     "harass",
+     "swarm",
+     "engage",
+     "engaged",
+     "pound",
+     "assault",
+     "ambush",
+     "ram",
+     "حمله",
+     "هدف",
+     "غرق",
+     "اصابت",
+     "سرنگون",
+     "توقیف",
+     "struck",
+     "targeted",
+     "launch"
+    ],
+    [
+     "us navy",
+     "u.s. navy",
+     "american warship",
+     "warship",
+     "aircraft carrier",
+     "carrier",
+     "destroyer",
+     "frigate",
+     "amphibious",
+     "uss ",
+     "5th fleet",
+     "fifth fleet",
+     "navcent",
+     "naval base",
+     "aegis",
+     "arleigh burke",
+     "littoral combat",
+     "ناوشکن",
+     "ناو هواپیمابر",
+     "ناو آمریکایی",
+     "نیروی دریایی آمریکا"
+    ]
+   ],
+   "note": "★ 二维要求：必须有「动作」且有「美方海上平台」。单靠 attack 会命中一切攻击新闻。"
+  },
+  "anti_ship_weapon": {
+   "zone": "naval_platform",
+   "label": "反舰武器使用/宣称",
+   "weight": 3,
+   "phrases": [
+    "anti-ship missile",
+    "anti-ship ballistic",
+    "anti-ship cruise",
+    "asbm",
+    "naval mine",
+    "sea mine",
+    "mine the water",
+    "drone boat",
+    "unmanned surface vessel",
+    "usv",
+    "suicide boat",
+    "explosive boat",
+    "swarm attack",
+    "fast attack craft",
+    "موشک ضدکشتی",
+    "مین دریایی",
+    "قایق انتحاری",
+    "شناور بدون سرنشین"
+   ]
+  },
+  "us_naval_reinforce": {
+   "zone": "naval_platform",
+   "label": "美方海上增援/前出",
+   "weight": 3,
+   "require_all": [
+    [
+     "deploy",
+     "deployment",
+     "surge",
+     "reinforce",
+     "reposition",
+     "send",
+     "sail",
+     "sailing",
+     "transit",
+     "arrive",
+     "arrived",
+     "heading to",
+     "divert",
+     "redirect",
+     "second carrier",
+     "اعزام",
+     "استقرار",
+     "تقویت"
+    ],
+    [
+     "carrier",
+     "carrier strike group",
+     "csg",
+     "warship",
+     "destroyer",
+     "navy",
+     "fleet",
+     "amphibious ready group",
+     "arg",
+     "marines"
+    ]
+   ]
+  },
+  "naval_platform_mentioned": {
+   "zone": "naval_platform",
+   "label": "美方海上平台提及",
+   "weight": 1,
+   "phrases": [
+    "us navy",
+    "u.s. navy",
+    "warship",
+    "aircraft carrier",
+    "carrier strike group",
+    "destroyer",
+    "frigate",
+    "amphibious ready group",
+    "uss ",
+    "5th fleet",
+    "fifth fleet",
+    "navcent",
+    "centcom naval",
+    "naval forces central",
+    "ناوشکن",
+    "ناو هواپیمابر",
+    "نیروی دریایی آمریکا"
+   ]
+  },
+  "hormuz_threat": {
+   "zone": "chokepoint",
+   "label": "霍尔木兹封锁威胁",
+   "weight": 5,
+   "require_all": [
+    [
+     "close",
+     "closing",
+     "closure",
+     "block",
+     "blockade",
+     "shut",
+     "seal off",
+     "choke off",
+     "cut off",
+     "mine",
+     "control",
+     "threaten",
+     "disrupt",
+     "halt",
+     "stop",
+     "بستن",
+     "بسته",
+     "مسدود",
+     "کنترل",
+     "تهدید"
+    ],
+    [
+     "hormuz",
+     "strait",
+     "persian gulf",
+     "gulf of oman",
+     "هرمز",
+     "تنگه",
+     "خلیج فارس"
+    ]
+   ]
+  },
+  "hormuz_mention": {
+   "zone": "chokepoint",
+   "label": "霍尔木兹提及",
+   "weight": 1,
+   "phrases": [
+    "hormuz",
+    "strait of hormuz",
+    "persian gulf",
+    "gulf of oman",
+    "هرمز",
+    "تنگه هرمز",
+    "خلیج فارس"
+   ]
+  },
+  "babelmandeb_threat": {
+   "zone": "chokepoint",
+   "label": "曼德海峡/红海威胁",
+   "weight": 5,
+   "require_all": [
+    [
+     "close",
+     "closing",
+     "closure",
+     "block",
+     "blockade",
+     "shut",
+     "attack",
+     "strike",
+     "target",
+     "hijack",
+     "seize",
+     "seizure",
+     "harass",
+     "disrupt",
+     "halt",
+     "suspend",
+     "mine",
+     "threaten",
+     "بستن",
+     "مسدود",
+     "حمله",
+     "توقیف",
+     "تهدید",
+     "struck",
+     "targeted"
+    ],
+    [
+     "bab el-mandeb",
+     "bab al-mandeb",
+     "mandeb",
+     "red sea",
+     "gulf of aden",
+     "suez",
+     "باب‌المندب",
+     "دریای سرخ",
+     "خلیج عدن",
+     "سوئز"
+    ]
+   ]
+  },
+  "shipping_interdiction": {
+   "zone": "chokepoint",
+   "label": "商船扣押/袭扰",
+   "weight": 4,
+   "require_all": [
+    [
+     "seize",
+     "seized",
+     "seizure",
+     "hijack",
+     "hijacked",
+     "board",
+     "boarded",
+     "detain",
+     "impound",
+     "capture",
+     "attack",
+     "attacked",
+     "strike",
+     "harass",
+     "intercept",
+     "divert",
+     "توقیف",
+     "ربایش",
+     "حمله",
+     "توقیف شده",
+     "struck",
+     "targeted"
+    ],
+    [
+     "tanker",
+     "oil tanker",
+     "merchant vessel",
+     "merchant ship",
+     "cargo ship",
+     "container ship",
+     "bulk carrier",
+     "vessel",
+     "shipping",
+     "maritime",
+     "port",
+     "نفتکش",
+     "کشتی تجاری",
+     "شناور",
+     "بندر"
+    ]
+   ]
+  },
+  "chokepoint_drill": {
+   "zone": "chokepoint",
+   "label": "海峡附近演习",
+   "weight": 3,
+   "require_all": [
+    [
+     "drill",
+     "exercise",
+     "maneuver",
+     "war game",
+     "live fire",
+     "naval drill",
+     "simulation",
+     "رزمایش",
+     "مانور"
+    ],
+    [
+     "strait",
+     "hormuz",
+     "persian gulf",
+     "gulf of oman",
+     "red sea",
+     "bab el-mandeb",
+     "naval",
+     "fleet",
+     "تنگه",
+     "هرمز",
+     "خلیج",
+     "دریا"
+    ]
+   ]
+  },
+  "dual_front": {
+   "zone": "chokepoint",
+   "label": "双线/两线施压表述",
+   "weight": 4,
+   "phrases": [
+    "two fronts",
+    "two chokepoints",
+    "dual pressure",
+    "simultaneous pressure",
+    "both straits",
+    "two straits",
+    "multiple fronts",
+    "northern and southern",
+    "در دو جبهه",
+    "دو تنگه",
+    "دو جبهه"
+   ]
+  },
+  "energy_strike": {
+   "zone": "energy_infra",
+   "label": "打击能源设施",
+   "weight": 5,
+   "require_all": [
+    [
+     "strike",
+     "struck",
+     "attack",
+     "attacked",
+     "target",
+     "targeted",
+     "bomb",
+     "drone",
+     "missile",
+     "sabotage",
+     "sabotaged",
+     "hit",
+     "hitting",
+     "damage",
+     "destroy",
+     "set ablaze",
+     "explosion",
+     "حمله",
+     "هدف",
+     "انفجار",
+     "خرابکاری",
+     "اصابت"
+    ],
+    [
+     "refinery",
+     "oil facility",
+     "oil terminal",
+     "oil field",
+     "gas field",
+     "gas plant",
+     "pipeline",
+     "petrochemical",
+     "loading terminal",
+     "desalination",
+     "power plant",
+     "energy infrastructure",
+     "aramco",
+     "adnoc",
+     "پالایشگاه",
+     "تأسیسات نفتی",
+     "میدان نفتی",
+     "خط لوله",
+     "پتروشیمی",
+     "تأسیسات"
+    ]
+   ]
+  },
+  "energy_facility_named": {
+   "zone": "energy_infra",
+   "label": "点名能源设施",
+   "weight": 3,
+   "phrases": [
+    "abqaiq",
+    "ras tanura",
+    "kharg",
+    "khark",
+    "shaybah",
+    "khurais",
+    "yanbu",
+    "fujairah",
+    "ruwais",
+    "mina al-ahmadi",
+    "mina saud",
+    "basra terminal",
+    "bandar abbas",
+    "jubail",
+    "ras laffan",
+    "north field",
+    "south pars",
+    "خورج",
+    "عسلویه",
+    "پارس جنوبی",
+    "بندرعباس"
+   ]
+  },
+  "energy_threat": {
+   "zone": "energy_infra",
+   "label": "能源断供威胁",
+   "weight": 4,
+   "require_all": [
+    [
+     "cut off",
+     "cut the flow",
+     "halt",
+     "disrupt",
+     "choke off",
+     "stop the flow",
+     "shut down",
+     "strangle",
+     "blockade",
+     "deny access",
+     "target",
+     "قطع",
+     "متوقف",
+     "مسدود"
+    ],
+    [
+     "oil",
+     "gas",
+     "energy",
+     "export",
+     "supply",
+     "shipment",
+     "barrel",
+     "crude",
+     "نفت",
+     "گاز",
+     "انرژی",
+     "صادرات"
+    ]
+   ]
+  },
+  "cable_threat": {
+   "zone": "cable",
+   "label": "海底光缆切断威胁",
+   "weight": 5,
+   "require_all": [
+    [
+     "cut",
+     "cutting",
+     "sever",
+     "severed",
+     "damage",
+     "damaged",
+     "sabotage",
+     "sabotaged",
+     "target",
+     "attack",
+     "disrupt",
+     "destroy",
+     "break",
+     "tamper",
+     "قطع",
+     "خرابکاری",
+     "تخریب",
+     "آسیب"
+    ],
+    [
+     "undersea cable",
+     "submarine cable",
+     "subsea cable",
+     "fiber optic cable",
+     "fibre optic",
+     "internet cable",
+     "data cable",
+     "telecom cable",
+     "cable system",
+     "کابل زیردریایی",
+     "کابل مخابراتی",
+     "فیبر نوری"
+    ]
+   ]
+  },
+  "cable_incident": {
+   "zone": "cable",
+   "label": "光缆中断事故",
+   "weight": 3,
+   "phrases": [
+    "cable cut",
+    "cable damaged",
+    "cable outage",
+    "cable severed",
+    "cable fault",
+    "internet outage",
+    "internet blackout",
+    "connectivity disrupted",
+    "cable break",
+    "قطع کابل",
+    "اختلال اینترنت"
+   ]
+  },
+  "cable_named": {
+   "zone": "cable",
+   "label": "点名光缆系统",
+   "weight": 2,
+   "phrases": [
+    "aae-1",
+    "sea-me-we",
+    "smw",
+    "falcon",
+    "2africa",
+    "imewe",
+    "europe india gateway",
+    "blue raman",
+    "red sea cable",
+    "smw5",
+    "smw-5",
+    "seacom",
+    "eassy",
+    "teams cable",
+    "gulf bridge",
+    "gbi"
+   ]
+  },
+  "nuclear_test": {
+   "zone": "nuclear",
+   "label": "核试验/核爆",
+   "weight": 6,
+   "phrases": [
+    "nuclear test",
+    "nuclear testing",
+    "nuclear explosion",
+    "nuclear detonation",
+    "atomic test",
+    "atomic explosion",
+    "nuclear device",
+    "nuclear yield",
+    "underground nuclear",
+    "test a nuclear",
+    "detonate a nuclear",
+    "nuclear blast",
+    "seismic event nuclear",
+    "آزمایش هسته‌ای",
+    "انفجار هسته‌ای",
+    "آزمایش اتمی"
+   ]
+  },
+  "enrichment_milestone": {
+   "zone": "nuclear",
+   "label": "浓缩里程碑",
+   "weight": 5,
+   "phrases": [
+    "uranium enrichment",
+    "enrich uranium",
+    "enrichment level",
+    "60 percent",
+    "60%",
+    "90 percent",
+    "90%",
+    "weapons grade",
+    "weapon-grade",
+    "highly enriched",
+    "heu",
+    "uranium metal",
+    "centrifuge cascade",
+    "ir-9",
+    "ir-6",
+    "advanced centrifuge",
+    "غنی‌سازی اورانیوم",
+    "غنی‌سازی",
+    "سانتریفیوژ",
+    "درصد غنی‌سازی"
+   ]
+  },
+  "weaponization": {
+   "zone": "nuclear",
+   "label": "核武器化",
+   "weight": 5,
+   "phrases": [
+    "nuclear warhead",
+    "nuclear weapon",
+    "nuclear bomb",
+    "atomic bomb",
+    "nuclear breakout",
+    "weaponization",
+    "weaponisation",
+    "nuclear payload",
+    "nuclear capable",
+    "nuclear threshold",
+    "nuclear deterrent",
+    "کلاهک هسته‌ای",
+    "سلاح هسته‌ای",
+    "بمب اتمی"
+   ]
+  },
+  "iaea_standoff": {
+   "zone": "nuclear",
+   "label": "IAEA 对峙/退出 NPT",
+   "weight": 4,
+   "phrases": [
+    "iaea",
+    "safeguards",
+    "board of governors",
+    "snapback",
+    "jcpoa",
+    "npt",
+    "non-proliferation",
+    "additional protocol",
+    "inspectors",
+    "resolution against iran",
+    "censure",
+    "آژانس بین‌المللی انرژی اتمی",
+    "پادمان",
+    "برجام",
+    "ان‌پی‌تی",
+    "بازرسان"
+   ]
+  },
+  "readiness_claim": {
+   "zone": "readiness",
+   "label": "战备状态声明",
+   "weight": 3,
+   "phrases": [
+    "combat readiness",
+    "operational readiness",
+    "readiness level",
+    "military readiness",
+    "force readiness",
+    "fully prepared",
+    "fully ready",
+    "combat ready",
+    "combat-ready",
+    "highest state of readiness",
+    "state of readiness",
+    "ready to respond",
+    "ready for any",
+    "prepared for any",
+    "on high alert",
+    "highest alert",
+    "high state of alert",
+    "war readiness",
+    "آمادگی",
+    "آماده",
+    "آمادگی کامل",
+    "آماده مقابله",
+    "رزمی",
+    "توان رزمی",
+    "حالت آماده‌باش"
+   ]
+  },
+  "missile_drill": {
+   "zone": "readiness",
+   "label": "导弹试射/演习",
+   "weight": 3,
+   "phrases": [
+    "ballistic missile",
+    "cruise missile",
+    "hypersonic",
+    "missile test",
+    "missile launch",
+    "test-fired",
+    "test fired",
+    "launched missiles",
+    "missile drill",
+    "missile exercise",
+    "missile salvo",
+    "precision strike missile",
+    "موشک بالستیک",
+    "موشک کروز",
+    "هایپرسونیک",
+    "آزمایش موشک",
+    "شلیک موشک",
+    "پرتاب موشک"
+   ]
+  },
+  "exercise": {
+   "zone": "readiness",
+   "label": "军事演习",
+   "weight": 3,
+   "phrases": [
+    "military exercise",
+    "naval exercise",
+    "war game",
+    "war games",
+    "military drill",
+    "live fire",
+    "joint exercise",
+    "large-scale drill",
+    "maneuver",
+    "readiness drill",
+    "رزمایش",
+    "مانور نظامی",
+    "رزمایش نظامی"
+   ]
+  },
+  "denial": {
+   "zone": "readiness",
+   "label": "否认/驳斥",
+   "weight": 2,
+   "phrases": [
+    "deny",
+    "denial",
+    "reject",
+    "refute",
+    "dismiss",
+    "fabricate",
+    "baseless",
+    "unfounded",
+    "untrue",
+    "false claim",
+    "no truth",
+    "not true",
+    "categorically deny",
+    "تکذیب",
+    "رد",
+    "بی‌اساس",
+    "دروغ",
+    "جعلی"
+   ]
+  },
+  "attrition_admit": {
+   "zone": "readiness",
+   "label": "战损/伤亡承认",
+   "weight": 3,
+   "phrases": [
+    "casualty",
+    "casualties",
+    "killed in action",
+    "losses",
+    "suffered losses",
+    "damage to",
+    "sunk",
+    "shot down",
+    "shoot down",
+    "shoots down",
+    "destroyed by",
+    "martyrs",
+    "شهید",
+    "تلفات",
+    "خسارت",
+    "سرنگون",
+    "غرق"
+   ]
+  },
+  "deterrence_threat": {
+   "zone": "readiness",
+   "label": "威慑/报复威胁",
+   "weight": 4,
+   "phrases": [
+    "will respond",
+    "will retaliate",
+    "retaliation",
+    "retaliate",
+    "retaliatory",
+    "revenge",
+    "harsh response",
+    "severe response",
+    "decisive response",
+    "crushing response",
+    "punish",
+    "will strike",
+    "will target",
+    "heavy price",
+    "consequences will be",
+    "no red line",
+    "پاسخ",
+    "پاسخ کوبنده",
+    "انتقام",
+    "تلافی",
+    "مجازات",
+    "خط قرمز",
+    "strong response",
+    "vows response",
+    "vow to respond"
+   ]
+  },
+  "future_threat": {
+   "zone": "foresight",
+   "label": "未来时威胁（将要做）",
+   "weight": 5,
+   "phrases": [
+    "will strike",
+    "will attack",
+    "will target",
+    "will hit",
+    "will close",
+    "will block",
+    "will blockade",
+    "will destroy",
+    "will respond",
+    "will retaliate",
+    "will launch",
+    "are about to",
+    "intend to attack",
+    "intends to",
+    "plan to attack",
+    "planning to attack",
+    "plans to strike",
+    "preparing to strike",
+    "poised to",
+    "set to strike",
+    "خواهد زد",
+    "خواهد حمله",
+    "قصد دارد",
+    "برنامه دارد",
+    "در حال آماده‌سازی"
+   ]
+  },
+  "condition_ultimatum": {
+   "zone": "foresight",
+   "label": "条件式/最后通牒",
+   "weight": 5,
+   "phrases": [
+    "if you",
+    "if they",
+    "if the us",
+    "if israel",
+    "unless",
+    "otherwise we will",
+    "in response to any",
+    "any aggression will",
+    "will not hesitate",
+    "no choice but",
+    "last warning",
+    "final warning",
+    "ultimatum",
+    "deadline",
+    "red line",
+    "act of war",
+    "will be met with",
+    "at any cost",
+    "در صورت",
+    "اگر",
+    "واکنش",
+    "هشدار نهایی",
+    "اولتیماتوم",
+    "خط قرمز"
+   ]
+  },
+  "imminent_indicator": {
+   "zone": "foresight",
+   "label": "临战/迫近信号",
+   "weight": 5,
+   "phrases": [
+    "imminent",
+    "imminently",
+    "within days",
+    "within hours",
+    "in the coming days",
+    "in the coming weeks",
+    "shortly",
+    "at any moment",
+    "on the verge of",
+    "about to happen",
+    "preparations under way",
+    "preparations are under way",
+    "final stages",
+    "final stage",
+    "ready to launch",
+    "active preparations",
+    "high probability of attack",
+    "indicators of",
+    "warning signs",
+    "به‌زودی",
+    "در روزهای آینده",
+    "مراحل نهایی",
+    "آماده پرتاب",
+    "قریب‌الوقوع"
+   ]
+  },
+  "mobilization": {
+   "zone": "foresight",
+   "label": "兵力动员/调动",
+   "weight": 4,
+   "phrases": [
+    "mobilize",
+    "mobilization",
+    "mobilise",
+    "deploy forces",
+    "troop movement",
+    "reinforcement",
+    "alert level",
+    "reserve call-up",
+    "call up reserves",
+    "force posture",
+    "surge forces",
+    "activation of reserves",
+    "counter-mobilization",
+    "بسیج",
+    "فراخوان",
+    "اعزام نیرو",
+    "استقرار نیرو",
+    "تحرکات نظامی"
+   ]
+  },
+  "escalation_ladder": {
+   "zone": "foresight",
+   "label": "升级阶梯表述",
+   "weight": 4,
+   "phrases": [
+    "escalate",
+    "escalation",
+    "escalatory",
+    "next phase",
+    "next stage",
+    "phase two",
+    "phase three",
+    "unprecedented step",
+    "further steps",
+    "new phase",
+    "widening",
+    "open confrontation",
+    "full-scale",
+    "large-scale attack",
+    "all-out",
+    "تشدید",
+    "مرحله بعد",
+    "مرحله جدید",
+    "تقابل"
+   ]
+  }
+ },
+ "claims": {
+  "action_claim": [
+   "strike",
+   "struck",
+   "hit",
+   "hitting",
+   "destroy",
+   "down",
+   "shoot down",
+   "shoots down",
+   "shooting down",
+   "shot down",
+   "seize",
+   "seizure",
+   "board",
+   "repel",
+   "repelled",
+   "intercept",
+   "launch",
+   "carry out",
+   "carried out",
+   "target",
+   "kill",
+   "sink",
+   "sank",
+   "sunk",
+   "damage",
+   "capture",
+   "foil",
+   "thwart",
+   "attack",
+   "اصابت",
+   "سرنگون",
+   "توقیف",
+   "هدف قرار",
+   "منجر شد"
+  ],
+  "denial": [
+   "deny",
+   "denial",
+   "reject",
+   "refute",
+   "dismiss",
+   "fabricate",
+   "baseless",
+   "unfounded",
+   "untrue",
+   "no evidence",
+   "not true",
+   "false claim",
+   "dismissed as",
+   "تکذیب",
+   "رد کرد",
+   "بی‌اساس",
+   "دروغ"
+  ],
+  "acknowledgement": [
+   "confirmed",
+   "acknowledged",
+   "admitted",
+   "we lost",
+   "suffered",
+   "accepts responsibility",
+   "claimed responsibility",
+   "took credit",
+   "تأیید",
+   "اعتراف",
+   "مسئولیت",
+   "confirm"
+  ],
+  "readiness_declaration": [
+   "readiness",
+   "ready",
+   "prepared",
+   "on alert",
+   "fully operational",
+   "combat ready",
+   "state of alert",
+   "mobilized",
+   "آمادگی",
+   "آماده",
+   "آماده‌باش",
+   "عملیاتی"
+  ],
+  "threat_warning": [
+   "threaten",
+   "threat",
+   "warn",
+   "warning",
+   "will respond",
+   "will retaliate",
+   "consequences",
+   "heavy price",
+   "no choice",
+   "punish",
+   "تهدید",
+   "هشدار",
+   "پاسخ",
+   "انتقام",
+   "عواقب",
+   "retaliate"
+  ],
+  "foresight_plan": [
+   "plan",
+   "planning",
+   "will",
+   "intend",
+   "about to",
+   "prepare",
+   "preparing",
+   "upcoming",
+   "next phase",
+   "soon",
+   "imminent",
+   "considering",
+   "weighing",
+   "decision to",
+   "approved plan",
+   "قصد",
+   "برنامه",
+   "به‌زودی",
+   "در حال بررسی",
+   "تصمیم"
+  ],
+  "attribution": [
+   "blamed",
+   "accused",
+   "attributed to",
+   "responsibility for",
+   "mastermind",
+   "orchestrated",
+   "proxy",
+   "backed by",
+   "masterminded by",
+   "متهم",
+   "انگشت اتهام",
+   "مسئولیت"
+  ],
+  "negotiation_diplomacy": [
+   "negotiation",
+   "talks",
+   "deal",
+   "agreement",
+   "diplomatic",
+   "mediation",
+   "ceasefire",
+   "truce",
+   "sanctions relief",
+   "nuclear deal",
+   "مذاکره",
+   "توافق",
+   "آتش‌بس",
+   "دیپلماسی"
+  ]
+ },
+ "cross_anchors": [
+  {
+   "id": "hormuz",
+   "label": "霍尔木兹海峡",
+   "re": "(?:Hormuz|هرمز)"
+  },
+  {
+   "id": "babelmandeb",
+   "label": "曼德海峡 / 红海",
+   "re": "(?:Bab\\s*[ae]l[- ]?Mandeb|Mandeb|Red Sea|Gulf of Aden|دریای سرخ|باب‌المندب|خلیج عدن)"
+  },
+  {
+   "id": "us_naval",
+   "label": "美军海上平台",
+   "re": "(?:US Navy|U\\.S\\. Navy|warship|aircraft carrier|carrier strike group|destroyer|USS [A-Z]|5th Fleet|Fifth Fleet|NAVCENT|ناوشکن|ناو هواپیمابر)"
+  },
+  {
+   "id": "energy_facility",
+   "label": "能源设施",
+   "re": "(?:refinery|oil (?:facility|terminal|field)|gas (?:field|plant)|pipeline|petrochemical|Abqaiq|Ras Tanura|Kharg|Shaybah|Khurais|Ras Laffan|پالایشگاه|تأسیسات نفتی)"
+  },
+  {
+   "id": "subsea_cable",
+   "label": "海底光缆",
+   "re": "(?:undersea cable|submarine cable|subsea cable|fibre? optic cable|internet cable|AAE-1|SEA-ME-WE|SMW\\d|FALCON|2Africa|IMEWE|کابل زیردریایی)"
+  },
+  {
+   "id": "nuclear_program",
+   "label": "核计划",
+   "re": "(?:nuclear test|nuclear weapon|nuclear warhead|enrich(?:ment)?|uranium|centrifuge|IAEA|JCPOA|NPT|Fordow|Natanz|Isfahan|Arak|هسته‌ای|غنی‌سازی|آژانس|برجام)"
+  },
+  {
+   "id": "missile_program",
+   "label": "导弹计划",
+   "re": "(?:ballistic missile|cruise missile|hypersonic|missile (?:test|launch|salvo)|anti-ship missile|ASBM|موشک)"
+  },
+  {
+   "id": "gulf_shipping",
+   "label": "海湾航运",
+   "re": "(?:tanker|merchant vessel|cargo ship|container ship|bulk carrier|shipping|maritime traffic|نفتکش|کشتی تجاری)"
+  },
+  {
+   "id": "military_drill",
+   "label": "军事演习",
+   "re": "(?:military (?:exercise|drill)|naval (?:exercise|drill)|war game|live fire|large-scale drill|رزمایش)"
+  },
+  {
+   "id": "houthi_front",
+   "label": "胡塞 / 也门战线",
+   "re": "(?:Houthi|Ansarallah|Yemen|انصارالله|یمن)"
+  }
+ ],
+ "window": {
+  "cross_match_days": 7,
+  "note": "同一议题锚点下，双方表态落在 ±N 天内即视为「同期对照」。"
+ },
+ "outlet_map": {
+  "note": "★ 聚合器源（Google News）会把多个不同立场媒体的内容混在同一个源里。必须按「实际发布媒体」重新判定当事方，否则会把流亡/反对派媒体算成「伊方官方表态」——那是严重的定性错误。",
+  "rules": [
+   {
+    "match": [
+     "centcom",
+     "u.s. central command",
+     "us central command"
+    ],
+    "party": "us",
+    "publisher": "美国中央司令部（CENTCOM）",
+    "tier": "T1"
+   },
+   {
+    "match": [
+     "defense.gov",
+     "war.gov",
+     "department of defense",
+     "pentagon",
+     "dod"
+    ],
+    "party": "us",
+    "publisher": "美国国防部",
+    "tier": "T1"
+   },
+   {
+    "match": [
+     "state.gov",
+     "state department",
+     "u.s. department of state"
+    ],
+    "party": "us",
+    "publisher": "美国国务院",
+    "tier": "T1"
+   },
+   {
+    "match": [
+     "whitehouse",
+     "white house"
+    ],
+    "party": "us",
+    "publisher": "美国白宫",
+    "tier": "T1"
+   },
+   {
+    "match": [
+     "usni",
+     "u.s. naval institute"
+    ],
+    "party": "third",
+    "publisher": "美国海军学会新闻（USNI News）",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "gcaptain",
+     "g captain"
+    ],
+    "party": "third",
+    "publisher": "gCaptain（航运）",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "maritime-executive",
+     "the maritime executive"
+    ],
+    "party": "third",
+    "publisher": "The Maritime Executive",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "splash247"
+    ],
+    "party": "third",
+    "publisher": "Splash 247（航运）",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "freightwaves"
+    ],
+    "party": "third",
+    "publisher": "FreightWaves",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "offshore energy",
+     "offshore-energy"
+    ],
+    "party": "third",
+    "publisher": "Offshore Energy",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "oilprice"
+    ],
+    "party": "third",
+    "publisher": "OilPrice.com",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "subtelforum",
+     "submarine telecoms forum"
+    ],
+    "party": "third",
+    "publisher": "Submarine Telecoms Forum",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "datacenterdynamics",
+     "data center dynamics"
+    ],
+    "party": "third",
+    "publisher": "Data Center Dynamics",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "lightreading",
+     "light reading"
+    ],
+    "party": "third",
+    "publisher": "Light Reading（电信）",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "totaltele",
+     "total telecom"
+    ],
+    "party": "third",
+    "publisher": "Total Telecom",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "capacitymedia",
+     "capacity media"
+    ],
+    "party": "third",
+    "publisher": "Capacity Media",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "twz",
+     "the war zone",
+     "thedrive"
+    ],
+    "party": "third",
+    "publisher": "The War Zone",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "navalnews",
+     "naval news"
+    ],
+    "party": "third",
+    "publisher": "Naval News",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "seapower"
+    ],
+    "party": "third",
+    "publisher": "Seapower Magazine",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "defensenews",
+     "defense news"
+    ],
+    "party": "third",
+    "publisher": "Defense News",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "breakingdefense",
+     "breaking defense"
+    ],
+    "party": "third",
+    "publisher": "Breaking Defense",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "al jazeera",
+     "aljazeera"
+    ],
+    "party": "third",
+    "publisher": "半岛电视台（Al Jazeera）",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "bbc"
+    ],
+    "party": "third",
+    "publisher": "英国广播公司（BBC）",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "france24",
+     "france 24"
+    ],
+    "party": "third",
+    "publisher": "France 24",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "middle east eye"
+    ],
+    "party": "third",
+    "publisher": "Middle East Eye",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "al-monitor",
+     "al monitor"
+    ],
+    "party": "third",
+    "publisher": "Al-Monitor",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "times of israel"
+    ],
+    "party": "third",
+    "publisher": "The Times of Israel",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "jerusalem post",
+     "jpost"
+    ],
+    "party": "third",
+    "publisher": "The Jerusalem Post",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "arab news",
+     "arabnews"
+    ],
+    "party": "third",
+    "publisher": "Arab News（沙特）",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "reuters"
+    ],
+    "party": "third",
+    "publisher": "路透社",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "associated press",
+     "ap news"
+    ],
+    "party": "third",
+    "publisher": "美联社（AP）",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "irna",
+     "irna.ir"
+    ],
+    "party": "iran",
+    "publisher": "伊朗伊斯兰共和国通讯社（IRNA）",
+    "tier": "T1"
+   },
+   {
+    "match": [
+     "tasnim",
+     "تسنیم"
+    ],
+    "party": "iran",
+    "publisher": "塔斯尼姆通讯社（Tasnim，IRGC 关联）",
+    "tier": "T1"
+   },
+   {
+    "match": [
+     "fars news",
+     "farsnews",
+     "فارس"
+    ],
+    "party": "iran",
+    "publisher": "法尔斯通讯社（Fars，IRGC 关联）",
+    "tier": "T1"
+   },
+   {
+    "match": [
+     "mehr news",
+     "mehrnews",
+     "مهر"
+    ],
+    "party": "iran",
+    "publisher": "梅赫尔通讯社（Mehr）",
+    "tier": "T2"
+   },
+   {
+    "match": [
+     "isna",
+     "isna.ir"
+    ],
+    "party": "iran",
+    "publisher": "伊朗学生通讯社（ISNA）",
+    "tier": "T2"
+   },
+   {
+    "match": [
+     "sepah news",
+     "sepahnews",
+     "sepahnews.ir"
+    ],
+    "party": "iran",
+    "publisher": "Sepah News（IRGC 官方新闻社）",
+    "tier": "T1"
+   },
+   {
+    "match": [
+     "defa press",
+     "defapress",
+     "دفاع"
+    ],
+    "party": "iran",
+    "publisher": "Defa Press（伊朗国防部关联）",
+    "tier": "T1"
+   },
+   {
+    "match": [
+     "mashregh",
+     "مشرق"
+    ],
+    "party": "iran",
+    "publisher": "Mashregh News（IRGC 关联）",
+    "tier": "T1"
+   },
+   {
+    "match": [
+     "kayhan",
+     "کیهان"
+    ],
+    "party": "iran",
+    "publisher": "Kayhan（最高领袖系）",
+    "tier": "T2"
+   },
+   {
+    "match": [
+     "press tv",
+     "presstv"
+    ],
+    "party": "iran",
+    "publisher": "Press TV（伊朗国家对外广播）",
+    "tier": "T2"
+   },
+   {
+    "match": [
+     "parstoday",
+     "pars today"
+    ],
+    "party": "iran",
+    "publisher": "Pars Today（伊朗对外广播）",
+    "tier": "T1"
+   },
+   {
+    "match": [
+     "tehran times"
+    ],
+    "party": "iran",
+    "publisher": "Tehran Times",
+    "tier": "T2"
+   },
+   {
+    "match": [
+     "abna",
+     "abna24"
+    ],
+    "party": "iran",
+    "publisher": "ABNA 24",
+    "tier": "T2"
+   },
+   {
+    "match": [
+     "iran international",
+     "iranintl"
+    ],
+    "party": "iran_opp",
+    "publisher": "Iran International（流亡反对派媒体）",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "radio farda",
+     "rferl",
+     "radio liberty"
+    ],
+    "party": "iran_opp",
+    "publisher": "Radio Farda / RFE-RL（美国资助，流亡）",
+    "tier": "T3"
+   },
+   {
+    "match": [
+     "manoto"
+    ],
+    "party": "iran_opp",
+    "publisher": "Manoto TV（流亡）",
+    "tier": "T3"
+   }
+  ]
+ }
+}

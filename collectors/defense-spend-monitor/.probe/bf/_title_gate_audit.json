@@ -1,0 +1,1325 @@
+{
+ "note": "被 title_include/title_exclude 过滤掉的标题，供人工回扫确认没有误杀（每个源最多留 300 条）",
+ "gated": {
+  "cbo-reports": [
+   {
+    "title": "CBO's 2026 Long-Term Projections for Social Security",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 1640, HEIRS Act of 2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 2801, Canterbury Shaker Village National Heritage Area Study Authorization Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 4259, Blue Skies for Taiwan Act of 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "CBO's Panel of Health Advisers, 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 164, Midnight Rules Relief Act of 2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Legislation considered under suspension of the Rules of the House of Representatives during the week of September 14, 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 4429, Connected Vehicle Security Act of 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 4570, U.S. Technology Procurement and Access to Trusted Hardware Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 9342, GPO Modernization Act of 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 3334, USCP Empowerment Act of 2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 8052, Veteran Infection Prevention Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 4122, Health Care for Energy Workers Act of 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Monthly Budget Review: August 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 4219, National Wildlife Refuge System Invasive Species Strike Team Act of 2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 9340, Ratepayer Protection Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 9339, Affordable Innovation for the Grid Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 9617, CHARM Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 6529, Protecting Families from AI Data Center Energy Costs Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Effects of Changing Temperatures on the Medicare Population",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 2732, Bonuses for Cost-Cutters Act of 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 2733, Duplication Scoring Act of 2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 3340, Modernizing Access to Our Public Oceans Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 9332, Load Forecasting Enhancement Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 252, Guidance Out Of Darkness Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 3720, Bay Area Ridge National Scenic Trail Feasibility Study Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 3010, 21st Century Dyslexia Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 6633, High-Capacity Grid Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 3872, an act to amend the Mineral Leasing Act for Acquired Lands to make that act applicable to hardrock minerals",
+    "reason": "title_include 未命中"
+   }
+  ],
+  "crs-reports": [
+   {
+    "title": "Selected Federal Legislation on Search and Seizure Authority",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S.-South Korea Bilateral Trade Relations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S. Court of Appeals for Veterans Claims: A Brief Introduction",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Poverty in 2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "May 2026 Proposed Rule on Uniform Guidance for Federal Grants: Summary of Selected Changes",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Overview of Continuing Appropriations for FY2027 (Division A of P.L. 119-103)",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Regional Commissions and Authorities: Structural Features and Function",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The IRS Direct File Program",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Section 232 Tariffs on Steel and Aluminum",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Updates on Litigation over the IRS-ICE Information-Sharing Agreement",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Mongolia: In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Mandatory Detention During Removal Proceedings: Circuit Split",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "GENIUS Act (P.L. 119-27): Creating a Regulatory Framework for Stablecoins",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Support for Drug Courts: In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Farm Credit Administration and Its Board Members",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Considerations for Federal Leasing of Onshore Energy: Oil and Gas and Geothermal Power",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Revisions to Statistical Policy Directive No. 15: Standards for Maintaining, Collecting, and Presenting Federal Data on Race and Ethnicity",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Sole-Source Contracts for Small Businesses",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Contract Set-Asides for Small Businesses",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Status of U.S. Offshore Wind Leasing and Permitting: President Trump’s January 2025 Wind Leasing Memorandum",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S.-Canada Trade Relations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Foreign Agents Registration Act (FARA): Background and Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Health Insurance Exchanges: Sources for Enrollment Data",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Past Government Shutdowns: Key Resources",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Defense Primer: Control and Command of the U.S. Military",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Congress, the Judiciary, and Federal Court Procedure",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Understanding State Capacity for Emergency Management",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Land Ownership: Overview and Data",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Farm and Food Support Under USDA’s Section 32 Account",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Small Business Administration’s (SBA’s) Women’s Business Centers Program",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Firearms and Ammunition Excise Tax (FAET)",
+    "reason": "title_exclude 命中「firearms and ammunition excise」"
+   },
+   {
+    "title": "Department of Homeland Security Appropriations: FY2026 Provisions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Department of Homeland Security Appropriations: FY2027 Provisions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Department of Homeland Security Appropriations: FY2025 Provisions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Department of Homeland Security Appropriations: FY2024 Provisions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Attacks on Ukraine’s Electric Grid: Insights for U.S. Infrastructure Security and Resilience",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Ensuring Electricity Infrastructure Resilience Against Deliberate Electromagnetic Threats",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Supreme Court Clarifies Federal Arbitration Act Exemption for Transportation Workers",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "National Ambient Air Quality Standards and Selected Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Congressional Votes on Surface Transportation Authorizations, 1978-2021",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Earned Income Tax Credit (EITC): How It Works and Who Receives It",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S. Tariffs on Canadian Imports: Section 338 of the Tariff Act of 1930",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S. Greenhouse Gas Reporting Program: Overview and Considerations for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Artificial Intelligence and Biosecurity Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "EEOC’s Proposed Changes to the Federal-Sector Equal Employment Opportunity Complaint Process",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Trump Administration Actions: Geographic Naming",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Lame Duck Sessions of Congress, 1935-2024 (74th-118th Congresses)",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Economic Development Administration: An Overview of Programs and Appropriations (FY2012-FY2026)",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "An Overview of H.R. 3633, the CLARITY Act (Senator Lummis Draft)",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Geofence Warrants and the Fourth Amendment: The Supreme Court Weighs In",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Reverse Warrants and the Fourth Amendment: The Supreme Court Weighs in on Geofence Searches",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Temporary Protected Status Terminations, 2025-2026: Fact Sheet",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Overview of the Department of Veterans Affairs FY2027 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Oversight Hearing - The Economy Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Chile: An Overview",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Gender and School Sports: Federal Action and Legal Challenges to State Laws",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Housing Supply",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Implementation of the Whole Milk for Healthy Kids Act of 2025 (P.L. 119-69): In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Section 232 of the Trade Expansion Act of 1962",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "What Happens If the National Flood Insurance Program (NFIP) Lapses?",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Lapses in DHS Appropriations: History and Plans",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Air Force Fighter Force Structure: Background and Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Surface Transportation Authorization Legislation: Timelines and Extensions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Standing to Sue for Informational Injuries",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Housing Trust Fund: An Overview",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Presidential Medal of Freedom",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S. Regional Fishery Management Councils",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Surface Transportation Reauthorization: Commercial Trucking Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S. Satellite Capabilities for Tracking the Wildfire Life Cycle",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Staff Pay, Selected Positions in Senators’ Offices, FY2001-FY2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Senate Committee Staff Pay, Selected Positions, FY2001-FY2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Status of FY2027 Labor, Health and Human Services, and Education Appropriations: In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Staff Pay, Selected Positions in House Member Offices, 2001-2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Tech Hubs and Build to Scale (B2S) Program Updates and Considerations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "House Committee Staff Pay, Selected Positions, 2001-2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Agriculture and Related Agencies: FY2027 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Budgetary Effects Excluded or Eliminated from the Statutory Pay-As-You-Go Scorecards",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Service-Disabled Veteran-Owned Small Business Contracting Program",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Overview of U.S. Army Corps of Engineers Environmental Infrastructure (EI) Assistance",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "CFIUS: Executive Branch Actions on Evolving National Security Risks and Enforcement",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Electric Bicycles (E-Bikes) on Federal Lands",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "SEC Issues Crypto Guidance as Congress Considers MarketStructure Legislation",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "House Standing Committee Chairs and Ranking Members: 104th-119th Congresses",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Army Corps Provisions in Water Resources Development Act of 2026 (WRDA 2026) Legislation: In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "SEC Proposes ”Regulation Crypto Assets”",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Millennium Challenge Corporation",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Economic Development Administration: An Overview of Programs",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Cybersecurity Information Sharing Act of 2015: Expiring Provisions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Overview of the 340B Drug Discount Program",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Sixth Amendment’s Right to Assistance of Counsel and the Risk of Denaturalization: Federal Circuit Courts Are Split",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Overview of the 340B Drug Discount Program",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Government Shutdowns and Legislative Branch Operations: Frequently Asked Questions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Congressional Salaries and Allowances: In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Overview of Federally Certified Long-Term Care Facilities",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Surface Transportation Reauthorization: Passenger and Freight Rail Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Transportation, Housing and Urban Development, and Related Agencies (THUD) Appropriations for FY2027",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Avian Influenza (Bird Flu) in the United States",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The United States and United Nations Reform: In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "FEMA Review Council Recommendations for the National Flood Insurance Program",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Automated License Plate Readers: Background and Legal Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "National Park Service: FY2027 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Surface Transportation Reauthorization: Federal Highway Programs",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Fourth Amendment Search Warrant Requirements",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Sub-Saharan Africa: Selected Issues for the 119th Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Angola: Key Developments and U.S. Relations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Recognition of Indian Tribes: The Administrative Process",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S.-South Africa Relations: Tensions Rise",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Bureau of Land Management: FY2027 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Congressional Authority to Regulate Data Centers",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Export-Import Bank: Overview and Reauthorization Debate",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Latin America and the Caribbean: Fact Sheet on Leaders and Elections",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Overview of FY2027 Budget Request for the Census Bureau",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Social Security Overview",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Overview of Assisted Living Facilities",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Surface Transportation Reauthorization: Public Transportation",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Congressional District Geography Workbook (119th Congress): An Interactive Tool for Congressional Users",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Labor, Health and Human Services, and Education: FY2026 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "State Marijuana Laws and the Dormant Commerce Clause",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Teen Births in the United States: Overview and Recent Trends",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Fertilizer Transportation: In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "No NIETCs: U.S. Department of Energy Suspends Efforts to Designate “National Interest Electricity Transmission Corridors”",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Office of Strategic Capital: Overview and Considerations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Army’s XM-30 Mechanized Infantry Combat Vehicle",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Pension Benefit Guaranty Corporation (PBGC): A Primer",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Military Service Records, Awards, and Unit Histories: A Guide to Locating Sources",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Israel: Major Issues and U.S. Relations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Private Nondelegation Doctrine",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S. Climate Change Policy",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Rail Transportation of Liquefied Natural Gas: Safety and Regulation",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S. LNG Trade Rising, But No Domestic Shipping",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Cross-Border Energy Trade in North America: Present and Potential",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Distribution of Harbor Maintenance Trust Fund Expenditures",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Freight Policy: In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Autonomous and Semi-autonomous Trucks",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Coast Guard’s Need for Experienced Marine Safety Personnel",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Great Lakes-St. Lawrence Seaway Navigation System: Options for Growth",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Coast Guard’s Role in Safeguarding Maritime Transportation: Selected Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Shipping, Ports, and the Federal Maritime Commission",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Shipping on the Great Lakes and St. Lawrence Seaway: An Update",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S. Commercial Shipbuilding in a Global Context",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Vessel Construction for Offshore Wind Power Generation",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Offshore Energy: Vessel and Crew Nationality Requirements",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Securing General Aviation",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Airport Body Scanners: The Role of Advanced Imaging Technology in Airline Passenger Screening",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Proposed Cuts to Air Traffic Control Towers Under Budget Sequestration: Background and Considerations for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Risk-Based Approaches to Airline Passenger Screening",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Unmanned Aircraft Operations in Domestic Airspace: U.S. Policy Perspectives and the Regulatory Landscape",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Nuclear Cooperation with Other Countries: A Primer",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Role of the U.S. Environmental Protection Agency in Environmental Justice",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The National Transportation Safety Board (NTSB): Background and Possible Issues for Reauthorization and Oversight",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Safety Considerations for Automated Passenger Vehicles",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Taxation of Social Security Benefits for Disabled Beneficiaries Aged 25 to 59",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Uniform Grants Regulation: OMB’s Relation to Federal Grantmaking Agencies",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Department of Justice Asks the Supreme Court to Review Constitutionality of Federal Prohibition on Felons Possessing Firearms",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Appropriations Measures for Fiscal Years Coinciding with Lame Duck Sessions: 103rd Congress-118th Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Congressional Court Watcher: Circuit Splits from July 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Global Refugee Resettlement: Background and Selected Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "NOAA’s Geostationary Extended Observations (GeoXO) Satellite Program and Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Appropriations for Implementation of the Endangered Species Act Since FY2017",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Aircraft Noise and Air Traffic Control Modernization",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Cockpit Automation, Flight Systems Complexity, and Aircraft Certification: Background and Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Securing Air Cargo: Industry Perspectives",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Air Traffic Inc.: Considerations Regarding the Corporatization of Air Traffic Control",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Security of Air Cargo Shipments, Operations, and Facilities",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Aviation Administration (FAA) Reauthorization Issues and Debate in the 115th Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Boeing 737-9 Max Grounded Amid Renewed Concerns About Manufacturing Quality and Product Safety",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Aviation Administration (FAA) Reauthorization Issues for the 118th Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Addressing Unruly Airline Passengers",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Aviation Concerns Regarding the Rollout of 5G Wireless Telecommunications Networks",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Aviation Security Measures and Domestic Terrorism Threats",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Addressing COVID-19 Pandemic Impacts on Civil Aviation Operations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S. Military Action in Venezuela Triggers Caribbean Airspace Closures and Flight Disruptions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Midair Collision in Washington, DC, Focuses National Attention on Aviation Safety",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Reagan National Airport Slot and Perimeter Rules and Exemptions Authorized in 2024",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Drone Encounters Prompt Calls for Restrictions and Other Protections",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Senate Committee-Passed FAA Bill Revived Debate over Reagan National Airport Slot and Perimeter Rules",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Aviation Administration Reauthorization: Legislative Action in the 118th Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Unmanned Aircraft Systems (UAS): Commercial Outlook for a New Industry",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "East Palestine, OH, Train Derailment and Hazardous Materials Shipment by Rail: Frequently Asked Questions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Civil Aviation Programs: In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Key Issues in FAA Reauthorization in the 115th Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Offshoring of Airline Maintenance: Implications for Domestic Jobs and Aviation Safety",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Freight Issues in Surface Transportation Reauthorization",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Container Shipping Slump, U.S. Exports, and the Role of the Federal Maritime Commission",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Rail Transportation of Crude Oil and the FAST Act: An Update",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Shipping U.S. Crude Oil by Water: Vessel Flag Requirements and Safety Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Cargo Preferences for U.S.-Flag Shipping",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Revitalizing Coastal Shipping for Domestic Commerce",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Positive Train Control (PTC): Overview and Policy Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Prioritizing Waterway Lock Projects: Barge Traffic Changes",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Port Strike’s Effect on Maritime Commerce",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Mileage-Based Road User Charges",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Support for Streetcars: Frequently Asked Questions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Public Transportation Program and Funding Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Highways and Highway Safety on Indian Lands",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Public Transportation Capital Investment Grant (New Starts) Program: Background and Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Infrastructure Finance and Debt to Support Surface Transportation Investment",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The U.S. Election Assistance Commission (EAC): Overview and Selected Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Legislation and Oversight of Law Enforcement Use of Automated License Plate Readers (ALPRs)",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Marriage Penalties and Bonuses in the Federal Tax Code",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "2025 Army Transformation Initiative (ATI) Force Structure and Organizational Proposals: Background and Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Commission Without Commissioners: The U.S. Election Assistance Commission",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Energy and Water Development and Related Agencies Appropriations: Funding History and Agency Descriptions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Two Years After SEC v. Jarkesy: Overview of Selected Appellate Decisions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Coordinated Party Expenditures: Policy Background",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Cost and Benefit Considerations in Clean Air Act Regulations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The United Nations Framework Convention on Climate Change, the Kyoto Protocol, and the Paris Agreement: A Summary",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Reclamation of Coal Mining Operations: Select Issues and Legislation",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Overview of the Steam Electric Power Generator Effluent Limitation Guidelines and Standards",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Methane and Other Air Pollution Issues in Natural Gas Systems",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Freshwater Harmful Algal Blooms: Causes, Challenges, and Policy Considerations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Freshwater Harmful Algal Blooms: An Overview",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Uranium Reserve Program Proposal: Policy Implications",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Abandoned Mine Reclamation Fund: Reauthorization Issues in the 116th Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Uranium Enrichment Decontamination and Decommissioning Fund: Status and Funding Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Front End of the Nuclear Fuel Cycle: Current Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S. Carbon Dioxide Emissions in the Electricity Sector: Factors, Trends, and Projections",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Deepwater Horizon Oil Spill: Recent Activities and Ongoing Developments",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "EPA Policies Concerning Integrated Planning and Affordability of Water Infrastructure",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Oil Sands and the Oil Spill Liability Trust Fund: The Definition of “Oil” and Related Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Spill Prevention, Control, and Countermeasure (SPCC) Regulations: Background and Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Wastewater Infrastructure: Overview, Funding, and Legislative Developments",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S. Marine Corps Ground Combat Element 2040 Initiative",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Pollution Control Laws: How Are They Enforced?",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Drinking Water State Revolving Fund (DWSRF): Overview, Issues, and Legislation",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "America’s Water Infrastructure Act of 2018 (P.L. 115-270): Drinking Water Provisions",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "WIFIA Program: Background and Recent Developments",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "CO2 Underground Injection Regulations: Selected Differences for Enhanced Oil Recovery and Geologic Sequestration",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Carbon Sequestration Legislation in the 116th Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Regional Greenhouse Gas Initiative: Background, Impacts, and Selected Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Nuclear Waste Fund: Budgetary, Funding, and Scoring Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Comprehensive Environmental Response, Compensation, and Liability Act: A Summary of Superfund Cleanup Authorities and Related Provisions of the Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Lead-Based Paint Poisoning Prevention: Summary of Federal Mandates and Financial Assistance for Reducing Hazards in Housing",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Judicial and Administrative Developments in the Tax Treatment of Digital Assets",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Supreme Court Vacancies During Midterm Election Years (1914-2022)",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "United Nations Issues: Appointing the UN Secretary-General",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "State Actions to Lower Drug Prices: Selected Legal Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Buy America, Transportation Infrastructure, and American Manufacturing",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Risks and Rewards of Transportation Public-Private Partnerships (P3s), with Lessons from Texas and Indiana",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Effects of Buy America on Transportation Infrastructure and U.S. Manufacturing",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Transportation Infrastructure Finance and Innovation Act (TIFIA) Program",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Trends in Public Transportation Ridership: Implications for Federal Policy",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Transportation Spending Under an Earmark Ban",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Surface Transportation Reauthorization and Climate Change: H.R. 2 and S. 2302",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Transportation Infrastructure Investment as Economic Stimulus: Lessons from the American Recovery and Reinvestment Act of 2009",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Climate Change and the America’s Transportation Infrastructure Act of 2019 (S. 2302)",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Biden Administration Again Proposes Temporary Operating Assistance Authority for Larger Transit Agencies",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "National Infrastructure Bank: Proposals in the 118th Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Public Transportation Ridership: Implications of Recent Trends for Federal Policy",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "National Infrastructure Bank: Proposals in the 117th Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Reauthorization of the Federal Public Transportation Program",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Federal Law Enforcement Use of Facial Recognition Technology",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Continuing Authorities Programs (CAPs) of the U.S. Army Corps of Engineers",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Chile in Brief: Overview and U.S. Relations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Tolling U.S. Highways and Bridges",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Rural Highways",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Infrastructure Investment and Jobs Act: Highway Bridges",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "How Consumer Data Affects Competition Through Digital Advertising",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Social Security Primer",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "U.S.-Canada Relations: Current Tensions and Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Microsoft’s Proposed Acquisition of Activision Blizzard: In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Stop the Presses? Newspapers in the Digital Age",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Mergers and Acquisitions in Digital Markets",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Foreign Government-Sponsored Broadcast Programming",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Google and Competition: Concerns Beyond the DOJ’s Lawsuit",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Competition Among Video Streaming Services",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Identifying TV Political and Issue Ad Sponsors in the Digital Age",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Music Licensing: The ASCAP and BMI Consent Decrees",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Competition on the Edge of the Internet",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Copyright Act and Communications Act Changes in 2019 Related to Television",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Role of Online Services in Entertainment Industry Diversity",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Cable and Satellite Television Issues in the 116th Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Nexstar-Tribune Merger: Potential Competition Issues",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Shipping Under the Jones Act: Legislative and Regulatory Background",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "AT&T-Time Warner Merger Overview",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "T-Mobile – Sprint Merger",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Essential Air Service (EAS)",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Department of Housing and Urban Development: FY2016 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Synthetic/Engineering Biology: Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "White House Initiative to Advance the Bioeconomy, E.O. 14081: In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Patents and Innovation Policy",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Undersea Telecommunication Cables: Technology Overview and Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Metaverse: Concepts and Issues for Congress",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Expanding Broadband: Potential Role of Municipal Networks to Address the Digital Divide",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Transportation, Housing and Urban Development, and Related Agencies (THUD): FY2010 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Transportation, Housing and Urban Development, and Related Agencies (THUD): FY2011 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Transportation, Housing and Urban Development, and Related Agencies: FY2012 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Department of Housing and Urban Development (HUD): FY2011 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Department of Housing and Urban Development (HUD): FY2012 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Transportation, Housing and Urban Development, and Related Agencies (THUD): FY2013 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Transportation, Housing and Urban Development, and Related Agencies (THUD): FY2015 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "FY2015 Department of Housing and Urban Development Appropriations: Fact Sheet",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Department of Housing and Urban Development: FY2015 Appropriations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Infrastructure Investment and Jobs Act (P.L. 117-58): Summary of the Broadband Provisions in Division F",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Bioeconomy: A Primer",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Artificial Intelligence: Background, Selected Issues, and Policy Considerations",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The National Science Foundation: An Overview",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Digital Divide: What Is It, Where Is It, and Federal Assistance Programs",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Consolidated Appropriations Act, 2021 Broadband Provisions: In Brief",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Transportation, Housing and Urban Development, and Related Agencies (THUD): FY2008 Appropriations",
+    "reason": "title_include 未命中"
+   }
+  ]
+ }
+}

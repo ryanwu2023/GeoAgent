@@ -1,0 +1,498 @@
+{
+  "version": "1.4-5f-yahoo-bz",
+  "project": "taco-monitor",
+  "title": "TACO 压力指数每日监测（5 因子口径）",
+  "generated_at": "2026-09-21T19:00:00+08:00",
+  "generated_by": "manual build (probe-verified)",
+  "topic": "TACO 压力指数（东吴 5 因子复刻）· 霍尔木兹通行量作观察指标",
+  "_readme": [
+    "本配置的每一条 chain entry 都在 tools/_probe_*.json 里有 ok:true 的实测证据（先测后用）。",
+    "URL 逐字一致：探测用 A、抓取用 B，证据就是假的。",
+    "USSWIT1 是彭博终端专有序列，本项目【不】使用东吴底稿中的真实值。",
+    "替代方案：FRED T5YIE（5 年期盈亏平衡通胀率），已在 423 个重叠观测上实证优于其它候选。"
+  ],
+  "request": {
+    "user_agent": "curl/8.19.0",
+    "_ua_note": "默认用 curl 风格 UA —— 实测它同时通过 FRED / Datawrapper / ArcGIS 三个源。",
+    "ua_ladder": [
+      "curl/8.19.0",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+      "Python-urllib/3.13"
+    ],
+    "_ua_ladder_note": "【本项目第二贵的一课】实测 2026-09：FRED 封浏览器 UA（Mozilla/Chrome -> 0 字节超时），放行 curl/* 与 Python-urllib/*；Datawrapper 封 Python-urllib/*（403），放行 curl/* 与浏览器 UA。没有单一 UA 能让所有源满意，且失败表现为「超时」或「403」——看起来像网络问题，实为 UA 指纹。故设阶梯：默认 curl 风格，失败逐档降级，实际生效 UA 写进报告。",
+    "timeout_sec": 40,
+    "retries": 3,
+    "retry_backoff_sec": [
+      2,
+      5,
+      10
+    ],
+    "delay_between_sources_sec": 1.2,
+    "min_interval_per_host_sec": 1.2,
+    "_note": "同主机限速 1.2s 是正确性要求不是礼貌：FRED 单请求 1.3s/200，并发 8 个后全部挂到超时。",
+    "proxy": {
+      "mode": "tested_autodetect",
+      "_note": "先实测直连（--noproxy '*'），通了就用直连；不通才试系统代理。绝不写死端口。",
+      "env_override": "RM_PROXY",
+      "_env_note": "【本项目第一贵的一课】本机环境变量注入了 http_proxy/https_proxy（实测 127.0.0.1:56716），该端口仍在监听但已无出口。curl 与 urllib 默认都会读它，于是请求被送去死代理 0 字节超时——症状与「被 CDN 风控」一模一样。所以：不指定代理时必须显式 --noproxy '*' / ProxyHandler({})。"
+    }
+  },
+  "formula": {
+    "source": "东吴宏观《TACO 压力指数》数据底稿（已逐格反解，复现误差 < 1e-10）",
+    "lag_days": 31,
+    "_lag_note": "底稿用【日历 31 天】差分（行号差 31），不是自然月。周末沿用周五值，故为日历日网格。",
+    "steps": [
+      "I = C - C[-31]               10Y 美债收益率 31 日变动",
+      "J = D - D[-31]               1Y 通胀互换 31 日变动（本项目用 T5YIE 代理）",
+      "K = -(E - E[-31])            特朗普支持率 31 日变动，【取负】",
+      "L = 1/(G/G[-31] - 1)         道指 31 日涨跌幅的【倒数】",
+      "M = H - H[-31]               布伦特原油 31 日变动",
+      "N..R = expanding z(I,J,K,L,M)  扩张窗口 z 分数（起点固定、窗口右扩）",
+      "S = mean(N:R)                5 因子等权合成",
+      "T = 7-row MA of S            TACO 指数（7 日移动平均）",
+      "---- 观察指标（**不进入 TACO 合成**）----",
+      "F = TRHBCCCD                 霍尔木兹海峡日通行量（总艘次）",
+      "    口径：IMF PortWatch ArcGIS chokepoint6 / Strait of Hormuz，前值填充到",
+      "          既有日历网格（**不参与网格构造**，否则扩张窗口 z 会整体漂移）。",
+      "    用途：只抓取、落盘、展示（观察账本 + 水位面板 + 看板面板），",
+      "          **不加权、不取 z、不进 S、不进 T**。",
+      "    为什么不做成因子：底稿 F 列虽有该序列，但 0 个公式引用它 —— 东吴的",
+      "          TACO 只用 5 个因子；且该序列 2026-03 出现结构性水位断裂",
+      "          （约 78 → 约 3 艘次/日，至今未恢复），任何「N 日变动」类变换",
+      "          都会退化成断点噪声。作为观察指标可以看，作为因子会污染指数。",
+      "---- 已移除：里亚尔汇率（Bonnast USD 卖出价）----",
+      "    2026-09-23 按用户要求移除，不再抓取、不再落盘、不再参与任何合成。",
+      "    留档：config.json 中 extended_factor_2.enabled=false（定义保留供追溯）。"
+    ],
+    "z_score": {
+      "type": "expanding_window",
+      "start_index": 31,
+      "min_obs": 2,
+      "ddof": 1,
+      "_note": "= (x - AVERAGE(起点:当前))/STDEV.S(起点:当前)。起点固定在第 31 个索引，窗口随时间扩张。"
+    },
+    "ma_window": 7,
+    "ma_blank_semantics": "skip_blanks",
+    "_ma_note": "Excel AVERAGE 跳过空单元格。工作簿 S 列从第 60 行（idx 55）才有值，故 7 日 MA 窗口实际起点是 idx 55 而非 idx 31。此细节决定能否复现到 1e-10。"
+  },
+  "bonbast_crawler": {
+    "enabled": false,
+    "series_id": "BONBAST_USD_sell_rial",
+    "label": "Bonnast USD 卖出价（里亚尔）",
+    "tier": "market",
+    "base_url": "https://www.bonbast.com",
+    "json_endpoint": "/json",
+    "graph_endpoint": "/graph",
+    "graph_pair": "usd",
+    "_scope": "只取 USD 卖出价这一项。同站还有 EUR/CNY/金币/比特币等几十个字段，一律不取 —— 多字段接口的单位混用（把「金币托曼」当「汇率里亚尔」）是经典事故。",
+    "_unit": "页面明写 All prices are in Iranian Toman (1 Toman = 10 Rials)；接口返回托曼，本因子口径是里亚尔，故一律 × 10。",
+    "_unit_evidence": {
+      "page_statement": "All prices are in Iranian Toman (1 Toman = 10 Rials)",
+      "bonbast_snapshot_2026_09_22_toman": 229600,
+      "reference_impl_iran_condition_monitor": {
+        "db": "D:/1.Project/12.VSProject/38.DSH/iran-condition-monitor/data/iran_condition_monitor.db",
+        "table": "fx_daily",
+        "bonbast_usd_sell_toman": 229600,
+        "bonbast_usd_sell_rial": 2296000
+      },
+      "_note": "同一天两条独立链路（本爬虫 / 参考实现）互相印证，且与页面单位自述一致 —— 这就是「托曼 × 10 = 里亚尔」的实证来源，不是猜的。"
+    },
+    "_anti_bot": "首页内嵌一次性令牌 $.post('/json', {param: \"<hash>,<tok>,<ts>\"})，每次加载都变；且必须带 cookie，否则 /json 直接回令牌失效。注意失效响应实测是 {\"rest\":\"1\"}（站点侧拼写），只判 \"reset\" 会把它当合法空载荷、静默丢掉重试。",
+    "max_reset_retries": 4,
+    "graph_retries": 3,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36",
+    "_ua_note": "该站对浏览器 UA 友好；curl 风格 UA 取首页也通，但带 cookie 的浏览器 UA 更稳。",
+    "_history_cap": "站点 /graph/<pair> 固定返回 60 天，实测 ?range=1y / ?period=1y 无效、/graph/usd/365 404。要更长的历史只能靠本地 history 日更累积。",
+    "probe_evidence": {
+      "ok": true,
+      "home_http": 200,
+      "home_bytes": 43341,
+      "json_http": 200,
+      "json_bytes": 1345,
+      "graph_days": 60,
+      "graph_first": "2026-07-24",
+      "graph_last": "2026-09-21",
+      "snapshot_value_toman": 229600,
+      "snapshot_value_rial": 2296000,
+      "crosscheck_rel_diff": 0.0009,
+      "checked": "2026-09-22"
+    },
+    "_disabled_note": "2026-09-23 按用户要求停用：汇率数据整体移除，故不再发起任何 Bonnast 请求。定义（含单位证据 _unit_evidence 与端点说明）保留供追溯。"
+  },
+  "extended_factor": {
+    "enabled": true,
+    "series": "TRHBCCCD",
+    "field": "n_total",
+    "label": "霍尔木兹海峡通行量（总艘次）",
+    "variant_a_change": {
+      "label": "TACO-6（31 日变动口径）",
+      "transform": "negate(diff_lag(F, 31))",
+      "_why_negate": "通行量下降 = 供给压力上升，与支持率 K 同向处理（同样取负）。",
+      "_inactive_in_observe_mode": true
+    },
+    "variant_b_level": {
+      "label": "TACO-6L（水位口径）",
+      "transform": "negate(expanding_z(F))",
+      "_why_negate": "水位低 = 压力贡献高。注意 z(-x) = -z(x)，故与「先取负再 z」等价。",
+      "_why_needed": "水位断裂后 31 日变动会退化成断点噪声甚至反向；水位口径回答「现在是正常的百分之几」。二者在断裂序列上符号可能相反，故并列输出、都不隐藏。",
+      "_inactive_in_observe_mode": true
+    },
+    "_grid_discipline": "必须前值填充到既有日历网格，绝不参与网格构造；否则面板长度变化会让扩张窗口 z 整体漂移，改掉已验证的 5 因子复刻结果。",
+    "is_replication": false,
+    "_note": "东吴底稿的 TACO 只用 5 个因子 —— 数据底稿 F 列虽有 TRHBCCCD 数据，但 0 个公式引用 F，反解确认它不进指数。本轮按用户要求把它作为**观察指标**保留（可见、可查、不进指数）。",
+    "mode": "observe",
+    "_mode_note": "mode=observe：**观察指标** —— 抓取 / 落盘 / 展示，但不参与 TACO 合成。mode=composite：作为第 6 因子并入，产出 TACO-6（31 日变动）与 TACO-6L（水位）。2026-09-23 按用户要求切回 observe，TACO 回到 5 因子口径。"
+  },
+  "extended_factor_2": {
+    "enabled": false,
+    "series": "BONBAST_USD_sell_rial",
+    "field": "usd_sell_rial",
+    "label": "Bonnast USD 卖出价（里亚尔）",
+    "unit": "rial",
+    "polarity": 1,
+    "_polarity_note": "本模块全部因子的统一约定是「压力上升 -> 因子上升」。第 6 因子（霍尔木兹）是通行量【下降】代表供给压力上升，故取负；第 7 因子是汇率【上升】（里亚尔贬值）代表压力上升，故取正。两者方向相反、约定一致 —— 不能因为上一个因子取了负就照抄。polarity 置 -1 可整体翻向。",
+    "is_replication": false,
+    "variant_a_change": {
+      "label": "TACO-7（31 日变动口径）",
+      "transform": "diff_lag(F2, 31)",
+      "_why_positive": "汇率上行 = 里亚尔贬值 = 压力升，与「压力升 -> 因子升」同向，故不取负。"
+    },
+    "variant_b_level": {
+      "label": "TACO-7L（水位口径）",
+      "transform": "expanding_z(F2)",
+      "_why_positive": "水位高 = 里亚尔弱 = 压力贡献高，故不取负。",
+      "_why_needed": "与第 6 因子同理：水位断裂/口径变更时 31 日变动会退化甚至反向，水位口径回答「现在弱到什么位置」，两者并列不互相替代。"
+    },
+    "_grid_discipline": "与前 6 因子同一纪律：必须 ffill 到既有日历网格，绝不参与网格构造，否则面板长度变化会让扩张窗口 z 整体漂移。",
+    "_known_limit": "源只有近 60 天。ffill 到 609 天网格后：水位口径约 60 天有效，变动口径需 F2 与 F2[-31] 同时存在、约 29 天有效。报告与落盘必须披露实际起止日，不许让它看起来和 5 因子一样长。",
+    "_merge_rule": "第 7 因子只在第 6 因子就绪时才并入；否则会得到一个「5 基础 + 里亚尔、缺霍尔木兹」的混合体，没人验证过也不好解释。",
+    "_note": "东吴底稿的 TACO 只用 5 个因子。本项与 TACO-6/TACO-6L 一样，是用户明确要求的方法论扩展，5/6 因子结果一个字节都不动。",
+    "_disabled_note": "2026-09-23 按用户要求移除汇率因子：不再抓取、不再落盘、不再参与合成。定义保留供追溯与随时恢复（改 enabled=true 并切回 composite 模式即可）。"
+  },
+  "window": {
+    "history_start": "2024-01-01",
+    "_history_note": "抓取起点。留足预热期，使 31 日差分 + 扩张 z 在目标区间内已稳定。",
+    "z_window": "expanding",
+    "min_obs_for_z": 2,
+    "max_points_per_series": 4000,
+    "_max_note": "约 16 年日频。超出丢最旧。数值历史是资产，绝不因单轮回溯短而删点。"
+  },
+  "staleness": {
+    "default_max_lag_days": 7,
+    "per_series": {
+      "USGG10YR": 5,
+      "USSWIT1_proxy_T5YIE": 5,
+      "RCPPTAPP": 5,
+      "INDU": 5,
+      "CO1": 3,
+      "TRHBCCCD": 14,
+      "CO1_fred_crosscheck": 10,
+      "CO1_sina_crosscheck": 3
+    },
+    "_note": "CO1 已换成 Yahoo BZ=F 日更期货（T+1 收盘即可得），故 max_lag=3。TRHBCCCD 是 AIS 事后汇编，滞后 4-7 天，故 max_lag=14。crosscheck 允许到 10（越过 EIA 的 4-5 交易日滞后）；CO1_sina_crosscheck 同为日更期货，给 3。"
+  },
+  "series": [
+    {
+      "id": "USGG10YR",
+      "label": "美国 10 年期国债收益率",
+      "unit": "pct",
+      "delta_unit": "bp",
+      "role": "index_input",
+      "tier": "official",
+      "provider": "FRED",
+      "fred_id": "DGS10",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd=2024-01-01",
+      "payload": "csv",
+      "date_col": "observation_date",
+      "value_col": "DGS10",
+      "polarity": 1,
+      "probe_evidence": {
+        "ok": true,
+        "http": 200,
+        "bytes": 11231,
+        "last_date": "2026-09-17",
+        "last_value": 4.94,
+        "checked": "2026-09-21"
+      },
+      "workbook_col": "C",
+      "_note": "东吴底稿 C 列。FRED DGS10 与彭博 USGG10YR 口径一致（国债 par yield）。"
+    },
+    {
+      "id": "USSWIT1_proxy_T5YIE",
+      "label": "1 年期通胀互换（替代：5 年期盈亏平衡通胀率）",
+      "unit": "pct",
+      "delta_unit": "bp",
+      "role": "index_input",
+      "tier": "official",
+      "provider": "FRED",
+      "fred_id": "T5YIE",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T5YIE&cosd=2024-01-01",
+      "payload": "csv",
+      "date_col": "observation_date",
+      "value_col": "T5YIE",
+      "polarity": 1,
+      "probe_evidence": {
+        "ok": true,
+        "http": 200,
+        "bytes": 11247,
+        "last_date": "2026-09-18",
+        "last_value": 2.31,
+        "checked": "2026-09-21"
+      },
+      "workbook_col": "D",
+      "_is_proxy": true,
+      "_proxy_note": "USSWIT1（1Y 通胀互换）为彭博专有序列，无公开日频等价物。本项目明确【不】使用底稿 D 列真实值。",
+      "substitute_ranking": [
+        {
+          "series": "T5YIE",
+          "desc": "5Y breakeven inflation",
+          "freq": "daily",
+          "diff31_corr": 0.637,
+          "chosen": true
+        },
+        {
+          "series": "T10YIE",
+          "desc": "10Y breakeven inflation",
+          "freq": "daily",
+          "diff31_corr": 0.535,
+          "chosen": false
+        },
+        {
+          "series": "MICH",
+          "desc": "Michigan 1Y inflation expectation",
+          "freq": "monthly",
+          "diff31_corr": 0.424,
+          "chosen": false
+        },
+        {
+          "series": "EXPINF1YR",
+          "desc": "Cleveland Fed 1Y expected inflation",
+          "freq": "monthly",
+          "diff31_corr": 0.351,
+          "chosen": false
+        },
+        {
+          "series": "T5YIFR",
+          "desc": "5Y5Y forward breakeven",
+          "freq": "daily",
+          "diff31_corr": 0.084,
+          "chosen": false
+        },
+        {
+          "series": "DGS1",
+          "desc": "1Y nominal Treasury yield",
+          "freq": "daily",
+          "diff31_corr": -0.131,
+          "chosen": false
+        },
+        {
+          "series": "DFII5",
+          "desc": "5Y TIPS real yield",
+          "freq": "daily",
+          "diff31_corr": -0.509,
+          "chosen": false
+        }
+      ],
+      "_ranking_note": "基准 = 底稿 D 列真实 USSWIT1，重叠观测 n=423，比较对象 = 31 日差分序列的相关系数。月频 1 年期口径反而不如日频 5Y 盈亏平衡。"
+    },
+    {
+      "id": "RCPPTAPP",
+      "label": "特朗普净支持率（RCP 均值口径）",
+      "unit": "pct",
+      "delta_unit": "pp",
+      "role": "index_input",
+      "tier": "aggregator",
+      "provider": "Silver Bulletin / Datawrapper",
+      "url": "https://static.dwcdn.net/data/kSCt4.csv",
+      "payload": "csv",
+      "date_col": "modeldate",
+      "date_format": "%m/%d/%Y",
+      "value_col": "approve",
+      "polarity": -1,
+      "probe_evidence": {
+        "ok": true,
+        "http": 200,
+        "bytes": 39069,
+        "last_date": "2026-09-20",
+        "last_value": 38.49159,
+        "checked": "2026-09-21"
+      },
+      "workbook_col": "E",
+      "_note": "底稿用 RCP 支持率均值。此处用 Silver Bulletin 的贝叶斯平滑均值代理（同类聚合器口径），已对齐到 2025-09-01 起窗口。",
+      "_polarity_note": "支持率上升 = 压力下降，故公式中 K 列取负号。极性已写在公式里，此处仅作说明。"
+    },
+    {
+      "id": "INDU",
+      "label": "道琼斯工业平均指数",
+      "unit": "index",
+      "delta_unit": "pct_over",
+      "role": "index_input",
+      "tier": "official",
+      "provider": "FRED",
+      "fred_id": "DJIA",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DJIA&cosd=2024-01-01",
+      "payload": "csv",
+      "date_col": "observation_date",
+      "value_col": "DJIA",
+      "polarity": -1,
+      "probe_evidence": {
+        "ok": true,
+        "http": 200,
+        "bytes": 13978,
+        "last_date": "2026-09-18",
+        "last_value": 51682.64,
+        "checked": "2026-09-21"
+      },
+      "workbook_col": "G",
+      "_note": "底稿 G 列。股指上涨 = 压力下降，故 L 列取涨跌幅的倒数（跌幅越大 → 倒数越小/负值越大 → 压力越高）。"
+    },
+    {
+      "id": "CO1",
+      "label": "布伦特原油（ICE 首月连续 / Yahoo BZ=F）",
+      "unit": "usd_bbl",
+      "delta_unit": "usd",
+      "role": "index_input",
+      "tier": "aggregator",
+      "provider": "Yahoo Finance（NYMEX BZ=F）",
+      "symbol": "BZ=F",
+      "url": "https://query1.finance.yahoo.com/v8/finance/chart/BZ=F?range=5y&interval=1d",
+      "payload": "yahoo_chart",
+      "value_col": "close",
+      "drop_inprogress_session": true,
+      "egress": "proxy",
+      "polarity": 1,
+      "probe_evidence": {
+        "ok": true,
+        "http": 200,
+        "bytes": 53712,
+        "last_date": "2026-09-23",
+        "last_value": 98.76,
+        "checked": "2026-09-23",
+        "_note": "实测 2026-09-23 经系统代理 127.0.0.1:7897 抓取，506 根 2y 日线；末根为当日未收盘盘中价，需 drop_inprogress_session 丢弃。直连（不经代理）会被网关返回 HTML 拦截页，validate_payload 会明确报 yahoo-blocked-html。"
+      },
+      "workbook_col": "H",
+      "_note": "【2026-09-23 换源】底稿 H 列表头是 `CO1 Comdty` —— 彭博 ICE 布伦特原油期货【首月连续】。上一版用新浪外盘期货 `OIL` 代理，用户核对 Yahoo `BZ=F` 时发现两者近期分叉（同点位差约 4 美元），故直接改用 Yahoo BZ=F —— 它是 NYMEX 的 Brent Last Day Financial Futures，现金结算价紧跟 ICE 布伦特首月，是最接近底稿口径的公开可抓取源。URL 参数用 range=5y 而非 range=2y：本项目 z 用【扩张窗口】(window.z_window=expanding)，网格起点取各序列起点之最大值，若本序列只回溯到 2024-09-23，会把整个面板的起点一起拽后，令其余 4 个已复刻的因子 z 值整体漂移；取 5y 使本序列覆盖 window.history_start=2024-01-01，面板起点维持不变。原新浪源保留为 CO1_sina_crosscheck（context_only，不入指数）。"
+    },
+    {
+      "id": "CO1_fred_crosscheck",
+      "label": "布伦特原油（EIA 欧洲现货 FOB）— 仅交叉校验",
+      "unit": "usd_bbl",
+      "role": "context_only",
+      "tier": "official",
+      "provider": "FRED",
+      "fred_id": "DCOILBRENTEU",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILBRENTEU&cosd=2024-01-01",
+      "payload": "csv",
+      "date_col": "observation_date",
+      "value_col": "DCOILBRENTEU",
+      "_note": "【不入指数】保留它是为了盯住「现货 vs 期货」基差。正常时两者差约 2 美元，2026-09 危机期扩大到 +22 美元；基差异常放大时要么是真实现货紧张，要么是某一侧数据有问题——无论哪种都该被看见，而不是静默混进指数。",
+      "probe_evidence": {
+        "ok": true,
+        "http": 200,
+        "bytes": 11988,
+        "last_date": "2026-09-15",
+        "last_value": 130.8,
+        "checked": "2026-09-22",
+        "_note": "实测该序列结构性滞后 4-5 个交易日；FRED release 页自标 (5 days ago)。仅作交叉校验，不入指数。"
+      },
+      "workbook_col": null
+    },
+    {
+      "id": "CO1_sina_crosscheck",
+      "label": "布伦特原油（新浪外盘期货 OIL）— 仅交叉校验",
+      "unit": "usd_bbl",
+      "role": "context_only",
+      "tier": "aggregator",
+      "provider": "新浪财经（外盘期货）",
+      "symbol": "OIL",
+      "url": "https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20t=/GlobalFuturesService.getGlobalFuturesDailyKLine?symbol=OIL",
+      "payload": "sina_jsonp",
+      "value_col": "close",
+      "drop_inprogress_session": true,
+      "_note": "【不入指数】这是 2026-09-22 版曾用作 CO1 的源，2026-09-23 因用户拿 Yahoo BZ=F 逐日核对发现近期分叉而降级为交叉校验。分叉定位：09-18 及以前两源基本同向贴合（09-18 新浪 99.03 / Yahoo 103.87，差值属正常口径差），09-21 起明显分道——新浪 95.99 vs Yahoo 100.34，差 4.35。根因是【连续合约滚动节奏不同】：ICE 布伦特当前处于深度 backwardation（11 月 99.25 / 12 月 95.41 / 1 月 92.74，Nov-Dec 月差约 3.9），新浪在近月到期前就已切到次月，而 ICE 官方首月（也就是 Yahoo BZ=F 跟踪的合约）仍是 11 月，折价因此被放大到约 4 美元。留着它每天盯住这个价差——价差异常时能第一时间看见，而不是等它悄悄进指数。",
+      "probe_evidence": {
+        "ok": true,
+        "http": 200,
+        "bytes": 337207,
+        "last_date": "2026-09-22",
+        "last_value": 96.39,
+        "checked": "2026-09-23",
+        "_note": "实测 2026-09-23 该接口末行为当日未收盘会话（volume 仅 406），需 drop_inprogress_session 丢弃。"
+      },
+      "workbook_col": null
+    },
+    {
+      "id": "TRHBCCCD",
+      "label": "霍尔木兹海峡日通行量（上下文，不入指数）",
+      "unit": "vessels",
+      "delta_unit": "count",
+      "role": "context_only",
+      "tier": "official",
+      "provider": "IMF PortWatch",
+      "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query?where=portid%3D%27chokepoint6%27&outFields=date%2Cn_total%2Cn_tanker%2Ccapacity&f=json&resultRecordCount=1000&orderByFields=date%20DESC",
+      "payload": "arcgis_json",
+      "date_col": "date",
+      "value_col": "n_total",
+      "polarity": -1,
+      "probe_evidence": {
+        "ok": true,
+        "http": 200,
+        "bytes": 1069,
+        "last_date": "2026-09-13",
+        "last_value": 8,
+        "checked": "2026-09-21"
+      },
+      "workbook_col": null,
+      "_note": "【重要】底稿 F 列虽有此序列，但经反解验证【它不参与 TACO 指数计算】。本项目保留其抓取，仅作上下文与旁证。",
+      "_count_note": "小基数百分比禁令：艘次计数不做 N 期百分比变化（1->8 艘次 = +700%，会把噪声渲染成升级）。只用 7 期均值与结构比。",
+      "_fields": {
+        "total": "n_total",
+        "tanker": "n_tanker",
+        "capacity": "capacity"
+      }
+    }
+  ],
+  "output": {
+    "dir_per_run": true,
+    "layout": {
+      "daily_dir": "output/{date}/",
+      "raw_subdir": "output/{date}/raw/",
+      "records": "output/{date}/taco-records-{date}.jsonl",
+      "report": "output/{date}/taco-digest-{date}.md",
+      "composite": "output/{date}/taco-composite-{date}.json",
+      "csv": "output/{date}/taco-{date}.csv",
+      "latest_md": "output/LATEST.md",
+      "latest_csv": "output/taco-latest.csv",
+      "latest_html": "output/taco-dashboard.html",
+      "latest_xlsx": "output/taco_index.xlsx",
+      "history_dir": "output/history/",
+      "all_observations": "output/ALL-observations.jsonl",
+      "verify_last": "output/_verify_last.json",
+      "source_status": "output/_source_status.json"
+    },
+    "_raw_note": "原始载荷按 provider__ref 命名，可 --from-file 离线重放。"
+  },
+  "schedule": {
+    "_comment": "定时运行配置（供计划任务与 run.bat 参考；本程序自身不常驻，由外部调度器触发）。",
+    "enabled": true,
+    "time_local": "09:10",
+    "timezone": "Asia/Shanghai",
+    "cadence": "daily",
+    "_note": "每日 09:10（北京时间）跑一次。选这个时点的理由：① 美股周五收盘 + 周末特朗普支持率聚合器已更新；② FRED 日频序列通常在前一工作日 16:00 ET 后落定；③ 霍尔木兹通行量滞后 4-7 天，晚跑不亏。",
+    "_why_not_more": "建议频率每日 1 次即可，不做高频轮询——5 个输入里 3 个是日频、1 个是日频聚合、1 个滞后 4-7 天，高频跑只会重复读到同一批数。"
+  },
+  "gate": {
+    "min_series_ok": 4,
+    "_note": "入指数序列抓取门禁。abort_on_index_input_fail=true 时，只要有任一入指数序列缺失就中止（不写任何产物）。min_series_ok 只在 abort_on_index_input_fail=false 时才是「至少 N 个」那档宽松判据。历史：这两个键曾长期只写在配置里、代码从未读取（死配置），2026-09-23 实现（见 README §5 #29）。",
+    "max_stale_ratio": 0.5,
+    "abort_on_index_input_fail": true,
+    "required_for_index": [
+      "USGG10YR",
+      "USSWIT1_proxy_T5YIE",
+      "RCPPTAPP",
+      "INDU",
+      "CO1"
+    ]
+  },
+  "sources_note": "所有源均无需登录、无需 API 密钥。仅作研究与监测用途，不构成投资建议。"
+}

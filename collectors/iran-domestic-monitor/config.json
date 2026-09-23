@@ -1,0 +1,843 @@
+{
+ "project": "iran-domestic-monitor",
+ "topic": "美伊冲突·伊朗内政监测（里亚尔汇率/物价食品/青年失业/原油出口/燃料限电/文官政府vs革命卫队/最高领袖权威）",
+ "as_of_note": "战争 2026-02-28 爆发；2026-07-14 美方重启海上封锁后伊朗原油出口实质归零；里亚尔自由市场 9 月连创纪录低点；汽油第三档 2026-09-08 涨至 1 万托曼",
+ "schema_ver": 1,
+ "parse_ver": 1,
+ "max_age_days": 365,
+ "window_days": 14,
+ "per_source_max": 60,
+ "anchor_note": "锚定词表在主脚本（伊朗全域专名）；rial/toman 仅作信号词不作锚定（阿曼里亚尔同拼形），靠锚定+排除项兜底",
+ "manual_baseline_note": "手工基线=探测期 2026-09-19 权威转写快照，逐条带来源与等级；数值口径严禁混用（官方价 vs 自由市场价；点对点 vs 年度通胀；托曼=10 里亚尔）",
+ "sources": [
+  {
+   "id": "tehrantimes",
+   "url": "https://www.tehrantimes.com/rss",
+   "tier": "T3",
+   "publisher": "Tehran Times",
+   "enabled": true,
+   "note": "伊朗英文官媒报纸——官方立场一手窗口（官方数字经其转写，标注宣传口径）"
+  },
+  {
+   "id": "atlantic-iran",
+   "url": "https://www.atlanticcouncil.org/category/blogs/iransource/feed/",
+   "tier": "T2",
+   "publisher": "Atlantic Council IranSource",
+   "enabled": true,
+   "note": "IranSource 专栏（机构分析）"
+  },
+  {
+   "id": "aljazeera-all",
+   "url": "https://www.aljazeera.com/xml/rss/all.xml",
+   "tier": "T3",
+   "publisher": "Al Jazeera",
+   "enabled": true,
+   "note": "半岛全部（区域视角；9-6 油轮战综述实测）"
+  },
+  {
+   "id": "bbci-mideast",
+   "url": "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
+   "tier": "T3",
+   "publisher": "BBC",
+   "enabled": true,
+   "note": "BBC 中东频道"
+  },
+  {
+   "id": "guardian-iran",
+   "url": "https://www.theguardian.com/world/iran/rss",
+   "tier": "T3",
+   "publisher": "The Guardian",
+   "enabled": true,
+   "note": "Guardian 伊朗频道"
+  },
+  {
+   "id": "nyt-mideast",
+   "url": "https://rss.nytimes.com/services/xml/rss/nyt/MiddleEast.xml",
+   "tier": "T3",
+   "publisher": "NYT",
+   "enabled": true,
+   "note": "NYT 中东频道"
+  },
+  {
+   "id": "gn-rial",
+   "url": "https://news.google.com/rss/search?q=%22iranian+rial%22+(exchange+rate+OR+dollar+OR+toman)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "里亚尔汇率总通道"
+  },
+  {
+   "id": "gn-rial-deval",
+   "url": "https://news.google.com/rss/search?q=Iran+rial+(plunge+OR+slump+OR+devaluat+OR+%22record+low%22)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "里亚尔贬值动态"
+  },
+  {
+   "id": "gn-food-price",
+   "url": "https://news.google.com/rss/search?q=Iran+(food+prices+OR+bread+price+OR+meat+price+OR+inflation)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "物价/食品/通胀"
+  },
+  {
+   "id": "gn-cpi",
+   "url": "https://news.google.com/rss/search?q=Iran+(CPI+OR+%22inflation+rate%22)+statistics+(release+OR+report)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "官方统计发布通道"
+  },
+  {
+   "id": "gn-unemploy",
+   "url": "https://news.google.com/rss/search?q=Iran+(unemployment+OR+jobless)+(youth+OR+graduates+OR+rate)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "失业率通道"
+  },
+  {
+   "id": "gn-oil-export",
+   "url": "https://news.google.com/rss/search?q=Iran+crude+oil+exports+(barrels+OR+shipments+OR+tankers+OR+China)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "原油出口规模"
+  },
+  {
+   "id": "gn-fuel",
+   "url": "https://news.google.com/rss/search?q=Iran+(fuel+OR+gasoline+petrol)+shortage+(queues+OR+rationing+OR+crisis)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "燃料短缺/配给"
+  },
+  {
+   "id": "gn-power",
+   "url": "https://news.google.com/rss/search?q=Iran+(power+outage+OR+blackout+OR+%22electricity+cuts%22+OR+%22power+cuts%22)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "限电/停电（round1 超时 round2 复测 200）"
+  },
+  {
+   "id": "gn-energy",
+   "url": "https://news.google.com/rss/search?q=Iran+(energy+crisis+OR+gas+shortage+OR+%22fuel+rationing%22)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "能源危机总通道"
+  },
+  {
+   "id": "gn-irgc",
+   "url": "https://news.google.com/rss/search?q=IRGC+OR+%22Revolutionary+Guards%22+Iran+(power+OR+economy+OR+crackdown+OR+arrests)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "革命卫队权势通道"
+  },
+  {
+   "id": "gn-irgc-gov",
+   "url": "https://news.google.com/rss/search?q=Pezeshkian+(IRGC+OR+%22Revolutionary+Guards%22+OR+parliament+OR+government)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "文官政府 vs IRGC"
+  },
+  {
+   "id": "gn-khamenei",
+   "url": "https://news.google.com/rss/search?q=Khamenei+(met+OR+speech+OR+appearance+OR+public)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "领袖公开露面通道"
+  },
+  {
+   "id": "gn-succession",
+   "url": "https://news.google.com/rss/search?q=Iran+supreme+leader+(succession+OR+successor+OR+Mojtaba+OR+health)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "继承/健康/权威重塑"
+  },
+  {
+   "id": "gn-protest",
+   "url": "https://news.google.com/rss/search?q=Iran+(protests+OR+protesters)+(Tehran+OR+arrested+OR+riot)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "街头抗议"
+  },
+  {
+   "id": "gn-subsidy",
+   "url": "https://news.google.com/rss/search?q=Iran+(subsidy+OR+rationing+OR+%22coupon%22)+bread+OR+fuel&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "补贴/配给券"
+  },
+  {
+   "id": "gn-economy-gen",
+   "url": "https://news.google.com/rss/search?q=Iran+economy+(recession+OR+budget+OR+trade+OR+wages)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "宏观经济总通道（round2 新增实测 200）"
+  },
+  {
+   "id": "khamenei-en",
+   "url": "https://english.khamenei.ir/rss",
+   "tier": "T1",
+   "publisher": "Leader.ir (EN)",
+   "enabled": false,
+   "note": "实测 2026-09-19：round1+round2 两次连接失败（status 0，经当前出口不可达，疑 geo 限制）；替代=gnews gn-khamenei + Tehran Times 官媒窗口"
+  },
+  {
+   "id": "khamenei-fa",
+   "url": "https://khamenei.ir/rss",
+   "tier": "T1",
+   "publisher": "Leader.ir",
+   "enabled": false,
+   "note": "实测 2026-09-19：连接失败（status 0），同上"
+  },
+  {
+   "id": "irna-en",
+   "url": "https://en.irna.ir/rss",
+   "tier": "T1",
+   "publisher": "IRNA (EN)",
+   "enabled": false,
+   "note": "实测 2026-09-19：连接失败（status 0）；/rss 路径返回 6.2KB HTML 壳（非 feed）"
+  },
+  {
+   "id": "irna-en2",
+   "url": "https://en.irna.ir/rss/home",
+   "tier": "T1",
+   "publisher": "IRNA (EN)",
+   "enabled": false,
+   "note": "实测 2026-09-19：200 但 HTML 壳（非 feed）"
+  },
+  {
+   "id": "president-ir",
+   "url": "https://www.president.ir/en/rss",
+   "tier": "T1",
+   "publisher": "President.ir",
+   "enabled": false,
+   "note": "实测 2026-09-19：200 但 1KB HTML 壳（JS 渲染，无 feed）"
+  },
+  {
+   "id": "cbi-ir",
+   "url": "https://www.cbi.ir/",
+   "tier": "T1",
+   "publisher": "Central Bank of Iran",
+   "enabled": false,
+   "note": "实测 2026-09-19：连接失败（status 0）；官方汇率经 currencyrate.today T3 转写层替代"
+  },
+  {
+   "id": "amar-ir",
+   "url": "https://amar.org.ir/",
+   "tier": "T1",
+   "publisher": "Statistical Center of Iran",
+   "enabled": false,
+   "note": "实测 2026-09-19：连接失败（status 0）；CPI/失业率发布经 Tehran Times/IranWire 等 T3 转写"
+  },
+  {
+   "id": "mei-rss",
+   "url": "https://www.mei.edu/rss.xml",
+   "tier": "T2",
+   "publisher": "Middle East Institute",
+   "enabled": false,
+   "note": "实测 2026-09-19：200 但仅 2.9KB XML 壳（疑似空 feed/xsl 页），无条目"
+  },
+  {
+   "id": "ctp-rss",
+   "url": "https://www.criticalthreats.org/rss",
+   "tier": "T2",
+   "publisher": "Critical Threats Project",
+   "enabled": false,
+   "note": "实测 2026-09-19：404"
+  },
+  {
+   "id": "isw-update",
+   "url": "https://www.understandingwar.org/backgrounder/rss.xml",
+   "tier": "T2",
+   "publisher": "ISW",
+   "enabled": false,
+   "note": "实测 2026-09-19：403（mideast 项目同况，不绕过）"
+  },
+  {
+   "id": "radiofarda",
+   "url": "https://www.radiofarda.com/rss/",
+   "tier": "T3",
+   "publisher": "Radio Farda (RFE/RL)",
+   "enabled": false,
+   "note": "实测 2026-09-19：403（不绕过）"
+  },
+  {
+   "id": "radiofarda2",
+   "url": "https://www.rferl.org/rss/rssall",
+   "tier": "T3",
+   "publisher": "RFE/RL",
+   "enabled": false,
+   "note": "实测 2026-09-19：403（不绕过）"
+  },
+  {
+   "id": "almonitor",
+   "url": "https://www.al-monitor.com/rss",
+   "tier": "T3",
+   "publisher": "Al-Monitor",
+   "enabled": false,
+   "note": "实测 2026-09-19：连接失败（status 0）"
+  },
+  {
+   "id": "presstv",
+   "url": "https://www.presstv.ir/rss.xml",
+   "tier": "T3",
+   "publisher": "Press TV",
+   "enabled": false,
+   "note": "实测 2026-09-19：连接失败（status 0）"
+  },
+  {
+   "id": "iranintl-en",
+   "url": "https://www.iranintl.com/en/rss",
+   "tier": "T3",
+   "publisher": "Iran International (EN)",
+   "enabled": false,
+   "note": "实测 2026-09-19：200 但 82KB HTML 壳（Next.js 渲染，无 feed）；内政覆盖损失由 gnews 多通道补偿"
+  },
+  {
+   "id": "iranintl2",
+   "url": "https://iranintl.com/en/rss",
+   "tier": "T3",
+   "publisher": "Iran International",
+   "enabled": false,
+   "note": "实测 2026-09-19：同上 HTML 壳"
+  },
+  {
+   "id": "bonbast",
+   "url": "https://bonbast.com/",
+   "tier": "T3",
+   "publisher": "BonBast",
+   "enabled": false,
+   "note": "实测 2026-09-19：200 但数值由 Firebase JS 动态填充（td id=usd1 为空），不做逆向端点解析；自由市场汇率经 gnews 转述+基线快照替代"
+  },
+  {
+   "id": "tgju",
+   "url": "https://www.tgju.org/",
+   "tier": "T3",
+   "publisher": "TGJU",
+   "enabled": false,
+   "note": "实测 2026-09-19：200 但 1.5MB 波斯语重页、数值 JS 渲染，解析成本高不启用"
+  },
+  {
+   "id": "globaltimes",
+   "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+   "tier": "T3",
+   "publisher": "Global Times 环球时报英文版",
+   "enabled": false,
+   "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担"
+  },
+  {
+   "id": "cgtn-world",
+   "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+   "tier": "T3",
+   "publisher": "CGTN 中国环球电视网",
+   "enabled": true,
+   "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）"
+  }
+ ],
+ "buckets": {
+  "rial_fx": {
+   "label": "里亚尔汇率",
+   "require_all": [
+    [
+     "rial",
+     "toman"
+    ]
+   ]
+  },
+  "prices_food": {
+   "label": "物价与民生",
+   "require_all": [
+    [
+     "inflation",
+     "price hike",
+     "price increase",
+     "price rise",
+     "prices rose",
+     "prices rise",
+     "food price",
+     "bread price",
+     "meat price",
+     "medicine price",
+     "cost of living",
+     "consumer price",
+     "purchasing power",
+     "livelihood",
+     "price of bread",
+     "wage",
+     "salary",
+     "subsidy"
+    ]
+   ]
+  },
+  "unemployment": {
+   "label": "就业与失业",
+   "require_all": [
+    [
+     "unemployment",
+     "jobless",
+     "unemployed",
+     "job market",
+     "labor market",
+     "labour market",
+     "jobs lost",
+     "underemploy",
+     "labor force",
+     "labour force",
+     "job loss"
+    ]
+   ]
+  },
+  "oil_exports": {
+   "label": "原油出口",
+   "require_all": [
+    [
+     "oil",
+     "crude",
+     "petroleum",
+     "barrel",
+     "barrels",
+     "tanker",
+     "shadow fleet"
+    ],
+    [
+     "export",
+     "exports",
+     "shipment",
+     "shipments",
+     "revenue",
+     "income",
+     "sales",
+     "supply",
+     "tanker",
+     "barrel",
+     "barrels",
+     "import",
+     "blockade",
+     "liftings"
+    ]
+   ]
+  },
+  "fuel_power": {
+   "label": "燃料与限电",
+   "require_all": [
+    [
+     "fuel shortage",
+     "gasoline shortage",
+     "petrol shortage",
+     "fuel crisis",
+     "gas crisis",
+     "rationing",
+     "ration",
+     "fuel quota",
+     "gasoline quota",
+     "gas station",
+     "petrol station",
+     "long queues",
+     "fuel queues",
+     "power outage",
+     "blackout",
+     "power cut",
+     "power cuts",
+     "electricity cut",
+     "electricity cuts",
+     "load shedding",
+     "power grid",
+     "energy crisis",
+     "electricity shortage",
+     "gas shortage",
+     "fuel price",
+     "gasoline price",
+     "petrol price",
+     "electricity supply",
+     "fuel supply",
+     "gasoline supply"
+    ]
+   ]
+  },
+  "irgc_power": {
+   "label": "革命卫队权势结构",
+   "require_all": [
+    [
+     "irgc",
+     "revolutionary guard",
+     "revolutionary guards",
+     "islamic revolutionary guard corps",
+     "pasdaran",
+     "guard corps"
+    ],
+    [
+     "power",
+     "influence",
+     "control",
+     "crackdown",
+     "arrest",
+     "detain",
+     "purge",
+     "purged",
+     "rival",
+     "defiance",
+     "defied",
+     "defy",
+     "undermine",
+     "grip",
+     "tighten",
+     "appointment",
+     "appointed",
+     "economy",
+     "economic",
+     "empire",
+     "business",
+     "payroll",
+     "unpaid",
+     "wages",
+     "faction",
+     "infighting",
+     "resign",
+     "untouchable",
+     "dominance",
+     "dominant",
+     "oversee",
+     "supervise",
+     "smuggling",
+     "shell companies"
+    ]
+   ]
+  },
+  "khamenei_leader": {
+   "label": "最高领袖与继承",
+   "require_all": [
+    [
+     "khamenei",
+     "supreme leader",
+     "ayatollah"
+    ]
+   ]
+  },
+  "protest": {
+   "label": "街头与抗议",
+   "require_all": [
+    [
+     "protest",
+     "protester",
+     "protests",
+     "demonstration",
+     "demonstrator",
+     "rally",
+     "vigil",
+     "chant",
+     "took to the streets",
+     "riot",
+     "rioters"
+    ]
+   ]
+  }
+ },
+ "stance": {
+  "escalate": [
+   "crackdown",
+   "arrest",
+   "plunge",
+   "slump",
+   "collapse",
+   "shortage",
+   "blackout",
+   "riot",
+   "unrest",
+   "hyperinflation",
+   "crisis",
+   "record low",
+   "unpaid",
+   "layoff",
+   "job losses",
+   "rationing",
+   "queues",
+   "default",
+   "devaluation"
+  ],
+  "deescalate": [
+   "stabilize",
+   "recovery",
+   "recover",
+   "rebound",
+   "ease",
+   "relief",
+   "restore",
+   "reopen",
+   "improve",
+   "subsidy increase",
+   "wage increase"
+  ]
+ },
+ "entities": {
+  "iran_figures": {
+   "Ali Khamenei": [
+    "khamenei"
+   ],
+   "Mojtaba Khamenei": [
+    "mojtaba khamenei",
+    "mojtaba"
+   ],
+   "Masoud Pezeshkian": [
+    "pezeshkian"
+   ],
+   "Mohammad-Bagher Ghalibaf": [
+    "ghalibaf"
+   ],
+   "Abbas Araghchi": [
+    "araghchi"
+   ],
+   "Mohsen Paknejad": [
+    "paknejad"
+   ],
+   "Mohsen Rezaei": [
+    "mohsen rezaei",
+    "rezaei"
+   ]
+  },
+  "institutions": {
+   "Central Bank of Iran": [
+    "central bank",
+    "cbi"
+   ],
+   "Statistical Center": [
+    "statistical center",
+    "statistics center"
+   ],
+   "Parliament (Majlis)": [
+    "parliament",
+    "majlis"
+   ],
+   "IRGC": [
+    "irgc",
+    "revolutionary guard",
+    "pasdaran"
+   ],
+   "Judiciary": [
+    "judiciary"
+   ]
+  }
+ },
+ "fx_baseline": [
+  {
+   "date": "2025-09-18",
+   "event": "官方/银行间中间价约 42,062 里亚尔/美元（危机前一年参照）",
+   "tier": "T3",
+   "source": "currencyrate.today 年前对照"
+  },
+  {
+   "date": "2026-07-01",
+   "event": "官方系列年内低点 ≈1,376,000 里亚尔/USD（0.0000007267 USD/IRR）",
+   "tier": "T3",
+   "source": "exchange-rates.org"
+  },
+  {
+   "date": "2026-09-19",
+   "event": "官方/银行间中间价 ≈1,374,600 里亚尔/USD；同页 CBI 报价口径 1,658,791 里亚尔/USD（两套官方口径并存披露）",
+   "tier": "T3",
+   "source": "currencyrate.today"
+  },
+  {
+   "date": "2026-09-01",
+   "event": "自由市场里亚尔连创纪录低点，>2,200,000 里亚尔/USD（Reuters 转述）",
+   "tier": "T3",
+   "source": "Capital Times 转述 Reuters"
+  },
+  {
+   "date": "2026-09-16",
+   "event": "自由市场 USD 卖价 230,600 托曼（≈2,306,000 里亚尔/USD）；Azadi 金币 2.29 亿托曼",
+   "tier": "T3",
+   "source": "bonbast 快照（经搜索快照转写）"
+  },
+  {
+   "date": "2026-09-11",
+   "event": "自由市场美元突破 2,300,000 里亚尔（Iran Focus 转述）",
+   "tier": "T3",
+   "source": "Iran Focus"
+  }
+ ],
+ "cpi_baseline": [
+  {
+   "date": "2026-07",
+   "event": "点对点通胀 87.9%；年度通胀 66%（6 月为 62%）——SCI 数据",
+   "tier": "T3",
+   "source": "IranWire 转述 SCI"
+  },
+  {
+   "date": "2026-08",
+   "event": "Mordad 月：年度通胀 69.9%、点对点 89%、食品饮料点对点 127.5%、CPI 环比 +3.4%（Tir→Mordad）",
+   "tier": "T3",
+   "source": "Donya-e-Eqtesad 转述 SCI"
+  },
+  {
+   "date": "2026-09-14",
+   "event": "工人生计篮子约 9,000 万托曼/月；最低工资 1,662.5 万托曼（+60% 仍不抵通胀）——最高劳工委员会",
+   "tier": "T3",
+   "source": "Asr Iran 转述"
+  },
+  {
+   "date": "2026-09-13",
+   "event": "药品市场『成本累积』式涨价（优先汇率取消+原料/包装/运输）——药剂师协会",
+   "tier": "T3",
+   "source": "Aftab News 转述"
+  }
+ ],
+ "jobs_baseline": [
+  {
+   "date": "2026-08",
+   "event": "SCI 春季数据：总失业率 9.1%（上年同期 7.3%）；青年 15-24 岁 23.4%；18-35 岁 17.5%；女性 16.7%/男性 7.5%；毕业生 11.6%；失业毕业生约 87.7 万；就业人数一年 -45 万；经济不活跃人口 +80 万；参与率 40.7%（女性 13.7%）；就业不足 210.3 万人（8.5%）",
+   "tier": "T3",
+   "source": "SCI via IRNA/IranWire/IranFocus"
+  },
+  {
+   "date": "2026-04-19",
+   "event": "劳工部副部长 Mohammadi 初估：战争致 100 万+ 岗位消失、200 万人直接/间接失业",
+   "tier": "T3",
+   "source": "Iran Focus 转述"
+  },
+  {
+   "date": "2026-09",
+   "event": "失业保险申请增加；战后失业保险申请者中女性占 1/3",
+   "tier": "T3",
+   "source": "IranWire 转述"
+  }
+ ],
+ "oil_baseline": [
+  {
+   "date": "2026-02-28",
+   "event": "战前霍尔木兹通行约 2,000 万桶/日（全球 20% 油品）",
+   "tier": "T3",
+   "source": "Al Jazeera"
+  },
+  {
+   "date": "2026-04",
+   "event": "美方开始封锁伊朗港口（Operation Economic Outcast 前奏）",
+   "tier": "T3",
+   "source": "Al Jazeera"
+  },
+  {
+   "date": "2026-07-14",
+   "event": "美方重启海上封锁；此后至 9-01 约 7 周无对华原油海运出口",
+   "tier": "T3",
+   "source": "Maritime News 转述航运情报"
+  },
+  {
+   "date": "2026-09-05",
+   "event": "CENTCOM 击瘫 3 艘伊朗油轮（MT Kylo/Downy/Stark 1）；Bessent：伊朗仅剩约 3,000 万桶未售中国",
+   "tier": "T3",
+   "source": "Artesh Brief 转述"
+  },
+  {
+   "date": "2026-09-16",
+   "event": "TankerTrackers：60 天无伊朗原油越过封锁线，出口『近乎为零』；对照口径：伊朗官媒宣称出口未中断+恢复 100 mcm/日天然气产能（Paknejad）",
+   "tier": "T3",
+   "source": "Artesh Brief / TankerTrackers 转述"
+  },
+  {
+   "date": "2026-09-06",
+   "event": "霍尔木兹商业通行 Kpler 口径 5-13 艘/日 vs 战前 130-140 艘/日（美方称海峡『开放』、伊方称『受监管』——三套口径并存）",
+   "tier": "T3",
+   "source": "Al Jazeera / Kpler 转述"
+  }
+ ],
+ "fuel_baseline": [
+  {
+   "date": "2026-09-08",
+   "event": "第三档汽油价格翻倍至 10,000 托曼/升；配额外按市价",
+   "tier": "T3",
+   "source": "Samt 转述（官媒）"
+  },
+  {
+   "date": "2026-09 上旬",
+   "event": "单一匿名信源（Reuters）：汽油库存仅剩约 2 个月",
+   "tier": "T3",
+   "source": "Capital Times 转述 Reuters"
+  },
+  {
+   "date": "2026-09-13",
+   "event": "Minab/Konarak 加油站长队（市民实拍转述）",
+   "tier": "T3",
+   "source": "Defend Ashraf 转述"
+  },
+  {
+   "date": "2026-09-14",
+   "event": "摩托车骑手 25 升配额 3 天用尽，配送行业受冲击——运输工会",
+   "tier": "T3",
+   "source": "Samt 转述"
+  }
+ ],
+ "power_baseline": [
+  {
+   "date": "2026-09-06",
+   "event": "news18 转述美方官员：IRGC 成员数月未领饷，士气受『Operation Economic Outcast』冲击（单方口径）",
+   "tier": "T3",
+   "source": "News18 转述美方官员"
+  },
+  {
+   "date": "2026-09-06",
+   "event": "SNSC 秘书 Mohsen Rezaei：『伊朗条件未满足前不谈判』",
+   "tier": "T3",
+   "source": "Artesh Brief 转述"
+  },
+  {
+   "date": "2026-09",
+   "event": "Pezeshkian：贸易额下降 1/4~1/3，进口受创最重；呼吁团结",
+   "tier": "T3",
+   "source": "Capital Times 转述"
+  },
+  {
+   "date": "2026-09",
+   "event": "经济学家 Masoud Nili：经济已越过慢性通胀、正在滑向恶性通胀区间",
+   "tier": "T3",
+   "source": "IranWire 转述"
+  }
+ ],
+ "output": {
+  "dir": "output",
+  "report_prefix": "iran-domestic"
+ },
+ "report": {
+  "known_limitations": [
+   "官方一手渠道全部不可达：khamenei.ir、IRNA、president.ir、CBI、统计中心（SCI）经当前网络出口连接失败或仅 JS 壳（实测 2026-09-19，不绕过）——本项目 T1 直接源为零，官方数字全部经 T3 转述层获得，报告逐条披露转写链",
+   "里亚尔官方价（银行间/CBI 报价）与自由市场价（bonbast 口径）是两套口径，禁止混用/相加；托曼=10 里亚尔，转写时逐条标注",
+   "通胀数字多版本并存（年度 66/69.9%；点对点 87.9/89%；食品 127.5/128%）——口径不同非数据冲突，逐条标注口径",
+   "原油出口『接近归零』是美方/航运跟踪机构口径；伊朗官媒宣称『出口未中断』——双方口径并列披露、不采信单方",
+   "『汽油库存仅剩 2 个月』为 Reuters 单一匿名信源，未经独立核验",
+   "IRGC 未领饷为美方官员单方口径（news18 转述），伊朗方无回应",
+   "词表分类是启发式，只看方向不看强度；signal bucket × tier 交叉表自动警告全 T3 桶"
+  ]
+ },
+ "glossary": {
+  "fa": {
+   "نفت": "石油",
+   "تحریم": "制裁",
+   "تورم": "通胀",
+   "دلار": "美元",
+   "بودجه": "预算",
+   "انتخابات": "选举",
+   "دولت": "政府",
+   "مجلس": "议会",
+   "رئیس‌جمهور": "总统",
+   "ارز": "外汇/货币",
+   "گاز": "天然气",
+   "صادرات": "出口",
+   "واردات": "进口",
+   "برجام": "伊核协议（JCPOA）",
+   "سپاه": "伊斯兰革命卫队",
+   "آژانس": "国际原子能机构（IAEA）",
+   "غنیسازی": "铀浓缩"
+  }
+ }
+}

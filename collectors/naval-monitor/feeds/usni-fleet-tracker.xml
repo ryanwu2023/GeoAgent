@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ============================================================================
+  真实数据转存文件
+  来源：USNI News《Fleet and Marine Tracker: Sept. 14, 2026》
+        https://news.usni.org/2026/09/14/usni-news-fleet-and-marine-tracker-sept-14-2026
+  说明：本机网络无法直连 news.usni.org（Cloudflare 403），故通过可用的抓取链路
+        将该公开文章的正文转存为本文件，再由 naval_monitor.py 的本地文件模式解析。
+        正文内容为该文章公开发布的原文，未做改写。
+  ============================================================================
+-->
+<rss version="2.0">
+  <channel>
+    <title>Fleet Tracker Archives - USNI News</title>
+    <link>https://news.usni.org/category/fleet-tracker</link>
+    <description>USNI News Fleet and Marine Tracker</description>
+
+    <item>
+      <title>USNI News Fleet and Marine Tracker: Sept. 14, 2026</title>
+      <link>https://news.usni.org/2026/09/14/usni-news-fleet-and-marine-tracker-sept-14-2026</link>
+      <pubDate>Mon, 14 Sep 2026 19:26:00 +0000</pubDate>
+      <description>These are the approximate positions of the U.S. Navy's deployed carrier strike groups and amphibious ready groups throughout the world as of Sept. 14, 2026, based on Navy and public data. In cases in which a CSG or ARG is conducting disaggregated operations, the chart reflects the location of the capital ship.
+
+In Japan USS Tripoli (LHA-7) is in port in Sasebo, Japan.
+
+In the South China Sea The Abraham Lincoln Carrier Strike Group is in the South China Sea heading back from a deployment. Carrier: USS Abraham Lincoln (CVN-72), homeported at Naval Air Station North Island, Calif. Air Defense Commander is USS Frank E. Petersen, Jr. (DDG-121), homeported at Naval Station Pearl Harbor, Hawaii. Littoral Combat Ship USS Canberra (LCS-30) is in the South China Sea. Guided-missile cruiser USS Robert Smalls (CG-62), homeported in Yokosuka, is in the South China Sea.
+
+In Singapore USS Santa Barbara (LCS-32) and USS Tulsa (LCS-16) are in port in Singapore, according to ship spotters.
+
+In the Southern Pacific USS San Antonio (LPD-17) and USS Gridley (DDG-101) are underway in the Southern Pacific, operating off Ecuador. Elements of the 24th Marine Expeditionary Unit are embarked.
+
+In the Caribbean Littoral combat ship USS Billings (LCS-15) is operating in the Central Caribbean Sea. The Freedom-class LCS is based at Naval Station Mayport, Fla.
+
+In the Mediterranean Sea The independently deployed guided-missile destroyers in the Mediterranean Sea include USS Roosevelt (DDG-80), homeported at Naval Station Rota, Spain, and USS Jason Dunham (DDG-109), homeported at Naval Station Mayport, Fla.
+
+In the Red Sea There are two guided-missile destroyers operating in the Red Sea: USS Gonzalez (DDG-66), homeported at Naval Station Norfolk, Va., and USS Oscar Austin (DDG-79), homeported at Naval Station Rota, Spain.
+
+In the Arabian Sea Aircraft carrier USS George Washington (CVN-73), along with embarked Carrier Air Wing (CVW) 5 and USS Shoup (DDG-86), are operating in the Arabian Sea in support of U.S. operations against Iran. Carrier Strike Group 5 includes USS Shoup (DDG-86), homeported in Yokosuka. The George H. W. Bush Carrier Strike Group is operating in the Arabian Sea in support of U.S. operations in the Middle East. Carrier Strike Group 10 includes USS George H. W. Bush (CVN-77) and Air Defense Commander USS Princeton (CG-59), homeported at Naval Station San Diego. Destroyer Squadron 22 includes USS Donald Cook (DDG-75) and USS Ross (DDG-71). Amphibious assault ship USS Boxer (LHD-4) is operating in the Arabian Sea. The Boxer Amphibious Ready Group includes USS Boxer (LHD-4), USS Comstock (LSD-45), USS Portland (LPD-27) and the 11th Marine Expeditionary Unit. As of Monday, USS Comstock (LSD-45) was operating in the Indian Ocean. Additionally, the independently deployed warships in the region include USS John Finn (DDG-113), USS Delbert D. Black (DDG-119), USS McFaul (DDG-74), USS Mason (DDG-87), USS Higgins (DDG-76), USS John Paul Jones (DDG-53), USS Milius (DDG-69), USS Rafael Peralta (DDG-115), USS Spruance (DDG-111) and USS Michael Murphy (DDG-112).
+
+In the Indian Ocean Warships operating in the Indian Ocean include USS Mustin (DDG-89), homeported in Yokosuka, Japan, USS Comstock (LSD-45), homeported at Naval Station San Diego, and USS Miguel Keith (ESB-5), homeported in Apra Harbor, Guam.
+
+In the Eastern Pacific Aircraft carrier USS Theodore Roosevelt (CVN-71) returned Friday to San Diego, Calif., according to ship spotters.
+</description>
+      <category>Fleet Tracker</category>
+      <category>News &amp; Analysis</category>
+      <category>Surface Forces</category>
+      <category>U.S. Navy</category>
+      <category>USS Abraham Lincoln (CVN-72)</category>
+      <category>USS George Washington (CVN-73)</category>
+      <category>USS George H.W. Bush (CVN-77)</category>
+      <category>USS Theodore Roosevelt (CVN-71)</category>
+      <category>USS Boxer (LHD-4)</category>
+      <category>USS Tripoli (LHA-7)</category>
+    </item>
+
+  </channel>
+</rss>

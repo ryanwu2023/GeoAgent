@@ -1,0 +1,756 @@
+{
+  "project": "opinion-monitor",
+  "topic": "美国民意 x 美伊战争（反战情绪监测：民调/意见领袖/国会/街头）",
+  "schema_ver": "1.0",
+  "parse_ver": 1,
+  "window_days": 14,
+  "per_source_max": 60,
+  "summary_max_chars": 1200,
+  "min_interval_per_host": 1.2,
+  "request_timeout": 30,
+  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "sources": [
+    {
+      "id": "apnorc-feed",
+      "type": "rss",
+      "url": "https://apnorc.org/feed/",
+      "tier": "T1",
+      "publisher": "AP-NORC",
+      "tier_note": "民调机构一手发布（原始调查结果）",
+      "enabled": true,
+      "note": "实测 200 RSS 104KB (2026-09-19)"
+    },
+    {
+      "id": "yougov-rss",
+      "type": "rss",
+      "url": "https://today.yougov.com/rss",
+      "tier": "T1",
+      "publisher": "YouGov",
+      "tier_note": "民调机构一手发布",
+      "enabled": true,
+      "note": "实测 200 RSS 173KB；/politics/rss 为 404，用全站"
+    },
+    {
+      "id": "ipsos-rss",
+      "type": "rss",
+      "url": "https://www.ipsos.com/en-us/rss.xml",
+      "tier": "T1",
+      "publisher": "Ipsos",
+      "tier_note": "路透/益普索民调一手方",
+      "enabled": true,
+      "note": "实测 200 RSS 16KB"
+    },
+    {
+      "id": "paul-feed",
+      "type": "rss",
+      "url": "https://www.paul.senate.gov/feed/",
+      "tier": "T1",
+      "publisher": "Sen. Rand Paul",
+      "tier_note": "议员本人官网新闻稿（其表态的原始出处）",
+      "enabled": true,
+      "note": "实测 200 RSS 79KB"
+    },
+    {
+      "id": "rcp-index",
+      "type": "rss",
+      "url": "https://www.realclearpolitics.com/index.xml",
+      "tier": "T3",
+      "publisher": "RealClearPolitics",
+      "tier_note": "民调聚合/媒体转述（二手）",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "npr-politics",
+      "type": "rss",
+      "url": "https://feeds.npr.org/1001/rss.xml",
+      "tier": "T3",
+      "publisher": "NPR",
+      "tier_note": "主流媒体（6月决议报道即 NPR）",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "thehill-feed",
+      "type": "rss",
+      "url": "https://thehill.com/feed/",
+      "tier": "T3",
+      "publisher": "The Hill",
+      "tier_note": "国会报道主力媒体",
+      "enabled": true,
+      "note": "实测 200 RSS 128KB"
+    },
+    {
+      "id": "reason-feed",
+      "type": "rss",
+      "url": "https://reason.com/feed/",
+      "tier": "T3",
+      "publisher": "Reason",
+      "tier_note": "自由意志派观点媒体",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "tac-feed",
+      "type": "rss",
+      "url": "https://www.theamericanconservative.com/feed/",
+      "tier": "T3",
+      "publisher": "The American Conservative",
+      "tier_note": "反干预右翼观点媒体（卡尔森阵营同温层）",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "intercept-feed",
+      "type": "rss",
+      "url": "https://theintercept.com/feed/",
+      "tier": "T3",
+      "publisher": "The Intercept",
+      "tier_note": "进步派观点媒体",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "cd-rss",
+      "type": "rss",
+      "url": "https://www.commondreams.org/rss.xml",
+      "tier": "T3",
+      "publisher": "Common Dreams",
+      "tier_note": "进步派观点媒体（反战运动组织方报道多）",
+      "enabled": true,
+      "note": "实测 200 RSS 183KB；/feed 为 404，用 /rss.xml"
+    },
+    {
+      "id": "antiwar-original",
+      "type": "rss",
+      "url": "https://original.antiwar.com/feed/",
+      "tier": "T3",
+      "publisher": "Antiwar.com",
+      "tier_note": "反战专业媒体（专栏层）",
+      "enabled": true,
+      "note": "实测 200 RSS；news.antiwar.com 连接失败"
+    },
+    {
+      "id": "gn-poll-generic",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=%22Iran+war%22+poll+Americans&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "关键词聚合转述层（覆盖 Reuters/AP/WaPo 民调报道）",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-poll-reuters",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=Reuters+Ipsos+Iran+poll&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "路透/益普索转述通道",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-poll-apnorc",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=AP-NORC+Iran&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "AP-NORC 转述通道",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-poll-wapo",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=Washington+Post+Iran+poll&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "华盛顿邮报-Schar 民调转述通道",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-poll-quinnipiac",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=Quinnipiac+poll+Iran&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "昆尼皮亚克转述通道",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-poll-marist",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=Marist+poll+Iran&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "NPR/PBS/Marist 转述通道",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-trump-approval",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=Trump+approval+rating+poll+war+Iran&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "总统支持率 x 战争关联",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-midterm-war",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=midterm+elections+Iran+war+polls&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "中期选举 x 战争民意",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-tucker",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=Tucker+Carlson+Iran&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "卡尔森动向（本人平台 403 后的转述层）",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-kent",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=%22Joe+Kent%22+Iran&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "肯特动向（辞职后媒体巡访/组党动向）",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-maga-dissent",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=Iran+war+(Massie+OR+Greene+OR+%22Megyn+Kelly%22+OR+Rogan)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "MAGA 反战其余意见领袖",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-warpowers",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=%22war+powers%22+Iran+Senate+vote&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "国会战争权力动向（媒体转述层）",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-kaine-wp",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=Kaine+OR+Schumer+war+powers+Iran&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "决议发起人与民主党领导层动向",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "gn-protest",
+      "type": "gnews",
+      "url": "https://news.google.com/rss/search?q=Iran+war+protest+rally+Americans&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "tier_note": "抗议/集会动向",
+      "enabled": true,
+      "note": "实测 200 RSS"
+    },
+    {
+      "id": "senate-votes-rss",
+      "type": "rss",
+      "url": "https://www.senate.gov/general/rss/RSS_votes.xml",
+      "tier": "T1",
+      "publisher": "US Senate",
+      "tier_note": "-",
+      "enabled": false,
+      "note": "停用留档 2026-09-19：HTTP 200 但返回 404 Error Page HTML 25KB（端点已下线）。替代：战争权力表决经 gn-warpowers(T3) 覆盖 + 手工基线快照；日后可回源 senate.gov LIS roll call XML（需逐表决编号枚举）"
+    },
+    {
+      "id": "govinfo-cbd",
+      "type": "rss",
+      "url": "https://www.govinfo.gov/rss/cbd.xml",
+      "tier": "T1",
+      "publisher": "govinfo",
+      "tier_note": "-",
+      "enabled": false,
+      "note": "停用留档 2026-09-19：404；/rss 目录页 403（Akamai）。替代：gn-warpowers"
+    },
+    {
+      "id": "paul-press-old",
+      "type": "rss",
+      "url": "https://www.paul.senate.gov/rss/press-releases",
+      "tier": "T1",
+      "publisher": "Sen. Rand Paul",
+      "tier_note": "-",
+      "enabled": false,
+      "note": "停用留档 2026-09-19：404（路径已失效）。替代：paul-feed（/feed/ 实测 200）"
+    },
+    {
+      "id": "murkowski-press",
+      "type": "rss",
+      "url": "https://www.murkowski.senate.gov/rss/press-releases",
+      "tier": "T1",
+      "publisher": "Sen. Murkowski",
+      "tier_note": "-",
+      "enabled": false,
+      "note": "停用留档 2026-09-19：410 Gone；/rss.xml 亦 410。替代：gn-warpowers / gn-kaine-wp 转述层"
+    },
+    {
+      "id": "collins-press",
+      "type": "rss",
+      "url": "https://www.collins.senate.gov/rss/press-releases",
+      "tier": "T1",
+      "publisher": "Sen. Collins",
+      "tier_note": "-",
+      "enabled": false,
+      "note": "停用留档 2026-09-19：首次超时(status 0)，重试 404；/rss.xml 404。替代：gn-warpowers 转述层"
+    },
+    {
+      "id": "kaine-press",
+      "type": "rss",
+      "url": "https://www.kaine.senate.gov/rss/press-releases",
+      "tier": "T1",
+      "publisher": "Sen. Kaine",
+      "tier_note": "-",
+      "enabled": false,
+      "note": "停用留档 2026-09-19：404。替代：gn-kaine-wp"
+    },
+    {
+      "id": "massie-rss",
+      "type": "rss",
+      "url": "https://massie.house.gov/rss.xml",
+      "tier": "T1",
+      "publisher": "Rep. Massie",
+      "tier_note": "-",
+      "enabled": false,
+      "note": "停用留档 2026-09-19：404；/rss/pressreleases.xml 与 /news/rss.xml 亦 404。替代：gn-maga-dissent"
+    },
+    {
+      "id": "tucker-feed",
+      "type": "rss",
+      "url": "https://tuckercarlson.com/feed/",
+      "tier": "T1",
+      "publisher": "Tucker Carlson",
+      "tier_note": "-",
+      "enabled": false,
+      "note": "停用留档 2026-09-19：403（CDN 拦截，不做风控绕过）。替代：gn-tucker(T3)；如需升级需人工访问其 YouTube/X 原帖"
+    },
+    {
+      "id": "politico-congress",
+      "type": "rss",
+      "url": "https://www.politico.com/rss/congress.xml",
+      "tier": "T3",
+      "publisher": "Politico",
+      "tier_note": "-",
+      "enabled": false,
+      "note": "停用留档 2026-09-19：403。替代：thehill-feed + gn-warpowers"
+    },
+    {
+      "id": "gallup-rss",
+      "type": "rss",
+      "url": "https://news.gallup.com/rss/news.xml",
+      "tier": "T1",
+      "publisher": "Gallup",
+      "tier_note": "-",
+      "enabled": false,
+      "note": "停用留档 2026-09-19：404（Gallup 无公开 RSS）。替代：gn-poll-generic 转述层"
+    },
+    {
+      "id": "commondreams-feed-old",
+      "type": "rss",
+      "url": "https://www.commondreams.org/feed",
+      "tier": "T3",
+      "publisher": "Common Dreams",
+      "tier_note": "-",
+      "enabled": false,
+      "note": "停用留档 2026-09-19：404。替代：cd-rss(/rss.xml 实测 200)"
+    },
+    {
+      "id": "senate-rollcall-list",
+      "type": "html",
+      "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1192",
+      "tier": "T1",
+      "publisher": "US Senate",
+      "tier_note": "-",
+      "enabled": false,
+      "note": "停用留档 2026-09-19：返回 Roll Call Vote Unavailable（会期路径未命中）。后续可探测正确会期目录后启用为 T1 表决直连"
+    },
+    {
+      "id": "globaltimes",
+      "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+      "tier": "T3",
+      "publisher": "Global Times 环球时报英文版",
+      "enabled": false,
+      "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担",
+      "type": "rss",
+      "tier_note": "中国官媒（转述层：官方立场经其报道加工）"
+    },
+    {
+      "id": "cgtn-world",
+      "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+      "tier": "T3",
+      "publisher": "CGTN 中国环球电视网",
+      "enabled": true,
+      "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）（opinion-monitor 项目加注）",
+      "type": "rss",
+      "tier_note": "中国官媒（转述层：官方立场经其报道加工）"
+    }
+  ],
+  "buckets": {
+    "polling": {
+      "label": "民调证据",
+      "require_all": [
+        [
+          "poll",
+          "survey",
+          "pollster",
+          "polling",
+          "ipsos",
+          "norc",
+          "gallup",
+          "quinnipiac",
+          "yougov",
+          "marist",
+          "schar school"
+        ]
+      ]
+    },
+    "leader": {
+      "label": "意见领袖动向",
+      "entity_group": "leaders",
+      "require_all": []
+    },
+    "congress": {
+      "label": "国会战争权力动向",
+      "entity_group": "congress",
+      "require_all": [
+        [
+          "war powers",
+          "joint resolution",
+          "resolution",
+          "roll call",
+          "vote",
+          "veto",
+          "senate",
+          "senator",
+          "congress",
+          "congressional",
+          "house of representatives",
+          "the house",
+          "capitol",
+          "legislation",
+          "legislator"
+        ]
+      ]
+    },
+    "protest": {
+      "label": "街头行动/抗议",
+      "require_all": [
+        [
+          "protest",
+          "rally",
+          "demonstration",
+          "march",
+          "gather",
+          "vigil",
+          "mobilize",
+          "demonstrator"
+        ]
+      ]
+    },
+    "election_pressure": {
+      "label": "民意 x 中期选举压力",
+      "require_all": [
+        [
+          "midterm",
+          "election",
+          "electorate",
+          "voter",
+          "ballot",
+          "campaign"
+        ],
+        [
+          "poll",
+          "approval",
+          "support",
+          "backlash",
+          "candidate",
+          "gas price",
+          "gasoline",
+          "economy"
+        ]
+      ]
+    }
+  },
+  "entities": {
+    "leaders": {
+      "Tucker Carlson": [
+        "Tucker Carlson",
+        "Carlson"
+      ],
+      "Joe Kent": [
+        "Joe Kent",
+        "Kent"
+      ],
+      "Megyn Kelly": [
+        "Megyn Kelly",
+        "Kelly"
+      ],
+      "Joe Rogan": [
+        "Joe Rogan",
+        "Rogan"
+      ],
+      "Candace Owens": [
+        "Candace Owens",
+        "Owens"
+      ],
+      "Marjorie Taylor Greene": [
+        "Marjorie Taylor Greene",
+        "Taylor Greene",
+        "Greene"
+      ],
+      "Shawn Ryan": [
+        "Shawn Ryan"
+      ],
+      "Charlie Kirk": [
+        "Charlie Kirk"
+      ]
+    },
+    "congress": {
+      "Rand Paul": [
+        "Rand Paul",
+        "Sen. Paul"
+      ],
+      "Susan Collins": [
+        "Susan Collins",
+        "Collins"
+      ],
+      "Lisa Murkowski": [
+        "Lisa Murkowski",
+        "Murkowski"
+      ],
+      "Bill Cassidy": [
+        "Bill Cassidy",
+        "Cassidy"
+      ],
+      "Tim Kaine": [
+        "Tim Kaine",
+        "Kaine"
+      ],
+      "Chuck Schumer": [
+        "Chuck Schumer",
+        "Schumer"
+      ],
+      "John Fetterman": [
+        "John Fetterman",
+        "Fetterman"
+      ],
+      "Mitch McConnell": [
+        "Mitch McConnell",
+        "McConnell"
+      ],
+      "John Thune": [
+        "John Thune",
+        "Thune"
+      ],
+      "Lindsey Graham": [
+        "Lindsey Graham",
+        "Graham"
+      ],
+      "Todd Young": [
+        "Todd Young"
+      ],
+      "Dave McCormick": [
+        "Dave McCormick",
+        "McCormick"
+      ],
+      "James Risch": [
+        "James Risch",
+        "Risch"
+      ],
+      "Thomas Massie": [
+        "Thomas Massie",
+        "Massie"
+      ],
+      "Tulsi Gabbard": [
+        "Tulsi Gabbard",
+        "Gabbard"
+      ],
+      "JD Vance": [
+        "JD Vance",
+        "Vance"
+      ],
+      "Mike Johnson": [
+        "Mike Johnson",
+        "Speaker Johnson"
+      ]
+    }
+  },
+  "stance": {
+    "antiwar": [
+      "oppose",
+      "against",
+      "condemn",
+      "criticize",
+      "criticism",
+      "slam",
+      "blast",
+      "denounce",
+      "resign",
+      "quit",
+      "betray",
+      "betrayal",
+      "antiwar",
+      "anti-war",
+      "end the war",
+      "stop the war",
+      "withdraw",
+      "unpopular",
+      "dissent",
+      "rebel",
+      "rebuke",
+      "backlash",
+      "outrage",
+      "furious",
+      "turn against",
+      "break with",
+      "split",
+      "war weary",
+      "war fatigue",
+      "fiasco",
+      "blunder",
+      "quagmire",
+      "reckless",
+      "unjust",
+      "distract",
+      "forever war",
+      "hands off",
+      "no more war",
+      "squander",
+      "rift",
+      "crackup",
+      "must stop",
+      "must end",
+      "opposition",
+      "opponent"
+    ],
+    "pro_war": [
+      "support",
+      "defend",
+      "praise",
+      "applaud",
+      "endorse",
+      "necessary",
+      "justify",
+      "stand by",
+      "hail",
+      "approve",
+      "commend",
+      "obliterate",
+      "deterrence",
+      "victory",
+      "win",
+      "resolve",
+      "back the war",
+      "backs the war",
+      "stand behind"
+    ]
+  },
+  "kind_rules": {
+    "fact_poll": "polling 桶命中 且 抽出至少一个百分比数字",
+    "fact_vote": "vote 动作词命中（vote/voted/passed/blocked/roll call/...）且 congress 桶命中",
+    "fact_event": "event 动作词命中（resign/quit/met/investigation/...）",
+    "opinion_statement": "意见领袖/议员实体命中 或 引语标记",
+    "opinion_analysis": "以上皆不中时的默认（分析/转述）"
+  },
+  "warpowers_baseline": [
+    {
+      "date": "2026-03-04",
+      "chamber": "Senate",
+      "motion": "Kaine 决议移送表决（motion to discharge）",
+      "result": "failed 47-53",
+      "gop_for": [
+        "Rand Paul"
+      ],
+      "note": "仅保罗一人倒戈支持推进；柯林斯/穆尔科斯基当时投反对并附保留意见",
+      "kind": "fact_vote",
+      "tier": "T3",
+      "src": "The Hill/wivb 转写（2026-09-19），应回源 senate.gov roll call"
+    },
+    {
+      "date": "2026-06-03",
+      "chamber": "House",
+      "motion": "战争权力共同决议（限制对伊军事行动）",
+      "result": "passed 215-208",
+      "gop_for_count": 4,
+      "note": "众议院 4 名共和党人倒戈",
+      "kind": "fact_vote",
+      "tier": "T3",
+      "src": "NPR/中国经济网转写（2026-09-19）"
+    },
+    {
+      "date": "2026-06-23",
+      "chamber": "Senate",
+      "motion": "同一共同决议（两院首次同过）",
+      "result": "passed 50-48",
+      "gop_for": [
+        "Bill Cassidy",
+        "Susan Collins",
+        "Rand Paul",
+        "Lisa Murkowski"
+      ],
+      "absent": [
+        "Mitch McConnell",
+        "Dave McCormick"
+      ],
+      "dem_against": [
+        "John Fetterman"
+      ],
+      "note": "1973 年战争权力法以来首次两院共同决议要求总统撤军；无法律强制力、无需签署",
+      "kind": "fact_vote",
+      "tier": "T3",
+      "src": "NPR/Al Jazeera 转写（2026-09-19）"
+    },
+    {
+      "date": "2026-06-24",
+      "chamber": "Senate",
+      "motion": "Kaine 另一战争权力决议的程序表决",
+      "result": "blocked 50-47-1",
+      "gop_flip": {
+        "Bill Cassidy": "against->against Trump side",
+        "Rand Paul": "for->present"
+      },
+      "note": "保罗改投 present（称给总统谈判空间）；卡西迪受白宫简报后反转；柯林斯/穆尔科斯基仍支持",
+      "kind": "fact_vote",
+      "tier": "T3",
+      "src": "ABC News 转写（2026-09-19）"
+    }
+  ],
+  "report": {
+    "title": "美伊战争·美国民意监测日报",
+    "known_limitations": [
+      "民调数字为『发布值』（一手或转述），程序不参与计算；抽出的百分比只做定位不做加权",
+      "意见领袖与议员动向的『立场分类』是启发式词表判断，只看方向不看强度，逐条附上下文可人工复核",
+      "抗议人数多为组织者估计，与警方口径可差数倍，引用时必须注明口径来源",
+      "意见领袖本人平台（tuckercarlson.com 403、X/YouTube 无合规接口）不可直连，其表态经由 T3 转述层捕获，存在延迟与选择性",
+      "Google News 通道的查全率受查询词覆盖面限制，未见任何民调≠没有新民调",
+      "T4（社交平台自媒体）不采集：不可核验；战争相关民调同样存在低回应率/线上样本偏差，跨机构对比只看方向"
+    ]
+  },
+  "max_age_days": 400
+}

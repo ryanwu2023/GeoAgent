@@ -1,4 +1,4 @@
-from scripts.collect import run_collectors, select_collectors
+from scripts.collect import run_collectors, select_collectors, serialize_for_console
 
 
 def _registry():
@@ -25,3 +25,7 @@ def test_topic_filter_only_selects_matching_collectors():
     selected = select_collectors(_registry(), ids=[], topic="ru_ua")
     assert [item["id"] for item in selected] == ["second"]
 
+
+def test_console_json_is_ascii_safe_for_windows_codepages():
+    rendered = serialize_for_console([{"message": "✅ 完成"}])
+    rendered.encode("ascii")

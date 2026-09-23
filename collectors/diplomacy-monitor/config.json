@@ -1,0 +1,1220 @@
+{
+  "parse_ver": 1,
+  "schema_ver": 1,
+  "window_days": 30,
+  "max_age_days": 400,
+  "summary_max_chars": 1200,
+  "request_timeout": 30,
+  "min_interval_per_host": 1.2,
+  "per_source_max": 200,
+  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "buckets": {
+    "qatar_mediation": {
+      "label": "卡塔尔斡旋",
+      "require_all": [
+        [
+          "qatar",
+          "qatari",
+          "doha",
+          "al thani",
+          "al ansari"
+        ],
+        [
+          "mediat",
+          "broker",
+          "backchannel",
+          "back-channel",
+          "shuttle",
+          "envoy",
+          "delegation",
+          "visit",
+          "met",
+          "mission",
+          "diplomat",
+          "engage",
+          "talks",
+          "negotiat",
+          "messages",
+          "drafts",
+          "proposal",
+          "facilitat",
+          "meet",
+          "diplomatic",
+          "summit"
+        ]
+      ]
+    },
+    "oman_mediation": {
+      "label": "阿曼斡旋",
+      "require_all": [
+        [
+          "oman",
+          "omani",
+          "muscat"
+        ],
+        [
+          "mediat",
+          "broker",
+          "backchannel",
+          "back-channel",
+          "shuttle",
+          "envoy",
+          "delegation",
+          "visit",
+          "met",
+          "mission",
+          "diplomat",
+          "engage",
+          "talks",
+          "negotiat",
+          "messages",
+          "drafts",
+          "proposal",
+          "facilitat",
+          "corridor",
+          "mine clearance",
+          "meet",
+          "diplomatic",
+          "summit"
+        ]
+      ]
+    },
+    "pakistan_mediation": {
+      "label": "巴基斯坦斡旋",
+      "require_all": [
+        [
+          "pakistan",
+          "islamabad",
+          "asim munir"
+        ],
+        [
+          "mediat",
+          "broker",
+          "backchannel",
+          "back-channel",
+          "shuttle",
+          "envoy",
+          "delegation",
+          "visit",
+          "met",
+          "mission",
+          "diplomat",
+          "engage",
+          "talks",
+          "negotiat",
+          "messages",
+          "drafts",
+          "proposal",
+          "facilitat",
+          "meet",
+          "diplomatic",
+          "summit"
+        ]
+      ]
+    },
+    "other_mediators": {
+      "label": "其他协调方（中国/土耳其/瑞士/沙特/联合国/OIC/E3）",
+      "require_all": [
+        [
+          "china",
+          "beijing",
+          "wang yi",
+          "turkey",
+          "ankara",
+          "switzerland",
+          "geneva",
+          "saudi arabia",
+          "riyadh",
+          "iraq",
+          "baghdad",
+          "united nations",
+          "oic",
+          "e3",
+          "france",
+          "germany",
+          "britain"
+        ],
+        [
+          "mediat",
+          "broker",
+          "backchannel",
+          "back-channel",
+          "shuttle",
+          "envoy",
+          "delegation",
+          "visit",
+          "met",
+          "mission",
+          "diplomat",
+          "engage",
+          "talks",
+          "negotiat",
+          "messages",
+          "drafts",
+          "proposal",
+          "facilitat",
+          "meet",
+          "diplomatic",
+          "summit"
+        ]
+      ]
+    },
+    "trump_signals": {
+      "label": "特朗普谈判意愿与能力（含 TACO）",
+      "require_all": [
+        [
+          "trump",
+          "donald trump",
+          "white house",
+          "rubio",
+          "witkoff"
+        ],
+        [
+          "iran",
+          "iranian",
+          "tehran",
+          "hormuz"
+        ]
+      ]
+    },
+    "memo_track": {
+      "label": "伊斯兰堡备忘录动向",
+      "require_all": [
+        [
+          "memorandum",
+          "memoranda",
+          "mou",
+          "islamabad memorandum",
+          "june deal",
+          "june agreement",
+          "roadmap"
+        ],
+        [
+          "deal",
+          "agreement",
+          "revive",
+          "return",
+          "honor",
+          "honour",
+          "fulfil",
+          "implement",
+          "comply",
+          "collapse",
+          "breach",
+          "violat",
+          "conditions",
+          "terms",
+          "commitments",
+          "blockade",
+          "strait",
+          "sanctions",
+          "unfreeze",
+          "assets",
+          "roadmap"
+        ]
+      ]
+    },
+    "deescalation": {
+      "label": "军事降温信号",
+      "require_all": [
+        [
+          "ceasefire",
+          "cease-fire",
+          "truce",
+          "de-escalat",
+          "deescalat",
+          "wind down",
+          "pull back",
+          "pullback",
+          "halt",
+          "pause",
+          "stand down",
+          "end the war",
+          "end hostilities",
+          "step back",
+          "toning down"
+        ],
+        [
+          "iran",
+          "iranian",
+          "tehran",
+          "hormuz",
+          "houthi"
+        ]
+      ]
+    },
+    "reescalation_mil": {
+      "label": "军事再升级信号（对照）",
+      "require_all": [
+        [
+          "trump",
+          "washington",
+          "white house",
+          "pentagon",
+          "rubio",
+          "u.s.",
+          "united states"
+        ],
+        [
+          "strike",
+          "strikes",
+          "military action",
+          "attack",
+          "escalat",
+          "intensif",
+          "bombard",
+          "major decision",
+          "destroy",
+          "offensive",
+          "ultimatum"
+        ],
+        [
+          "iran",
+          "iranian",
+          "tehran",
+          "hormuz",
+          "houthi"
+        ]
+      ]
+    },
+    "talks_channels": {
+      "label": "谈判渠道状态（直接/间接/否认）",
+      "require_all": [
+        [
+          "talks",
+          "negotiations",
+          "negotiat",
+          "diplomatic channel",
+          "backchannel",
+          "back-channel",
+          "indirect talks",
+          "direct talks"
+        ],
+        [
+          "iran",
+          "iranian",
+          "tehran",
+          "hormuz",
+          "houthi",
+          "oman",
+          "muscat",
+          "doha"
+        ]
+      ]
+    },
+    "unga_diplomacy": {
+      "label": "联大周外交窗口",
+      "require_all": [
+        [
+          "general assembly",
+          "unga",
+          "united nations",
+          "new york"
+        ],
+        [
+          "iran",
+          "iranian",
+          "pezeshkian",
+          "araghchi",
+          "tehran",
+          "delegation",
+          "visa"
+        ]
+      ]
+    }
+  },
+  "entities": {
+    "mediators": {
+      "Qatar": [
+        "qatar",
+        "qatari",
+        "doha",
+        "al thani",
+        "al ansari"
+      ],
+      "Oman": [
+        "oman",
+        "omani",
+        "muscat"
+      ],
+      "Pakistan": [
+        "pakistan",
+        "islamabad",
+        "asim munir"
+      ],
+      "Turkey": [
+        "turkey",
+        "ankara",
+        "turkiye"
+      ],
+      "Switzerland": [
+        "switzerland",
+        "geneva"
+      ],
+      "China": [
+        "china",
+        "beijing",
+        "wang yi"
+      ],
+      "Saudi Arabia": [
+        "saudi arabia",
+        "riyadh"
+      ],
+      "Iraq": [
+        "iraq",
+        "baghdad"
+      ],
+      "United Nations": [
+        "united nations",
+        "unga",
+        "security council"
+      ],
+      "OIC": [
+        "oic",
+        "organisation of islamic cooperation",
+        "organization of islamic cooperation"
+      ],
+      "E3/Europe": [
+        "e3",
+        "france",
+        "germany",
+        "britain"
+      ]
+    },
+    "us_side": {
+      "Trump": [
+        "donald trump",
+        "trump",
+        "president trump"
+      ],
+      "Rubio": [
+        "marco rubio",
+        "rubio"
+      ],
+      "Witkoff": [
+        "steve witkoff",
+        "witkoff"
+      ],
+      "State Dept": [
+        "state department"
+      ],
+      "White House": [
+        "white house"
+      ],
+      "Pentagon": [
+        "pentagon"
+      ]
+    },
+    "iran_side": {
+      "Pezeshkian": [
+        "pezeshkian"
+      ],
+      "Araghchi": [
+        "araghchi",
+        "aragchi"
+      ],
+      "Khamenei": [
+        "khamenei"
+      ],
+      "Rezaei": [
+        "rezaei",
+        "rezai",
+        "reyaei"
+      ],
+      "Baghaei": [
+        "baghaei",
+        "bagaei"
+      ],
+      "Larijani": [
+        "larijani"
+      ]
+    }
+  },
+  "stance": {
+    "escalate": [
+      "strike",
+      "attack",
+      "escalat",
+      "intensif",
+      "expand",
+      "destroy",
+      "unleash",
+      "bomb",
+      "raid",
+      "offensive",
+      "ultimatum",
+      "threat",
+      "blockade",
+      "seiz",
+      "hardlin",
+      "confront",
+      "retaliat",
+      "shel"
+    ],
+    "deescalate": [
+      "ceasefire",
+      "cease-fire",
+      "truce",
+      "de-escalat",
+      "wind down",
+      "pull back",
+      "halt",
+      "pause",
+      "stabiliz",
+      "ease",
+      "resume talks",
+      "agreement",
+      "deal",
+      "soften",
+      "concession",
+      "compromise",
+      "goodwill",
+      "reopen",
+      "talks",
+      "negotiat",
+      "diplomat"
+    ]
+  },
+  "flags": {
+    "talk_open": [
+      "open to",
+      "willing",
+      "ready to",
+      "prepared to",
+      "hopeful",
+      "want(?:s)? a deal",
+      "seek(?:s)? a deal",
+      "openness"
+    ],
+    "talk_close": [
+      "not (?:currently )?consider",
+      "won'?t",
+      "refus",
+      "rules out",
+      "no plans",
+      "not the time",
+      "reject",
+      "not what we're considering"
+    ],
+    "memo_return": [
+      "return to",
+      "revive",
+      "honor",
+      "honour",
+      "fulfil",
+      "back to the table",
+      "comply",
+      "implement the"
+    ],
+    "memo_breach": [
+      "collapse",
+      "breach",
+      "violat",
+      "reneg",
+      "walked away",
+      "derail",
+      "sabotage",
+      "shredd"
+    ]
+  },
+  "sources": [
+    {
+      "id": "app-pk",
+      "url": "https://www.app.com.pk/feed/",
+      "tier": "T1",
+      "publisher": "Associated Press of Pakistan",
+      "enabled": true,
+      "note": "巴基斯坦国家通讯社 WordPress feed，9-19 实测 rss-ok"
+    },
+    {
+      "id": "anatolia",
+      "url": "https://www.aa.com.tr/en/rss/default?cat=world",
+      "tier": "T3",
+      "publisher": "Anadolu Agency",
+      "enabled": true,
+      "note": "土耳其（协调方之一）国家通讯社英文，9-19 实测 rss-ok"
+    },
+    {
+      "id": "crisisgroup",
+      "url": "https://www.crisisgroup.org/rss.xml",
+      "tier": "T2",
+      "publisher": "International Crisis Group",
+      "enabled": true,
+      "note": "国际危机组织，9-19 实测 rss-ok"
+    },
+    {
+      "id": "atlantic",
+      "url": "https://www.atlanticcouncil.org/category/blogs/iransource/feed/",
+      "tier": "T2",
+      "publisher": "Atlantic Council IranSource",
+      "enabled": true,
+      "note": "9-19 实测 rss-ok"
+    },
+    {
+      "id": "aljazeera",
+      "url": "https://www.aljazeera.com/xml/rss/all.xml",
+      "tier": "T3",
+      "publisher": "Al Jazeera",
+      "enabled": true,
+      "note": "半岛（卡塔尔背景，按加工方定级 T3），9-19 实测 rss-ok"
+    },
+    {
+      "id": "bbc-mideast",
+      "url": "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
+      "tier": "T3",
+      "publisher": "BBC",
+      "enabled": true,
+      "note": "9-19 实测 rss-ok"
+    },
+    {
+      "id": "guardian-iran",
+      "url": "https://www.theguardian.com/world/iran/rss",
+      "tier": "T3",
+      "publisher": "The Guardian",
+      "enabled": true,
+      "note": "9-19 实测 rss-ok"
+    },
+    {
+      "id": "nyt-mideast",
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/MiddleEast.xml",
+      "tier": "T3",
+      "publisher": "NYT",
+      "enabled": true,
+      "note": "9-19 实测 rss-ok"
+    },
+    {
+      "id": "mee",
+      "url": "https://www.middleeasteye.net/rss",
+      "tier": "T3",
+      "publisher": "Middle East Eye",
+      "enabled": true,
+      "note": "9-19 实测 rss-ok"
+    },
+    {
+      "id": "dawn",
+      "url": "https://www.dawn.com/feed/home",
+      "tier": "T3",
+      "publisher": "Dawn",
+      "enabled": true,
+      "note": "巴基斯坦英文大报（巴方视角），9-19 实测 rss-ok"
+    },
+    {
+      "id": "dohanews",
+      "url": "https://dohanews.co/feed/",
+      "tier": "T3",
+      "publisher": "Doha News",
+      "enabled": true,
+      "note": "9-19 实测 rss-ok"
+    },
+    {
+      "id": "tehrantimes",
+      "url": "https://www.tehrantimes.com/rss",
+      "tier": "T3",
+      "publisher": "Tehran Times",
+      "enabled": true,
+      "note": "伊朗官媒英文（伊朗官方立场窗口），9-19 实测 rss-ok"
+    },
+    {
+      "id": "gn-mediation",
+      "url": "https://news.google.com/rss/search?q=(US+OR+America)+Iran+(mediation+OR+mediator+OR+intermediaries+OR+go-between)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "斡旋总通道"
+    },
+    {
+      "id": "gn-qatar",
+      "url": "https://news.google.com/rss/search?q=Qatar+Iran+(mediation+OR+mediator+OR+talks+OR+Al+Thani)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "卡塔尔斡旋"
+    },
+    {
+      "id": "gn-oman",
+      "url": "https://news.google.com/rss/search?q=Oman+Iran+(talks+OR+mediation+OR+Muscat+OR+corridor)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "阿曼斡旋"
+    },
+    {
+      "id": "gn-pakistan",
+      "url": "https://news.google.com/rss/search?q=Pakistan+Iran+(mediation+OR+backchannel+OR+Munir+OR+messages)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "巴基斯坦斡旋"
+    },
+    {
+      "id": "gn-trump",
+      "url": "https://news.google.com/rss/search?q=Trump+Iran+(deal+OR+talks+OR+negotiate+OR+agreement)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "特朗普谈判意愿"
+    },
+    {
+      "id": "gn-taco",
+      "url": "https://news.google.com/rss/search?q=%22TACO%22+Trump+Iran&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "TACO 交易（市场押注降温）"
+    },
+    {
+      "id": "gn-memo",
+      "url": "https://news.google.com/rss/search?q=Iran+US+(%22Islamabad+memorandum%22+OR+%22memorandum+of+understanding%22+OR+%22June+deal%22)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "备忘录动向"
+    },
+    {
+      "id": "gn-deesc",
+      "url": "https://news.google.com/rss/search?q=US+Iran+(ceasefire+OR+de-escalation+OR+%22wind+down%22+OR+%22pull+back%22+OR+halt+strikes)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "军事降温信号"
+    },
+    {
+      "id": "gn-esc",
+      "url": "https://news.google.com/rss/search?q=Trump+Iran+(strike+OR+%22military+action%22+OR+%22major+decision%22+OR+attack)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "再升级信号（对照）"
+    },
+    {
+      "id": "gn-talks",
+      "url": "https://news.google.com/rss/search?q=US+Iran+(indirect+talks+OR+negotiations+OR+%22diplomatic+channel%22)+Oman&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "间接谈判渠道"
+    },
+    {
+      "id": "gn-unga",
+      "url": "https://news.google.com/rss/search?q=Iran+(%22General+Assembly%22+OR+UNGA)+(visa+OR+delegation+OR+Pezeshkian+OR+Araghchi)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "联大周外交"
+    },
+    {
+      "id": "gn-china",
+      "url": "https://news.google.com/rss/search?q=China+Iran+(mediation+OR+Wang+Yi+OR+Araghchi+OR+talks)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "中国渠道"
+    },
+    {
+      "id": "gn-gulf",
+      "url": "https://news.google.com/rss/search?q=Gulf+leaders+Trump+Iran+(meeting+OR+summit+OR+postwar)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "海湾六国联大会晤"
+    },
+    {
+      "id": "gn-nuclear",
+      "url": "https://news.google.com/rss/search?q=Iran+nuclear+(E3+OR+snapback+OR+IAEA+OR+talks)+sanctions&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "核文件/快速恢复制裁（外交线）"
+    },
+    {
+      "id": "gn-europe",
+      "url": "https://news.google.com/rss/search?q=Europe+Iran+(diplomacy+OR+talks+OR+Geneva+OR+Switzerland)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "欧洲渠道"
+    },
+    {
+      "id": "qna-rss",
+      "url": "https://www.qna.org.qa/en/rss",
+      "tier": "T1",
+      "publisher": "QNA",
+      "enabled": false,
+      "note": "2026-09-19 实测 404 无 RSS（mideast 项目同期同结论）；卡塔尔官方口径经 aljazeera/dohanews/gn-qatar 覆盖"
+    },
+    {
+      "id": "ona-oman",
+      "url": "https://ona.gov.om/",
+      "tier": "T1",
+      "publisher": "Oman News Agency",
+      "enabled": false,
+      "note": "2026-09-19 实测连接失败(status 0)；阿官方口径经 gn-oman 覆盖"
+    },
+    {
+      "id": "radiopk",
+      "url": "https://www.radio.gov.pk/rss",
+      "tier": "T1",
+      "publisher": "Radio Pakistan",
+      "enabled": false,
+      "note": "2026-09-19 实测 404；巴方口径经 app-pk(T1)/dawn 覆盖"
+    },
+    {
+      "id": "carnegie",
+      "url": "https://carnegieendowment.org/rss/solr/?lang=en",
+      "tier": "T2",
+      "publisher": "Carnegie",
+      "enabled": false,
+      "note": "2026-09-19 实测返回普通 HTML（feed 路径失效）"
+    },
+    {
+      "id": "aawsat",
+      "url": "https://www.aawsat.com/rss",
+      "tier": "T3",
+      "publisher": "Asharq Al-Awsat",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（mideast 项目 9-18 同路径可用，疑似路径变更，留档待复测）"
+    },
+    {
+      "id": "arabnews",
+      "url": "https://www.arabnews.com/rss/feed/27",
+      "tier": "T3",
+      "publisher": "Arab News",
+      "enabled": false,
+      "note": "2026-09-19 实测 status 0/403；斡旋报道经 gn-pakistan/gn-qatar 转述覆盖"
+    },
+    {
+      "id": "dawn-world",
+      "url": "https://www.dawn.com/rss/world",
+      "tier": "T3",
+      "publisher": "Dawn",
+      "enabled": false,
+      "note": "2026-09-19 实测 404；主 feed(dawn) 可用，备用路径留档"
+    },
+    {
+      "id": "timesofoman",
+      "url": "https://www.timesofoman.com/rss",
+      "tier": "T3",
+      "publisher": "Times of Oman",
+      "enabled": false,
+      "note": "2026-09-19 实测 404"
+    },
+    {
+      "id": "muscatdaily",
+      "url": "https://www.muscatdaily.com/feed/",
+      "tier": "T3",
+      "publisher": "Muscat Daily",
+      "enabled": false,
+      "note": "2026-09-19 实测返回普通 HTML（feed 失效）"
+    },
+    {
+      "id": "gulftimes",
+      "url": "https://www.gulf-times.com/feed/",
+      "tier": "T3",
+      "publisher": "Gulf Times",
+      "enabled": false,
+      "note": "2026-09-19 实测 404"
+    },
+    {
+      "id": "thenational",
+      "url": "https://www.thenationalnews.com/rss?latest",
+      "tier": "T3",
+      "publisher": "The National",
+      "enabled": false,
+      "note": "2026-09-19 实测 404"
+    },
+    {
+      "id": "presstv",
+      "url": "https://www.presstv.ir/rss.xml",
+      "tier": "T3",
+      "publisher": "Press TV",
+      "enabled": false,
+      "note": "2026-09-19 实测连接失败(status 0)；伊朗官媒口径经 tehrantimes 覆盖"
+    },
+    {
+      "id": "trt-world",
+      "url": "https://www.trtworld.com/rss",
+      "tier": "T3",
+      "publisher": "TRT World",
+      "enabled": false,
+      "note": "2026-09-19 实测 404；土耳其视角经 anatolia 覆盖"
+    },
+    {
+      "id": "un-press",
+      "url": "https://press.un.org/en/rss.xml",
+      "tier": "T1",
+      "publisher": "United Nations",
+      "enabled": true,
+      "note": "UN 新闻稿（安理会/秘书长/斡旋表态），2026-09-19 实测 200/rss 10条；mideast 项目同源在用"
+    },
+    {
+      "id": "iran-un-org",
+      "url": "https://iran.un.org/en/rss.xml",
+      "tier": "T1",
+      "publisher": "United Nations Iran",
+      "enabled": true,
+      "note": "UN 伊朗国别页新闻（UN 伊朗驻地机构），2026-09-19 实测 200/rss 10条"
+    },
+    {
+      "id": "responsiblestate",
+      "url": "https://responsiblestatecraft.org/feed",
+      "tier": "T2",
+      "publisher": "Responsible Statecraft (Quincy Institute)",
+      "enabled": true,
+      "note": "昆西研究所分析（美外交政策），2026-09-19 实测 200/rss 30条"
+    },
+    {
+      "id": "tass",
+      "url": "https://tass.com/rss/v2.xml",
+      "tier": "T3",
+      "publisher": "TASS",
+      "enabled": true,
+      "note": "俄罗斯国家通讯社英文（俄方官方立场窗口），2026-09-19 实测 200/rss 100条"
+    },
+    {
+      "id": "lobelog",
+      "url": "https://lobelog.com/feed/",
+      "tier": "T3",
+      "publisher": "LobeLog",
+      "enabled": true,
+      "note": "美外交评论博客（观点分析），2026-09-19 实测 200/rss 10条"
+    },
+    {
+      "id": "unscol-feed",
+      "url": "https://unscol.unmissions.org/feed",
+      "tier": "T1",
+      "publisher": "UNSCO",
+      "enabled": false,
+      "note": "2026-09-19 实测 404；UN 中东特使声明经 un-press 覆盖"
+    },
+    {
+      "id": "qatar-mofa",
+      "url": "https://www.mofa.gov.qa/en/rss.xml",
+      "tier": "T1",
+      "publisher": "Qatar MOFA",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（rss 与 newsroom 页均 404）；卡方口径经 aljazeera/dohanews/gn-qatar 覆盖"
+    },
+    {
+      "id": "pakistan-mofa",
+      "url": "https://mofa.gov.pk/feed/",
+      "tier": "T1",
+      "publisher": "Pakistan MOFA",
+      "enabled": false,
+      "note": "2026-09-19 实测连接失败(status 0)；巴方口径经 app-pk(T1)/dawn 覆盖"
+    },
+    {
+      "id": "state-gov",
+      "url": "https://www.state.gov/press-releases/feed/",
+      "tier": "T1",
+      "publisher": "US State Dept",
+      "enabled": false,
+      "note": "2026-09-19 实测 407（代理认证拒绝）；美方口径经 gn-trump/gn-talks 覆盖"
+    },
+    {
+      "id": "whitehouse-feed",
+      "url": "https://www.whitehouse.gov/feed/",
+      "tier": "T1",
+      "publisher": "White House",
+      "enabled": false,
+      "note": "2026-09-19 实测 404"
+    },
+    {
+      "id": "defense-gov",
+      "url": "https://www.defense.gov/News/Releases/",
+      "tier": "T1",
+      "publisher": "US DoD",
+      "enabled": false,
+      "note": "2026-09-19 实测 403"
+    },
+    {
+      "id": "kuna",
+      "url": "https://www.kuna.net.kw/EnglishRSSNews.aspx",
+      "tier": "T1",
+      "publisher": "KUNA Kuwait",
+      "enabled": false,
+      "note": "2026-09-19 实测连接失败(status 0，两条路径)"
+    },
+    {
+      "id": "wam-uae",
+      "url": "https://www.wam.ae/en/rss",
+      "tier": "T1",
+      "publisher": "WAM UAE",
+      "enabled": false,
+      "note": "2026-09-19 实测 200 但返回 JS 壳 HTML（非 RSS）"
+    },
+    {
+      "id": "spa-saudi",
+      "url": "https://www.spa.gov.sa/en/rss.xml",
+      "tier": "T1",
+      "publisher": "SPA Saudi",
+      "enabled": false,
+      "note": "2026-09-19 实测 200 但返回 JS 壳 HTML（非 RSS）"
+    },
+    {
+      "id": "china-mofa",
+      "url": "https://www.fmprc.gov.cn/mfa_eng/xw/fyyl/",
+      "tier": "T1",
+      "publisher": "China MFA",
+      "enabled": false,
+      "note": "2026-09-19 实测 200 HTML 列表页，无 RSS；中方口径经 gn-china 覆盖"
+    },
+    {
+      "id": "iran-mofa",
+      "url": "https://en.mfa.gov.ir/",
+      "tier": "T1",
+      "publisher": "Iran MOFA",
+      "enabled": false,
+      "note": "2026-09-19 实测 307 重定向链失败；伊方口径经 tehrantimes/gn 覆盖"
+    },
+    {
+      "id": "whatsonblue",
+      "url": "https://www.whatsinblue.org/rss/",
+      "tier": "T2",
+      "publisher": "Security Council Report",
+      "enabled": false,
+      "note": "2026-09-19 实测 RSS 0.92 空频道（无 item）"
+    },
+    {
+      "id": "scr-feed",
+      "url": "https://www.securitycouncilreport.org/feed/",
+      "tier": "T2",
+      "publisher": "Security Council Report",
+      "enabled": false,
+      "note": "2026-09-19 实测 rss-ok 但 0 item"
+    },
+    {
+      "id": "isw-rss",
+      "url": "https://www.understandingwar.org/rss.xml",
+      "tier": "T2",
+      "publisher": "ISW",
+      "enabled": false,
+      "note": "2026-09-19 实测 403（与 mideast 项目同结论）"
+    },
+    {
+      "id": "xinhua",
+      "url": "http://english.news.cn/rss/world.xml",
+      "tier": "T3",
+      "publisher": "Xinhua EN",
+      "enabled": false,
+      "note": "2026-09-19 实测 404"
+    },
+    {
+      "id": "oic-press",
+      "url": "https://www.oic-oci.org/rss.xml",
+      "tier": "T1",
+      "publisher": "OIC",
+      "enabled": false,
+      "note": "2026-09-19 实测 404；新闻页仅 HTML 无 RSS"
+    },
+    {
+      "id": "globaltimes",
+      "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+      "tier": "T3",
+      "publisher": "Global Times 环球时报英文版",
+      "enabled": false,
+      "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担"
+    },
+    {
+      "id": "cgtn-world",
+      "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+      "tier": "T3",
+      "publisher": "CGTN 中国环球电视网",
+      "enabled": true,
+      "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）"
+    }
+  ],
+  "mediator_baseline": [
+    {
+      "date": "2026-08-07",
+      "event": "麦加协议（沙特+土耳其+巴基斯坦，类北约第5条）签署——巴基斯坦同时是协调方与安全协议方，立场双重性须标注",
+      "tier": "T3",
+      "source": "mideast-monitor 基线"
+    },
+    {
+      "date": "2026-08-24",
+      "event": "巴基斯坦陆军参谋长阿西姆·穆尼尔访德黑兰，会见佩泽希齐扬与卡利巴夫谈降级",
+      "tier": "T3",
+      "source": "CIVL 聚合/Arab News"
+    },
+    {
+      "date": "2026-08-下旬",
+      "event": "卡塔尔首相穆罕默德·本·阿卜杜勒拉赫曼·阿勒萨尼访德黑兰推动降级与恢复美伊谈判",
+      "tier": "T3",
+      "source": "CIVL/Al Jazeera"
+    },
+    {
+      "date": "2026-09-01",
+      "event": "卡塔尔外交部发言人安萨里：与斡旋伙伴（巴基斯坦、阿曼）讨论持续进行，敦促重返谈判轨道",
+      "tier": "T3",
+      "source": "AFP/Malay Mail"
+    },
+    {
+      "date": "2026-09-04",
+      "event": "伊斯兰合作组织（OIC）公开承认巴基斯坦的斡旋作用",
+      "tier": "T3",
+      "source": "AP/CIVL"
+    },
+    {
+      "date": "2026-09-07",
+      "event": "伊朗-阿曼就霍尔木兹临时安全航道框架达成一致（含扫雷）；伊方强调≠全面重开海峡",
+      "tier": "T3",
+      "source": "Al Jazeera/头条转述"
+    },
+    {
+      "date": "2026-09-13",
+      "event": "卡塔尔代表在德黑兰与伊朗外长阿拉格齐会谈；卡塔尔与阿曼交换方案与草案",
+      "tier": "T3",
+      "source": "头条转述 RT/FT"
+    },
+    {
+      "date": "2026-09-16",
+      "event": "阿拉格齐访北京与王毅会谈（中国渠道）",
+      "tier": "T3",
+      "source": "newssky 转述"
+    },
+    {
+      "date": "2026-09-17",
+      "event": "美国批准伊朗总统/外长联大签证（旅行受限、规模小于去年）；佩泽希齐扬预计 9-23 联大演讲",
+      "tier": "T3",
+      "source": "央视/新华社转述"
+    }
+  ],
+  "trump_baseline": [
+    {
+      "date": "2026-09-上旬",
+      "event": "特朗普称美伊战事将在 11 月中期选举后『立即结束』，恢复谈判『并非目前考虑的事情』",
+      "tier": "T3",
+      "source": "新华社转述"
+    },
+    {
+      "date": "2026-09-14",
+      "event": "特朗普转口称对谈判『开放』，称伊朗『迫切』想达成协议；提出各国应对美『护航补偿』",
+      "tier": "T3",
+      "source": "新华社"
+    },
+    {
+      "date": "2026-09-17",
+      "event": "特朗普称将很快就『是否恢复对伊大规模军事打击』作出重大决定；联大周将会晤沙特/阿联酋/卡塔尔等六个海湾国家领导人",
+      "tier": "T3",
+      "source": "央视新闻/Axios 转述"
+    },
+    {
+      "date": "2026-09-17",
+      "event": "Signum Global TACO 指数（押注特朗普对市场压力让步）再次亮起；7 月曾正确预测降温窗口",
+      "tier": "T3",
+      "source": "MarketWatch/Signum"
+    },
+    {
+      "date": "2026-09-18",
+      "event": "特朗普称与德黑兰『直接』谈过、伊朗『想达成协议』因为『各方面都在输』；是否『摧毁』伊朗拭目以待",
+      "tier": "T3",
+      "source": "NewsNation/格隆汇转述"
+    }
+  ],
+  "memo_baseline": [
+    {
+      "date": "2026-06",
+      "event": "伊斯兰堡谅解备忘录（巴基斯坦+卡塔尔斡旋）签署：美伊谈判 60 天路线图 + 霍尔木兹海峡相关措施",
+      "tier": "T3",
+      "source": "Arab News/CIVL 聚合"
+    },
+    {
+      "date": "2026-06-中",
+      "event": "另一份初步协议（6 月中签署以结束冲突、重开海峡）数周内因航道控制权争议与持续打击而崩溃",
+      "tier": "T3",
+      "source": "PulseWire"
+    },
+    {
+      "date": "2026-07",
+      "event": "7 月短暂降温（双方派团赴卡塔尔间接谈判），月底因替代航道争议与『绕行』指控再度升级",
+      "tier": "T3",
+      "source": "MarketWatch/Signum"
+    },
+    {
+      "date": "2026-09-09",
+      "event": "FT：德黑兰敦促华盛顿履行伊斯兰堡备忘录承诺；美方据称寻求涵盖海峡+核计划的更大范围新协议",
+      "tier": "T3",
+      "source": "FT/头条转述"
+    },
+    {
+      "date": "2026-09-15",
+      "event": "伊方备忘录条件公开口径：美须 30 天内完全解除海上封锁，否则海峡通行状况不变；另有解冻资产/解除制裁要求",
+      "tier": "T3",
+      "source": "塔斯尼姆/网易转述"
+    }
+  ],
+  "military_baseline": [
+    {
+      "date": "2026-02-28",
+      "event": "战争起点：美以对伊联合军事行动（美方代号 Epic Fury / 以方 Roaring Lion）",
+      "tier": "T3",
+      "source": "newssky 转述"
+    },
+    {
+      "date": "2026-08-01",
+      "event": "CBO：战争至 8-01 美国防部直接成本约 $38B；若持续每月再增 $2-3B",
+      "tier": "T2",
+      "source": "CBO/央视转述"
+    },
+    {
+      "date": "2026-09-01",
+      "event": "美军打击霍尔木兹伊朗岛屿，德黑兰袭击美在中东军事目标报复（针锋相对升级）",
+      "tier": "T3",
+      "source": "AFP/Malay Mail"
+    },
+    {
+      "date": "2026-09-17",
+      "event": "沙特-胡塞相互袭击再起，红海局势恶化；同日特朗普称希望战争『接近尾声』（升降温并存）",
+      "tier": "T3",
+      "source": "Reuters/央视转述"
+    }
+  ],
+  "talks_baseline": [
+    {
+      "date": "2026-09-01",
+      "event": "卡塔尔：斡旋持续但**美伊无直接谈判安排**；协调重点是为重启会谈铺路的短期方案",
+      "tier": "T3",
+      "source": "PulseWire/AFP"
+    },
+    {
+      "date": "2026-09-01",
+      "event": "伊朗外交部否认与美谈判，坚称只与阿曼谈重开海峡；鲁比奥称讨论有进展但无最终协议",
+      "tier": "T3",
+      "source": "PulseWire"
+    },
+    {
+      "date": "2026-09-09",
+      "event": "RT：美方向德黑兰提出新提议后，伊朗经中间人传达己方条件（细节未公开）",
+      "tier": "T3",
+      "source": "RT/头条转述"
+    },
+    {
+      "date": "2026-09-15",
+      "event": "伊朗最高国安委秘书雷扎伊：『在伊朗条件满足之前不会有谈判』，批特朗普信号混乱",
+      "tier": "T3",
+      "source": "网易转述"
+    },
+    {
+      "date": "2026-09-中旬",
+      "event": "海湾+伊朗领导人原定在阿曼的会晤推迟；Signum 称幕后谈判仍在进行并取得进展",
+      "tier": "T3",
+      "source": "MarketWatch/Signum"
+    },
+    {
+      "date": "2026-09-18",
+      "event": "特朗普称美国正与胡塞武装谈判（胡塞也想达成协议）——外围渠道与美伊主线并行的佐证",
+      "tier": "T3",
+      "source": "NewsNation/格隆汇转述"
+    }
+  ],
+  "report": {
+    "known_limitations": [
+      "斡旋活动大量发生在幕后：『谈判在进行』与『否认谈判』经常同时为真（不同层级/渠道），本报告只并列记录不裁决。",
+      "官方一手渠道缺口：卡塔尔 QNA、阿曼 ONA、巴基斯坦国家电台本监测期不可达（停用留档），巴方唯一 T1 直连源为 APP 通讯社；其余全经 T3 转述。",
+      "『意愿』类信号（特朗普 open/cool、伊朗条件满足才谈）是表态不是承诺：表态的事实性=『他说了』，兑现与否须逐条回看。",
+      "TACO 是市场叙事（Signum Global 等机构的启发式模型）而非官方信号：其指数亮起只说明『市场押注降温』，不构成降温证据本身。",
+      "备忘录文本未公开：条款描述（30 天解除封锁等）全部来自转述（塔斯尼姆/FT 等），以『伊方公开口径』记录。",
+      "军事温度词表是启发式（升级/缓解两族词，否定翻转）：只看方向不看强度；沙特-胡塞战线外溢事件可能混入，已用第二维（美/伊主体）收紧但仍可能有边缘案例。"
+    ]
+  }
+}

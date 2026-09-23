@@ -1,0 +1,114 @@
+[
+ {
+  "label": "defapress-rss",
+  "url": "https://defapress.ir/fa/rss",
+  "verdict": "200 但非 feed —— <!DOCTYPE html> <html> <head> \t \t \t<meta charset=\"UTF-8\"> \t<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge,chrome=1\"",
+  "status": 200,
+  "server": "",
+  "bytes": 61116
+ },
+ {
+  "label": "defapress-home",
+  "url": "https://defapress.ir/",
+  "verdict": "200 但非 feed —— <!DOCTYPE html> <html lang=\"fa\"> <head> \t \t \t<meta charset=\"UTF-8\"> \t<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge",
+  "status": 200,
+  "server": "",
+  "bytes": 150353
+ },
+ {
+  "label": "mashreghnews-rss",
+  "url": "https://www.mashreghnews.ir/rss",
+  "verdict": "✅ 可用（30 条）",
+  "status": 200,
+  "server": "nginx",
+  "bytes": 40748
+ },
+ {
+  "label": "jahannews-rss",
+  "url": "https://www.jahannews.com/rss",
+  "verdict": "③源可用层 —— 404 路径已变",
+  "status": 404,
+  "server": "Apache",
+  "bytes": 695
+ },
+ {
+  "label": "iranpress-rss",
+  "url": "https://iranpress.com/rss",
+  "verdict": "①网络/TLS层 —— URLError: <urlopen error [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] ssl/tls alert handshake failure (_ssl.c:1032)>",
+  "status": null,
+  "server": "",
+  "bytes": 0
+ },
+ {
+  "label": "iranpress-home",
+  "url": "https://iranpress.com/",
+  "verdict": "①网络/TLS层 —— URLError: <urlopen error [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] ssl/tls alert handshake failure (_ssl.c:1032)>",
+  "status": null,
+  "server": "",
+  "bytes": 0
+ },
+ {
+  "label": "parstoday-rss",
+  "url": "https://parstoday.ir/en/rss",
+  "verdict": "✅ 可用（120 条）",
+  "status": 200,
+  "server": "cloudflare",
+  "bytes": 106377
+ },
+ {
+  "label": "isna-en-rss",
+  "url": "https://en.isna.ir/rss",
+  "verdict": "✅ 可用（30 条）",
+  "status": 200,
+  "server": "ArvanCloud",
+  "bytes": 25420
+ },
+ {
+  "label": "isna-fa-rss",
+  "url": "https://www.isna.ir/rss",
+  "verdict": "✅ 可用（30 条）",
+  "status": 200,
+  "server": "ArvanCloud",
+  "bytes": 46216
+ },
+ {
+  "label": "ifpnews-rss",
+  "url": "https://ifpnews.com/feed",
+  "verdict": "①网络/TLS层 —— URLError: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1032)>",
+  "status": null,
+  "server": "",
+  "bytes": 0
+ },
+ {
+  "label": "kayhan-rss",
+  "url": "https://kayhan.ir/fa/rss",
+  "verdict": "200 但非 feed —— <!DOCTYPE html> <html> <head> \t \t     <meta charset=\"UTF-8\">     <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge,chr",
+  "status": 200,
+  "server": "Apache2",
+  "bytes": 21165
+ },
+ {
+  "label": "alalam-rss",
+  "url": "https://www.alalam.ir/rss",
+  "verdict": "①网络/TLS层 —— URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: certificate has expired (_ssl.c:1032)>",
+  "status": null,
+  "server": "",
+  "bytes": 0
+ },
+ {
+  "label": "irib-en-rss",
+  "url": "https://english.irib.ir/rss",
+  "verdict": "①网络/TLS层 —— URLError: <urlopen error _ssl.c:1015: The handshake operation timed out>",
+  "status": null,
+  "server": "",
+  "bytes": 0
+ },
+ {
+  "label": "snntv-rss",
+  "url": "https://www.snntv.ir/rss",
+  "verdict": "①网络/TLS层 —— URLError: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1032)>",
+  "status": null,
+  "server": "",
+  "bytes": 0
+ }
+]

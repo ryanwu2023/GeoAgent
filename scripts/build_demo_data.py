@@ -18,11 +18,11 @@ def _sanitize(text: str) -> str:
     return PERSONAL_PATH.sub("[local-path-removed]", text)
 
 
-def _write(destination: Path, text: str) -> dict:
+def _write(destination: Path, text: str, base: Path) -> dict:
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(text, encoding="utf-8")
     payload = text.encode("utf-8")
-    return {"path": destination.as_posix(), "bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
+    return {"path": destination.relative_to(base).as_posix(), "bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
 
 
 def build_demo(source_root: Path, destination: Path, max_records: int = 100) -> dict:
@@ -34,7 +34,7 @@ def build_demo(source_root: Path, destination: Path, max_records: int = 100) -> 
             continue
         text = "\n".join(_sanitize(line) for line in lines) + "\n"
         target = destination / source.relative_to(source_root)
-        files.append(_write(target, text))
+        files.append(_write(target, text, destination))
         record_count += len(lines)
     for source in sorted(source_root.glob("*/output/geo-v6.json")):
         payload = json.loads(source.read_text(encoding="utf-8-sig"))
@@ -42,7 +42,7 @@ def build_demo(source_root: Path, destination: Path, max_records: int = 100) -> 
         for item in payload.get("observations", []):
             item["history"] = item.get("history", [])[-180:]
         text = _sanitize(json.dumps(payload, ensure_ascii=False, indent=2)) + "\n"
-        files.append(_write(destination / source.relative_to(source_root), text))
+        files.append(_write(destination / source.relative_to(source_root), text, destination))
         record_count += len(payload["records"])
     taco = source_root / "taco-monitor" / "output" / "taco-latest.csv"
     if taco.is_file():
@@ -50,10 +50,10 @@ def build_demo(source_root: Path, destination: Path, max_records: int = 100) -> 
         bounded = rows[:1] + rows[-180:] if rows else []
         buffer = io.StringIO(newline="")
         csv.writer(buffer, lineterminator="\n").writerows(bounded)
-        files.append(_write(destination / "taco-monitor/output/taco-latest.csv", buffer.getvalue()))
+        files.append(_write(destination / "taco-monitor/output/taco-latest.csv", buffer.getvalue(), destination))
         status = taco.parent / "_source_status.json"
         if status.is_file():
-            files.append(_write(destination / "taco-monitor/output/_source_status.json", _sanitize(status.read_text(encoding="utf-8-sig"))))
+            files.append(_write(destination / "taco-monitor/output/_source_status.json", _sanitize(status.read_text(encoding="utf-8-sig")), destination))
     manifest = {"schema_version": "demo-data/1", "record_count": record_count, "max_records_per_collector": max_records, "files": files}
     (destination / "manifest.json").parent.mkdir(parents=True, exist_ok=True)
     (destination / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -72,4 +72,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

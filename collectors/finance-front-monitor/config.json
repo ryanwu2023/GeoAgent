@@ -1,0 +1,1751 @@
+{
+  "version": "1.0.0",
+  "project": "finance-front-monitor",
+  "topic": "美伊冲突 · 金融战线监测（九个桶 × 可复算口径 + TACO 五因子对接）",
+  "generated_at": "2026-09-19",
+  "generated_by": "tools/build_config.py（源可用性来自 tools/_probe_round*.json 实测）",
+  "probe_evidence": {
+    "rounds": [
+      "_probe_round1.json",
+      "_probe_round2.json",
+      "_probe_round3.json",
+      "_probe_round4.json",
+      "_probe_round5.json",
+      "_probe_round6.json",
+      "_probe_round7.json",
+      "_probe_round8.json"
+    ],
+    "note": "每个链条目都必须在此找到 ok:true 记录；构建脚本强制校验，缺失即拒绝生成配置。"
+  },
+  "request": {
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "timeout": 30,
+    "retries": 3,
+    "retry_backoff_sec": 2.0,
+    "delay_between_sources_sec": 0.35,
+    "min_interval_per_host_sec": 1.2,
+    "note": "★ min_interval_per_host_sec 不是「礼貌」，是**正确性**要求：实测 FRED 单请求 1.3 秒 200，但在并发 8 个 + 此前 30 次超时之后，所有请求一起挂到 20 秒超时（Akamai 把批量并发判为异常并整体降级）。症状是全红+超时，看起来像源挂了。所以同主机串行且限速。",
+    "drop_inprogress_session": true,
+    "drop_inprogress_session_note": "★ 全库只取**完整交易日收盘**：日期 ≥ 运行日的会话一律丢弃。理由不是洁癖：日线序列的最后一根在交易时段内是**实时变动的盘中价**，把它当收盘价会让「最新值」在同一天内不可复算 —— 复核的人半小时后重跑会得到不同的数字，而两边都「没错」。实测例证：布伦特 BZ=F 在 taco-monitor 与本侧曾出现「503 天里 502 天全同、唯当日差 0.33」，原因就是本侧留了未收盘的那一根。口径与 taco-monitor 的 _drop_from = run_date 对齐。"
+  },
+  "divergence": {
+    "rel_tol": 0.02,
+    "abs_tol": 0.0,
+    "note": "默认相对容差 2%（可按序列覆盖）。★ 分歧**不等于**有一方错：不同源常常代表不同标的（Brent 期货 vs 现货、DXY vs 广义美元指数）。报告会列出分歧明细并说明口径，不自动判定谁对。"
+  },
+  "window": {
+    "min_obs_for_z": 25,
+    "z_window": 60,
+    "z_floor_rel": 0.0,
+    "percentile_window": 252,
+    "detail_n": 20,
+    "max_points_per_series": 4000,
+    "note": "z_window=60：用最近 60 个观测的**变动**估 σ。min_obs_for_z=25：点太少时不给 z（宁缺勿滥，避免 3 个点算出 z=7）。z_floor_rel=0：不设相对下限，因为本项目的 σ 已按各序列自身尺度计算。max_points_per_series=4000：累积历史的保留上限（约 16 年日频），超过则丢最旧。"
+  },
+  "staleness": {
+    "daily": 5,
+    "weekly": 16,
+    "monthly": 45,
+    "note": "超过该天数视为「源可能停止更新」，报告标 ⏳滞后。★ 它衡量的是**数据是否还在更新**，不是市场是否平静。周频用 16 天（EIA 周三发布 + 假日余量）；PortWatch 通行量虽是日频但汇编滞后，按序列覆盖为 14 天。"
+  },
+  "buckets": {
+    "oil": {
+      "name": "原油与天然气",
+      "order": 1,
+      "caveat": "Brent 与 WTI 是**两个不同的标的**（交割地、品质、计价货币敞口都不同），价差本身有信息量，不能相互替代。"
+    },
+    "inventory": {
+      "name": "库存与战略储备",
+      "order": 2,
+      "caveat": "★ 本桶基本是**周频**数据。与日频指标放在一起比较会连着 6 天显示「无变化」，那代表**没有新数据**，不代表市场没动。EIA 每周三发布，报告中的「滞后」栏会如实标出。"
+    },
+    "rates": {
+      "name": "利率与政策预期",
+      "order": 3,
+      "caveat": "收益率的变动一律以 **bp** 计。政策预期部分只给**代理量**（目标区间、EFFR、2Y 收益率的相对位置），**不提供加息概率**——本项目没有可用的官方概率源（CME 实测 403、亚特兰大联储数据页实测返回 HTML），因此不做这类推断。"
+    },
+    "equity": {
+      "name": "股市与板块",
+      "order": 4,
+      "caveat": "不同指数的**点位不可比**，只比百分比变化；板块 ETF 的涨跌是**价格反应**，不能反推因果（军工股涨不代表冲突会升级）。"
+    },
+    "credit": {
+      "name": "信用与波动率",
+      "order": 5,
+      "caveat": "信用利差与 VIX 是市场为风险支付的价格，不是风险的客观度量；它们会被期权供需、指数成分、被动资金流扭曲。"
+    },
+    "fx": {
+      "name": "汇率与贵金属",
+      "order": 6,
+      "caveat": "DXY 与 FRED 广义美元指数**口径不同**，水平值不可互相替代。"
+    },
+    "shipping": {
+      "name": "海峡通行与航运",
+      "order": 7,
+      "caveat": "★ 通行量是**实物**读数，但也最容易误读：① 数据由 AIS 事后汇编，滞后 4–7 天；② 通行量下降可能是**绕行**而非「贸易中断」——必须与好望角通行量一起看；③ 船舶折返会计两次。油轮股价**不是**通行量，只是市场对运价的定价。"
+    },
+    "food": {
+      "name": "粮食与农产品",
+      "order": 8,
+      "caveat": "期货价格是**预期**不是成交；与现货 FOB 存在基差。黑海运输出问题会先反映在**运价与保险费**上，再反映到价格。"
+    },
+    "taco": {
+      "name": "TACO 五因子（东吴宏观口径）",
+      "order": 9,
+      "caveat": "★ 本桶是**跨项目对接区**，不是美伊冲突的专属指标。五个因子来自 taco-monitor（东吴宏观 TACO 压力指数复刻），其中「特朗普支持率」两侧**口径不同源**（建模日频值 vs 民调均值），只可作方向性对照。这里只放原始序列，**不算 TACO 指数**。"
+    }
+  },
+  "series": [
+    {
+      "id": "brent",
+      "label": "Brent 原油",
+      "bucket": "oil",
+      "unit": "$/bbl",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "headline",
+      "div_tol": 0.04,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "BZ=F",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/BZ%3DF?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "BZ=F"
+        }
+      ],
+      "note": "北海 Brent 近月期货收盘。跨源链是**期货 vs 现货**，价差 1–4% 属正常期限结构，不是源错。〔配置生成时按实测证据过滤：弃 1 条目〕 ★ 评估过 FRED 现货（DCOILBRENTEU）能否作交叉源：**否**。★ 试过，**否了**：FRED `DCOILBRENTEU`（欧洲 Brent **现货**）与主源 Yahoo `BZ=F`（Brent 近月**期货**）在 490 个共有日上相对差中位数 1.69%、最大 22.4% —— 但最近一周扩大到 −7.7% → −16.9%（现货升水），且 FRED 该序列当时已滞后 8 天。① 这是**真实的期限结构**（近端供给冲击下现货高于期货），不是数据错误；② 它偏巧是 taco-monitor 因子 H **没有**用的那个源（对侧用的就是 Yahoo BZ=F）；③ 交叉源的作用是抓「解析错、单位错、取错列」，不是抓基差 ——把基差放进 4% 容差里，等于让它每天报一次警，真正的数据错会被淹掉。结论：不入链。基差本身有信息量，但那是另一个指标，不该伪装成校验。",
+      "caveat": "Brent 期货与 FRED 的 Brent 现货是两个标的；本报告以期货为主源，现货仅作交叉核对，两者价差已按 4% 容差处理，**不代表数据错误**。"
+    },
+    {
+      "id": "wti",
+      "label": "WTI 原油",
+      "bucket": "oil",
+      "unit": "$/bbl",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "headline",
+      "div_tol": 0.04,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "CL=F",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/CL%3DF?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "CL=F"
+        }
+      ],
+      "note": "WTI 近月期货收盘（库欣交割）。〔配置生成时按实测证据过滤：弃 1 条目〕",
+      "caveat": "WTI 期货 vs 现货（库欣）存在期限结构差异，容差 4%。"
+    },
+    {
+      "id": "natgas",
+      "label": "天然气（Henry Hub 期货）",
+      "bucket": "oil",
+      "unit": "$/MMBtu",
+      "decimals": 3,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "div_tol": 0.08,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "NG=F",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/NG%3DF?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "NG=F"
+        }
+      ],
+      "note": "与原油同为能源成本，但驱动因素（天气/库存）不同，**不能**当成油价的替代。〔配置生成时按实测证据过滤：弃 1 条目〕"
+    },
+    {
+      "id": "spr",
+      "label": "美国战略石油储备（SPR）",
+      "bucket": "inventory",
+      "unit": "千桶",
+      "decimals": 0,
+      "cadence": "weekly",
+      "polarity": 0,
+      "role": "headline",
+      "max_lag": 16,
+      "chain": [
+        {
+          "provider": "eia_wpsr",
+          "ref": "Strategic Petroleum Reserve (SPR)",
+          "tier": "official",
+          "url": "https://ir.eia.gov/wpsr/table1.csv",
+          "accept": "text/csv,*/*",
+          "scale": 1000.0,
+          "label": "EIA WPSR Strategic Petroleum Reserve (SPR)"
+        }
+      ],
+      "note": "★ 这是**政策工具的直接读数**：SPR 下降＝政府在动用储备平抑价格。周频，EIA 每周三发布。〔配置生成时按实测证据过滤：弃 1 条目〕",
+      "caveat": "SPR 是政策**存量**，不是市场供需。它的增减由行政决定，与油价的关系是「被用来应对」，不是「被油价驱动」。极性设为 0，**不参与合成指数**。"
+    },
+    {
+      "id": "crude_stocks",
+      "label": "美国商业原油库存",
+      "bucket": "inventory",
+      "unit": "千桶",
+      "decimals": 0,
+      "cadence": "weekly",
+      "polarity": -1,
+      "role": "headline",
+      "max_lag": 16,
+      "chain": [
+        {
+          "provider": "eia_wpsr",
+          "ref": "Commercial (Excluding SPR)",
+          "tier": "official",
+          "url": "https://ir.eia.gov/wpsr/table1.csv",
+          "accept": "text/csv,*/*",
+          "scale": 1000.0,
+          "label": "EIA WPSR Commercial (Excluding SPR)"
+        }
+      ],
+      "note": "周频（EIA）。库存超预期累积＝需求走弱或供应宽松。〔配置生成时按实测证据过滤：弃 1 条目〕",
+      "caveat": "周频数据有**初值/修正值**之分；本报告只声明「截至抓取时点」，不声称终值。"
+    },
+    {
+      "id": "dgs3mo",
+      "label": "3M 美债收益率",
+      "bucket": "rates",
+      "unit": "%",
+      "decimals": 3,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "div_tol": 0.01,
+      "chain": [
+        {
+          "provider": "treasury",
+          "ref": "3 Mo",
+          "field": "3 Mo",
+          "tier": "official",
+          "urls": [
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year_prev}/all?type=daily_treasury_yield_curve&field_tdr_date_value={year_prev}&page&_format=csv",
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year}/all?type=daily_treasury_yield_curve&field_tdr_date_value={year}&page&_format=csv"
+          ],
+          "accept": "text/csv,*/*",
+          "label": "US Treasury par yield 3 Mo"
+        }
+      ],
+      "note": "最贴近政策利率的市场利率。"
+    },
+    {
+      "id": "dgs1",
+      "label": "1Y 美债收益率",
+      "bucket": "rates",
+      "unit": "%",
+      "decimals": 3,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "div_tol": 0.01,
+      "chain": [
+        {
+          "provider": "treasury",
+          "ref": "1 Yr",
+          "field": "1 Yr",
+          "tier": "official",
+          "urls": [
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year_prev}/all?type=daily_treasury_yield_curve&field_tdr_date_value={year_prev}&page&_format=csv",
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year}/all?type=daily_treasury_yield_curve&field_tdr_date_value={year}&page&_format=csv"
+          ],
+          "accept": "text/csv,*/*",
+          "label": "US Treasury par yield 1 Yr"
+        }
+      ]
+    },
+    {
+      "id": "dgs2",
+      "label": "2Y 美债收益率",
+      "bucket": "rates",
+      "unit": "%",
+      "decimals": 3,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "headline",
+      "div_tol": 0.01,
+      "chain": [
+        {
+          "provider": "treasury",
+          "ref": "2 Yr",
+          "field": "2 Yr",
+          "tier": "official",
+          "urls": [
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year_prev}/all?type=daily_treasury_yield_curve&field_tdr_date_value={year_prev}&page&_format=csv",
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year}/all?type=daily_treasury_yield_curve&field_tdr_date_value={year}&page&_format=csv"
+          ],
+          "accept": "text/csv,*/*",
+          "label": "US Treasury par yield 2 Yr"
+        }
+      ],
+      "note": "★ **政策预期的主要市场读数**：2Y 对联邦基金利率路径最敏感。〔配置生成时按实测证据过滤：弃 1 条目〕"
+    },
+    {
+      "id": "dgs5",
+      "label": "5Y 美债收益率",
+      "bucket": "rates",
+      "unit": "%",
+      "decimals": 3,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "div_tol": 0.01,
+      "chain": [
+        {
+          "provider": "treasury",
+          "ref": "5 Yr",
+          "field": "5 Yr",
+          "tier": "official",
+          "urls": [
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year_prev}/all?type=daily_treasury_yield_curve&field_tdr_date_value={year_prev}&page&_format=csv",
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year}/all?type=daily_treasury_yield_curve&field_tdr_date_value={year}&page&_format=csv"
+          ],
+          "accept": "text/csv,*/*",
+          "label": "US Treasury par yield 5 Yr"
+        },
+        {
+          "provider": "yahoo",
+          "ref": "^FVX",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/%5EFVX?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "^FVX"
+        }
+      ]
+    },
+    {
+      "id": "dgs10",
+      "label": "10Y 美债收益率",
+      "bucket": "rates",
+      "unit": "%",
+      "decimals": 3,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "headline",
+      "div_tol": 0.01,
+      "chain": [
+        {
+          "provider": "treasury",
+          "ref": "10 Yr",
+          "field": "10 Yr",
+          "tier": "official",
+          "urls": [
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year_prev}/all?type=daily_treasury_yield_curve&field_tdr_date_value={year_prev}&page&_format=csv",
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year}/all?type=daily_treasury_yield_curve&field_tdr_date_value={year}&page&_format=csv"
+          ],
+          "accept": "text/csv,*/*",
+          "label": "US Treasury par yield 10 Yr"
+        },
+        {
+          "provider": "yahoo",
+          "ref": "^TNX",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/%5ETNX?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "^TNX"
+        },
+        {
+          "provider": "fred",
+          "ref": "DGS10",
+          "tier": "official",
+          "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd=2016-01-01",
+          "accept": "text/csv,*/*",
+          "transport": "curl",
+          "ua": "curl/8.19.0",
+          "label": "FRED DGS10"
+        }
+      ],
+      "note": "全球资产定价基准。★ 三源链：财政部官方 par yield 为主，Yahoo 与 FRED 交叉核对。〔配置生成时按实测证据过滤：弃 1 条目〕 ★ 已实证：与主源（财政部 par yield）在 181 个共有交易日上**逐日完全相同**，属于「同底层数据、不同发布途径」——留作免费的双通道校验。",
+      "caveat": "财政部给的是 **par yield（平价收益率）**，Yahoo `^TNX` 是市场报价的近似，两者口径略有差异，容差 1%。"
+    },
+    {
+      "id": "dgs30",
+      "label": "30Y 美债收益率",
+      "bucket": "rates",
+      "unit": "%",
+      "decimals": 3,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "div_tol": 0.01,
+      "chain": [
+        {
+          "provider": "treasury",
+          "ref": "30 Yr",
+          "field": "30 Yr",
+          "tier": "official",
+          "urls": [
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year_prev}/all?type=daily_treasury_yield_curve&field_tdr_date_value={year_prev}&page&_format=csv",
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year}/all?type=daily_treasury_yield_curve&field_tdr_date_value={year}&page&_format=csv"
+          ],
+          "accept": "text/csv,*/*",
+          "label": "US Treasury par yield 30 Yr"
+        },
+        {
+          "provider": "yahoo",
+          "ref": "^TYX",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/%5ETYX?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "^TYX"
+        }
+      ]
+    },
+    {
+      "id": "effr",
+      "label": "有效联邦基金利率（EFFR）",
+      "bucket": "rates",
+      "unit": "%",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 0,
+      "role": "context",
+      "max_lag": 7,
+      "chain": [
+        {
+          "provider": "nyfed",
+          "ref": "effr",
+          "tier": "official",
+          "url": "https://markets.newyorkfed.org/api/rates/unsecured/effr/last/400.json",
+          "accept": "application/json,*/*",
+          "label": "NY Fed EFFR"
+        }
+      ],
+      "note": "纽约联储官方发布的**当日**实际政策利率，不是预期。极性 0：这是政策**现状**，不参与压力合成。"
+    },
+    {
+      "id": "fedtarget_upper",
+      "label": "联邦基金目标区间上限",
+      "bucket": "rates",
+      "unit": "%",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 0,
+      "role": "context",
+      "max_lag": 10,
+      "chain": [
+        {
+          "provider": "nyfed",
+          "ref": "fedtarget",
+          "tier": "official",
+          "url": "https://markets.newyorkfed.org/api/rates/unsecured/effr/last/400.json",
+          "accept": "application/json,*/*",
+          "label": "NY Fed FEDTARGET"
+        }
+      ],
+      "note": "FOMC 决议直接设定。它只在议息会议变动，**两次会议之间「没动」是正常的**。〔配置生成时按实测证据过滤：弃 1 条目〕"
+    },
+    {
+      "id": "real10y_treasury",
+      "label": "10Y TIPS 实际收益率",
+      "bucket": "rates",
+      "unit": "%",
+      "decimals": 3,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "max_lag": 10,
+      "chain": [
+        {
+          "provider": "treasury",
+          "ref": "tips-10 YR",
+          "field": "10 YR",
+          "tier": "official",
+          "urls": [
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year_prev}/all?type=daily_treasury_real_yield_curve&field_tdr_date_value={year_prev}&page&_format=csv",
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year}/all?type=daily_treasury_real_yield_curve&field_tdr_date_value={year}&page&_format=csv"
+          ],
+          "accept": "text/csv,*/*",
+          "label": "US Treasury real yield 10 YR"
+        }
+      ],
+      "note": "财政部 TIPS 曲线的 10Y 真实收益率。★ 通胀预期上行会**吃掉**名义利率上行的实际意义——实际利率才是金融条件。",
+      "caveat": "TIPS 曲线列名是大写 `10 YR`，且与 par yield 曲线是**两张表**；本条与 dgs10 的日期天然对齐。"
+    },
+    {
+      "id": "sp500",
+      "label": "标普 500",
+      "bucket": "equity",
+      "unit": "点",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "headline",
+      "div_tol": 0.01,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "^GSPC",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "^GSPC"
+        }
+      ],
+      "note": "★ 不同指数的**点位不可比**，只比百分比变化。〔配置生成时按实测证据过滤：弃 1 条目〕"
+    },
+    {
+      "id": "nasdaq",
+      "label": "纳斯达克综合指数",
+      "bucket": "equity",
+      "unit": "点",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "headline",
+      "div_tol": 0.01,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "^IXIC",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/%5EIXIC?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "^IXIC"
+        }
+      ],
+      "note": "〔配置生成时按实测证据过滤：弃 1 条目〕"
+    },
+    {
+      "id": "djia",
+      "label": "道琼斯工业指数",
+      "bucket": "equity",
+      "unit": "点",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "headline",
+      "div_tol": 0.01,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "^DJI",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/%5EDJI?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "^DJI"
+        },
+        {
+          "provider": "fred",
+          "ref": "DJIA",
+          "tier": "official",
+          "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DJIA&cosd=2016-01-01",
+          "accept": "text/csv,*/*",
+          "transport": "curl",
+          "ua": "curl/8.19.0",
+          "label": "FRED DJIA"
+        }
+      ],
+      "note": "〔配置生成时按实测证据过滤：弃 1 条目〕 ★ 已实证：与 Yahoo `^DJI` 在 501 个共有日上 22 天完全相同，最大差 0.001875 点（FRED 只保留两位小数），容差 1% 足够。"
+    },
+    {
+      "id": "xle",
+      "label": "能源板块 ETF（XLE）",
+      "bucket": "equity",
+      "unit": "$",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "context",
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "XLE",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/XLE?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "XLE"
+        }
+      ],
+      "note": "能源股的**相对强弱**是「冲突受益方」的市场读法，但只是价格反应，不是因果证明。"
+    },
+    {
+      "id": "ita",
+      "label": "航空航天与国防 ETF（ITA）",
+      "bucket": "equity",
+      "unit": "$",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "context",
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "ITA",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/ITA?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "ITA"
+        }
+      ],
+      "note": "国防板块。冲突升级预期通常**推高**它、压低大盘——两者背离才是有信息量的信号。"
+    },
+    {
+      "id": "vix",
+      "label": "VIX 波动率指数",
+      "bucket": "credit",
+      "unit": "点",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "headline",
+      "div_tol": 0.03,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "^VIX",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "^VIX"
+        }
+      ],
+      "note": "标普 500 期权隐含波动率（30 天）。**前瞻性**，但也被期权供需扭曲。〔配置生成时按实测证据过滤：弃 1 条目〕"
+    },
+    {
+      "id": "hyg",
+      "label": "垃圾债 ETF（HYG）价格",
+      "bucket": "credit",
+      "unit": "$",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "context",
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "HYG",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/HYG?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "HYG"
+        }
+      ],
+      "note": "信用利差的**市场侧代理**：利差走阔时 HYG 下跌。它不是利差本身，但来源稳定、日频，可当信用情绪的温度计用。"
+    },
+    {
+      "id": "dxy",
+      "label": "美元指数（DXY）",
+      "bucket": "fx",
+      "unit": "点",
+      "decimals": 3,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "headline",
+      "div_tol": 0.03,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "DX-Y.NYB",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "DX-Y.NYB"
+        }
+      ],
+      "note": "★ 两条源是**不同口径**：DXY 是六种货币的固定权重篮子（欧元占 57.6%），FRED `DTWEXBGS` 是广义贸易加权。水平值不可比，只用于互验方向。〔配置生成时按实测证据过滤：弃 1 条目〕",
+      "caveat": "DXY 与 FRED 广义美元指数口径不同（篮子构成与权重均不同），二者水平值**不可互相替代**，容差已放宽到 3%，分歧时以主源 DXY 为准。"
+    },
+    {
+      "id": "gold",
+      "label": "黄金期货",
+      "bucket": "fx",
+      "unit": "$/oz",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "GC=F",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "GC=F"
+        }
+      ],
+      "note": "避险需求与「美元信用」的对冲读数。"
+    },
+    {
+      "id": "usdcny",
+      "label": "美元兑人民币",
+      "bucket": "fx",
+      "unit": "CNY/USD",
+      "decimals": 4,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "max_lag": 10,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "CNY=X",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/CNY%3DX?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "CNY=X"
+        }
+      ],
+      "note": "新兴市场风险偏好的代理之一（人民币走弱＝避险美元需求上升）。〔配置生成时按实测证据过滤：弃 1 条目〕"
+    },
+    {
+      "id": "babelmandeb_total",
+      "label": "曼德海峡 日通行艘次（全部船型）",
+      "bucket": "shipping",
+      "unit": "艘次",
+      "decimals": 0,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "headline",
+      "step": 7,
+      "max_lag": 14,
+      "chain": [
+        {
+          "provider": "arcgis",
+          "ref": "chokepoint4:n_total",
+          "tier": "official",
+          "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query?where=portid%3D%27chokepoint4%27&outFields=date,portid,n_total&orderByFields=date%20DESC&resultRecordCount=1000&returnGeometry=false&f=json",
+          "accept": "application/json,*/*",
+          "date_field": "date",
+          "value_field": "n_total",
+          "entity_field": "portid",
+          "entity_match": "chokepoint4",
+          "label": "PortWatch chokepoint4 n_total"
+        }
+      ],
+      "note": "★ IMF PortWatch 日频汇编（AIS 事后整理，通常滞后 4–7 天）。**通行量下降 = 双线施压的实物落地**。",
+      "caveat": "【口径边界·2026-09-21 依 IMF PortWatch 官方说明核实，同日下午以 41 天全区间对表复核】PortWatch 的 n_total **只数 5 类商船**（集装箱、干散货、杂货、滚装、油轮）；该口径由字段恒等式自证（41 天零违反）：n_total = n_cargo + n_tanker + n_roro，n_cargo = 集装箱 + 干散 + 杂货 → **本序列结构上不含军舰/护航舰艇/渔船/拖轮/小艇**，**关闭 AIS 的船也不计**（Windward 曾单日 24h 记录海湾逾 1,100 艘船遭 GPS/AIS 干扰）。计数规则：船穿过海峡边界记 1 次；多日才走完的只记 1 次；同一艘船 48 小时内不重复计。更新节奏：每周三才更新一次（有新数据才更新），本序列是**修订后定稿值**。 —— 与彭博终端对照（2026-08-01~09-10，41 天）：彭博 237 艘次 vs 本序列 184（彭博高 29%，本序列低 22.4%）。但**两边有 12 天数值完全相同**；平移扫描显示 **lag=0 一枝独秀**（整体挪 ±1 天相关性即跌到 ≈0）→ **日期完全对齐，不存在时区/日期错位**；剔除 9 个 |差|≥3 的异常日后 **r=0.888**。差额高度集中：9 天贡献 63% 的绝对差（大差日日均差 5.2 vs 其余 32 天 0.88，相差 6 倍）。→ 定性为**同一数据集的不同版本/快照差**（对方为未修订的实时快照），**既不是本序列抓取错误，也不是「对方多算了军舰」的口径差**。外部锚定：Reuters 2026-08-23 报道「周末少于 20 艘穿越霍尔木兹」——本序列 8/22+8/23=10 艘 ✓，彭博同两日 18+9=27 艘 ✗。口径谱系（同期）：本序列/路透引用 ≈4.5 艘/日 < 彭博 5.8 < Lloyd's List「非伊朗关联」13.9（97 艘/周）。 —— 对外比较只比**趋势方向与 7 日均值**，不比单日绝对值；本序列只有下界没有上界，绝不表述为「一艘船都没过」。"
+    },
+    {
+      "id": "babelmandeb_tanker",
+      "label": "曼德海峡 日通行油轮艘次",
+      "bucket": "shipping",
+      "unit": "艘次",
+      "decimals": 0,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "headline",
+      "step": 7,
+      "max_lag": 14,
+      "chain": [
+        {
+          "provider": "arcgis",
+          "ref": "chokepoint4:n_tanker",
+          "tier": "official",
+          "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query?where=portid%3D%27chokepoint4%27&outFields=date,portid,n_tanker&orderByFields=date%20DESC&resultRecordCount=1000&returnGeometry=false&f=json",
+          "accept": "application/json,*/*",
+          "date_field": "date",
+          "value_field": "n_tanker",
+          "entity_field": "portid",
+          "entity_match": "chokepoint4",
+          "label": "PortWatch chokepoint4 n_tanker"
+        }
+      ],
+      "note": "只看油轮。油轮对安全风险的敏感度高于集装箱船。",
+      "caveat": "【口径边界·2026-09-21 依 IMF PortWatch 官方说明核实，同日下午以 41 天全区间对表复核】PortWatch 的 n_total **只数 5 类商船**（集装箱、干散货、杂货、滚装、油轮）；该口径由字段恒等式自证（41 天零违反）：n_total = n_cargo + n_tanker + n_roro，n_cargo = 集装箱 + 干散 + 杂货 → **本序列结构上不含军舰/护航舰艇/渔船/拖轮/小艇**，**关闭 AIS 的船也不计**（Windward 曾单日 24h 记录海湾逾 1,100 艘船遭 GPS/AIS 干扰）。计数规则：船穿过海峡边界记 1 次；多日才走完的只记 1 次；同一艘船 48 小时内不重复计。更新节奏：每周三才更新一次（有新数据才更新），本序列是**修订后定稿值**。 —— 与彭博终端对照（2026-08-01~09-10，41 天）：彭博 237 艘次 vs 本序列 184（彭博高 29%，本序列低 22.4%）。但**两边有 12 天数值完全相同**；平移扫描显示 **lag=0 一枝独秀**（整体挪 ±1 天相关性即跌到 ≈0）→ **日期完全对齐，不存在时区/日期错位**；剔除 9 个 |差|≥3 的异常日后 **r=0.888**。差额高度集中：9 天贡献 63% 的绝对差（大差日日均差 5.2 vs 其余 32 天 0.88，相差 6 倍）。→ 定性为**同一数据集的不同版本/快照差**（对方为未修订的实时快照），**既不是本序列抓取错误，也不是「对方多算了军舰」的口径差**。外部锚定：Reuters 2026-08-23 报道「周末少于 20 艘穿越霍尔木兹」——本序列 8/22+8/23=10 艘 ✓，彭博同两日 18+9=27 艘 ✗。口径谱系（同期）：本序列/路透引用 ≈4.5 艘/日 < 彭博 5.8 < Lloyd's List「非伊朗关联」13.9（97 艘/周）。 —— 对外比较只比**趋势方向与 7 日均值**，不比单日绝对值；本序列只有下界没有上界，绝不表述为「一艘船都没过」。"
+    },
+    {
+      "id": "hormuz_total",
+      "label": "霍尔木兹海峡 日通行艘次（全部船型）",
+      "bucket": "shipping",
+      "unit": "艘次",
+      "decimals": 0,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "headline",
+      "step": 7,
+      "max_lag": 14,
+      "chain": [
+        {
+          "provider": "arcgis",
+          "ref": "chokepoint6:n_total",
+          "tier": "official",
+          "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query?where=portid%3D%27chokepoint6%27&outFields=date,portid,n_total&orderByFields=date%20DESC&resultRecordCount=1000&returnGeometry=false&f=json",
+          "accept": "application/json,*/*",
+          "date_field": "date",
+          "value_field": "n_total",
+          "entity_field": "portid",
+          "entity_match": "chokepoint6",
+          "label": "PortWatch chokepoint6 n_total"
+        }
+      ],
+      "note": "★ 全球约 1/5 的石油消费经此通过。这是本项目里**最直接**的「海峡是否被真正封锁」读数。",
+      "caveat": "【口径边界·2026-09-21 依 IMF PortWatch 官方说明核实，同日下午以 41 天全区间对表复核】PortWatch 的 n_total **只数 5 类商船**（集装箱、干散货、杂货、滚装、油轮）；该口径由字段恒等式自证（41 天零违反）：n_total = n_cargo + n_tanker + n_roro，n_cargo = 集装箱 + 干散 + 杂货 → **本序列结构上不含军舰/护航舰艇/渔船/拖轮/小艇**，**关闭 AIS 的船也不计**（Windward 曾单日 24h 记录海湾逾 1,100 艘船遭 GPS/AIS 干扰）。计数规则：船穿过海峡边界记 1 次；多日才走完的只记 1 次；同一艘船 48 小时内不重复计。更新节奏：每周三才更新一次（有新数据才更新），本序列是**修订后定稿值**。 —— 与彭博终端对照（2026-08-01~09-10，41 天）：彭博 237 艘次 vs 本序列 184（彭博高 29%，本序列低 22.4%）。但**两边有 12 天数值完全相同**；平移扫描显示 **lag=0 一枝独秀**（整体挪 ±1 天相关性即跌到 ≈0）→ **日期完全对齐，不存在时区/日期错位**；剔除 9 个 |差|≥3 的异常日后 **r=0.888**。差额高度集中：9 天贡献 63% 的绝对差（大差日日均差 5.2 vs 其余 32 天 0.88，相差 6 倍）。→ 定性为**同一数据集的不同版本/快照差**（对方为未修订的实时快照），**既不是本序列抓取错误，也不是「对方多算了军舰」的口径差**。外部锚定：Reuters 2026-08-23 报道「周末少于 20 艘穿越霍尔木兹」——本序列 8/22+8/23=10 艘 ✓，彭博同两日 18+9=27 艘 ✗。口径谱系（同期）：本序列/路透引用 ≈4.5 艘/日 < 彭博 5.8 < Lloyd's List「非伊朗关联」13.9（97 艘/周）。 —— 对外比较只比**趋势方向与 7 日均值**，不比单日绝对值；本序列只有下界没有上界，绝不表述为「一艘船都没过」。"
+    },
+    {
+      "id": "hormuz_tanker",
+      "label": "霍尔木兹海峡 日通行油轮艘次",
+      "bucket": "shipping",
+      "unit": "艘次",
+      "decimals": 0,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "headline",
+      "step": 7,
+      "max_lag": 14,
+      "chain": [
+        {
+          "provider": "arcgis",
+          "ref": "chokepoint6:n_tanker",
+          "tier": "official",
+          "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query?where=portid%3D%27chokepoint6%27&outFields=date,portid,n_tanker&orderByFields=date%20DESC&resultRecordCount=1000&returnGeometry=false&f=json",
+          "accept": "application/json,*/*",
+          "date_field": "date",
+          "value_field": "n_tanker",
+          "entity_field": "portid",
+          "entity_match": "chokepoint6",
+          "label": "PortWatch chokepoint6 n_tanker"
+        }
+      ],
+      "caveat": "【口径边界·2026-09-21 依 IMF PortWatch 官方说明核实，同日下午以 41 天全区间对表复核】PortWatch 的 n_total **只数 5 类商船**（集装箱、干散货、杂货、滚装、油轮）；该口径由字段恒等式自证（41 天零违反）：n_total = n_cargo + n_tanker + n_roro，n_cargo = 集装箱 + 干散 + 杂货 → **本序列结构上不含军舰/护航舰艇/渔船/拖轮/小艇**，**关闭 AIS 的船也不计**（Windward 曾单日 24h 记录海湾逾 1,100 艘船遭 GPS/AIS 干扰）。计数规则：船穿过海峡边界记 1 次；多日才走完的只记 1 次；同一艘船 48 小时内不重复计。更新节奏：每周三才更新一次（有新数据才更新），本序列是**修订后定稿值**。 —— 与彭博终端对照（2026-08-01~09-10，41 天）：彭博 237 艘次 vs 本序列 184（彭博高 29%，本序列低 22.4%）。但**两边有 12 天数值完全相同**；平移扫描显示 **lag=0 一枝独秀**（整体挪 ±1 天相关性即跌到 ≈0）→ **日期完全对齐，不存在时区/日期错位**；剔除 9 个 |差|≥3 的异常日后 **r=0.888**。差额高度集中：9 天贡献 63% 的绝对差（大差日日均差 5.2 vs 其余 32 天 0.88，相差 6 倍）。→ 定性为**同一数据集的不同版本/快照差**（对方为未修订的实时快照），**既不是本序列抓取错误，也不是「对方多算了军舰」的口径差**。外部锚定：Reuters 2026-08-23 报道「周末少于 20 艘穿越霍尔木兹」——本序列 8/22+8/23=10 艘 ✓，彭博同两日 18+9=27 艘 ✗。口径谱系（同期）：本序列/路透引用 ≈4.5 艘/日 < 彭博 5.8 < Lloyd's List「非伊朗关联」13.9（97 艘/周）。 —— 对外比较只比**趋势方向与 7 日均值**，不比单日绝对值；本序列只有下界没有上界，绝不表述为「一艘船都没过」。"
+    },
+    {
+      "id": "hormuz_capacity_tanker",
+      "label": "霍尔木兹海峡 油轮载重吨",
+      "bucket": "shipping",
+      "unit": "载重吨",
+      "decimals": 0,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "context",
+      "step": 7,
+      "max_lag": 14,
+      "chain": [
+        {
+          "provider": "arcgis",
+          "ref": "chokepoint6:capacity_tanker",
+          "tier": "official",
+          "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query?where=portid%3D%27chokepoint6%27&outFields=date,portid,capacity_tanker&orderByFields=date%20DESC&resultRecordCount=1000&returnGeometry=false&f=json",
+          "accept": "application/json,*/*",
+          "date_field": "date",
+          "value_field": "capacity_tanker",
+          "entity_field": "portid",
+          "entity_match": "chokepoint6",
+          "label": "PortWatch chokepoint6 capacity_tanker"
+        }
+      ],
+      "note": "★ 与「艘次」互补：艘次少但吨位没少，说明是**小船在跑、大船在躲**——比单看艘次更有信息量。",
+      "caveat": "【口径边界·2026-09-21 依 IMF PortWatch 官方说明核实，同日下午以 41 天全区间对表复核】PortWatch 的 n_total **只数 5 类商船**（集装箱、干散货、杂货、滚装、油轮）；该口径由字段恒等式自证（41 天零违反）：n_total = n_cargo + n_tanker + n_roro，n_cargo = 集装箱 + 干散 + 杂货 → **本序列结构上不含军舰/护航舰艇/渔船/拖轮/小艇**，**关闭 AIS 的船也不计**（Windward 曾单日 24h 记录海湾逾 1,100 艘船遭 GPS/AIS 干扰）。计数规则：船穿过海峡边界记 1 次；多日才走完的只记 1 次；同一艘船 48 小时内不重复计。更新节奏：每周三才更新一次（有新数据才更新），本序列是**修订后定稿值**。 —— 与彭博终端对照（2026-08-01~09-10，41 天）：彭博 237 艘次 vs 本序列 184（彭博高 29%，本序列低 22.4%）。但**两边有 12 天数值完全相同**；平移扫描显示 **lag=0 一枝独秀**（整体挪 ±1 天相关性即跌到 ≈0）→ **日期完全对齐，不存在时区/日期错位**；剔除 9 个 |差|≥3 的异常日后 **r=0.888**。差额高度集中：9 天贡献 63% 的绝对差（大差日日均差 5.2 vs 其余 32 天 0.88，相差 6 倍）。→ 定性为**同一数据集的不同版本/快照差**（对方为未修订的实时快照），**既不是本序列抓取错误，也不是「对方多算了军舰」的口径差**。外部锚定：Reuters 2026-08-23 报道「周末少于 20 艘穿越霍尔木兹」——本序列 8/22+8/23=10 艘 ✓，彭博同两日 18+9=27 艘 ✗。口径谱系（同期）：本序列/路透引用 ≈4.5 艘/日 < 彭博 5.8 < Lloyd's List「非伊朗关联」13.9（97 艘/周）。 —— 对外比较只比**趋势方向与 7 日均值**，不比单日绝对值；本序列只有下界没有上界，绝不表述为「一艘船都没过」。"
+    },
+    {
+      "id": "suez_total",
+      "label": "苏伊士运河 日通行艘次",
+      "bucket": "shipping",
+      "unit": "艘次",
+      "decimals": 0,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "context",
+      "step": 7,
+      "max_lag": 14,
+      "chain": [
+        {
+          "provider": "arcgis",
+          "ref": "chokepoint1:n_total",
+          "tier": "official",
+          "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query?where=portid%3D%27chokepoint1%27&outFields=date,portid,n_total&orderByFields=date%20DESC&resultRecordCount=1000&returnGeometry=false&f=json",
+          "accept": "application/json,*/*",
+          "date_field": "date",
+          "value_field": "n_total",
+          "entity_field": "portid",
+          "entity_match": "chokepoint1",
+          "label": "PortWatch chokepoint1 n_total"
+        }
+      ],
+      "note": "红海航线的上游读数，与曼德海峡配套看。",
+      "caveat": "【口径边界·2026-09-21 依 IMF PortWatch 官方说明核实，同日下午以 41 天全区间对表复核】PortWatch 的 n_total **只数 5 类商船**（集装箱、干散货、杂货、滚装、油轮）；该口径由字段恒等式自证（41 天零违反）：n_total = n_cargo + n_tanker + n_roro，n_cargo = 集装箱 + 干散 + 杂货 → **本序列结构上不含军舰/护航舰艇/渔船/拖轮/小艇**，**关闭 AIS 的船也不计**（Windward 曾单日 24h 记录海湾逾 1,100 艘船遭 GPS/AIS 干扰）。计数规则：船穿过海峡边界记 1 次；多日才走完的只记 1 次；同一艘船 48 小时内不重复计。更新节奏：每周三才更新一次（有新数据才更新），本序列是**修订后定稿值**。 —— 与彭博终端对照（2026-08-01~09-10，41 天）：彭博 237 艘次 vs 本序列 184（彭博高 29%，本序列低 22.4%）。但**两边有 12 天数值完全相同**；平移扫描显示 **lag=0 一枝独秀**（整体挪 ±1 天相关性即跌到 ≈0）→ **日期完全对齐，不存在时区/日期错位**；剔除 9 个 |差|≥3 的异常日后 **r=0.888**。差额高度集中：9 天贡献 63% 的绝对差（大差日日均差 5.2 vs 其余 32 天 0.88，相差 6 倍）。→ 定性为**同一数据集的不同版本/快照差**（对方为未修订的实时快照），**既不是本序列抓取错误，也不是「对方多算了军舰」的口径差**。外部锚定：Reuters 2026-08-23 报道「周末少于 20 艘穿越霍尔木兹」——本序列 8/22+8/23=10 艘 ✓，彭博同两日 18+9=27 艘 ✗。口径谱系（同期）：本序列/路透引用 ≈4.5 艘/日 < 彭博 5.8 < Lloyd's List「非伊朗关联」13.9（97 艘/周）。 —— 对外比较只比**趋势方向与 7 日均值**，不比单日绝对值；本序列只有下界没有上界，绝不表述为「一艘船都没过」。"
+    },
+    {
+      "id": "cape_total",
+      "label": "好望角 日通行艘次",
+      "bucket": "shipping",
+      "unit": "艘次",
+      "decimals": 0,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "step": 7,
+      "max_lag": 14,
+      "chain": [
+        {
+          "provider": "arcgis",
+          "ref": "chokepoint7:n_total",
+          "tier": "official",
+          "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query?where=portid%3D%27chokepoint7%27&outFields=date,portid,n_total&orderByFields=date%20DESC&resultRecordCount=1000&returnGeometry=false&f=json",
+          "accept": "application/json,*/*",
+          "date_field": "date",
+          "value_field": "n_total",
+          "entity_field": "portid",
+          "entity_match": "chokepoint7",
+          "label": "PortWatch chokepoint7 n_total"
+        }
+      ],
+      "note": "★ **绕行替代路线**。曼德海峡通行量下降而好望角上升，是「船绕开了红海」的直接证据，而不是「贸易消失」。",
+      "caveat": "【口径边界·2026-09-21 依 IMF PortWatch 官方说明核实，同日下午以 41 天全区间对表复核】PortWatch 的 n_total **只数 5 类商船**（集装箱、干散货、杂货、滚装、油轮）；该口径由字段恒等式自证（41 天零违反）：n_total = n_cargo + n_tanker + n_roro，n_cargo = 集装箱 + 干散 + 杂货 → **本序列结构上不含军舰/护航舰艇/渔船/拖轮/小艇**，**关闭 AIS 的船也不计**（Windward 曾单日 24h 记录海湾逾 1,100 艘船遭 GPS/AIS 干扰）。计数规则：船穿过海峡边界记 1 次；多日才走完的只记 1 次；同一艘船 48 小时内不重复计。更新节奏：每周三才更新一次（有新数据才更新），本序列是**修订后定稿值**。 —— 与彭博终端对照（2026-08-01~09-10，41 天）：彭博 237 艘次 vs 本序列 184（彭博高 29%，本序列低 22.4%）。但**两边有 12 天数值完全相同**；平移扫描显示 **lag=0 一枝独秀**（整体挪 ±1 天相关性即跌到 ≈0）→ **日期完全对齐，不存在时区/日期错位**；剔除 9 个 |差|≥3 的异常日后 **r=0.888**。差额高度集中：9 天贡献 63% 的绝对差（大差日日均差 5.2 vs 其余 32 天 0.88，相差 6 倍）。→ 定性为**同一数据集的不同版本/快照差**（对方为未修订的实时快照），**既不是本序列抓取错误，也不是「对方多算了军舰」的口径差**。外部锚定：Reuters 2026-08-23 报道「周末少于 20 艘穿越霍尔木兹」——本序列 8/22+8/23=10 艘 ✓，彭博同两日 18+9=27 艘 ✗。口径谱系（同期）：本序列/路透引用 ≈4.5 艘/日 < 彭博 5.8 < Lloyd's List「非伊朗关联」13.9（97 艘/周）。 —— 对外比较只比**趋势方向与 7 日均值**，不比单日绝对值；本序列只有下界没有上界，绝不表述为「一艘船都没过」。"
+    },
+    {
+      "id": "fro",
+      "label": "Frontline 油轮股价",
+      "bucket": "shipping",
+      "unit": "$",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "FRO",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/FRO?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "FRO"
+        }
+      ],
+      "note": "油轮运价的市场侧代理。★ **不是通行量**：股价反应的是运价与预期，通行量下降若伴随运价上升，股价会涨。"
+    },
+    {
+      "id": "zim",
+      "label": "以星航运股价",
+      "bucket": "shipping",
+      "unit": "$",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "ZIM",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/ZIM?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "ZIM"
+        }
+      ],
+      "note": "集装箱航运的市场侧代理，对红海绕行最敏感。"
+    },
+    {
+      "id": "ttf_gas",
+      "label": "欧洲天然气 TTF 近月",
+      "bucket": "oil",
+      "unit": "€/MWh",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "div_tol": 0.05,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "TTF=F",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/TTF%3DF?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "TTF=F"
+        },
+        {
+          "provider": "stooq",
+          "ref": "ttf.f",
+          "tier": "market",
+          "url": "https://stooq.com/q/d/l/?s=ttf.f&i=d",
+          "accept": "text/csv,*/*",
+          "label": "stooq"
+        }
+      ],
+      "note": "荷兰 TTF 是欧洲天然气基准，欧洲对俄管道气/LNG 替代的**定价锚**。",
+      "caveat": "TTF（€/MWh）与 Henry Hub（$/MMBtu）**单位不同、标的不同**，不可直接相减或比较水平值；只能各自看自身变动。"
+    },
+    {
+      "id": "wheat",
+      "label": "CBOT 小麦近月",
+      "bucket": "food",
+      "unit": "US cents/bu",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "div_tol": 0.04,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "ZW=F",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/ZW%3DF?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "ZW=F"
+        },
+        {
+          "provider": "stooq",
+          "ref": "zw.f",
+          "tier": "market",
+          "url": "https://stooq.com/q/d/l/?s=zw.f&i=d",
+          "accept": "text/csv,*/*",
+          "label": "stooq"
+        }
+      ],
+      "note": "黑海粮食外运的最直接价格读数；乌克兰与俄罗斯均为主要出口方。",
+      "caveat": "期货价格是**预期定价**，不等于实际成交价；与现货FOB价存在基差。"
+    },
+    {
+      "id": "corn",
+      "label": "CBOT 玉米近月",
+      "bucket": "food",
+      "unit": "US cents/bu",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "div_tol": 0.04,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "ZC=F",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/ZC%3DF?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "ZC=F"
+        },
+        {
+          "provider": "stooq",
+          "ref": "zc.f",
+          "tier": "market",
+          "url": "https://stooq.com/q/d/l/?s=zc.f&i=d",
+          "accept": "text/csv,*/*",
+          "label": "stooq"
+        }
+      ],
+      "note": "与小麦同属黑海出口篮子，用于交叉验证粮价传导。",
+      "caveat": "同为期货价格，与现货基差不等于数据错误。"
+    },
+    {
+      "id": "bdi",
+      "label": "干散货运价代理（BDRY ETF）",
+      "bucket": "shipping",
+      "unit": "USD",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "div_tol": 0.05,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "BDRY",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/BDRY?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "BDRY"
+        }
+      ],
+      "note": "干散货运价的**可交易代理**。【2026-09-20 实测：Yahoo 无 BDI 指数序列（^BDI / BDIY=Y / BDI=F 全部 404），stooq 对该代码返回 robots 挑战页；因此改用 Breakwave 干散货运价 ETF（BDRY），单位是美元而非指数点】",
+      "caveat": "BDRY 是**ETF 价格（USD）**，跟踪干散货运价期货组合，**不是 BDI 指数点**；只看自身百分比变动，不可与 BDI 点位比较。运价涨可能来自绕行拉长航程，不代表运量增长；与海峡通行量口径不同，不可互相替代。"
+    },
+    {
+      "id": "usdrub",
+      "label": "美元兑卢布",
+      "bucket": "fx",
+      "unit": "RUB/USD",
+      "decimals": 3,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "div_tol": 0.03,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "RUB=X",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/RUB%3DX?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "RUB=X"
+        },
+        {
+          "provider": "stooq",
+          "ref": "rub",
+          "tier": "market",
+          "url": "https://stooq.com/q/d/l/?s=rub&i=d",
+          "accept": "text/csv,*/*",
+          "label": "stooq"
+        }
+      ],
+      "note": "俄罗斯本币的外部压力读数（制裁/资本管制/油价三条线共同定价）。",
+      "caveat": "制裁后该汇率流动性受限、报价分散，且俄国内存在**多重汇率**（官方/场外/现金），本序列只能代表其中一个口径。"
+    },
+    {
+      "id": "usduah",
+      "label": "美元兑格里夫纳",
+      "bucket": "fx",
+      "unit": "UAH/USD",
+      "decimals": 3,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "context",
+      "div_tol": 0.03,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "UAH=X",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/UAH%3DX?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "UAH=X"
+        },
+        {
+          "provider": "stooq",
+          "ref": "uah",
+          "tier": "market",
+          "url": "https://stooq.com/q/d/l/?s=uah&i=d",
+          "accept": "text/csv,*/*",
+          "label": "stooq"
+        }
+      ],
+      "note": "乌克兰本币读数；乌央行为管理汇率，官方价与市场价可能分离。",
+      "caveat": "乌实行汇率管理，**官方中间价≠市场成交价**；战时偏离会扩大。"
+    },
+    {
+      "id": "ta125",
+      "label": "以色列 TA-125 指数",
+      "bucket": "equity",
+      "unit": "指数点",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "context",
+      "div_tol": 0.04,
+      "chain": [
+        {
+          "provider": "yahoo",
+          "ref": "%5ETA125.TA",
+          "tier": "market",
+          "url": "https://query1.finance.yahoo.com/v8/finance/chart/%5ETA125.TA?range=2y&interval=1d",
+          "accept": "application/json,*/*",
+          "label": "^TA125.TA"
+        }
+      ],
+      "note": "中东地区资产情绪的地区股市读数。【2026-09-20 实测：Yahoo 有效代码是 ^TA125.TA；不带 ^ 的 TA125.TA 返回 404，stooq 对该代码返回 robots 挑战页】",
+      "caveat": "指数**点位不可跨市场比较**，只看自身百分比变动；地区交易所交易时段与欧美不同，日期对齐会滞后一日。"
+    },
+    {
+      "id": "taco_breakeven5y",
+      "label": "5Y 通胀预期（TACO 因子 D）",
+      "bucket": "taco",
+      "unit": "%",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": 1,
+      "role": "headline",
+      "div_tol": 0.01,
+      "chain": [
+        {
+          "provider": "fred",
+          "ref": "T5YIE",
+          "tier": "official",
+          "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T5YIE&cosd=2016-01-01",
+          "accept": "text/csv,*/*",
+          "transport": "curl",
+          "ua": "curl/8.19.0",
+          "label": "FRED T5YIE 5Y breakeven"
+        }
+      ],
+      "note": "对侧 taco-monitor 的因子 D 用的是 «1Y 通胀互换»，公开源不可得，它以 FRED `T5YIE`（5 年盈亏平衡通胀率）代理。本侧采用**同一个代理源、同一个 series id**，因此这一因子两侧**完全同源**，不需要容差谈判。",
+      "caveat": "T5YIE 是**国债市场的盈亏平衡通胀率**（名义 − TIPS），不等于通胀互换报价：前者含 TIPS 流动性溢价与通胀风险溢价，后者含交易对手与抵押品因素。用它代理 1Y 互换是**期限也换了**（5Y 而不是 1Y）的近似，只能看方向与拐点，不能当水平值引用。"
+    },
+    {
+      "id": "taco_trump_approval",
+      "label": "特朗普支持率（TACO 因子 E）",
+      "bucket": "taco",
+      "unit": "%",
+      "decimals": 2,
+      "cadence": "daily",
+      "polarity": -1,
+      "role": "headline",
+      "div_tol": 0.02,
+      "chain": [
+        {
+          "provider": "datawrapper",
+          "ref": "trump_approval",
+          "tier": "aggregator",
+          "url": "https://static.dwcdn.net/data/kSCt4.csv",
+          "accept": "text/csv,*/*",
+          "transport": "curl",
+          "ua": "curl/8.19.0",
+          "date_col": "modeldate",
+          "value_col": "approve",
+          "date_format": "%m/%d/%Y",
+          "label": "Silver Bulletin / Datawrapper kSCt4"
+        }
+      ],
+      "note": "★ 按**列名**取 `approve`，不能按位置取：表头是 `modeldate,approve,disapprove,approve_lo,...`，`disapprove` 也在第 2 列且同样是小数字 —— 按位置会「成功地」取到反向那一列，而且只要表结构不变就永远发现不了。解析器见 finance_monitor.parse_named_csv。",
+      "caveat": "对侧 taco-monitor 的因子 E 是**净支持率**（RCP 手工均值 poll 平均），本侧是 **Silver Bulletin 的模型值 approve**：① 一个是「原始民调均值」、一个是「建模后的日频序列」，口径不同；② 一个可能已扣 disapprove、一个是单侧支持率，**水平值不可直接比**；③ 日期是 M/D/YYYY（月在前），解析器已显式指定格式而不是靠猜测。结论：这一因子两侧**不同源**，只可用于**方向性**对照，不适合跨项目拼接成一条连续序列。"
+    }
+  ],
+  "derived": [
+    {
+      "id": "brent_wti_spread",
+      "label": "Brent − WTI 价差",
+      "bucket": "oil",
+      "kind": "diff",
+      "a": "brent",
+      "b": "wti",
+      "unit": "$/bbl",
+      "decimals": 2,
+      "delta_unit": "$",
+      "polarity": 1,
+      "role": "headline",
+      "definition": "Brent 收盘 − WTI 收盘（$/bbl）",
+      "note": "价差走阔通常意味着**国际（海运）市场比美国本土更紧**——出口能力或国际风险定价的变化会先反映在这里。"
+    },
+    {
+      "id": "brent_20d_z",
+      "label": "Brent 20 期标准化偏离",
+      "bucket": "oil",
+      "kind": "zdev",
+      "series": "brent",
+      "window": 20,
+      "unit": "σ",
+      "decimals": 2,
+      "delta_unit": "",
+      "polarity": 1,
+      "role": "context",
+      "definition": "(最新值 − 近 20 期均值) / 近 20 期标准差",
+      "note": "与「日变动 z」不同：这个量衡量的是**水平**相对近期有多异常。"
+    },
+    {
+      "id": "brent_chg20",
+      "label": "Brent 20 期涨幅",
+      "bucket": "oil",
+      "kind": "pct_over",
+      "series": "brent",
+      "window": 20,
+      "unit": "%",
+      "decimals": 2,
+      "delta_unit": "pp",
+      "polarity": 1,
+      "role": "context",
+      "definition": "最新值 / 20 期前 − 1（%）",
+      "note": "用于与能源股涨幅对照（见 §9 的 `oil_vs_energy`）。"
+    },
+    {
+      "id": "xle_chg20",
+      "label": "能源板块 20 期涨幅",
+      "bucket": "equity",
+      "kind": "pct_over",
+      "series": "xle",
+      "window": 20,
+      "unit": "%",
+      "decimals": 2,
+      "delta_unit": "pp",
+      "polarity": -1,
+      "role": "context",
+      "definition": "XLE 最新价 / 20 期前 − 1（%）"
+    },
+    {
+      "id": "oil_vs_energy",
+      "label": "油价涨幅 − 能源股涨幅",
+      "bucket": "equity",
+      "kind": "diff",
+      "a": "brent_chg20",
+      "b": "xle_chg20",
+      "unit": "pp",
+      "decimals": 2,
+      "delta_unit": "pp",
+      "polarity": 1,
+      "role": "context",
+      "definition": "Brent 20 期涨幅 − XLE 20 期涨幅（百分点）",
+      "note": "正值＝商品涨得比相关股票多。可能意味着市场认为这轮上涨**不可持续**（股票不跟），或股票受其他因素拖累。**只报背离，不解释成因。**"
+    },
+    {
+      "id": "yield_10y2y",
+      "label": "10Y − 2Y 期限利差",
+      "bucket": "rates",
+      "kind": "diff",
+      "a": "dgs10",
+      "b": "dgs2",
+      "scale": 100,
+      "unit": "bp",
+      "decimals": 1,
+      "delta_unit": "bp",
+      "polarity": 1,
+      "role": "headline",
+      "definition": "(10Y − 2Y) × 100（bp）",
+      "note": "倒挂（负值）常被当作衰退前兆，但**时点不确定**；本项目只报数值与变化。"
+    },
+    {
+      "id": "yield_10y3m",
+      "label": "10Y − 3M 期限利差",
+      "bucket": "rates",
+      "kind": "diff",
+      "a": "dgs10",
+      "b": "dgs3mo",
+      "scale": 100,
+      "unit": "bp",
+      "decimals": 1,
+      "delta_unit": "bp",
+      "polarity": 1,
+      "role": "context",
+      "definition": "(10Y − 3M) × 100（bp）",
+      "note": "与 10Y−2Y 配套看：3M 更贴政策利率，倒挂形态在两条曲线上是否一致本身有信息量。"
+    },
+    {
+      "id": "policy_gap_2y",
+      "label": "2Y 收益率 − 目标区间上限",
+      "bucket": "rates",
+      "kind": "diff",
+      "a": "dgs2",
+      "b": "fedtarget_upper",
+      "scale": 100,
+      "unit": "bp",
+      "decimals": 1,
+      "delta_unit": "bp",
+      "polarity": 1,
+      "role": "headline",
+      "definition": "(2Y 收益率 − 联邦基金目标区间上限) × 100（bp）",
+      "note": "★ **这是代理量，不是概率。** 定义：市场对「未来两年政策利率平均水平」的定价相对**当前上限**的偏移。正值＝市场定价未来路径高于当前上限（偏紧/加息方向）；负值＝低于当前上限（偏松/降息方向）。后续会给出**方向**，但不给出概率、不给出时点、不构成预测。"
+    },
+    {
+      "id": "forward_1y1y",
+      "label": "1 年期远期利率（近似）",
+      "bucket": "rates",
+      "kind": "linear",
+      "terms": [
+        {
+          "series": "dgs2",
+          "weight": 2.0
+        },
+        {
+          "series": "dgs1",
+          "weight": -1.0
+        }
+      ],
+      "unit": "%",
+      "decimals": 3,
+      "delta_unit": "bp",
+      "polarity": 1,
+      "role": "context",
+      "definition": "2 × 2Y − 1Y（%）",
+      "note": "★ **近似式**，用于刻画「1 年后 1 年期利率」的市场定价方向。它假设平价收益率与即期利率近似相等，在曲线陡峭时不精确；本项目只在**方向与相对变化**上使用它，不用其绝对水平。"
+    },
+    {
+      "id": "breakeven10",
+      "label": "10Y 盈亏平衡通胀（名义 − TIPS 实际）",
+      "bucket": "rates",
+      "kind": "diff",
+      "a": "dgs10",
+      "b": "real10y_treasury",
+      "unit": "%",
+      "decimals": 3,
+      "delta_unit": "bp",
+      "polarity": 1,
+      "role": "context",
+      "definition": "dgs10 − real10y_treasury（%）",
+      "note": "财政部同表口径的名义 − 实际。包含通胀风险溢价，**不等于**市场预测的 CPI。"
+    },
+    {
+      "id": "brent_vol20",
+      "label": "Brent 20 期已实现波动率（年化）",
+      "bucket": "oil",
+      "kind": "rollstd",
+      "series": "brent",
+      "window": 20,
+      "annualize": 15.8745,
+      "scale": 100,
+      "unit": "%",
+      "decimals": 1,
+      "delta_unit": "pp",
+      "polarity": 1,
+      "role": "context",
+      "definition": "近 20 个交易日日收益标准差 × √252 × 100（%）",
+      "note": "与油价水平无关：价格不动而波动率飙升，说明市场在给「跳跃风险」定价。",
+      "return_base": true
+    },
+    {
+      "id": "sp_drawdown60",
+      "label": "标普距 60 期高点回撤",
+      "bucket": "equity",
+      "kind": "drawdown",
+      "series": "sp500",
+      "window": 60,
+      "unit": "%",
+      "decimals": 2,
+      "delta_unit": "pp",
+      "polarity": -1,
+      "role": "context",
+      "definition": "最新值 / 近 60 期最高 − 1（%）",
+      "note": "负值。越深代表风险偏好受损越重。"
+    },
+    {
+      "id": "real_10y",
+      "label": "10Y 实际利率（名义 − 盈亏平衡）",
+      "bucket": "rates",
+      "kind": "diff",
+      "a": "dgs10",
+      "b": "breakeven10",
+      "scale": 100,
+      "unit": "bp",
+      "decimals": 1,
+      "delta_unit": "bp",
+      "polarity": 1,
+      "role": "context",
+      "definition": "(10Y 名义 − 10Y 盈亏平衡通胀) × 100（bp）",
+      "note": "**实际**融资成本的代理。名义利率上行但实际利率不动，说明涨的是通胀预期而非真实紧缩。"
+    },
+    {
+      "id": "mab_ma7",
+      "label": "曼德海峡 7 期日均通行",
+      "bucket": "shipping",
+      "kind": "ma",
+      "series": "babelmandeb_total",
+      "window": 7,
+      "unit": "艘次",
+      "decimals": 1,
+      "delta_unit": "",
+      "polarity": -1,
+      "role": "headline",
+      "definition": "近 7 个观测点的算术平均（艘次）",
+      "note": "★ 海峡通行量有**强周内季节性**（周末船舶少），逐日比会全是噪声。7 日均值把季节性抹平，是读这条数据唯一可用的方式。"
+    },
+    {
+      "id": "hormuz_ma7",
+      "label": "霍尔木兹 7 期日均通行",
+      "bucket": "shipping",
+      "kind": "ma",
+      "series": "hormuz_total",
+      "window": 7,
+      "unit": "艘次",
+      "decimals": 1,
+      "delta_unit": "",
+      "polarity": -1,
+      "role": "headline",
+      "definition": "近 7 个观测点的算术平均（艘次）"
+    },
+    {
+      "id": "hormuz_tanker_share",
+      "label": "霍尔木兹 油轮艘次占比",
+      "bucket": "shipping",
+      "kind": "ratio",
+      "a": "hormuz_tanker",
+      "b": "hormuz_total",
+      "scale": 100,
+      "unit": "%",
+      "decimals": 1,
+      "delta_unit": "pp",
+      "polarity": -1,
+      "role": "context",
+      "definition": "油轮艘次 ÷ 总艘次 × 100",
+      "note": "★ 结构性读数：**油轮占比下降而总通行不变**，说明是油轮在避险、其他船型照常——这比总量更能指向「针对能源航运」的施压。"
+    },
+    {
+      "id": "cape_vs_suez",
+      "label": "好望角 ÷ 苏伊士 通行比",
+      "bucket": "shipping",
+      "kind": "ratio",
+      "a": "cape_total",
+      "b": "suez_total",
+      "scale": 1,
+      "unit": "×",
+      "decimals": 2,
+      "delta_unit": "",
+      "polarity": 1,
+      "role": "headline",
+      "definition": "好望角通行艘次 ÷ 苏伊士通行艘次",
+      "note": "★ **绕行代理指标**：比值上升＝船舶改走好望角（绕行、航程变长、运价上升）。它区分了「贸易减少」与「航线改道」——只看曼德海峡通行量下降会把两者混为一谈。"
+    }
+  ],
+  "watch_pairs": [
+    {
+      "a": "brent",
+      "b": "sp500",
+      "label": "Brent ↔ 标普 500",
+      "note": "典型的「供给冲击」配对：油价涨、股指跌是教科书式风险回避组合。"
+    },
+    {
+      "a": "brent",
+      "b": "dgs10",
+      "label": "Brent ↔ 10Y 收益率",
+      "note": "油价上行推高通胀预期从而抬升名义收益率；若同向不明显，说明市场认为冲击是暂时的。"
+    },
+    {
+      "a": "vix",
+      "b": "sp500",
+      "label": "VIX ↔ 标普 500",
+      "note": "几乎总是反向。同向出现通常意味着极端行情或数据错位。"
+    },
+    {
+      "a": "hormuz_total",
+      "b": "brent",
+      "label": "霍尔木兹通行量 ↔ Brent",
+      "note": "若通行量下降而油价**不涨**，说明市场判定封锁未真正落地或可被替代。"
+    },
+    {
+      "a": "babelmandeb_total",
+      "b": "cape_total",
+      "label": "曼德海峡 ↔ 好望角",
+      "note": "反向＝绕行正在发生；同向下降＝贸易量本身在收缩。"
+    },
+    {
+      "a": "dxy",
+      "b": "gold",
+      "label": "美元指数 ↔ 黄金",
+      "note": "通常反向。同向上涨是「避险买美元也买黄金」的极端风险回避特征。"
+    }
+  ],
+  "composite": {
+    "id": "fsi",
+    "label": "金融战线压力合成指数（FSI）",
+    "unit": "z",
+    "components": [
+      {
+        "series": "brent",
+        "weight": 1.0,
+        "polarity": 1
+      },
+      {
+        "series": "brent_wti_spread",
+        "weight": 0.5,
+        "polarity": 1
+      },
+      {
+        "series": "vix",
+        "weight": 1.0,
+        "polarity": 1
+      },
+      {
+        "series": "sp500",
+        "weight": 1.0,
+        "polarity": -1
+      },
+      {
+        "series": "nasdaq",
+        "weight": 0.5,
+        "polarity": -1
+      },
+      {
+        "series": "ita",
+        "weight": 0.5,
+        "polarity": -1
+      },
+      {
+        "series": "dgs2",
+        "weight": 0.5,
+        "polarity": 1
+      },
+      {
+        "series": "dgs10",
+        "weight": 0.5,
+        "polarity": 1
+      },
+      {
+        "series": "dxy",
+        "weight": 0.5,
+        "polarity": 1
+      },
+      {
+        "series": "hormuz_total",
+        "weight": 1.0,
+        "polarity": -1
+      },
+      {
+        "series": "babelmandeb_total",
+        "weight": 1.0,
+        "polarity": -1
+      }
+    ],
+    "note": "Σ(权重 × 极性 × z) / Σ权重。单位是 **z**，不是概率、不是点位、不是预测。★ 覆盖度不同的两期**不可比较**（少一个分量少一份权重）。★ 分量里混有 **步长 1 期**（油价、股指、利差）与 **步长 7 期**（海峡通行量）的 z，两者的时间尺度不同：前者的 z 是「一天的变化有多异常」，后者是「相对上周同一天」。所以本指数只能读作「压力方向与量级」，不能读作精确的当期变化。"
+  },
+  "data_gaps": {
+    "chokepoint_probe": [
+      {
+        "label": "CME FedWatch 页面 / 报价接口",
+        "why": "实测 HTTP 403（三个端點全部 403）—— 有主动反爬，不绕。"
+      },
+      {
+        "label": "亚特兰大联储 Market Probability Tracker 数据文件",
+        "why": "HTTP 200、48KB，但**内容是一个 HTML 页面**（JS 挑战/错误页），不是 CSV。只看状态码与体积会以为拿到了数据。"
+      },
+      {
+        "label": "Stooq 历史行情（作为冗余源）",
+        "why": "HTTP 200、每个符号返回**完全相同的 796 字节** JS proof-of-work 挑战页。需要 JS 引擎，urllib/curl 均取不到；已用 Yahoo 覆盖同一批标的。"
+      },
+      {
+        "label": "EIA Open Data API（石油库存，作为 FRED 的替代）",
+        "why": "HTTP 403（需要 API key）。本项目不使用需要密钥的接口。"
+      },
+      {
+        "label": "纽约联储 markets API（last/400.json）",
+        "why": "HTTP 200 可用，但响应按日期【降序】排列——data[-1] 是 19 个月前的旧记录，校验器若直接取末条会把 latest 写成 2025-02-14。已改为取日期最大者。"
+      },
+      {
+        "label": "美国财政部 TIPS 真实收益率曲线",
+        "why": "HTTP 200 可用，但列名是大写 `10 YR`（par yield 曲线是 `10 Yr`）。两张表连列名风格都不一致，属于典型的「200 但字段对不上」陷阱。"
+      },
+      {
+        "label": "FRED 的 Python 直连",
+        "why": "urllib 4 种请求头组合全部超时（40s），同一 URL curl 200 / 268KB / 3s。判定为 Akamai 指纹区别对待，已改用 curl 传输并记录在案。"
+      }
+    ],
+    "dropped_unverified": [
+      {
+        "series": "wti（部分条目）",
+        "reason": "fred(fred:DCOILWTICO) 无实测可用记录；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。"
+      },
+      {
+        "series": "natgas（部分条目）",
+        "reason": "fred(fred:DHHNGSP) 无实测可用记录；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。"
+      },
+      {
+        "series": "gasoline_retail",
+        "reason": "fred(fred:GASREGW) 无实测可用记录；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。"
+      },
+      {
+        "series": "spr（部分条目）",
+        "reason": "FRED **已下线该序列**：2026-09-23 实测 http=404（连 series 页也是 404），不是可达性问题。spr / crude_stocks 的 FRED 交叉源因此**永久不可恢复**，需要另找源（EIA 需 key，本项目不用密钥接口）。"
+      },
+      {
+        "series": "crude_stocks（部分条目）",
+        "reason": "FRED **已下线该序列**：2026-09-23 实测 http=404（连 series 页也是 404），不是可达性问题。spr / crude_stocks 的 FRED 交叉源因此**永久不可恢复**，需要另找源（EIA 需 key，本项目不用密钥接口）。"
+      },
+      {
+        "series": "dgs2（部分条目）",
+        "reason": "fred(fred:DGS2) 无实测可用记录；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。"
+      },
+      {
+        "series": "fedtarget_upper（部分条目）",
+        "reason": "fred(fred:DFEDTARU) 无实测可用记录；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。"
+      },
+      {
+        "series": "sp500（部分条目）",
+        "reason": "fred(fred:SP500) 无实测可用记录；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。"
+      },
+      {
+        "series": "nasdaq（部分条目）",
+        "reason": "fred(fred:NASDAQCOM) 无实测可用记录；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。"
+      },
+      {
+        "series": "vix（部分条目）",
+        "reason": "fred(fred:VIXCLS) 无实测可用记录；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。"
+      },
+      {
+        "series": "hy_spread",
+        "reason": "fred(fred:BAMLH0A0HYM2) 无实测可用记录；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。"
+      },
+      {
+        "series": "ig_spread",
+        "reason": "fred(fred:BAMLC0A0CM) 无实测可用记录；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。"
+      },
+      {
+        "series": "dxy（部分条目）",
+        "reason": "fred(fred:DTWEXBGS) 无实测可用记录；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。"
+      },
+      {
+        "series": "usdcny（部分条目）",
+        "reason": "fred(fred:DEXCHUS) 无实测可用记录；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。；★ 该源现已实测可用（tools/_probe_round10.json），属于「可恢复但本轮未启用」——TACO 五因子只用到 DGS10/DJIA/DCOILBRENTEU/T5YIE，其余交叉源待用户确认后再开，以免每日多出十几次 FRED 请求、把 Akamai 限速触发概率抬高。"
+      }
+    ],
+    "restored_after_fred_ua_fix": {
+      "reason": "此前 FRED **整链**被判为不可用，真因是 Akamai 的双重指纹：「客户端类型」+「自称的 UA 名字」都被看 —— curl 自称 Chrome UA 会超时，改自称 curl/8.19.0 后 200。UA 一旦写对，FRED 全量 28/31 可用。",
+      "restored": [
+        {
+          "series": "dgs10",
+          "cross": "fred:DGS10",
+          "evidence": "181/181 个共有交易日逐日完全相同（同底层，不同发布途径）"
+        },
+        {
+          "series": "djia",
+          "cross": "fred:DJIA",
+          "evidence": "501 个共有日，最大差 0.001875 点（FRED 只留两位小数）"
+        }
+      ],
+      "evaluated_and_rejected": [
+        {
+          "series": "brent",
+          "cross": "fred:DCOILBRENTEU",
+          "why": "★ 试过，**否了**：FRED `DCOILBRENTEU`（欧洲 Brent **现货**）与主源 Yahoo `BZ=F`（Brent 近月**期货**）在 490 个共有日上相对差中位数 1.69%、最大 22.4% —— 但最近一周扩大到 −7.7% → −16.9%（现货升水），且 FRED 该序列当时已滞后 8 天。① 这是**真实的期限结构**（近端供给冲击下现货高于期货），不是数据错误；② 它偏巧是 taco-monitor 因子 H **没有**用的那个源（对侧用的就是 Yahoo BZ=F）；③ 交叉源的作用是抓「解析错、单位错、取错列」，不是抓基差 ——把基差放进 4% 容差里，等于让它每天报一次警，真正的数据错会被淹掉。结论：不入链。基差本身有信息量，但那是另一个指标，不该伪装成校验。"
+        }
+      ],
+      "evidence_file": "tools/_probe_round10.json"
+    },
+    "taco_gaps": [
+      {
+        "series": "taco_trump_approval",
+        "gap": "对侧 taco-monitor 用的是 RCP 民调净支持率；本侧只能用 Silver Bulletin 建模值（Datawrapper kSCt4）。**两侧不同源**，水平值不可比。"
+      },
+      {
+        "series": "taco_breakeven5y",
+        "gap": "对侧因子 D 本想用 «1Y 通胀互换»，公开源不可得，两侧都用 FRED T5YIE 代理。同源，但「5Y 盈亏平衡 ≠ 1Y 互换」，期限与工具都不是同一个东西。"
+      }
+    ]
+  },
+  "taco_factors": {
+    "note": "TACO 五因子的**原始日频序列**在本工程的落地位置。本工程只提供数据，**不合成 TACO 指数**——指数由 taco-monitor 负责，避免两套实现互相打架。",
+    "counterpart": "taco-monitor（东吴宏观 TACO 压力指数五因子复刻）",
+    "formula_ref": "31 日差分 → expanding z（start_index=31, min_obs=2, ddof=1）→ 等权均值 S → 7 日 MA = TACO",
+    "alignment_summary": {
+      "同源": 2,
+      "同底层不同途径": 2,
+      "不同源（仅方向性）": 1,
+      "method": "用双方**已落盘的原始载荷**逐日对表，脚本 tools/compare_taco_sources.py",
+      "report": "tools/_taco_source_check.json"
+    },
+    "factors": [
+      {
+        "code": "C",
+        "name": "10Y 美债收益率",
+        "series": "dgs10",
+        "taco_ref": "FRED DGS10 (USGG10YR)",
+        "align": "同底层数据、不同发布途径",
+        "evidence": "181/181 个共有交易日逐日完全相同；本侧主源为财政部 par yield，FRED 已作为交叉源入链"
+      },
+      {
+        "code": "D",
+        "name": "1Y 通胀互换（以 5Y 盈亏平衡代理）",
+        "series": "taco_breakeven5y",
+        "taco_ref": "FRED T5YIE",
+        "align": "同源同 ID（FRED T5YIE）",
+        "evidence": "本次新增；两侧使用完全相同的 series id，无需容差"
+      },
+      {
+        "code": "E",
+        "name": "特朗普净支持率",
+        "series": "taco_trump_approval",
+        "taco_ref": "RCP 手工均值（净支持率）",
+        "align": "不同源：建模日频值 vs 民调均值，且单侧 vs 净额",
+        "evidence": "本次新增；只可用于方向性对照，**不可跨项目拼接**"
+      },
+      {
+        "code": "G",
+        "name": "道琼斯工业指数",
+        "series": "djia",
+        "taco_ref": "FRED DJIA (INDU)",
+        "align": "同底层数据、不同发布途径",
+        "evidence": "501 天共有，22 天完全相同，最大差 0.001875 点（FRED 取两位小数）；FRED 已作为交叉源入链"
+      },
+      {
+        "code": "H",
+        "name": "布伦特原油",
+        "series": "brent",
+        "taco_ref": "Yahoo BZ=F（同一 symbol）",
+        "align": "同源同 symbol",
+        "evidence": "503 天中 502 天完全相同，唯当日差 0.33 —— 本侧当时保留了未收盘盘中价；已由 drop_inprogress_session 修复口径。★ 另试过把 FRED 现货 DCOILBRENTEU 挂作交叉源，**否了**：它与期货的基差最近一周扩大到 −17%（真实现货升水），放进 4% 容差会天天报警，把真正的数据错淹掉。"
+      }
+    ]
+  },
+  "patched_by": [
+    {
+      "tool": "tools/add_taco_series.py",
+      "at": "2026-09-23",
+      "what": "接入 TACO 五因子原始序列（C/D/E/G/H）；dgs10/djia/brent 追加 FRED 交叉源；全库开启 drop_inprogress_session",
+      "scope_note": "只搬数据、不合成指数；主源一律不变，只追加交叉源"
+    }
+  ]
+}

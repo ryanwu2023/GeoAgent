@@ -1,0 +1,856 @@
+{
+  "_comment": "美军弹药库存 & 军费开支监测 — 数据源配置。全部为公开数据：政府 API、官方 RSS、公共媒体 RSS。新增源按同结构追加一项即可。",
+  "_design": "三级证据链：拨款层(公法/授权) → 合同层(弹药补货订单) → 支付层(真金白银出账)。另加 审计层(GAO 产能/库存约束) 与 新闻层(线索)。",
+  "_verified_at": "2026-09-17 实测（系统自动探测代理，本次出口为 127.0.0.1:63299）",
+  "lookback_hours": 720,
+  "request": {
+    "timeout_sec": 30,
+    "retries": 3,
+    "delay_between_sources_sec": 1.5,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "respect_robots": true,
+    "stale_after_days": 30
+  },
+  "_source_tiers": {
+    "_comment": "信源等级。核心区分：T1 是政府自身的原始记录或具法律效力的文件（可逐项回源对账）；T2 是政府机构发布的分析/审计（权威但含估算、假设与滞后）；T3 是商业媒体或非政府专业学会（二手转述，引用前必须回溯其引用的原文）；T4 为无编辑审核的自媒体/社交平台，本报告一律不采用。",
+    "T1": {
+      "label": "官方一手（原始记录 / 法律文件）",
+      "rank": 1,
+      "desc": "政府机构直接发布的原始数据或具法律效力的文件。数字可逐项回源对账，具备财务/法律效力。",
+      "usage": "可直接引用为事实，并注明 API 端点/文件编号",
+      "traceable": "full"
+    },
+    "T2": {
+      "label": "官方分析 / 审计（机构估算与判断）",
+      "rank": 2,
+      "desc": "政府机构发布的审计报告、成本估算、分析结论。权威，但含机构假设、口径选择与发布滞后，数字多为估算而非原始记录。",
+      "usage": "可作为「官方观点/估算」引用，不得当作披露的精确值",
+      "traceable": "partial"
+    },
+    "T3": {
+      "label": "专业 / 商业媒体（二手转述）",
+      "rank": 3,
+      "desc": "商业防务媒体或非政府专业学会。内容通常转述 T1/T2，但已经过一次加工裁剪，且存在选题偏好与流量动机。",
+      "usage": "仅作线索索引，引用前必须回溯到其援引的原始出处",
+      "traceable": "via-citation"
+    },
+    "T4": {
+      "label": "自媒体 / 社交平台（不采用）",
+      "rank": 4,
+      "desc": "无编辑审核的博客、自媒体账号、社交平台帖文、匿名或不具名转述。",
+      "usage": "本报告明确不采集、不引用",
+      "traceable": "none"
+    }
+  },
+  "history": {
+    "_comment": "历史时间序列。目的：把「弹药库存与军费开支」从单日快照变成可看趋势的时间序列 —— 战前基线 → 开战 → 至今的逐月变化。start 定在美伊冲突起始月。",
+    "start": "2026-02-01",
+    "start_label": "2026-02（美伊冲突起始月）",
+    "_incremental_note": "首次用 --backfill 全量拉取；之后每日运行只刷新最近 2 个月与当月，历史月份读缓存 (output/history/*.json)，不重复请求。",
+    "refresh_recent_months": 2,
+    "cache_dir": "history",
+    "_treasury_note": "财政部 MTS 口径为「实际净支出(outlay)」，是一手权威数据，可逐项回源。",
+    "_usaspending_note": "USAspending 口径为「合同义务/授标(obligation)」，**不是**实际支出，不可与财政部数字相加。API 字段名为 Contract_Obligations，已在报告中标明。",
+    "_monitor_index_note": "信号计数序列来自本监测收录的记录，是**监测覆盖度指标**，不是官方统计口径 —— 收录量变化本身会影响该序列，报告已明确标注为启发式指标。"
+  },
+  "sources": [
+    {
+      "id": "treasury-mts",
+      "name": "美国财政部 — 月度财政报表(MTS)表5：国防科目实际净支出",
+      "kind": "treasury_mts",
+      "layer": "支付层",
+      "tier": "T1",
+      "publisher": "美国财政部 · 财政服务局（Bureau of the Fiscal Service）",
+      "tier_note": "政府实际出账原始记录（MTS 表5），法律要求编制，可用 API 逐项回源对账。",
+      "enabled": true,
+      "priority": "high",
+      "months": 13,
+      "lines": [
+        "Total--Department of Defense--Military Programs",
+        "Total--Military Personnel",
+        "Total--Operation and Maintenance",
+        "Total--Procurement",
+        "Total--Research, Development, Test, and Evaluation",
+        "Total--Military Construction"
+      ],
+      "extra_lines": [
+        "Foreign Military Financing Program",
+        "Foreign Military Sales Trust Fund"
+      ],
+      "note": "官方硬数据：政府实际出账（outlay）金额，非预算申请数。月度数据，通常次月中旬发布上月值，滞后约 1 个月属正常。这是「真金白银」层，最能反映战争开支节奏。"
+    },
+    {
+      "id": "usaspending-munitions",
+      "name": "USAspending — 弹药/导弹类新签合同（按 PSC 产品代码）",
+      "kind": "usaspending_awards",
+      "layer": "合同层",
+      "tier": "T1",
+      "publisher": "USAspending.gov（美国联邦政府官方支出数据库，OMB 主持）",
+      "tier_note": "联邦授标的一手登记记录，每条含 award 唯一编号，可点链接回源。",
+      "enabled": true,
+      "priority": "high",
+      "window_days": 210,
+      "limit": 30,
+      "sort": "Start Date",
+      "agencies": [
+        "Department of Defense"
+      ],
+      "stale_after_days": 120,
+      "psc_codes": [
+        "1410",
+        "1420",
+        "1425",
+        "1340",
+        "1345",
+        "1336",
+        "1377",
+        "1398"
+      ],
+      "note": "PSC 1410=制导导弹 / 1420=导弹部件 / 1425=导弹装卸设备 / 1340=火箭与火箭发动机 / 1345=弹药与炸药 / 1336=手榴弹 / 1377=弹药驱动装置 / 1398=专用弹药。注意 USAspending 新签合同数据约有 1–3 个月发布滞后，属正常现象，不代表无新订单。"
+    },
+    {
+      "id": "usaspending-psc-category",
+      "name": "USAspending — 国防部按 PSC 分类的开支聚合（含弹药与导弹大类）",
+      "kind": "usaspending_category",
+      "layer": "合同层",
+      "tier": "T1",
+      "publisher": "USAspending.gov（美国联邦政府官方支出数据库，OMB 主持）",
+      "tier_note": "交易级支出聚合，同一手数据库按 PSC 分类汇总，可回源重算。",
+      "enabled": true,
+      "priority": "high",
+      "window_days": 365,
+      "limit": 100,
+      "agency": "Department of Defense",
+      "note": "取国防部在窗口期内按 PSC 代码的交易级支出金额，用于计算弹药与导弹大类的开支规模与占比。"
+    },
+    {
+      "id": "federal-register",
+      "name": "美国联邦公报 — 总统决定书 / 军贸授权 / 国防生产法授权",
+      "kind": "federal_register",
+      "layer": "拨款层",
+      "tier": "T1",
+      "publisher": "美国联邦公报办公室（OFR / 国家档案与文件署 NARA）",
+      "tier_note": "法律效力文件的法定发布地，每份有 FR 文号，可回源。",
+      "enabled": true,
+      "priority": "high",
+      "per_query": 12,
+      "queries": [
+        {
+          "label": "国防生产法(DPA)产能与优先权授权",
+          "term": "Defense Production Act"
+        },
+        {
+          "label": "总统决定书—对外军援与紧急裁减授权",
+          "term": "Presidential Determination",
+          "extra": {
+            "conditions[presidential_document_type]": "determination"
+          }
+        },
+        {
+          "label": "弹药与军贸出口许可(DDTC)通知",
+          "term": "munitions"
+        },
+        {
+          "label": "紧急追加拨款与重新计划",
+          "term": "emergency supplemental appropriations"
+        },
+        {
+          "label": "伊朗相关国防部规则与制裁",
+          "term": "Iran",
+          "extra": {
+            "conditions[agencies][]": "defense-department"
+          }
+        },
+        {
+          "label": "对外军售与裁减(武装力量撤离/移交)",
+          "term": "drawdown"
+        }
+      ],
+      "note": "这一层是「战争能否继续」的法律与资金开关：DPA §101 决定弹药产能能否扩张；Presidential Determination / 506(a)(3) 决定能否紧急动用库存与军援；emergency supplemental 决定有没有新钱。"
+    },
+    {
+      "id": "gao-reports",
+      "name": "美国政府问责局(GAO) — 报告 RSS",
+      "kind": "rss",
+      "layer": "审计层",
+      "tier": "T2",
+      "publisher": "美国政府问责局（GAO，国会立法分支）",
+      "tier_note": "官方审计结论 —— 是机构对产能/库存的评估与估算，非原始数量记录。权威但含假设与发布滞后。",
+      "enabled": true,
+      "url": "https://www.gao.gov/rss/reports.xml",
+      "priority": "high",
+      "note": "GAO 报告是官方承认瓶颈的地方：弹药产能、库存水平、交付延迟、单点依赖。实测 200，条目每日更新，是信号最密集的来源。"
+    },
+    {
+      "id": "cbo-reports",
+      "name": "CBO 国会预算办公室 — 出版物 RSS",
+      "kind": "rss",
+      "layer": "审计层",
+      "tier": "T2",
+      "publisher": "美国国会预算办公室（CBO，立法分支）",
+      "tier_note": "CBO 发布的成本估算与作战成本评估：属官方**分析估算**，非原始记录（故为 T2 而非 T1）；实测正文页对数据中心 IP 返回 403（Akamai），**只有官方 RSS 可取**（标题/摘要/链接/日期），全文需人工打开链接 —— 报告已如实标注可达性边界。",
+      "enabled": true,
+      "priority": "high",
+      "url": "https://www.cbo.gov/rss/publications.xml",
+      "stale_after_days": 45,
+      "title_include": [
+        "cost of combat",
+        "combat operations",
+        "military operations",
+        "cost of the conflict",
+        "cost of operation",
+        "Iran",
+        "missile",
+        "munitions",
+        "ammunition",
+        "interceptor",
+        "stockpile",
+        "weapon system",
+        "defense production",
+        "drawdown",
+        "defense budget",
+        "defense appropriations",
+        "defense spending",
+        "defense acquisition",
+        "defense industrial",
+        "military construction",
+        "procurement program"
+      ],
+      "title_exclude": [
+        "social security",
+        "medicare",
+        "medicaid",
+        "health insurance",
+        "student loan",
+        "highway",
+        "agriculture",
+        "child",
+        "tax credit",
+        "federal employee",
+        "excise tax",
+        "firearms",
+        "intelligence support",
+        "privacy",
+        "veterans"
+      ],
+      "note": "CBO 是「战争花了多少钱」的官方出处。实测 2026-09-15 发布《Estimating the Cost of Combat Operations Against Iran》(publication/62756) —— 这正是此前只能靠商业媒体二手转述的那条证据的原始来源。接入后该主题由 T3 二手升级为 T2 官方直连。",
+      "_title_include_note": "只留**核心主题词**。这里刻意不用 defense / military / procurement 这类裸词 —— 实测裸词会把《...Technology Procurement and Access to Trusted Hardware Act》《Defense Primer: Intelligence Support to Military Operations》放进来。被过滤掉的标题会写入 output/_title_gate_audit.json 供人工复核（防压过头删掉真信号）。"
+    },
+    {
+      "id": "crs-reports",
+      "name": "CRS 国会研究服务局 — 报告 API",
+      "kind": "crs_report",
+      "layer": "审计层",
+      "tier": "T2",
+      "publisher": "美国国会研究服务局（CRS，国会图书馆）",
+      "tier_note": "CRS 为国会提供的官方研究分析报告：权威但属研究分析层（含假设与判断），非原始记录，故为 T2。API 每条含报告编号与 PDF/HTML 原文链接，可逐条回源。",
+      "enabled": true,
+      "priority": "high",
+      "api_url": "https://api.congress.gov/v3/crsreport",
+      "api_key": "DEMO_KEY",
+      "api_key_note": "DEMO_KEY 为公开演示 key，限流约 30 次/小时。正式长期运行建议到 api.data.gov 免费申请个人 key 后替换（过程约 1 分钟），可显著提高限额。",
+      "limit": 250,
+      "max_pages": 2,
+      "window_days": 240,
+      "include_recent_updates": true,
+      "title_include": [
+        "missile",
+        "munition",
+        "ammunition",
+        "interceptor",
+        "stockpile",
+        "guided missile",
+        "air defense",
+        "missile defense",
+        "defense industrial base",
+        "defense production act",
+        "defense budget",
+        "defense appropriations",
+        "defense spending",
+        "weapon system",
+        "arms sale",
+        "foreign military",
+        "security assistance",
+        "drawdown",
+        "supplemental appropriation",
+        "Iran",
+        "Hormuz",
+        "CENTCOM",
+        "Houthi",
+        "war powers",
+        "defense acquisition",
+        "defense logistics",
+        "military readiness",
+        "national defense",
+        "combat operations",
+        "cost of combat"
+      ],
+      "title_exclude": [
+        "firearms and ammunition excise",
+        "transgender",
+        "radiation exposure",
+        "data center",
+        "student",
+        "medicare",
+        "medicaid",
+        "social security",
+        "agriculture",
+        "immigration",
+        "cyber military service",
+        "veterans claims",
+        "trade relations",
+        "poverty",
+        "highway"
+      ],
+      "note": "CRS 覆盖国会全部议题，必须靠 title_include 做主题闸门，否则税务/医疗/移民类会灌进来。实测 2026-02 起 1250 份报告中主题命中约 25–30 份。含《FY2027 Defense Budget: Funding for Selected Weapon Systems》《U.S. Army's Patriot Air and Missile Defense System》等。",
+      "_title_include_note": "同 CBO：去掉 NDAA / military operations / military action 这类会放进人事与情报类报告的宽词。被过滤标题同样写入审计文件。",
+      "_max_pages_note": "DEMO_KEY 限流约 30 次/小时，实测 3 页会在第 3 页被限流。2 页（500 份）已足够覆盖近期更新；换成个人 key 后可调高。"
+    },
+    {
+      "id": "govinfo-plaw",
+      "name": "美国政府出版局(govinfo) — 公法(Public Laws) RSS",
+      "kind": "rss",
+      "layer": "拨款层",
+      "tier": "T1",
+      "publisher": "美国政府出版局（GPO）",
+      "tier_note": "公法(Public Law)原文发布方，法律文本本身。",
+      "enabled": true,
+      "url": "https://www.govinfo.gov/rss/plaw.xml",
+      "priority": "high",
+      "note": "紧急追加拨款一旦成为法律必然出现在此。是「新钱到位」的时间戳证据。实测 200。"
+    },
+    {
+      "id": "defensenews",
+      "name": "Defense News — 主站 RSS",
+      "kind": "rss",
+      "layer": "新闻层",
+      "tier": "T3",
+      "publisher": "Defense News（Sightline Media Group，商业防务媒体）",
+      "tier_note": "商业媒体。多条关键内容（如 CBO 战争成本与拦截弹消耗）实为对官方报告的转述，本报告未直连其原始出处。",
+      "enabled": true,
+      "url": "https://www.defensenews.com/arc/outboundfeeds/rss/",
+      "priority": "normal",
+      "note": "商业防务媒体，覆盖弹药采购、产能扩张、战争成本估算等。实测 200、当日更新。仅作线索，不作事实依据（需回溯到官方源）。"
+    },
+    {
+      "id": "dod-contracts",
+      "name": "美国国防部 — 每日合同公告 RSS",
+      "kind": "rss",
+      "layer": "合同层",
+      "tier": "T1",
+      "publisher": "美国国防部（DoD 官网每日合同公告）",
+      "tier_note": "国防部自身发布的合同公告原文。当前因出口 IP 被风控拦截而停用，等级不变。",
+      "enabled": false,
+      "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=50",
+      "priority": "high",
+      "url_alternates": [
+        "https://www.war.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=50"
+      ],
+      "note": "【2026-09-17 实测 403 AkamaiGHost，主站与 war.gov 镜像均被拦】此前 2026-09-17 上午经 127.0.0.1:7897 出口可通，本次出口 IP 变更后（127.0.0.1:63299）被 Akamai 拉黑 —— 属出口 IP 风控，非代码问题。不要做风控绕过。替代方案：① 用 usaspending-* 源拿合同硬数据（更结构化）；② 用浏览器另存 XML 后放到 feeds/dod-contracts.xml，配 --from-file 使用。若日后换出口恢复，把 enabled 改回 true 即可。"
+    },
+    {
+      "id": "usni-news",
+      "name": "USNI News — 主站",
+      "kind": "rss",
+      "layer": "新闻层",
+      "tier": "T3",
+      "publisher": "USNI News（美国海军学会，非政府专业学会）",
+      "tier_note": "学会主办媒体，非政府发布主体；编辑标准高于普通商业媒体，但仍属二手加工层。",
+      "enabled": false,
+      "url": "https://news.usni.org/feed",
+      "priority": "normal",
+      "note": "【2026-09-17 实测 403，Server=cloudflare，cf-mitigated=challenge】出口 IP 被 Cloudflare 挑战拦截。此前经 7897 出口可通。不要做风控绕过。替代：浏览器另存为 feeds/usni-news.xml 后用 --from-file。"
+    }
+  ],
+  "_psc_families": {
+    "13": "弹药与炸药 (Ammunition & Explosives)",
+    "14": "制导导弹与发射装置 (Guided Missiles & Launchers)"
+  },
+  "munitions_terms": [
+    "PAC-3",
+    "PAC-3 MSE",
+    "THAAD",
+    "Patriot",
+    "Standard Missile",
+    "SM-3",
+    "SM-6",
+    "SM-2",
+    "ESSM",
+    "AMRAAM",
+    "AIM-120",
+    "AIM-9X",
+    "Sidewinder",
+    "JASSM",
+    "JASSM-ER",
+    "LRASM",
+    "JSOW",
+    "JDAM",
+    "SDB",
+    "GBU-39",
+    "GBU-53",
+    "GMLRS",
+    "HIMARS",
+    "ATACMS",
+    "PrSM",
+    "Tomahawk",
+    "Harpoon",
+    "Hellfire",
+    "Javelin",
+    "Stinger",
+    "NASAMS",
+    "APKWS",
+    "Excalibur",
+    "Phalanx",
+    "CIWS",
+    "Vulcan",
+    "Avenger",
+    "Sentinel",
+    "Mk 48",
+    "Mk 54",
+    "torpedo",
+    "interceptor",
+    "Interceptor",
+    "155mm",
+    "120mm",
+    "105mm",
+    "5-inch",
+    "BGM-109",
+    "RIM-174",
+    "RIM-161",
+    "GBI",
+    "Minuteman",
+    "Trident",
+    "SLBM",
+    "ICBM",
+    "ammunition",
+    "munitions",
+    "guided missile",
+    "ballistic missile",
+    "cruise missile",
+    "air defense",
+    "air-defense",
+    "rocket motor",
+    "propellant",
+    "warhead",
+    "solid rocket",
+    "artillery shell"
+  ],
+  "munitions_context_exclude": [
+    "Patriot Act",
+    "patriotism"
+  ],
+  "quantity_units": [
+    "rounds",
+    "round",
+    "missiles",
+    "missile",
+    "interceptors",
+    "interceptor",
+    "rockets",
+    "rocket",
+    "launchers",
+    "launcher",
+    "bombs",
+    "bomb",
+    "shells",
+    "shell",
+    "torpedoes",
+    "torpedo",
+    "units",
+    "unit",
+    "systems",
+    "system",
+    "sets",
+    "set",
+    "vehicles",
+    "vehicle"
+  ],
+  "signal_lexicon": {
+    "sustain": [
+      {
+        "weight": 3,
+        "patterns": [
+          "emergency supplemental",
+          "supplemental appropriations",
+          "supplemental funding",
+          "emergency appropriations",
+          "emergency funding request",
+          "urgent supplemental",
+          "additional appropriations"
+        ]
+      },
+      {
+        "weight": 3,
+        "patterns": [
+          "surge production",
+          "production surge",
+          "accelerated production",
+          "expand production",
+          "increase production rate",
+          "capacity expansion",
+          "new production line",
+          "second production source",
+          "second source",
+          "multi-year procurement",
+          "block buy",
+          "quantity increase"
+        ]
+      },
+      {
+        "weight": 3,
+        "patterns": [
+          "Defense Production Act",
+          "Title III",
+          "priority rated order",
+          "DPAS",
+          "rated order",
+          "allocation authority"
+        ]
+      },
+      {
+        "weight": 3,
+        "patterns": [
+          "drawdown authority",
+          "506(a)(3)",
+          "Presidential Determination",
+          "emergency drawdown",
+          "transfer of defense articles"
+        ]
+      },
+      {
+        "weight": 2,
+        "patterns": [
+          "replenish",
+          "replenishment",
+          "restock",
+          "reconstitute stocks",
+          "rebuild inventory",
+          "replacement rounds",
+          "backfill"
+        ]
+      },
+      {
+        "weight": 2,
+        "patterns": [
+          "forward deploy",
+          "pre-position",
+          "preposition",
+          "expeditionary sustainment",
+          "extended deployment",
+          "deployment extension",
+          "surge forces",
+          "additional forces",
+          "force buildup"
+        ]
+      },
+      {
+        "weight": 2,
+        "patterns": [
+          "urgent operational need",
+          "unfunded requirement",
+          "rapid acquisition",
+          "rapid fielding",
+          "emergency procurement"
+        ]
+      },
+      {
+        "weight": 1,
+        "patterns": [
+          "sustainment",
+          "continued operations",
+          "sustained operations",
+          "on-going operations",
+          "ongoing operations"
+        ]
+      }
+    ],
+    "terminate": [
+      {
+        "weight": 4,
+        "patterns": [
+          "ceasefire",
+          "cease-fire",
+          "cessation of hostilities",
+          "truce",
+          "armistice",
+          "peace agreement",
+          "peace deal",
+          "negotiated settlement"
+        ]
+      },
+      {
+        "weight": 3,
+        "patterns": [
+          "withdrawal of forces",
+          "troop withdrawal",
+          "withdraw forces",
+          "drawdown of forces",
+          "redeploy home",
+          "redeployment home",
+          "repatriate",
+          "end of deployment",
+          "mission end",
+          "ending the mission"
+        ]
+      },
+      {
+        "weight": 3,
+        "patterns": [
+          "contract termination",
+          "termination for convenience",
+          "terminate the contract",
+          "contract cancellation",
+          "cancellation of the contract",
+          "descope",
+          "defund",
+          "funding rescission",
+          "rescind"
+        ]
+      },
+      {
+        "weight": 3,
+        "patterns": [
+          "sanctions relief",
+          "lift sanctions",
+          "lifting of sanctions",
+          "waiver of sanctions",
+          "sanctions waiver",
+          "easing sanctions"
+        ]
+      },
+      {
+        "weight": 2,
+        "patterns": [
+          "de-escalate",
+          "deescalate",
+          "de-escalation",
+          "stand down",
+          "wind down",
+          "winding down",
+          "reduce force posture",
+          "force posture reduction",
+          "reduced footprint"
+        ]
+      },
+      {
+        "weight": 2,
+        "patterns": [
+          "cease offensive operations",
+          "defensive posture only",
+          "shifting to diplomacy",
+          "return to negotiations",
+          "resumption of talks",
+          "diplomatic solution"
+        ]
+      },
+      {
+        "weight": 1,
+        "patterns": [
+          "sequestration",
+          "budget reduction",
+          "cost savings",
+          "efficiency savings",
+          "program cancellation"
+        ]
+      }
+    ],
+    "stress": [
+      {
+        "weight": 3,
+        "except": [
+          "depleted uranium"
+        ],
+        "patterns": [
+          "inventory shortfall",
+          "stockpile shortfall",
+          "munitions shortfall",
+          "below required quantities",
+          "insufficient quantities",
+          "insufficient inventory",
+          "quantity shortfall",
+          "critical shortfall",
+          "severe shortfall",
+          "depleted stockpile",
+          "depleted",
+          "depletion",
+          "exhausted"
+        ]
+      },
+      {
+        "weight": 2,
+        "patterns": [
+          "of the u.s. inventory",
+          "of its inventory",
+          "fewer weapons available",
+          "rebuild those stocks",
+          "rebuilding those stocks",
+          "years to rebuild",
+          "take years to replace"
+        ]
+      },
+      {
+        "weight": 3,
+        "patterns": [
+          "production capacity constraint",
+          "production bottleneck",
+          "production constraint",
+          "cannot meet demand",
+          "unable to meet",
+          "capacity shortfall",
+          "production shortfall",
+          "insufficient production capacity"
+        ]
+      },
+      {
+        "weight": 2,
+        "patterns": [
+          "long lead time",
+          "lead time",
+          "backlog",
+          "delivery delay",
+          "delayed deliveries",
+          "late to need",
+          "behind schedule",
+          "years to replenish",
+          "replenishment timeline"
+        ]
+      },
+      {
+        "weight": 2,
+        "patterns": [
+          "single point of failure",
+          "sole source",
+          "sole-source",
+          "supply chain vulnerability",
+          "fragile supply chain",
+          "supply chain risk",
+          "dependency on foreign"
+        ]
+      },
+      {
+        "weight": 2,
+        "patterns": [
+          "has not developed",
+          "has not established",
+          "lacks a plan",
+          "does not track",
+          "no visibility",
+          "has not assessed",
+          "did not meet",
+          "not met its goals"
+        ]
+      },
+      {
+        "weight": 2,
+        "patterns": [
+          "cost per interceptor",
+          "unsustainable cost",
+          "cost overrun",
+          "cost growth",
+          "unit cost increase"
+        ]
+      },
+      {
+        "weight": 1,
+        "patterns": [
+          "stockpile",
+          "inventory levels",
+          "attrition",
+          "readiness shortfall",
+          "readiness risk",
+          "risk to readiness",
+          "capability gap",
+          "critical gap",
+          "affordability"
+        ]
+      }
+    ]
+  },
+  "extra_keywords": [
+    "Iran",
+    "Iranian",
+    "IRGC",
+    "Persian Gulf",
+    "Strait of Hormuz",
+    "CENTCOM",
+    "Israel",
+    "Houthi",
+    "Red Sea",
+    "Iraq",
+    "Syria",
+    "Yemen",
+    "Operation",
+    "combat",
+    "strike",
+    "air defense",
+    "missile defense",
+    "munitions",
+    "ammunition",
+    "interceptor",
+    "stockpile",
+    "inventory",
+    "procurement",
+    "budget",
+    "supplemental",
+    "outlay",
+    "appropriation"
+  ],
+  "_relevance_note": "相关性阈值：低于该分的记录不进日报正文（仍完整写入 JSONL 归档）。GAO/新闻等全主题 RSS 需要此过滤；合同类由 PSC 精确过滤，始终保留。",
+  "relevance_min": 2,
+  "_topic_title_terms_note": "强主题词：标题命中其一才算「锚定」到主题。必须放在标题层判定 —— 只用摘要关键词会被 Mortgage Insurance / Air Traffic Control 这类文档靠泛化词(budget/inventory)混进来；而 Arms Sales Notification 这类关键文件标题通用、无摘要，只能靠标题强词救回。",
+  "topic_title_terms": [
+    "arms sales",
+    "arms export",
+    "defense trade",
+    "foreign military",
+    "munitions",
+    "ammunition",
+    "missile",
+    "rocket",
+    "warhead",
+    "ordnance",
+    "interceptor",
+    "stockpile",
+    "arsenal",
+    "depot",
+    "weapon",
+    "defense production act",
+    "presidential determination",
+    "drawdown",
+    "supplemental appropriations",
+    "emergency appropriations",
+    "defense articles",
+    "defense budget",
+    "defense spending",
+    "defense appropriations",
+    "weapon systems",
+    "weapon system",
+    "defense industrial base",
+    "defense acquisition",
+    "missile defense",
+    "military readiness",
+    "defense logistics",
+    "Iran",
+    "Israel",
+    "Houthi",
+    "Yemen",
+    "CENTCOM",
+    "Persian Gulf",
+    "Strait of Hormuz",
+    "ceasefire",
+    "cease-fire",
+    "armistice",
+    "nuclear weapons",
+    "nuclear deterrent"
+  ],
+  "place_exclude_phrases": [],
+  "exclude_keywords": [],
+  "schedule": {
+    "_comment": "定时运行配置（供自动化任务与 run.bat 参考；本程序自身不常驻，由外部调度器触发）。",
+    "enabled": true,
+    "time_local": "08:30",
+    "timezone": "Asia/Shanghai",
+    "cadence": "daily",
+    "_note": "每日 08:30 跑一次：刷新滚动窗口 + 更新历史序列。历史序列首次需 --backfill 全量拉取一次。"
+  }
+}

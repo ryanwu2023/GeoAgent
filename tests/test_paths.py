@@ -16,3 +16,9 @@ def test_crawler_root_override_is_preserved(monkeypatch, tmp_path):
 
     assert collector_read_root() == tmp_path / "legacy data"
 
+
+def test_knowledge_root_is_repository_local(monkeypatch):
+    monkeypatch.delenv("KNOWLEDGE_ROOT", raising=False)
+    from backend.paths import knowledge_root, project_root
+
+    assert knowledge_root() == project_root() / "knowledge"

@@ -1,0 +1,12 @@
+{
+  "filters": {
+    "time_period": [{"start_date": "2026-05-01", "end_date": "2026-09-17", "date_type": "new_awards_only"}],
+    "award_type_codes": ["A", "B", "C", "D"],
+    "psc_codes": ["1410", "1420", "1340", "1425"]
+  },
+  "fields": ["Award ID", "Recipient Name", "Award Amount", "Description", "Start Date", "Awarding Sub Agency"],
+  "sort": "Start Date",
+  "order": "desc",
+  "limit": 5,
+  "page": 1
+}

@@ -1,0 +1,1432 @@
+{
+  "version": "1.5.0",
+  "project": "readiness-monitor",
+  "topic": "美军战备表态 × 伊朗革命卫队表态 交叉验证",
+  "lookback_hours": 336,
+  "per_source_max": 0,
+  "per_source_max_note": "0 = 不限（默认，推荐）。历史 bug：该项曾写 60，但实现里误写成 items[:max(60, len(items))]，恒等于全量，即「从没生效过的承诺」。现改为真正生效的截断，但默认取 0 不限 —— 因为截断是按 feed 顺序取前 N 条，会**静默丢弃窗口内记录**，与「合并源=窗口内全部」原则冲突。若确需防单一源刷屏，设为正数后 §2 会在该源标注「⚠️截断」使副作用可见。",
+  "request": {
+    "timeout": 30,
+    "retries": 3,
+    "retry_backoff_sec": 2.0,
+    "delay_between_sources_sec": 1.2,
+    "note": "403/410 不重试（风控或永久移除，重试无意义）；404 必须重试（CDN 边缘节点状态可能不一致）"
+  },
+  "relevance": {
+    "display_threshold": 3,
+    "strong": [
+      "combat readiness",
+      "operational readiness",
+      "readiness level",
+      "force readiness",
+      "fully prepared",
+      "military readiness",
+      "force posture",
+      "troop readiness",
+      "war readiness",
+      "high alert",
+      "defense readiness",
+      "combat-ready"
+    ],
+    "medium": [
+      "readiness",
+      "ready to",
+      "deploy",
+      "deployment",
+      "redeploy",
+      "mobilize",
+      "carrier strike group",
+      "carrier group",
+      "bomber task force",
+      "squadron",
+      "reinforcement",
+      "troop",
+      "exercise",
+      "drill",
+      "war game",
+      "live-fire",
+      "air defense",
+      "missile",
+      "munitions",
+      "stockpile",
+      "logistics",
+      "resupply",
+      "sustainment",
+      "sortie",
+      "intercept",
+      "shot down",
+      "destroyed",
+      "struck",
+      "retaliate",
+      "deterrence",
+      "deter",
+      "آمادگی",
+      "رزمایش",
+      "موشک",
+      "پدافند",
+      "اعزام",
+      "نیروهای مسلح",
+      "سپاه",
+      "پاسداران"
+    ],
+    "anchor": [
+      "iran",
+      "iranian",
+      "irgc",
+      "revolutionary guard",
+      "revolutionary guards",
+      "tehran",
+      "persian gulf",
+      "hormuz",
+      "centcom",
+      "pentagon",
+      "department of war",
+      "department of defense",
+      "u.s. military",
+      "us military",
+      "american forces",
+      "middle east",
+      "houthi",
+      "yemen",
+      "iraq",
+      "syria",
+      "bahrain",
+      "qatar",
+      "kuwait",
+      "jordan",
+      "israel",
+      "ایران",
+      "ایرانی",
+      "سپاه",
+      "پاسداران",
+      "تهران",
+      "خلیج فارس",
+      "هرمز",
+      "آمریکا",
+      "یمن",
+      "عراق",
+      "سوریه",
+      "بحرین",
+      "قطر",
+      "کویت",
+      "اردن",
+      "رژیم صهیونیستی",
+      "اسرائیل",
+      "بسیج",
+      "saudi",
+      "saudi arabia",
+      "uae",
+      "emirates",
+      "oman",
+      "turkey",
+      "pakistan",
+      "afghanistan",
+      "lebanon",
+      "red sea",
+      "gulf of oman",
+      "arabian sea",
+      "عربستان",
+      "امارات",
+      "عمان",
+      "ترکیه",
+      "پاکستان",
+      "دریای سرخ",
+      "دریای عمان",
+      "us strikes",
+      "us forces",
+      "us troops",
+      "us navy",
+      "american",
+      "u.s.",
+      "united states",
+      "washington",
+      "white house",
+      "نیروهای آمریکایی",
+      "ارتش آمریکا"
+    ],
+    "domain": [
+      "military",
+      "armed forces",
+      "navy",
+      "air force",
+      "marine corps",
+      "missile",
+      "munitions",
+      "weapon",
+      "warfighter",
+      "servicemember",
+      "troops",
+      "combat",
+      "warship",
+      "aircraft carrier",
+      "drone",
+      "uav",
+      "air defense",
+      "artillery",
+      "submarine",
+      "fighter jet",
+      "deployment",
+      "exercise",
+      "نظامی",
+      "دفاعی",
+      "رزمی",
+      "ارتش",
+      "موشک",
+      "ناو",
+      "پدافند",
+      "جنگنده",
+      "پهپاد",
+      "زیردریایی",
+      "توپخانه",
+      "نیروهای مسلح",
+      "بسیج",
+      "یگان",
+      "تجهیزات نظامی"
+    ],
+    "note": "anchor=当事方/地区词，domain=军事领域词。展示闸门要求 信号命中 且 (anchor≥1 或 domain≥1 或该源本身是国防主题源)。全部记录仍完整写入 JSONL。"
+  },
+  "signals": {
+    "readiness_claim": {
+      "label": "战备状态声明",
+      "weight": 3,
+      "phrases": [
+        "combat readiness",
+        "operational readiness",
+        "readiness level",
+        "military readiness",
+        "force readiness",
+        "troop readiness",
+        "war readiness",
+        "defense readiness",
+        "fully prepared",
+        "fully ready",
+        "combat-ready",
+        "combat ready",
+        "highest state of readiness",
+        "state of readiness",
+        "ready to respond",
+        "ready for any",
+        "prepared for any",
+        "on high alert",
+        "آمادگی رزمی",
+        "آمادگی کامل",
+        "آماده پاسخ",
+        "آمادگی دفاعی",
+        "بالاترین سطح آمادگی",
+        "آماده مقابله",
+        "آمادگی نیروها",
+        "readiness",
+        "medical readiness",
+        "installation readiness"
+      ]
+    },
+    "force_movement": {
+      "label": "兵力/装备调动",
+      "weight": 3,
+      "phrases": [
+        "carrier strike group",
+        "carrier group",
+        "bomber task force",
+        "deployment of",
+        "deployed to",
+        "deploy additional",
+        "force posture",
+        "troop deployment",
+        "reinforcements",
+        "reinforcement of",
+        "surge forces",
+        "additional forces",
+        "additional troops",
+        "forward-deployed",
+        "troops deployed",
+        "military buildup",
+        "naval buildup",
+        "force buildup",
+        "اعزام نیرو",
+        "اعزام ناوگروه",
+        "تقویت نیرو",
+        "استقرار نیرو",
+        "اعزام شناور",
+        "deploy",
+        "deployment",
+        "deploys"
+      ]
+    },
+    "exercise": {
+      "label": "演习/训练",
+      "weight": 2,
+      "phrases": [
+        "military exercise",
+        "joint exercise",
+        "naval exercise",
+        "live-fire",
+        "war game",
+        "military drill",
+        "training exercise",
+        "combined exercise",
+        "air defense drill",
+        "maneuver",
+        "رزمایش",
+        "مانور نظامی",
+        "تمرین نظامی",
+        "رزمایش مشترک",
+        "exercise",
+        "drill"
+      ]
+    },
+    "strike_claim": {
+      "label": "打击/战果声明",
+      "weight": 3,
+      "phrases": [
+        "shot down",
+        "destroy",
+        "strike",
+        "struck",
+        "intercept",
+        "repel",
+        "downed",
+        "hit a",
+        "hit the",
+        "took out",
+        "neutralize",
+        "annihilate",
+        "engage the",
+        "سرنگون",
+        "انهدام",
+        "هدف قرار",
+        "ساقط",
+        "منهدم",
+        "اصابت موشک"
+      ]
+    },
+    "denial": {
+      "label": "否认/驳斥",
+      "weight": 3,
+      "phrases": [
+        "refute",
+        "deny",
+        "is false",
+        "are false",
+        "inaccurate",
+        "unfounded",
+        "baseless",
+        "no evidence",
+        "fabricate",
+        "not true",
+        "no confirmation",
+        "reject claim",
+        "misinformation",
+        "تکذیب",
+        "کذب",
+        "بی‌اساس",
+        "دروغ",
+        "بی پایه"
+      ]
+    },
+    "attrition_admit": {
+      "label": "损耗/受损承认",
+      "weight": 3,
+      "phrases": [
+        "casualty",
+        "killed in action",
+        "combat loss",
+        "battle damage",
+        "attrition",
+        "deplete",
+        "stockpile shortfall",
+        "munitions shortfall",
+        "inventory shortfall",
+        "wear and tear",
+        "تلفات",
+        "خسارت",
+        "آسیب دید",
+        "کمبود مهمات",
+        "فرسایش نیرو",
+        "فرسایش توان",
+        "فرسایش تجهیزات"
+      ]
+    },
+    "deterrence_threat": {
+      "label": "威慑/威胁表态",
+      "weight": 2,
+      "phrases": [
+        "will respond",
+        "crushing response",
+        "severe consequences",
+        "grave consequences",
+        "will not go unanswered",
+        "retaliate",
+        "military option",
+        "strong response",
+        "vow to respond",
+        "threat of force",
+        "ready to confront",
+        "ready to strike",
+        "will confront",
+        "پاسخ کوبنده",
+        "پاسخ قاطع",
+        "انتقام",
+        "تلافی",
+        "هرگونه تجاوز",
+        "تهدید نظامی",
+        "پاسخ دردناک",
+        "آماده مقابله"
+      ]
+    },
+    "deescalation": {
+      "label": "降级/撤出",
+      "weight": 2,
+      "phrases": [
+        "troop withdrawal",
+        "withdraw forces",
+        "withdraw troops",
+        "withdrawal of forces",
+        "drawdown of forces",
+        "redeploy",
+        "ceasefire",
+        "truce",
+        "de-escalate",
+        "deescalate",
+        "stand down",
+        "pull back",
+        "scale back",
+        "خروج نیرو",
+        "آتش‌بس",
+        "عقب‌نشینی",
+        "تنش‌زدایی",
+        "کاهش نیرو"
+      ]
+    },
+    "arms_transfer": {
+      "label": "军售/军援",
+      "weight": 2,
+      "phrases": [
+        "arms sale",
+        "arm sale",
+        "foreign military sale",
+        "military sale",
+        "arms deal",
+        "arms package",
+        "security assistance",
+        "military aid",
+        "defense export",
+        "sale + fighter",
+        "sale + missile",
+        "sale + jet",
+        "sale + aircraft",
+        "sale + drone",
+        "sale + warship",
+        "approve + arms",
+        "delivery + fighter",
+        "delivery + missile",
+        "transfer + fighter",
+        "transfer + missile",
+        "فروش تسلیحات",
+        "کمک نظامی",
+        "قرارداد تسلیحاتی",
+        "صادرات سلاح"
+      ]
+    },
+    "munitions_production": {
+      "label": "弹药/产能补给",
+      "weight": 3,
+      "phrases": [
+        "munitions",
+        "ammunition",
+        "interceptor",
+        "stockpile",
+        "resupply",
+        "replenish",
+        "restock",
+        "industrial base",
+        "production line",
+        "production capacity",
+        "surge capacity",
+        "expand production",
+        "increase production",
+        "boost production",
+        "expedite delivery",
+        "weapons stockpile",
+        "missile stockpile",
+        "تولید موشک",
+        "افزایش تولید",
+        "ذخایر مهمات",
+        "پشتیبانی لجستیک",
+        "تسلیحات",
+        "production contract",
+        "defense production act",
+        "counter-drone",
+        "counter-drone defense",
+        "counter-uas",
+        "counter uas",
+        "defense industrial",
+        "production award",
+        "industry partner"
+      ]
+    }
+  },
+  "claims": {
+    "action_claim": [
+      "shot down",
+      "shoots down",
+      "shooting down",
+      "destroy",
+      "strike",
+      "striking",
+      "struck",
+      "intercept",
+      "repel",
+      "repelled",
+      "repelling",
+      "downed",
+      "hit",
+      "hitting",
+      "neutralize",
+      "neutralized",
+      "neutralizing",
+      "annihilate",
+      "annihilated",
+      "engage",
+      "engaging",
+      "targeted",
+      "launch",
+      "fire",
+      "firing",
+      "attack",
+      "seize",
+      "seized",
+      "capture",
+      "sunk",
+      "sank",
+      "claims to have",
+      "سرنگون",
+      "انهدام",
+      "هدف قرار",
+      "ساقط",
+      "اصابت",
+      "منهدم"
+    ],
+    "denial": [
+      "refute",
+      "denies",
+      "denied",
+      "deny",
+      "reject",
+      "dismiss",
+      "dispute",
+      "is false",
+      "are false",
+      "inaccurate",
+      "unfounded",
+      "baseless",
+      "no evidence",
+      "fabricated",
+      "not true",
+      "no confirmation",
+      "no comment on",
+      "sheer lie",
+      "تکذیب",
+      "کذب",
+      "بی‌اساس",
+      "دروغ"
+    ],
+    "acknowledgement": [
+      "confirm",
+      "acknowledge",
+      "acknowledging",
+      "admit",
+      "investigate",
+      "investigating",
+      "investigation",
+      "under investigation",
+      "assess",
+      "assessing",
+      "assessment",
+      "تأیید",
+      "تایید شد"
+    ],
+    "readiness_declaration": [
+      "combat readiness",
+      "fully prepared",
+      "ready to respond",
+      "on high alert",
+      "ready for any",
+      "prepared for any",
+      "readiness level",
+      "state of readiness",
+      "combat-ready",
+      "combat ready",
+      "fully ready",
+      "mobilize",
+      "mobilized",
+      "mobilizing",
+      "mobilization",
+      "آمادگی رزمی",
+      "آماده پاسخ",
+      "آمادگی کامل",
+      "آمادگی دفاعی"
+    ],
+    "threat_warning": [
+      "will respond",
+      "crushing response",
+      "severe consequences",
+      "will pay",
+      "grave consequences",
+      "will not go unanswered",
+      "retaliate",
+      "retaliation",
+      "retaliatory",
+      "strong response",
+      "threat of force",
+      "پاسخ کوبنده",
+      "پاسخ قاطع",
+      "انتقام",
+      "هشدار",
+      "تهدید"
+    ]
+  },
+  "cross_anchors": [
+    {
+      "id": "mq9",
+      "label": "MQ-9 / 无人机",
+      "re": "(?:MQ-?9|MQ-?1\\b|Reaper|drone|UAV|پهپاد)"
+    },
+    {
+      "id": "hormuz",
+      "label": "霍尔木兹海峡",
+      "re": "(?:Hormuz|هرمز)"
+    },
+    {
+      "id": "carrier",
+      "label": "航母/打击群",
+      "re": "(?:carrier strike group|aircraft carrier|ناوگروه|ناو هواپیمابر)"
+    },
+    {
+      "id": "warship",
+      "label": "军舰",
+      "re": "(?:warship|destroyer|frigate|USS\\s|شناور|ناو\\b)"
+    },
+    {
+      "id": "missile",
+      "label": "导弹",
+      "re": "(?:missile|ballistic|hypersonic|موشک)"
+    },
+    {
+      "id": "airdefense",
+      "label": "防空系统",
+      "re": "(?:air defense|Patriot|THAAD|پدافند)"
+    },
+    {
+      "id": "tanker",
+      "label": "油轮/商船",
+      "re": "(?:oil tanker|tanker|نفتکش)"
+    },
+    {
+      "id": "bomber",
+      "label": "轰炸机",
+      "re": "(?:B-2\\b|B-52\\b|bomber|بمب‌افکن)"
+    },
+    {
+      "id": "exercise",
+      "label": "演习",
+      "re": "(?:exercise|drill|war game|رزمایش)"
+    },
+    {
+      "id": "base",
+      "label": "驻军基地",
+      "re": "(?:Al Udeid|Al Dhafra|air base|پایگاه)"
+    },
+    {
+      "id": "fighter",
+      "label": "战斗机",
+      "re": "(?:F-35|F-22|F-15|F-16|fighter jet|جنگنده)"
+    },
+    {
+      "id": "sanction",
+      "label": "制裁/授权",
+      "re": "(?:sanction|embargo|تحریم)"
+    },
+    {
+      "id": "submarine",
+      "label": "潜艇/水下装备",
+      "re": "(?:submarine|submersible|underwater drone|زیردریایی|زیرسطحی)"
+    }
+  ],
+  "window": {
+    "cross_match_days": 7,
+    "note": "同一议题锚点下，双方表态落在 ±N 天内即视为「同期对照」"
+  },
+  "history": {
+    "start": "2026-02-01",
+    "start_label": "美伊冲突起始月（用于算战前/战后对照）",
+    "note": "历史回填起点；日常运行只刷新最近窗口"
+  },
+  "schedule": {
+    "cadence": "daily",
+    "time_local": "08:30",
+    "note": "每日运行：python readiness_monitor.py 。回填历史：--backfill"
+  },
+  "outlet_map": {
+    "note": "★ 聚合器源（Google News）会把多个不同立场媒体的内容混在同一个源里。必须按「实际发布媒体」重新判定当事方，否则会把流亡/反对派媒体算成「伊方官方表态」——那是严重的定性错误。",
+    "rules": [
+      {
+        "match": [
+          "centcom",
+          "u.s. central command",
+          "us central command"
+        ],
+        "party": "us",
+        "publisher": "美国中央司令部（CENTCOM）"
+      },
+      {
+        "match": [
+          "defense.gov",
+          "war.gov",
+          "department of war",
+          "dod"
+        ],
+        "party": "us",
+        "publisher": "美国国防部"
+      },
+      {
+        "match": [
+          "tasnim",
+          "تسنیم"
+        ],
+        "party": "iran",
+        "publisher": "Tasnim News Agency（تسنیم，革命卫队系）"
+      },
+      {
+        "match": [
+          "fars news",
+          "farsnews",
+          "فارس"
+        ],
+        "party": "iran",
+        "publisher": "Fars News Agency（فارس，革命卫队系）"
+      },
+      {
+        "match": [
+          "sepah news",
+          "sepahnews",
+          "سپاه نیوز"
+        ],
+        "party": "iran",
+        "publisher": "Sepah News（革命卫队官方通讯社）"
+      },
+      {
+        "match": [
+          "mehr news",
+          "مهر"
+        ],
+        "party": "iran",
+        "publisher": "Mehr News Agency（مهر）"
+      },
+      {
+        "match": [
+          "irna"
+        ],
+        "party": "iran",
+        "publisher": "IRNA（伊朗官方通讯社）"
+      },
+      {
+        "match": [
+          "isna"
+        ],
+        "party": "iran",
+        "publisher": "ISNA（伊朗学生通讯社）"
+      },
+      {
+        "match": [
+          "press tv",
+          "presstv"
+        ],
+        "party": "iran",
+        "publisher": "Press TV（伊朗国家广播对外台）"
+      },
+      {
+        "match": [
+          "tehran times"
+        ],
+        "party": "iran",
+        "publisher": "Tehran Times（伊朗官方英文报）"
+      },
+      {
+        "match": [
+          "kayhan"
+        ],
+        "party": "iran",
+        "publisher": "Kayhan（کیهان）"
+      },
+      {
+        "match": [
+          "mashregh",
+          "مشرق"
+        ],
+        "party": "iran",
+        "publisher": "Mashregh News（مشرق）"
+      },
+      {
+        "match": [
+          "parstoday",
+          "pars today"
+        ],
+        "party": "iran",
+        "publisher": "Pars Today（IRIB 对外台）"
+      },
+      {
+        "match": [
+          "defapress",
+          "دفاع مقدس"
+        ],
+        "party": "iran",
+        "publisher": "Defa Press（دفاع مقدس）"
+      },
+      {
+        "match": [
+          "iran international",
+          "iranwire",
+          "radio farda",
+          "manoto",
+          "iranintl"
+        ],
+        "party": "iran_opp",
+        "publisher": "伊朗流亡/反对派媒体"
+      },
+      {
+        "match": [
+          "reuters"
+        ],
+        "party": "third",
+        "publisher": "Reuters"
+      },
+      {
+        "match": [
+          "associated press",
+          "apnews"
+        ],
+        "party": "third",
+        "publisher": "AP"
+      },
+      {
+        "match": [
+          "bbc"
+        ],
+        "party": "third",
+        "publisher": "BBC"
+      },
+      {
+        "match": [
+          "al jazeera",
+          "aljazeera"
+        ],
+        "party": "third",
+        "publisher": "Al Jazeera"
+      },
+      {
+        "match": [
+          "france 24",
+          "france24"
+        ],
+        "party": "third",
+        "publisher": "France 24"
+      },
+      {
+        "match": [
+          "jerusalem post",
+          "jpost"
+        ],
+        "party": "third",
+        "publisher": "The Jerusalem Post"
+      },
+      {
+        "match": [
+          "times of israel"
+        ],
+        "party": "third",
+        "publisher": "The Times of Israel"
+      },
+      {
+        "match": [
+          "middle east eye"
+        ],
+        "party": "third",
+        "publisher": "Middle East Eye"
+      },
+      {
+        "match": [
+          "middle east monitor"
+        ],
+        "party": "third",
+        "publisher": "Middle East Monitor"
+      },
+      {
+        "match": [
+          "al arabiya"
+        ],
+        "party": "third",
+        "publisher": "Al Arabiya"
+      },
+      {
+        "match": [
+          "the hill"
+        ],
+        "party": "third",
+        "publisher": "The Hill"
+      },
+      {
+        "match": [
+          "shafaq"
+        ],
+        "party": "third",
+        "publisher": "Shafaq News"
+      }
+    ],
+    "unmatched_rule": "未匹配的媒体：party 继承该源默认值，publisher 记为实际媒体名，并打 outlet_unclassified=true 标记，报告里单列。"
+  },
+  "sources": [
+    {
+      "id": "dod-releases",
+      "enabled": true,
+      "kind": "rss",
+      "party": "us",
+      "channel": "官方声明/新闻稿",
+      "publisher": "美国国防部（五角大楼）",
+      "tier": "T1",
+      "tier_note": "官方一手发布，即该方表态的原始出处",
+      "topic_anchored": true,
+      "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=9&Site=945&max=60"
+    },
+    {
+      "id": "dod-transcripts",
+      "enabled": true,
+      "kind": "rss",
+      "party": "us",
+      "channel": "记者会/简报逐字稿",
+      "publisher": "美国国防部（五角大楼）",
+      "tier": "T1",
+      "tier_note": "官方一手逐字稿，战备表态密度最高的源",
+      "topic_anchored": true,
+      "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=13&Site=945&max=60",
+      "note": "2026-09-20 终审：HTTP 403（DoD Akamai，与 dod-releases/dod-news 同源被拒）；保留启用待出口变化。"
+    },
+    {
+      "id": "dod-news",
+      "enabled": true,
+      "kind": "rss",
+      "party": "us",
+      "channel": "官方新闻",
+      "publisher": "美国国防部（五角大楼）",
+      "tier": "T1",
+      "tier_note": "官方一手发布",
+      "topic_anchored": true,
+      "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=60"
+    },
+    {
+      "id": "dvids-centcom",
+      "enabled": true,
+      "kind": "rss",
+      "party": "us",
+      "channel": "战区司令部官方影像/新闻稿",
+      "publisher": "美国中央司令部公共事务办公室（DVIDS）",
+      "tier": "T1",
+      "tier_note": "★ 第 5 轮探测新增。DVIDS 是国防部官方影像分发平台，本条为 CENTCOM 公共事务办公室自营feed（unit 72）。它是 centcom.mil 被 CDN 封堵后**唯一可直接取到 CENTCOM 原文**的官方通道，含完整 description，故为 T1（对比 centcom-gnews 仅能拿到标题层、只能计 T3）。",
+      "topic_anchored": true,
+      "url": "https://www.dvidshub.net/rss/unit/72",
+      "collapse_asset_variants": true,
+      "note": "unit id 经 https://www.dvidshub.net/unit/CENTCOM 页面反查得到。首次探测实测 45 条、最新为当日，主要形态是演训(如 Eager Lion 26)与战备活动报道。"
+    },
+    {
+      "id": "dvids-afcent",
+      "enabled": true,
+      "kind": "rss",
+      "party": "us",
+      "channel": "空军组成部队官方影像/新闻稿",
+      "publisher": "美国中央空军司令部（DVIDS）",
+      "tier": "T1",
+      "tier_note": "★ 第 5 轮探测新增。CENTCOM 空军组成部队官方发布，可提供空中加油/战斗机部署等战备一手材料。",
+      "topic_anchored": true,
+      "url": "https://www.dvidshub.net/rss/unit/407",
+      "collapse_asset_variants": true,
+      "note": "unit id 经 https://www.dvidshub.net/unit/AFCENT 反查得到。实测 35 条，最新当日。"
+    },
+    {
+      "id": "dvids-marcent",
+      "enabled": true,
+      "kind": "rss",
+      "party": "us",
+      "channel": "陆战队组成部队官方影像/新闻稿",
+      "publisher": "美国海军陆战队中央司令部（DVIDS）",
+      "tier": "T1",
+      "tier_note": "★ 第 5 轮探测新增。CENTCOM 陆战队组成部队官方发布。",
+      "topic_anchored": true,
+      "url": "https://www.dvidshub.net/rss/unit/809",
+      "collapse_asset_variants": true,
+      "note": "unit id 经 https://www.dvidshub.net/unit/MARCENT 反查得到。实测 30 条，最新当日。"
+    },
+    {
+      "id": "whitehouse-actions",
+      "enabled": true,
+      "kind": "rss",
+      "party": "us",
+      "channel": "总统文件/授权",
+      "publisher": "美国白宫",
+      "tier": "T1",
+      "tier_note": "官方一手法律文件层",
+      "topic_anchored": false,
+      "url": "https://www.whitehouse.gov/presidential-actions/feed/"
+    },
+    {
+      "id": "gao-reports",
+      "enabled": true,
+      "kind": "rss",
+      "party": "us",
+      "channel": "审计报告",
+      "publisher": "美国政府问责局（GAO）",
+      "tier": "T2",
+      "tier_note": "官方机构的分析估算，不是原始记录",
+      "topic_anchored": false,
+      "url": "https://www.gao.gov/rss/reports.xml"
+    },
+    {
+      "id": "crs-reports",
+      "enabled": true,
+      "kind": "json",
+      "party": "us",
+      "channel": "国会研究报告",
+      "publisher": "美国国会研究服务部（CRS）",
+      "tier": "T2",
+      "tier_note": "官方分析层",
+      "topic_anchored": false,
+      "url": "https://api.congress.gov/v3/crsreport?limit=40&format=json&api_key=DEMO_KEY",
+      "json_path": "CRSReports",
+      "note": "DEMO_KEY 约 30 次/小时限流，实测会返回 HTTP 429。建议申请个人 API key 后替换 url 中的 api_key。"
+    },
+    {
+      "id": "centcom-gnews",
+      "enabled": true,
+      "kind": "rss",
+      "party": "us",
+      "channel": "战区司令部表态（经聚合器）",
+      "publisher": "美国中央司令部（CENTCOM）",
+      "tier": "T3",
+      "tier_note": "★ centcom.mil 整站被 CDN 拦截（全路径 403，含首页）。本条是经公开聚合器取回的官方页面标题+链接，未取得正文。原文等级本应为 T1，本系统只能拿到标题层，故按 T3 计。",
+      "aggregator": true,
+      "topic_anchored": true,
+      "url": "https://news.google.com/rss/search?q=site%3Acentcom.mil&hl=en-US&gl=US&ceid=US%3Aen",
+      "url_alternates": [
+        "https://news.google.com/rss/search?q=%22U.S.+Central+Command%22+OR+%22US+Central+Command%22&hl=en-US&gl=US&ceid=US%3Aen",
+        "https://news.google.com/rss/search?q=CENTCOM&hl=en-US&gl=US&ceid=US%3Aen"
+      ],
+      "title_include": [
+        "CENTCOM",
+        "U.S. Central Command",
+        "US Central Command"
+      ],
+      "merge_alternates": true
+    },
+    {
+      "id": "usni-news",
+      "enabled": true,
+      "kind": "rss",
+      "party": "third",
+      "channel": "专业军事媒体",
+      "publisher": "美国海军学会新闻（USNI News）",
+      "tier": "T3",
+      "tier_note": "专业媒体二手转述，仅作线索",
+      "topic_anchored": true,
+      "url": "https://news.usni.org/feed"
+    },
+    {
+      "id": "defensenews-pentagon",
+      "enabled": true,
+      "kind": "rss",
+      "party": "third",
+      "channel": "专业军事媒体",
+      "publisher": "Defense News（五角大楼条线）",
+      "tier": "T3",
+      "tier_note": "商业媒体二手转述",
+      "topic_anchored": true,
+      "url": "https://www.defensenews.com/arc/outboundfeeds/rss/category/pentagon/"
+    },
+    {
+      "id": "breakingdefense",
+      "enabled": true,
+      "kind": "rss",
+      "party": "third",
+      "channel": "专业军事媒体",
+      "publisher": "Breaking Defense",
+      "tier": "T3",
+      "tier_note": "商业媒体二手转述",
+      "topic_anchored": true,
+      "url": "https://breakingdefense.com/feed/"
+    },
+    {
+      "id": "airspaceforces",
+      "enabled": true,
+      "kind": "rss",
+      "party": "third",
+      "channel": "专业军事媒体",
+      "publisher": "Air & Space Forces Magazine",
+      "tier": "T3",
+      "tier_note": "行业媒体二手转述",
+      "topic_anchored": true,
+      "url": "https://www.airandspaceforces.com/feed/"
+    },
+    {
+      "id": "sepahnews",
+      "enabled": true,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "革命卫队官方通讯社",
+      "publisher": "Sepah News（伊朗伊斯兰革命卫队官方新闻社）",
+      "tier": "T1",
+      "tier_note": "伊方官方一手发布（革命卫队自营通讯社）。等级含义是「该方表态的原始出处」，不等于其事实主张已获证实。",
+      "topic_anchored": false,
+      "url": "https://sepahnews.ir/fa/rss/allnews",
+      "tls": {
+        "verify": false,
+        "note": "站点证书链含自签名根（实测 leaf 由公开 CA SSL.com 签发但链不完整），标准信任库无法校验。仅对本源关闭校验；不影响其它源。"
+      }
+    },
+    {
+      "id": "defapress",
+      "enabled": true,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "革命卫队系军事媒体",
+      "publisher": "Defa Press（دفاع مقدس，伊朗军事/国防新闻社）",
+      "tier": "T1",
+      "tier_note": "伊方军方背景军事媒体的官方一手发布",
+      "topic_anchored": true,
+      "url": "https://defapress.ir/fa/rss/allnews"
+    },
+    {
+      "id": "mashreghnews",
+      "enabled": true,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "革命卫队系新闻",
+      "publisher": "Mashregh News（مشرق، 与革命卫队关系密切）",
+      "tier": "T1",
+      "tier_note": "伊方革命卫队系媒体的官方一手发布",
+      "topic_anchored": false,
+      "url": "https://www.mashreghnews.ir/rss"
+    },
+    {
+      "id": "kayhan",
+      "enabled": true,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "强硬派报刊",
+      "publisher": "Kayhan（کیهان، 由最高领袖任命总编的强硬派报纸）",
+      "tier": "T2",
+      "tier_note": "伊方体制内媒体，反映官方强硬派立场，但不是政府部门直接发布",
+      "topic_anchored": false,
+      "url": "https://kayhan.ir/fa/rss/allnews"
+    },
+    {
+      "id": "parstoday",
+      "enabled": true,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "国家广播对外频道",
+      "publisher": "Pars Today（伊朗国家广播 IRIB 对外台）",
+      "tier": "T1",
+      "tier_note": "伊方国家广播机构官方对外发布",
+      "topic_anchored": false,
+      "url": "https://parstoday.ir/en/rss",
+      "note": "2026-09-20 终审：HTTP 404（端点已变更）；待重找路径，暂保留启用。"
+    },
+    {
+      "id": "irna-en",
+      "enabled": true,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "国家通讯社",
+      "publisher": "IRNA（伊朗伊斯兰共和国通讯社，官方）",
+      "tier": "T1",
+      "tier_note": "伊方国家通讯社官方一手发布",
+      "topic_anchored": false,
+      "url": "https://en.irna.ir/rss"
+    },
+    {
+      "id": "mehr-en",
+      "enabled": true,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "半官方通讯社",
+      "publisher": "Mehr News Agency（مهر）",
+      "tier": "T2",
+      "tier_note": "伊方半官方通讯社，革命卫队与军方消息的主要出口之一",
+      "topic_anchored": false,
+      "url": "https://en.mehrnews.com/rss"
+    },
+    {
+      "id": "isna-en",
+      "enabled": true,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "半官方通讯社",
+      "publisher": "ISNA（伊朗学生通讯社）",
+      "tier": "T2",
+      "tier_note": "伊方半官方通讯社",
+      "topic_anchored": false,
+      "url": "https://en.isna.ir/rss"
+    },
+    {
+      "id": "tehrantimes",
+      "enabled": true,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "官方英文报",
+      "publisher": "Tehran Times（伊朗官方英文日报）",
+      "tier": "T2",
+      "tier_note": "伊方体制内英文媒体",
+      "topic_anchored": false,
+      "url": "https://www.tehrantimes.com/rss"
+    },
+    {
+      "id": "farsnews-gnews",
+      "enabled": true,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "革命卫队系通讯社（经聚合器）",
+      "publisher": "Fars News Agency（فارس，革命卫队系）",
+      "tier": "T3",
+      "tier_note": "★ farsnews.ir 本机无法校验证书链，且 /rss 路径 404。本条经公开聚合器取回标题+链接，未取得正文。原文等级本应为 T1，本系统只能拿到标题层，故按 T3 计。",
+      "aggregator": true,
+      "topic_anchored": true,
+      "url": "https://news.google.com/rss/search?q=site%3Afarsnews.ir&hl=en-US&gl=US&ceid=US%3Aen"
+    },
+    {
+      "id": "tasnim-gnews",
+      "enabled": true,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "革命卫队系通讯社（经聚合器）",
+      "publisher": "Tasnim News Agency（تسنیم，革命卫队系）",
+      "tier": "T3",
+      "tier_note": "★ tasnimnews.com 本机 DNS 无法解析（网络层不可达），且 site: 检索在聚合器上返回 0 条。本条改用「Tasnim IRGC」主题检索取回标题+链接，未取得正文。原文等级本应为 T1，本系统只能拿到标题层，故按 T3 计。",
+      "aggregator": true,
+      "topic_anchored": true,
+      "url": "https://news.google.com/rss/search?q=Tasnim+IRGC&hl=en-US&gl=US&ceid=US%3Aen",
+      "title_include": [
+        "Tasnim",
+        "تسنیم",
+        "tasnimnews"
+      ]
+    },
+    {
+      "id": "irgc-gnews",
+      "enabled": true,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "革命卫队表态（议题检索）",
+      "publisher": "多源（含 Tasnim/Fars/Mehr/IRNA 及国际媒体）",
+      "tier": "T3",
+      "tier_note": "★ 经公开聚合器按议题检索取回，标题+链接层，未取得正文。用于补足不可直连的革命卫队系媒体。注意：该源会把不同立场的媒体混在一起，本系统按实际发布媒体重新判定当事方（见 outlet_map），流亡/反对派媒体单独归为 iran_opp，不计入「伊方官方表态」。",
+      "aggregator": true,
+      "topic_anchored": true,
+      "url": "https://news.google.com/rss/search?q=IRGC+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "merge_alternates": true,
+      "url_alternates": [
+        "https://news.google.com/rss/search?q=IRGC+OR+%22Revolutionary+Guards%22+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen"
+      ]
+    },
+    {
+      "id": "bbc-me",
+      "enabled": true,
+      "kind": "rss",
+      "party": "third",
+      "channel": "国际公共媒体",
+      "publisher": "BBC News（中东）",
+      "tier": "T3",
+      "tier_note": "第三方国际媒体，用于三角验证；二手转述",
+      "topic_anchored": false,
+      "url": "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml"
+    },
+    {
+      "id": "aljazeera",
+      "enabled": true,
+      "kind": "rss",
+      "party": "third",
+      "channel": "国际媒体",
+      "publisher": "Al Jazeera English",
+      "tier": "T3",
+      "tier_note": "第三方国际媒体；注意其编辑立场，仅作三角验证线索",
+      "topic_anchored": false,
+      "url": "https://www.aljazeera.com/xml/rss/all.xml"
+    },
+    {
+      "id": "france24-me",
+      "enabled": true,
+      "kind": "rss",
+      "party": "third",
+      "channel": "国际公共媒体",
+      "publisher": "France 24（中东）",
+      "tier": "T3",
+      "tier_note": "第三方国际公共媒体",
+      "topic_anchored": false,
+      "url": "https://www.france24.com/en/middle-east/rss"
+    },
+    {
+      "id": "centcom-press-direct",
+      "enabled": false,
+      "kind": "rss",
+      "party": "us",
+      "channel": "战区司令部新闻稿（直连）",
+      "publisher": "美国中央司令部（CENTCOM）",
+      "tier": "T1",
+      "tier_note": "本应是最优源",
+      "url": "https://www.centcom.mil/MEDIA/PRESS-RELEASES/",
+      "note": "【勘误 2026-09-18 晚 · 原『整站 CDN 拦截』结论有误，已更正】原记录（当日早）称『首页 / MEDIA / PRESS-RELEASES / STATEMENTS / Article 详情页 全部 HTTP 403，Server=AkamaiGHost』。复核发现该结论**叠加了两个可修复的本地因素**，不等于站点封锁：(a) **本地代理出口已过期** —— 原测量走的端口现为 502 不可用，换到存活端口后同一 URL 返回 **HTTP 200**；(b) **请求头组合不足** —— 只带 User-Agent 时确实 403，补齐 Accept/Accept-Language/Sec-Fetch-* 后 200（与 README §6「只带 UA 会被 Akamai 拦」一致）。★ 仍保持 enabled:false，但**理由改为**：该 URL 是 **JS 渲染的 HTML 列表页**（实测 200 / text/html / 293KB，但 HTML 里**不含任何 Article 链接**），静态解析取不到条目；启用需引入无头浏览器，与「不做风控绕过」的轻量原则相悖。替代仍为 centcom-gnews（聚合器取标题+链接）。"
+    },
+    {
+      "id": "tasnim-direct",
+      "enabled": false,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "革命卫队系通讯社（直连）",
+      "publisher": "Tasnim News Agency",
+      "tier": "T1",
+      "tier_note": "本应是最优伊方源",
+      "url": "https://www.tasnimnews.com/en/rss/feed/0/7/0/all-news",
+      "note": "【实测停用 2026-09-18】网络层不可达：www.tasnimnews.com DNS 无法解析（gaierror 11001），HTTP 通道返回 502。非本机代码问题。替代：tasnim-gnews。"
+    },
+    {
+      "id": "farsnews-direct",
+      "enabled": false,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "革命卫队系通讯社（直连）",
+      "publisher": "Fars News Agency",
+      "tier": "T1",
+      "tier_note": "本应是最优伊方源",
+      "url": "https://www.farsnews.ir/rss",
+      "note": "【实测停用 2026-09-18】证书链含自签名根，无法校验；且 /rss 路径 404（首页可达，未声明 feed）。首页未发现可用 feed 声明。替代：farsnews-gnews。"
+    },
+    {
+      "id": "presstv",
+      "enabled": false,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "国家对外电视台",
+      "publisher": "Press TV（IRIB 对外台）",
+      "tier": "T2",
+      "tier_note": "伊方体制内媒体",
+      "url": "https://www.presstv.ir/rss.xml",
+      "note": "【实测停用 2026-09-18】证书缺中间证书（unable to get local issuer certificate），无法校验。关校验可取到 107 条，但出于不默认弱化传输层安全的考虑停用；如需启用请在该源加 \"tls\": {\"verify\": false}。"
+    },
+    {
+      "id": "khamenei-en",
+      "enabled": false,
+      "kind": "rss",
+      "party": "iran",
+      "channel": "最高领袖办公室",
+      "publisher": "Khamenei.ir（最高领袖官方英文站）",
+      "tier": "T1",
+      "tier_note": "伊方最高权威一手表态，价值很高",
+      "url": "https://english.khamenei.ir/rss",
+      "note": "【实测停用 2026-09-18】证书链含自签名根，无法校验；且返回 302 重定向后关机校验仍失败。此项若日后接通，对「革命卫队最高层表态」这一点会有明显增益。"
+    },
+    {
+      "id": "reuters-world",
+      "enabled": false,
+      "kind": "rss",
+      "party": "third",
+      "channel": "国际通讯社",
+      "publisher": "Reuters",
+      "tier": "T3",
+      "tier_note": "第三方通讯社",
+      "url": "https://feeds.reuters.com/reuters/worldNews",
+      "note": "【实测停用 2026-09-18】该域 TLS 握手被中断；Reuters 已停用旧 RSS 通道。"
+    },
+    {
+      "id": "navy-rss",
+      "enabled": false,
+      "kind": "rss",
+      "party": "us",
+      "channel": "海军官网（候选，未接通）",
+      "publisher": "美国海军",
+      "tier": "T1",
+      "tier_note": "本应为美方官方一手源",
+      "url": "https://www.navy.mil/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=1060&max=25",
+      "note": "【实测停用 2026-09-18 第5轮】HTTP 200 但**响应体为空**（0 字节，XML 解析报 no element found）。与 centcom.mil 同一现象：AFPIMS 的 RSS.ashx 在 Site id 不匹配时返回 200 空体，不报错。navy.mil 的真实 Site/Category id 未能反查（首页未暴露 rss 链接）。★ 若日后接通，对「军舰/航母部署」这一点增益最大——目前该议题的美方一侧几乎只能靠 T3 聚合器。"
+    },
+    {
+      "id": "army-rss",
+      "enabled": false,
+      "kind": "rss",
+      "party": "us",
+      "channel": "陆军官网（候选，未接通）",
+      "publisher": "美国陆军",
+      "tier": "T1",
+      "tier_note": "本应为美方官方一手源",
+      "url": "https://www.army.mil/rss/",
+      "note": "【实测停用 2026-09-18 第5轮】SSL 校验失败：证书自签名。★ 注意甄别：本机经 127.0.0.1 代理出网，**代理的 TLS 中间人也会造成同样的『自签名』报错**，因此该结论不等于站点本身有问题（第 2 轮已用同样方法证实 sepahnews 的报错是真实的链不完整）。未加 tls.verify=false，避免把代理解密引入链路。【补测 2026-09-18 晚】换到存活代理出口复测：`https://www.army.mil/rss/` 返回 **HTTP 404**（不再报证书错），说明该路径本身不存在、而不是 TLS 问题 —— 原「证书自签名」很可能也是过期出口造成的假象。现**双重原因停用**：路径 404（端点已变更）+ 未定位到可用的 feed 端点。"
+    },
+    {
+      "id": "jcs-rss",
+      "enabled": false,
+      "kind": "rss",
+      "party": "us",
+      "channel": "参联会官网（候选，未接通）",
+      "publisher": "美国参谋长联席会议",
+      "tier": "T1",
+      "tier_note": "本应为美方官方一手源（主席/副主席表态）",
+      "url": "https://www.jcs.mil/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=1084&max=25",
+      "note": "【实测停用 2026-09-18 第5轮】读取超时（TimeoutError，25s）。与 navy-rss 同属 AFPIMS 家族，Site id 疑为猜测值。"
+    },
+    {
+      "id": "dvidshub-root",
+      "enabled": false,
+      "kind": "rss",
+      "party": "us",
+      "channel": "DVIDS 全站（候选，未接通）",
+      "publisher": "国防部影像分发服务（DVIDS）",
+      "tier": "T1",
+      "tier_note": "本应为美方官方一手源",
+      "url": "https://www.dvidshub.net/rss/",
+      "note": "【实测停用 2026-09-18 第5轮】HTTP 404（Server: Apache）。该站不提供全站 feed，只提供**按单位**的 feed（/rss/unit/<id>）。已据此接通 dvids-centcom / dvids-afcent / dvids-marcent 三个单位源。"
+    },
+    {
+      "id": "dod-contracts-rss",
+      "enabled": false,
+      "kind": "rss",
+      "party": "us",
+      "channel": "合同公告（可选，未启用）",
+      "publisher": "美国国防部（五角大楼）",
+      "tier": "T1",
+      "tier_note": "官方一手发布",
+      "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=25",
+      "note": "【实测可达 2026-09-18 第5轮，但**主动不启用**】实测 200/25 条。不启用的理由是**口径**：合同公告是采购/授标信息（obligation 层），不是战备表态，与本项目「表态监测」的口径不同，混入会污染信号统计。留档以备日后做「采购→战备」联动时启用。"
+    },
+    {
+      "id": "globaltimes",
+      "enabled": false,
+      "kind": "rss",
+      "party": "third",
+      "channel": "第三方官媒视角",
+      "publisher": "Global Times 环球时报英文版",
+      "tier": "T3",
+      "tier_note": "中国官媒英文版（转述层，勿与当事方 T1 表态并列当同级证据）",
+      "topic_anchored": true,
+      "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+      "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担"
+    },
+    {
+      "id": "cgtn-world",
+      "enabled": true,
+      "kind": "rss",
+      "party": "third",
+      "channel": "第三方官媒视角",
+      "publisher": "CGTN 中国环球电视网",
+      "tier": "T3",
+      "tier_note": "中国官媒英文版（转述层，勿与当事方 T1 表态并列当同级证据）",
+      "topic_anchored": true,
+      "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+      "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）"
+    }
+  ]
+}

@@ -1,0 +1,984 @@
+{
+ "parse_ver": 1,
+ "schema_ver": 1,
+ "window_days": 30,
+ "max_age_days": 45,
+ "per_source_max": 200,
+ "summary_max_chars": 1200,
+ "request_timeout": 30,
+ "min_interval_per_host": 1.2,
+ "prune_after_days": 365,
+ "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+ "sources": [
+  {
+   "id": "whitehouse-actions",
+   "url": "https://www.whitehouse.gov/presidential-actions/feed/",
+   "tier": "T1",
+   "publisher": "White House",
+   "enabled": true,
+   "note": "总统行动（行政令/PDD，含援乌与冻结决定），2026-09-19 实测 200/rss 622KB"
+  },
+  {
+   "id": "whitehouse-news",
+   "url": "https://www.whitehouse.gov/news/feed/",
+   "tier": "T1",
+   "publisher": "White House",
+   "enabled": true,
+   "note": "白宫新闻（援助包宣布），2026-09-19 实测 200/rss 597KB"
+  },
+  {
+   "id": "nato-usmission",
+   "url": "https://nato.usmission.gov/feed/",
+   "tier": "T1",
+   "publisher": "US Mission to NATO",
+   "enabled": true,
+   "note": "美驻北约使团（援助/防务姿态一手），2026-09-19 实测 200/rss 94KB"
+  },
+  {
+   "id": "un-press",
+   "url": "https://press.un.org/en/rss.xml",
+   "tier": "T1",
+   "publisher": "United Nations",
+   "enabled": true,
+   "note": "UN 新闻稿（人道/斡旋），diplomacy 项目同源在用，2026-09-19 实测 200/rss"
+  },
+  {
+   "id": "crisisgroup",
+   "url": "https://www.crisisgroup.org/rss.xml",
+   "tier": "T2",
+   "publisher": "International Crisis Group",
+   "enabled": true,
+   "note": "国际危机组织研究（2026-09-19 实测 200/rss）"
+  },
+  {
+   "id": "xinhua-home",
+   "url": "https://english.news.cn/home.htm",
+   "type": "html_listing",
+   "link_pattern": "<a[^>]+href=[\"'](https://english\\.news\\.cn/20\\d{6}/[0-9a-f]+/c\\.html)[\"'][^>]*>(.*?)</a>",
+   "date_re": "/(20\\d{6})/",
+   "tier": "T3",
+   "publisher": "Xinhua 新华社英文",
+   "enabled": true,
+   "note": "新华社英文首页列表页（用户指定通道）；worldrss.xml 已停更（最新条目 2018-01）故改用首页解析；仅标题无摘要；2026-09-19 实测 200/html 37 条当日文章链接"
+  },
+  {
+   "id": "chinanews-scroll",
+   "url": "https://www.chinanews.com.cn/rss/scroll-news.xml",
+   "tier": "T3",
+   "publisher": "中国新闻网",
+   "enabled": true,
+   "note": "中文即时新闻窗口（中文涉乌报道），2026-09-19 实测 200/rss 11KB"
+  },
+  {
+   "id": "kyivpost",
+   "url": "https://www.kyivpost.com/feed",
+   "tier": "T3",
+   "publisher": "Kyiv Post",
+   "enabled": true,
+   "note": "乌英文老牌（2026-09-19 实测 200/rss 156KB，ua-front 同源在用）"
+  },
+  {
+   "id": "euromaidan",
+   "url": "https://euromaidanpress.com/feed/",
+   "tier": "T3",
+   "publisher": "Euromaidan Press",
+   "enabled": true,
+   "note": "乌独立英文媒体（2026-09-19 实测 200/rss 318KB）"
+  },
+  {
+   "id": "tass",
+   "url": "https://tass.com/rss/v2.xml",
+   "tier": "T3",
+   "publisher": "TASS",
+   "enabled": true,
+   "note": "俄国家通讯社（俄方对西方援助的反应窗口，标注使用），2026-09-19 实测 200/rss 51KB"
+  },
+  {
+   "id": "moscowtimes",
+   "url": "https://www.themoscowtimes.com/rss/news",
+   "tier": "T3",
+   "publisher": "Moscow Times",
+   "enabled": true,
+   "note": "独立俄媒英文（2026-09-19 实测 200/rss 31KB）"
+  },
+  {
+   "id": "defense-news",
+   "url": "https://www.defensenews.com/arc/outboundfeeds/rss/",
+   "tier": "T3",
+   "publisher": "Defense News",
+   "enabled": true,
+   "note": "军事媒体（援助交付/合同报道），2026-09-19 实测 200/rss 145KB"
+  },
+  {
+   "id": "gn-aid-us",
+   "url": "https://news.google.com/rss/search?q=(Pentagon+OR+%22State+Department%22+OR+White+House)+Ukraine+(aid+OR+weapons+OR+funding)+package&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "美国援助宣布通道；依赖代理出口可达 google（2026-09-19 出口 50465 对 google 域全断，断连自动留档，恢复自动回补）"
+  },
+  {
+   "id": "gn-aid-eu",
+   "url": "https://news.google.com/rss/search?q=(EU+OR+%22European+Union%22+OR+Brussels+OR+%22von+der+Leyen%22)+Ukraine+(aid+OR+funding+OR+%22reparations+loan%22)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "欧盟援助通道；出口依赖同上"
+  },
+  {
+   "id": "gn-loans",
+   "url": "https://news.google.com/rss/search?q=Ukraine+(IMF+OR+loan+OR+G7+OR+ERA+OR+debt+OR+%22reparations+loan%22)+(billion+OR+finance+OR+disburs+OR+tranche)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "贷款/金融援助通道；出口依赖同上"
+  },
+  {
+   "id": "gn-weapons",
+   "url": "https://news.google.com/rss/search?q=Ukraine+(weapons+OR+ammunition+OR+Patriot+OR+HIMARS+OR+F-16+OR+%22artillery+shells%22+OR+missiles)+(deliver+OR+supply+OR+transfer+OR+pledge)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "武器援助交付通道；出口依赖同上"
+  },
+  {
+   "id": "gn-intel",
+   "url": "https://news.google.com/rss/search?q=Ukraine+(intelligence+sharing+OR+satellite+OR+targeting+OR+CIA)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "情报支持通道；出口依赖同上"
+  },
+  {
+   "id": "gn-aid-cut",
+   "url": "https://news.google.com/rss/search?q=Ukraine+aid+(cut+OR+halt+OR+delay+OR+pause+OR+curtail+OR+reduce)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "援助收缩/延误通道；出口依赖同上"
+  },
+  {
+   "id": "gn-russia-react",
+   "url": "https://news.google.com/rss/search?q=Russia+(warn+OR+reaction+OR+response)+(NATO+OR+Western)+Ukraine+(weapons+OR+aid+OR+escalation)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "俄方对援助反应通道；出口依赖同上"
+  },
+  {
+   "id": "gn-xinhua",
+   "url": "https://news.google.com/rss/search?q=Xinhua+Ukraine&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "新华社涉乌报道聚合搜索（用户指定）；出口依赖同上"
+  },
+  {
+   "id": "gn-china",
+   "url": "https://news.google.com/rss/search?q=(China+OR+Beijing+OR+%22Wang+Yi%22+OR+%22Li+Hui%22)+Ukraine+(aid+OR+peace+OR+talks+OR+reconstruction)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "中国视角涉乌通道（中方表态/和平方案/重建）；出口依赖同上"
+  },
+  {
+   "id": "dod-contracts",
+   "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?PortalID=1&ModuleID=1210",
+   "tier": "T1",
+   "publisher": "US DoD",
+   "enabled": false,
+   "note": "2026-09-19 实测 403（Akamai 拦截，news 路径同 403）；武器合同一手细节经 defense-news/gn-weapons 转述覆盖，待路径恢复复测"
+  },
+  {
+   "id": "dod-news",
+   "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?PortalID=1&ModuleID=1073",
+   "tier": "T1",
+   "publisher": "US DoD",
+   "enabled": false,
+   "note": "2026-09-19 实测 403（同 dod-contracts）"
+  },
+  {
+   "id": "state-press",
+   "url": "https://www.state.gov/press-releases/feed/",
+   "tier": "T1",
+   "publisher": "US State Dept",
+   "enabled": false,
+   "note": "2026-09-19 实测 200 但返回普通 HTML（非 feed，221KB 页面壳）；吹风会路径 403"
+  },
+  {
+   "id": "state-briefings",
+   "url": "https://www.state.gov/department-press-briefings/feed/",
+   "tier": "T1",
+   "publisher": "US State Dept",
+   "enabled": false,
+   "note": "2026-09-19 实测 403"
+  },
+  {
+   "id": "treasury-press",
+   "url": "https://home.treasury.gov/news/press-releases/feed",
+   "tier": "T1",
+   "publisher": "US Treasury",
+   "enabled": false,
+   "note": "2026-09-19 实测 404（列表页为 HTML 可解析但非本期范围）；贷款/制裁安排经 gnews-loans 覆盖"
+  },
+  {
+   "id": "uk-gov-ukraine",
+   "url": "https://www.gov.uk/government/all.atom?keywords=Ukraine",
+   "tier": "T1",
+   "publisher": "UK GOV",
+   "enabled": false,
+   "note": "2026-09-19 实测 404（news.atom、FCDO 过滤两变体均 404，疑似出口或路径问题）"
+  },
+  {
+   "id": "uk-gov-news",
+   "url": "https://www.gov.uk/government/news.atom",
+   "tier": "T1",
+   "publisher": "UK GOV",
+   "enabled": false,
+   "note": "2026-09-19 实测 404（同上，gov.uk 全路径不可达，留档复测）"
+  },
+  {
+   "id": "nato-int",
+   "url": "https://www.nato.int/cps/en/natohq/news.htm?rss=true",
+   "tier": "T1",
+   "publisher": "NATO",
+   "enabled": false,
+   "note": "2026-09-19 实测 200 但返回 HTML（非 feed）；news_rss 路径 404；北约视角经 nato-usmission（T1）覆盖"
+  },
+  {
+   "id": "eu-eeas",
+   "url": "https://www.eeas.europa.eu/api/news-rss/news.xml",
+   "tier": "T1",
+   "publisher": "EU EEAS",
+   "enabled": false,
+   "note": "2026-09-19 实测 200 但返回 HTML（40KB 页面壳，非 feed）"
+  },
+  {
+   "id": "imf-press",
+   "url": "https://www.imf.org/en/News/RSS?Language=ENG&category=press",
+   "tier": "T1",
+   "publisher": "IMF",
+   "enabled": false,
+   "note": "2026-09-19 实测 403（press/News 两路径均 403）；IMF 对乌贷款经 gn-loans 转述覆盖"
+  },
+  {
+   "id": "worldbank-news",
+   "url": "https://www.worldbank.org/en/news/all/rss",
+   "tier": "T1",
+   "publisher": "World Bank",
+   "enabled": false,
+   "note": "2026-09-19 实测 404"
+  },
+  {
+   "id": "ebrd-news",
+   "url": "https://www.ebrd.com/press/rss.xml",
+   "tier": "T1",
+   "publisher": "EBRD",
+   "enabled": false,
+   "note": "2026-09-19 实测 404（home/news/rss 亦 404）"
+  },
+  {
+   "id": "kiel-tracker",
+   "url": "https://www.ifw-kiel.de/topics/war-against-ukraine/ukraine-support-tracker/",
+   "tier": "T2",
+   "publisher": "Kiel Institute",
+   "enabled": false,
+   "note": "2026-09-19 实测连接失败(status 0，rss 路径同 0)；疑似出口路由问题（同批次 csis/atlantic 均断），出口变更后复测；Kiel 援助追踪器为援助数据权威 T2"
+  },
+  {
+   "id": "csis-analysis",
+   "url": "https://www.csis.org/analysis/feed",
+   "tier": "T2",
+   "publisher": "CSIS",
+   "enabled": false,
+   "note": "2026-09-19 实测连接失败(status 0)；同 kiel 疑似出口路由，留档复测"
+  },
+  {
+   "id": "atlantic-council",
+   "url": "https://www.atlanticcouncil.org/feed/",
+   "tier": "T2",
+   "publisher": "Atlantic Council",
+   "enabled": false,
+   "note": "2026-09-19 实测连接失败(status 0)；同 kiel 疑似出口路由，留档复测"
+  },
+  {
+   "id": "breaking-defense",
+   "url": "https://breakingdefense.com/feed/",
+   "tier": "T3",
+   "publisher": "Breaking Defense",
+   "enabled": false,
+   "note": "2026-09-19 实测连接失败(status 0)；同 kiel 疑似出口路由，留档复测"
+  },
+  {
+   "id": "xinhua-worldrss",
+   "url": "http://www.news.cn/english/rss/worldrss.xml",
+   "tier": "T3",
+   "publisher": "Xinhua 新华社英文",
+   "enabled": false,
+   "note": "2026-09-19 实测 200/rss 但**停更**：最新条目 2018-01-24（假活 feed）；改用 xinhua-home 首页解析"
+  },
+  {
+   "id": "xinhua-mil",
+   "url": "http://www.news.cn/english/rss/militaryrss.xml",
+   "tier": "T3",
+   "publisher": "Xinhua 新华社英文",
+   "enabled": false,
+   "note": "2026-09-19 实测 404"
+  },
+  {
+   "id": "xinhua-biz",
+   "url": "http://www.news.cn/english/rss/bizrss.xml",
+   "tier": "T3",
+   "publisher": "Xinhua 新华社英文",
+   "enabled": false,
+   "note": "2026-09-19 实测 404"
+  },
+  {
+   "id": "xinhua-cn-world",
+   "url": "http://www.news.cn/world/rss.xml",
+   "tier": "T3",
+   "publisher": "新华网中文",
+   "enabled": false,
+   "note": "2026-09-19 实测 404（politics 路径同 404）；中文窗口经 chinanews-scroll 覆盖"
+  },
+  {
+   "id": "bing-news",
+   "url": "https://www.bing.com/news/search?q=Ukraine+aid&format=rss",
+   "tier": "T3",
+   "publisher": "Bing News",
+   "enabled": false,
+   "note": "2026-09-19 实测 200 但返回 HTML JS 壳（format=rss 已不返回 XML）"
+  },
+  {
+   "id": "kyiv-independent",
+   "url": "https://kyivindependent.com/feed/",
+   "tier": "T3",
+   "publisher": "Kyiv Independent",
+   "enabled": false,
+   "note": "2026-09-19 复测仍 404（ua-front 同日实测 404）"
+  },
+  {
+   "id": "globaltimes",
+   "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+   "tier": "T3",
+   "publisher": "Global Times 环球时报英文版",
+   "enabled": false,
+   "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担"
+  },
+  {
+   "id": "cgtn-world",
+   "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+   "tier": "T3",
+   "publisher": "CGTN 中国环球电视网",
+   "enabled": true,
+   "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）"
+  }
+ ],
+ "buckets": {
+  "aid_packages": {
+   "label": "西方援助包与资金承诺",
+   "require_all": [
+    [
+     "aid",
+     "assistance",
+     "funding",
+     "financial support",
+     "support package",
+     "aid package",
+     "assistance package",
+     "security assistance",
+     "economic aid",
+     "humanitarian aid",
+     "budget support",
+     "appropriat",
+     "allocat",
+     "pledge",
+     "commitment",
+     "contribution",
+     "disbursement",
+     "package worth"
+    ],
+    [
+     "ukraine",
+     "ukrainian",
+     "kyiv",
+     "zelensk",
+     "war against russia",
+     "russia's war"
+    ]
+   ]
+  },
+  "loans_finance": {
+   "label": "贷款与金融援助（IMF/G7/欧盟）",
+   "require_all": [
+    [
+     "loan",
+     "imf",
+     "international monetary fund",
+     "world bank",
+     "ebrd",
+     "g7",
+     "reparations loan",
+     "era loan",
+     "macro-financial",
+     "debt relief",
+     "debt restructuring",
+     "restructuring",
+     "tranche",
+     "credit line",
+     "grant",
+     "financing",
+     "refinanc",
+     "special drawing rights",
+     "financial assistance"
+    ],
+    [
+     "ukraine",
+     "ukrainian",
+     "kyiv",
+     "zelensk",
+     "war against russia",
+     "russia's war"
+    ]
+   ]
+  },
+  "weapons_aid": {
+   "label": "武器装备援助（交付/供应/承诺）",
+   "require_all": [
+    [
+     "patriot",
+     "himars",
+     "f-16",
+     "leopard",
+     "abrams",
+     "artillery shell",
+     "155mm",
+     "munitions",
+     "ammunition",
+     "weapon",
+     "howitzer",
+     "javelin",
+     "stinger",
+     "glsdb",
+     "atacms",
+     "storm shadow",
+     "air defense system",
+     "missile",
+     "military aid",
+     "military assistance",
+     "lethal aid",
+     "drone"
+    ],
+    [
+     "aid",
+     "assistance",
+     "deliver",
+     "delivery",
+     "ship",
+     "shipment",
+     "supply",
+     "transfer",
+     "pledge",
+     "donat",
+     "provide",
+     "export",
+     "license",
+     "sale",
+     "sell",
+     "purchase",
+     "send",
+     "sent",
+     "package",
+     "announce",
+     "approve",
+     "authoriz",
+     "congress",
+     "senate",
+     "pentagon",
+     "white house",
+     "united states",
+     "washington",
+     "german",
+     "berlin",
+     "british",
+     "london",
+     "french",
+     "paris",
+     "nato",
+     "european union",
+     "brussels",
+     "allies",
+     "ramstein",
+     "ministry of defence",
+     "defense ministry",
+     "transferr"
+    ],
+    [
+     "ukraine",
+     "ukrainian",
+     "kyiv",
+     "zelensk"
+    ]
+   ]
+  },
+  "intel_sharing": {
+   "label": "情报支持（分享/卫星/目标指示）",
+   "require_all": [
+    [
+     "intelligence",
+     "intel",
+     "satellite",
+     "reconnaissance",
+     "surveillance",
+     "targeting data",
+     "cia",
+     "signals intelligence",
+     "imagery",
+     "targeting support",
+     "targeting information"
+    ],
+    [
+     "sharing",
+     "share",
+     "shared",
+     "provide",
+     "provided",
+     "gives",
+     "gave",
+     "handed",
+     "halt",
+     "paus",
+     "suspend",
+     "stop",
+     "curtail",
+     "cut off",
+     "united states",
+     "washington",
+     "pentagon",
+     "white house",
+     "trump",
+     "cia"
+    ],
+    [
+     "ukraine",
+     "ukrainian",
+     "kyiv",
+     "zelensk",
+     "russia",
+     "russian"
+    ]
+   ]
+  },
+  "china_xinhua": {
+   "label": "中国视角（新华社/中方涉乌表态）",
+   "require_all": [
+    [
+     "china",
+     "chinese",
+     "beijing",
+     "xinhua",
+     "wang yi",
+     "li hui",
+     "peace plan",
+     "position paper"
+    ],
+    [
+     "ukraine",
+     "ukrainian",
+     "kyiv",
+     "zelensk",
+     "war in ukraine",
+     "russia's war",
+     "war against ukraine"
+    ]
+   ]
+  }
+ },
+ "flags": {
+  "pledge_only": [
+   "pledge\\w*",
+   "promis\\w*",
+   "committed\\s+to",
+   "plans\\s+to",
+   "expected\\s+to",
+   "is\\s+expected",
+   "set\\s+to",
+   "will\\s+(?:provide|send|deliver|supply|give|transfer)",
+   "announc\\w+"
+  ],
+  "delivered": [
+   "deliver\\w*",
+   "shipp\\w*",
+   "handed\\s+over",
+   "transferr?\\w*",
+   "\\bsent\\b",
+   "airlift\\w*"
+  ],
+  "delay_or_halt": [
+   "halt\\w*",
+   "paus\\w*",
+   "suspend\\w*",
+   "delay\\w*",
+   "curtail\\w*",
+   "freez\\w*",
+   "withhold\\w*",
+   "scrapp?\\w*",
+   "cut\\s+off",
+   "stopped\\s+(?:sending|providing|sharing)"
+  ],
+  "strings_attached": [
+   "conditions?\\s+(?:attached|for|on)",
+   "strings?\\s+attached",
+   "in\\s+exchange\\s+for",
+   "demands?\\s+that",
+   "as\\s+a\\s+condition",
+   "minerals?\\s+deal",
+   "as\\s+part\\s+of\\s+a\\s+deal"
+  ]
+ },
+ "stance": {
+  "escalate": [
+   "boost",
+   "increas",
+   "expand",
+   "additional",
+   "extra",
+   "surge",
+   "ramp up",
+   "scale up",
+   "doubl",
+   "largest",
+   "record",
+   "approv",
+   "authoriz",
+   "green light",
+   "green-light",
+   "new package",
+   "another",
+   "fresh"
+  ],
+  "deescalate": [
+   "cut",
+   "halt",
+   "paus",
+   "suspend",
+   "delay",
+   "curtail",
+   "reduc",
+   "wind down",
+   "freez",
+   "withhold",
+   "review",
+   "scrapp",
+   "scaled back",
+   "scaled down",
+   "rethink",
+   "uncertain",
+   "suspens",
+   "curtailment"
+  ]
+ },
+ "entities": {
+  "donors": {
+   "United States": [
+    "united states",
+    "washington",
+    "pentagon",
+    "white house",
+    "u.s."
+   ],
+   "Germany": [
+    "germany",
+    "german",
+    "berlin"
+   ],
+   "United Kingdom": [
+    "britain",
+    "british",
+    "london",
+    "uk"
+   ],
+   "France": [
+    "france",
+    "french",
+    "paris"
+   ],
+   "European Union": [
+    "european union",
+    "brussels",
+    "european commission"
+   ],
+   "NATO": [
+    "nato"
+   ],
+   "Japan": [
+    "japan",
+    "tokyo"
+   ],
+   "Canada": [
+    "canada",
+    "ottawa"
+   ]
+  },
+  "institutions": {
+   "IMF": [
+    "imf",
+    "international monetary fund"
+   ],
+   "World Bank": [
+    "world bank"
+   ],
+   "EBRD": [
+    "ebrd",
+    "european bank for reconstruction"
+   ],
+   "G7": [
+    "g7",
+    "group of seven"
+   ],
+   "Kiel Institute": [
+    "kiel institute",
+    "ifw kiel"
+   ],
+   "US Congress": [
+    "congress",
+    "senate",
+    "house of representatives"
+   ],
+   "Rammstein Group": [
+    "ramstein"
+   ]
+  },
+  "people": {
+   "Trump": [
+    "trump"
+   ],
+   "Zelensky": [
+    "zelensky",
+    "zelenskyy",
+    "zelenskii"
+   ],
+   "Putin": [
+    "putin"
+   ],
+   "Rutte": [
+    "rutte"
+   ],
+   "Hegseth": [
+    "hegseth"
+   ],
+   "Rubio": [
+    "rubio"
+   ],
+   "Merz": [
+    "merz"
+   ],
+   "Starmer": [
+    "starmer"
+   ],
+   "Macron": [
+    "macron"
+   ]
+  },
+  "systems": {
+   "Patriot": [
+    "patriot"
+   ],
+   "HIMARS": [
+    "himars"
+   ],
+   "F-16": [
+    "f-16"
+   ],
+   "Leopard": [
+    "leopard"
+   ],
+   "Abrams": [
+    "abrams"
+   ],
+   "NASAMS": [
+    "nasams"
+   ],
+   "IRIS-T": [
+    "iris-t"
+   ],
+   "ATACMS": [
+    "atacms"
+   ],
+   "Javelin": [
+    "javelin"
+   ]
+  }
+ },
+ "baseline": {
+  "note": "资金机制与能力基线（2026-09-19 首次运行录入，均为可核验的结构性事实；窗口内动态基线由累积档滚动更新）",
+  "rows": [
+   {
+    "date": "2024-04-24",
+    "event": "美国《乌克兰安全补充拨款法》约 610 亿美元（2024 年国会通过，对乌最大单一拨款包；注意这是拨款口径，非交付口径）",
+    "tier": "T1",
+    "source": "US Congress 公开立法记录"
+   },
+   {
+    "date": "2024-02-23",
+    "event": "G7 确认以俄被冻结主权资产收益为担保向乌提供约 500 亿美元贷款（ERA 框架），由资产利息偿付",
+    "tier": "T1",
+    "source": "G7 领导人声明"
+   },
+   {
+    "date": "2024-02-01",
+    "event": "欧盟乌克兰基金（Ukraine Facility）2024-2027 年 500 亿欧元框架（赠款+贷款）通过",
+    "tier": "T1",
+    "source": "European Council"
+   }
+  ],
+  "capability_rows": [
+   {
+    "date": "2026-09-19",
+    "event": "军援估值口径注意：PDA（总统裁减权，从美军库存现提）与 USAI（合同制采购，交付周期以年计）口径不同，禁相加读作『已交付』",
+    "tier": "T2",
+    "source": "结构口径说明"
+   },
+   {
+    "date": "2026-09-19",
+    "event": "情报支持：官方从不披露分享范围/中断细节，该桶几乎全部为匿名官员转述（T3），只记录方向不作事实认定",
+    "tier": "T3",
+    "source": "结构口径说明"
+   }
+  ]
+ },
+ "report": {
+  "title": "俄乌冲突·乌克兰西方后援监测",
+  "known_limitations": [
+   "援助口径四层严禁混加：承诺(pledge) ≠ 拨款(appropriated) ≠ 交付(delivered) ≠ 实际消耗；flags 逐条标注 pledge_only/delivered，任何总额只允许同层相加。",
+   "军援估值两套口径：PDA（从美军库存现提）与 USAI（合同制采购）记账方式不同，数字不可横向比较。",
+   "情报支持细节官方极少披露，该桶几乎全部为匿名官员转述（T3），只记录方向不作事实认定。",
+   "gnews 9 通道依赖代理出口可达 google：2026-09-19 出口 50465 对 google 域全断，断连期窗口覆盖不完整，出口恢复后自动回补。",
+   "新华社（xinhua-home 首页解析，仅标题）与中新社为官方媒体窗口（中方立场，标注使用）；gn-xinhua/gn-china 为聚合搜索通道，同受出口依赖。",
+   "TASS/Moscow Times 为俄方窗口：对西方援助的报道常为宣传框架，只作俄方反应记录，不当独立事实。",
+   "US DoD 合同 RSS 403（Akamai），武器合同一手细节暂缺，经 defense-news 转述层覆盖；Kiel 援助追踪器（T2 权威）本出口不可达，留档复测。",
+   "援助动能（扩张/收缩）词表为启发式，只看方向不看强度；'record' 等词可能受非援助语境干扰。",
+   "aid_packages 桶的裸词 aid 依赖第二维乌克兰语境门控：正文顺带提及援助的政治/能源新闻（如 AfD-俄气会谈）仍会进桶，属弱相关，靠 §7 人工复核。"
+  ]
+ },
+ "glossary": {
+  "ru": {
+   "Государственная дума": "国家杜马（议会下院）",
+   "депутат": "议员",
+   "выборы": "选举",
+   "голосование": "投票",
+   "бюджет": "预算",
+   "дефицит": "赤字",
+   "профицит": "盈余",
+   "нефть": "石油",
+   "нефтепродукт": "石油产品",
+   "газ": "天然气",
+   "экспорт": "出口",
+   "импорт": "进口",
+   "рубль": "卢布",
+   "курс": "汇率",
+   "инфляция": "通胀",
+   "цена": "价格",
+   "добыча": "开采/产量",
+   "баррель": "桶",
+   "Минфин": "财政部",
+   "Минобороны": "国防部",
+   "Минэкономразвития": "经济发展部",
+   "Центробанк": "中央银行",
+   "ЦБ": "央行",
+   "Росстат": "国家统计局",
+   "Правительство": "政府",
+   "Кремль": "克里姆林宫（俄总统府）",
+   "президент": "总统",
+   "Путин": "普京",
+   "Мишустин": "米舒斯京",
+   "Лавров": "拉夫罗夫",
+   "Песков": "佩斯科夫",
+   "Белоусов": "别洛乌索夫",
+   "санкции": "制裁",
+   "мобилизация": "动员",
+   "армия": "军队",
+   "ракета": "导弹",
+   "беспилотник": "无人机",
+   "дроны": "无人机",
+   "удар": "打击",
+   "обстрел": "炮击",
+   "фронт": "前线",
+   "переговоры": "谈判",
+   "соглашение": "协议",
+   "прекращение огня": "停火",
+   "мирный": "和平的",
+   "зарплата": "工资",
+   "безработица": "失业",
+   "рабочая сила": "劳动力",
+   "кадровый дефицит": "用工/人才缺口",
+   "ВВП": "GDP（国内生产总值）",
+   "налог": "税",
+   "тариф": "关税/费率",
+   "порт": "港口",
+   "танкер": "油轮",
+   "трубопровод": "管道",
+   "Газпром": "俄气（俄罗斯天然气工业股份公司）",
+   "Роснефть": "俄油（俄罗斯石油公司）",
+   "Лукойл": "卢克石油",
+   "НПЗ": "炼油厂",
+   "ОПЕК": "OPEC（石油输出国组织）",
+   "Украина": "乌克兰",
+   "Киев": "基辅",
+   "Москва": "莫斯科",
+   "ВСУ": "乌克兰武装部队",
+   "СВО": "「特别军事行动」（俄方对俄乌战争的官方称谓）",
+   "Госдума": "国家杜马",
+   "Совет Федерации": "联邦委员会（议会上院）",
+   "законопроект": "法律草案",
+   "закон": "法律",
+   "указ": "总统令",
+   "заявление": "声明",
+   "заявил": "表示/声明",
+   "сообщил": "通报",
+   "поставки": "供应/交付",
+   "вооружение": "武器装备",
+   "оборона": "国防",
+   "США": "美国"
+  },
+  "uk": {
+   "Україна": "乌克兰",
+   "Зеленський": "泽连斯基",
+   "Верховна Рада": "最高拉达（乌克兰议会）",
+   "Кабінет Міністрів": "部长内阁",
+   "Міністерство оборони": "国防部",
+   "Збройні сили": "武装部队",
+   "допомога": "援助",
+   "зброя": "武器",
+   "постачання": "供应/交付",
+   "санкції": "制裁",
+   "переговори": "谈判",
+   "припинення вогню": "停火",
+   "обстріл": "炮击",
+   "ракета": "导弹",
+   "безпілотник": "无人机",
+   "дрон": "无人机",
+   "бюджет": "预算",
+   "дефіцит": "赤字",
+   "експорт": "出口",
+   "зерно": "粮食",
+   "врожай": "收成",
+   "порт": "港口",
+   "мобілізація": "动员",
+   "енергетика": "能源",
+   "електроенергія": "电力",
+   "АЕС": "核电站",
+   "ППО": "防空",
+   "позика": "贷款",
+   "кредит": "贷款/信贷",
+   "грант": "赠款",
+   "МВФ": "IMF（国际货币基金组织）",
+   "ЄС": "EU（欧盟）",
+   "НАТО": "北约",
+   "Київ": "基辅",
+   "Харків": "哈尔科夫",
+   "Одеса": "敖德萨",
+   "Дніпро": "第聂伯罗"
+  }
+ }
+}

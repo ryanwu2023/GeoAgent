@@ -1,0 +1,1147 @@
+{
+  "project": "mideast-monitor",
+  "topic": "美伊冲突·中东各国态势监测（麦加防务协议/沙特-胡塞/伊拉克民兵/海湾/航运/斡旋）",
+  "as_of_note": "战争 2026-02-28 爆发；麦加协议 2026-08-07 签署；胡塞 9 月发起海岸攻势夺取曼德海峡要地",
+  "schema_ver": 1,
+  "parse_ver": 1,
+  "max_age_days": 400,
+  "window_days": 14,
+  "per_source_max": 60,
+  "sources": [
+    {
+      "id": "un-press",
+      "url": "https://press.un.org/en/rss.xml",
+      "tier": "T1",
+      "publisher": "United Nations",
+      "enabled": true,
+      "note": "UN 新闻稿（安理会/秘书长），UNSCR 2817 谴责伊朗袭击阿拉伯国家"
+    },
+    {
+      "id": "icg-rss",
+      "url": "https://www.crisisgroup.org/rss.xml",
+      "tier": "T2",
+      "publisher": "Intl Crisis Group",
+      "enabled": true,
+      "note": "也门/海湾冲突分析（Closing the New War Front in Yemen 作者）"
+    },
+    {
+      "id": "lwj-feed",
+      "url": "https://www.longwarjournal.org/feed",
+      "tier": "T2",
+      "publisher": "Long War Journal (FDD)",
+      "enabled": true,
+      "note": "民兵袭击记录 | 2026-09-20 实测 /rss、/feed/、/arc/... 三个路径全部 403（出口 IP 被拦）；保留启用待出口变化，连续失败已在「信源健康」告警。 | 2026-09-20 终审：HTTP 403（/rss、/feed/、/arc/... 全路径被出口 IP 拒）；保留启用待出口变化。"
+    },
+    {
+      "id": "aljazeera-all",
+      "url": "https://www.aljazeera.com/xml/rss/all.xml",
+      "tier": "T3",
+      "publisher": "Al Jazeera",
+      "enabled": true,
+      "note": "卡塔尔系区域视角（与沙特系对照当事方立场）"
+    },
+    {
+      "id": "aawsat-feed",
+      "url": "https://english.aawsat.com/feed",
+      "tier": "T3",
+      "publisher": "Asharq Al-Awsat",
+      "enabled": true,
+      "note": "沙特系英文，海湾官方数字多源"
+    },
+    {
+      "id": "iraqinews",
+      "url": "https://www.iraqinews.com/feed/",
+      "tier": "T3",
+      "publisher": "IraqiNews",
+      "enabled": true,
+      "note": "伊拉克"
+    },
+    {
+      "id": "bbci-mideast",
+      "url": "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
+      "tier": "T3",
+      "publisher": "BBC",
+      "enabled": true,
+      "note": "中东频道"
+    },
+    {
+      "id": "guardian-mideast",
+      "url": "https://www.theguardian.com/world/middleeast/rss",
+      "tier": "T3",
+      "publisher": "The Guardian",
+      "enabled": true,
+      "note": "中东频道"
+    },
+    {
+      "id": "nyt-mideast",
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/MiddleEast.xml",
+      "tier": "T3",
+      "publisher": "NYT",
+      "enabled": true,
+      "note": "中东频道"
+    },
+    {
+      "id": "mee-rss",
+      "url": "https://www.middleeasteye.net/rss",
+      "tier": "T3",
+      "publisher": "Middle East Eye",
+      "enabled": true,
+      "note": "批评视角"
+    },
+    {
+      "id": "rstatecraft",
+      "url": "https://responsiblestatecraft.org/feed",
+      "tier": "T3",
+      "publisher": "Responsible Statecraft",
+      "enabled": true,
+      "note": "军控/外交政策分析"
+    },
+    {
+      "id": "anadolu",
+      "url": "https://www.aa.com.tr/en/rss/default?cat=middle-east",
+      "tier": "T3",
+      "publisher": "Anadolu Agency",
+      "enabled": true,
+      "note": "土耳其官方通讯社（土耳其侧动向 T3 层） | 2026-09-20：主路径读取超时，备用途经实测 200/27-30 条；已配 alt_urls。 | 2026-09-20 终审：WinError 10054 远程主机强迫关闭（主路径）；已配 alt_urls（world / tr-guncel），多数轮次可经备用路径取到 27-30 条。",
+      "alt_urls": [
+        "https://www.aa.com.tr/en/rss/default?cat=world",
+        "https://www.aa.com.tr/tr/rss/default?cat=guncel"
+      ]
+    },
+    {
+      "id": "gn-mecca-pact",
+      "url": "https://news.google.com/rss/search?q=%22Mecca+(defence+OR+defense)+agreement%22+OR+%22Mecca+pact%22&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "麦加防务协议总通道"
+    },
+    {
+      "id": "gn-pact-egypt",
+      "url": "https://news.google.com/rss/search?q=%22Mecca+pact%22+Egypt+join&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "埃及加入动向"
+    },
+    {
+      "id": "gn-mmdc",
+      "url": "https://news.google.com/rss/search?q=maritime+coalition+Red+Sea+shipping+Saudi&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "海上联盟/红海护航"
+    },
+    {
+      "id": "gn-saudi-houthi",
+      "url": "https://news.google.com/rss/search?q=Saudi+Houthi+(strike+OR+attack+OR+ceasefire)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "沙特-胡塞战事"
+    },
+    {
+      "id": "gn-houthi-mandeb",
+      "url": "https://news.google.com/rss/search?q=Houthi+Bab+el-Mandeb+(Mokha+OR+Perim+OR+Hodeida)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "胡塞-曼德海峡要地"
+    },
+    {
+      "id": "gn-pakistan-ksa",
+      "url": "https://news.google.com/rss/search?q=Pakistan+Saudi+defence+(troops+OR+aid+OR+agreement)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "巴基斯坦-沙特军援"
+    },
+    {
+      "id": "gn-iraq-militia",
+      "url": "https://news.google.com/rss/search?q=Iraq+militia+attack+%22US+troops%22+OR+%22US+base%22&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "伊拉克民兵袭美军"
+    },
+    {
+      "id": "gn-kataib",
+      "url": "https://news.google.com/rss/search?q=%22Kataib+Hezbollah%22+OR+%22Islamic+Resistance+in+Iraq%22&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "真主旅/伊拉克伊斯兰抵抗"
+    },
+    {
+      "id": "gn-pmf",
+      "url": "https://news.google.com/rss/search?q=Popular+Mobilization+Forces+(strike+OR+killed)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "PMF 动向"
+    },
+    {
+      "id": "gn-gulf-iran",
+      "url": "https://news.google.com/rss/search?q=(Kuwait+OR+Bahrain+OR+Qatar+OR+UAE+OR+Oman)+Iran+attack&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "海湾五国遭伊朗攻击"
+    },
+    {
+      "id": "gn-oman-mediate",
+      "url": "https://news.google.com/rss/search?q=Oman+mediate+(Iran+OR+Houthi+OR+US)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "阿曼斡旋"
+    },
+    {
+      "id": "gn-qatar-mediate",
+      "url": "https://news.google.com/rss/search?q=Qatar+mediation+(Iran+OR+Hormuz+OR+Gulf)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "卡塔尔斡旋"
+    },
+    {
+      "id": "gn-yemen-gov",
+      "url": "https://news.google.com/rss/search?q=Yemen+government+forces+(Houthi+OR+front+OR+offensive)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "也门政府军战线"
+    },
+    {
+      "id": "gn-redsea-ship",
+      "url": "https://news.google.com/rss/search?q=%22Red+Sea%22+vessel+(attacked+OR+struck+OR+seized)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "红海航运袭击"
+    },
+    {
+      "id": "gn-hormuz-gulf",
+      "url": "https://news.google.com/rss/search?q=%22Strait+of+Hormuz%22+(tanker+OR+transit+OR+closure)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "霍尔木兹/海湾航运"
+    },
+    {
+      "id": "gn-iran-axis",
+      "url": "https://news.google.com/rss/search?q=Iran+(proxy+OR+axis)+Gulf+(Saudi+OR+UAE+OR+Jordan)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "伊朗对海湾渗透"
+    },
+    {
+      "id": "gn-turkey-saudi",
+      "url": "https://news.google.com/rss/search?q=Turkey+Saudi+(Erdogan+OR+ankara)+defence+Iran&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "土耳其侧动向"
+    },
+    {
+      "id": "gn-egypt-gulf",
+      "url": "https://news.google.com/rss/search?q=Egypt+(Sisi+OR+Cairo)+(Saudi+OR+Houthi+OR+Red+Sea)+defence&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "埃及侧动向"
+    },
+    {
+      "id": "gn-jordan-iran",
+      "url": "https://news.google.com/rss/search?q=Jordan+(Iran+OR+Houthi+OR+militia)+attack+defence&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "约旦侧动向"
+    },
+    {
+      "id": "gn-us-troops-gulf",
+      "url": "https://news.google.com/rss/search?q=%22US+troops%22+(Kuwait+OR+Bahrain+OR+Jordan+OR+%22Prince+Sultan%22)+(killed+OR+attack+OR+base)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "驻海湾美军遇袭"
+    },
+    {
+      "id": "gn-unsc-iran",
+      "url": "https://news.google.com/rss/search?q=UN+Security+Council+(Iran+OR+Hormuz+OR+%22Arab+states%22)+resolution&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "安理会动向"
+    },
+    {
+      "id": "national-rss",
+      "url": "https://www.thenationalnews.com/rss",
+      "tier": "T3",
+      "publisher": "The National",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（变体 /news/mena/rss.xml、/feed 均 404）。阿联酋 Akamai 防护。替代：aawsat + gn-* 通道转述层"
+    },
+    {
+      "id": "arabnews-rss",
+      "url": "https://www.arabnews.com/rss",
+      "tier": "T3",
+      "publisher": "Arab News",
+      "enabled": false,
+      "note": "2026-09-19 实测 403（rss.xml 同）。沙特系防护。替代：aawsat-feed 已可用"
+    },
+    {
+      "id": "alarabiya-en",
+      "url": "https://english.alarabiya.net/.rss/all",
+      "tier": "T3",
+      "publisher": "Al Arabiya English",
+      "enabled": false,
+      "note": "2026-09-19 实测 403（变体 /rss/all.xml 403、/tools/rss 403）。替代：aawsat-feed + gn-*"
+    },
+    {
+      "id": "gulfnews-rss",
+      "url": "https://gulfnews.com/rss",
+      "tier": "T3",
+      "publisher": "Gulf News",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（world 变体同）。替代：national 不可用后以 aawsat/aljazeera 覆盖阿联酋"
+    },
+    {
+      "id": "rudaw-rss",
+      "url": "https://www.rudaw.net/english/rss",
+      "tier": "T3",
+      "publisher": "Rudaw",
+      "enabled": false,
+      "note": "2026-09-19 实测 200 但返回 HTML 非 feed。替代：gn-iraq-militia/gn-kataib 转述层"
+    },
+    {
+      "id": "shafaq-en",
+      "url": "https://shafaq.com/en/rss",
+      "tier": "T3",
+      "publisher": "Shafaq News",
+      "enabled": false,
+      "note": "2026-09-19 实测 200 但返回 HTML 非 feed。替代：gn-kataib 通道"
+    },
+    {
+      "id": "alsumaria-en",
+      "url": "https://www.alsumaria.tv/en/RSS",
+      "tier": "T3",
+      "publisher": "Alsumaria",
+      "enabled": false,
+      "note": "2026-09-19 实测 404"
+    },
+    {
+      "id": "ina-en",
+      "url": "https://en.ina-news.org/rss",
+      "tier": "T1",
+      "publisher": "Iraqi News Agency",
+      "enabled": false,
+      "note": "2026-09-19 实测 SSL 连接被重置（UNEXPECTED_EOF）。伊拉克官方通讯社不可达"
+    },
+    {
+      "id": "isw-update",
+      "url": "https://www.understandingwar.org/backgrounder/rss.xml",
+      "tier": "T2",
+      "publisher": "ISW",
+      "enabled": false,
+      "note": "2026-09-19 实测 403（www 根 RSS 同）。ISW 每日 Iran Update 是伊拉克民兵袭击计数最权威源，RSS 被防护——计数靠 gn-kataib/gn-pmf 转述层替代并在报告披露口径降级"
+    },
+    {
+      "id": "ctp-rss",
+      "url": "https://www.criticalthreats.org/rss",
+      "tier": "T2",
+      "publisher": "Critical Threats",
+      "enabled": false,
+      "note": "2026-09-19 实测 404。替代：lwj-feed（同为 FDD 旗下）"
+    },
+    {
+      "id": "qna-rss",
+      "url": "https://qna.org.qa/en/News-Area/rss",
+      "tier": "T1",
+      "publisher": "Qatar News Agency",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（变体 /en/rss 同）。卡塔尔官方表态靠 aljazeera（卡塔尔系）+ gn-qatar-mediate"
+    },
+    {
+      "id": "centcom-rss",
+      "url": "https://www.centcom.mil/MEDIA/PRESS-RELEASES/rss/",
+      "tier": "T1",
+      "publisher": "CENTCOM",
+      "enabled": false,
+      "note": "2026-09-19 实测 403。美军伤亡/拦截声明靠 gn-us-troops-gulf 转述层（口径：转述非一手）"
+    },
+    {
+      "id": "ap-mideast",
+      "url": "https://apnews.com/index/middle-east/rss.rss",
+      "tier": "T3",
+      "publisher": "AP",
+      "enabled": false,
+      "note": "2026-09-19 实测 403。替代：nyt/bbc/guardian 中东频道 + gnews"
+    },
+    {
+      "id": "jordantimes",
+      "url": "https://jordantimes.com/feed/",
+      "tier": "T3",
+      "publisher": "Jordan Times",
+      "enabled": false,
+      "note": "2026-09-19 实测 200 但返回 HTML 非 feed"
+    },
+    {
+      "id": "defpost",
+      "url": "https://www.defensepost.com/feed/",
+      "tier": "T3",
+      "publisher": "The Defense Post",
+      "enabled": false,
+      "note": "2026-09-19 实测 200 但返回 HTML 非 feed"
+    },
+    {
+      "id": "almasirah",
+      "url": "https://english.almasirah.net.ye/rss",
+      "tier": "T4",
+      "publisher": "Al-Masirah (Houthi)",
+      "enabled": false,
+      "note": "未实测，直接不启用：胡塞官方媒体属当事方宣传（T4 不可核验），其声称仅经 T3 转述层引用并标注口径"
+    },
+    {
+      "id": "globaltimes",
+      "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+      "tier": "T3",
+      "publisher": "Global Times 环球时报英文版",
+      "enabled": false,
+      "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担"
+    },
+    {
+      "id": "cgtn-world",
+      "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+      "tier": "T3",
+      "publisher": "CGTN 中国环球电视网",
+      "enabled": true,
+      "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）"
+    }
+  ],
+  "anchor_note": "锚定词表在主脚本（中东全域专名）；gulf 单词可撞墨西哥湾，靠 gnews 查询自带中东词+人工复核兜底",
+  "buckets": {
+    "defence_pact": {
+      "label": "防务协议与安全架构",
+      "require_all": [
+        [
+          "mecca pact",
+          "mecca agreement",
+          "mecca joint",
+          "joint deterrence",
+          "defence pact",
+          "defense pact",
+          "security pact",
+          "defence alliance",
+          "defense alliance",
+          "mutual defence",
+          "mutual defense",
+          "mmdc",
+          "maritime defence coalition",
+          "maritime defense coalition",
+          "defence agreement",
+          "defense agreement",
+          "military alliance",
+          "defence cooperation",
+          "defense cooperation"
+        ],
+        [
+          "sign",
+          "join",
+          "accede",
+          "ratif",
+          "expand",
+          "member",
+          "commit",
+          "consider",
+          "weigh",
+          "stud",
+          "ink",
+          "seal",
+          "form",
+          "establi",
+          "announce",
+          "invite",
+          "admit",
+          "enter",
+          "talk",
+          "discuss",
+          "militari",
+          "aid",
+          "deliver",
+          "suppl"
+        ]
+      ]
+    },
+    "houthi_war": {
+      "label": "也门战线（胡塞vs沙特/政府军）",
+      "require_all": [
+        [
+          "houthi",
+          "ansar allah",
+          "sanaa"
+        ],
+        [
+          "strike",
+          "attack",
+          "offensiv",
+          "seize",
+          "capture",
+          "mokha",
+          "hodeida",
+          "perim",
+          "zubab",
+          "mandeb",
+          "mandab",
+          "coast",
+          "front",
+          "clash",
+          "airstrik",
+          "drone",
+          "missile",
+          "blockade",
+          "ceasefire",
+          "truce",
+          "battl",
+          "fight",
+          "territor",
+          "port",
+          "withdraw",
+          "advance",
+          "gains"
+        ]
+      ]
+    },
+    "iraq_militia": {
+      "label": "伊拉克民兵vs美军",
+      "require_all": [
+        [
+          "kataib",
+          "islamic resistance in iraq",
+          "popular mobilization",
+          "pmf",
+          "nujaba",
+          "sayyid al-shuhada",
+          "sayyed al shuhada",
+          "badr organization",
+          "awliya al-dam",
+          "paramilitary",
+          "iraqi militia",
+          "iraqi militias",
+          "iraq's militias",
+          "militias in iraq",
+          "militia in iraq",
+          "pro-iran militia",
+          "iran-backed militia",
+          "iranian-backed militia"
+        ],
+        [
+          "strike",
+          "attack",
+          "drone",
+          "rocket",
+          "us base",
+          "u.s. base",
+          "american base",
+          "us troop",
+          "u.s. troop",
+          "american troop",
+          "embassy",
+          "kill",
+          "wound",
+          "claim",
+          "launch",
+          "target",
+          "injur"
+        ]
+      ]
+    },
+    "gulf_front": {
+      "label": "海湾国家遇袭与防务",
+      "entity_group": "gulf_states",
+      "require_all": [
+        [
+          "attack",
+          "strike",
+          "missile",
+          "drone",
+          "threat",
+          "retaliat",
+          "intercept",
+          "alert",
+          "airspace",
+          "evacuat",
+          "damag",
+          "casualt",
+          "kill",
+          "wound",
+          "hormuz",
+          "defen",
+          "base",
+          "war"
+        ]
+      ]
+    },
+    "shipping": {
+      "label": "双海峡与红海航运",
+      "require_all": [
+        [
+          "red sea",
+          "bab el-mandeb",
+          "bab al-mandab",
+          "mandeb",
+          "mandab",
+          "strait of hormuz",
+          "hormuz",
+          "gulf of aden",
+          "tanker",
+          "cargo ship",
+          "vessel",
+          "merchant ship",
+          "shipping"
+        ],
+        [
+          "attack",
+          "struck",
+          "hit",
+          "seize",
+          "transit",
+          "traffic",
+          "insur",
+          "closure",
+          "disrupt",
+          "sink",
+          "crew",
+          "port",
+          "boarding",
+          "blockade",
+          "safe"
+        ]
+      ]
+    },
+    "mediation": {
+      "label": "斡旋与停火外交",
+      "entity_group": "mediators",
+      "require_all": [
+        [
+          "ceasefire",
+          "truce",
+          "mediate",
+          "mediation",
+          "mediator",
+          "negotiat",
+          "talks",
+          "proposal",
+          "offer",
+          "de-escalat",
+          "deescalat",
+          "diplo",
+          "deal",
+          "peace",
+          "back channel",
+          "backchannel",
+          "concess",
+          "dialogue"
+        ]
+      ]
+    },
+    "protest": {
+      "label": "街头与内部反应",
+      "require_all": [
+        [
+          "protest",
+          "protests",
+          "protester",
+          "demonstrat",
+          "vigil",
+          "upris",
+          "unrest",
+          "riot",
+          "clash with police",
+          "rally in",
+          "rally at",
+          "rally outside",
+          "rally against",
+          "rally demanding",
+          "rallying in",
+          "rallying against",
+          "rallied in",
+          "rallied against",
+          "rallies in",
+          "rallies against"
+        ]
+      ]
+    }
+  },
+  "stance": {
+    "escalate": [
+      "strike",
+      "attack",
+      "escalat",
+      "bombard",
+      "threaten",
+      "retaliat",
+      "blockade",
+      "seize",
+      "mobiliz",
+      "intercept",
+      "kill",
+      "wound",
+      "launch",
+      "offensiv",
+      "shut",
+      "airspace",
+      "confront",
+      "clash",
+      "hostilit",
+      "ultimatum",
+      "revenge",
+      "punish",
+      "unleash"
+    ],
+    "deescalate": [
+      "ceasefire",
+      "truce",
+      "negotiat",
+      "talks",
+      "mediat",
+      "diplomacy",
+      "diplomatic",
+      "de-escalat",
+      "deescalat",
+      "proposal",
+      "peace",
+      "detente",
+      "restraint",
+      "dialogue",
+      "concess",
+      "thaw",
+      "compromise",
+      "agree",
+      "lift",
+      "resume",
+      "calm"
+    ]
+  },
+  "entities": {
+    "pact_actors": {
+      "Saudi Arabia": [
+        "Saudi Arabia",
+        "Saudi",
+        "Riyadh",
+        "MBS",
+        "Mohammed bin Salman",
+        "bin Salman"
+      ],
+      "Turkiye": [
+        "Turkey",
+        "Turkiye",
+        "Ankara",
+        "Erdogan",
+        "Hakan Fidan",
+        "Fidan"
+      ],
+      "Pakistan": [
+        "Pakistan",
+        "Pakistani",
+        "Islamabad",
+        "Shehbaz Sharif",
+        "Sharif",
+        "Asim Munir"
+      ],
+      "Egypt": [
+        "Egypt",
+        "Egyptian",
+        "Cairo",
+        "Sisi",
+        "Badr Abdelatty",
+        "Abdelatty"
+      ]
+    },
+    "militias": {
+      "Kataib Hezbollah": [
+        "Kataib Hezbollah",
+        "Kata'ib Hezbollah",
+        "Kataib Hizbollah"
+      ],
+      "Islamic Resistance in Iraq": [
+        "Islamic Resistance in Iraq"
+      ],
+      "Nujaba": [
+        "Nujaba",
+        "al-Nujaba"
+      ],
+      "Sayyid al-Shuhada": [
+        "Sayyid al-Shuhada",
+        "Sayyed al Shuhada",
+        "Kataib Sayyid"
+      ],
+      "Badr Organization": [
+        "Badr Organization",
+        "Badr Organisation"
+      ],
+      "PMF": [
+        "Popular Mobilization Forces",
+        "Popular Mobilisation",
+        "PMF",
+        "Hashd al-Shaabi"
+      ],
+      "Awliya al-Dam": [
+        "Awliya al-Dam",
+        "Awliya al Dam",
+        "Saraya Awliya"
+      ],
+      "Qais al-Khazali": [
+        "Qais al-Khazali",
+        "Khazali"
+      ],
+      "Asaib Ahl al-Haq": [
+        "Asa'ib Ahl al-Haq",
+        "Asaib Ahl al-Haq"
+      ]
+    },
+    "gulf_states": {
+      "Kuwait": [
+        "Kuwait",
+        "Kuwaiti"
+      ],
+      "Bahrain": [
+        "Bahrain",
+        "Bahraini",
+        "Manama"
+      ],
+      "Qatar": [
+        "Qatar",
+        "Qatari",
+        "Doha"
+      ],
+      "UAE": [
+        "UAE",
+        "Emirati",
+        "United Arab Emirates",
+        "Abu Dhabi",
+        "Dubai"
+      ],
+      "Oman": [
+        "Oman",
+        "Omani",
+        "Muscat"
+      ],
+      "Jordan": [
+        "Jordan",
+        "Jordanian",
+        "Amman",
+        "Muwaffaq Salti"
+      ]
+    },
+    "mediators": {
+      "Oman": [
+        "Oman",
+        "Omani",
+        "Muscat"
+      ],
+      "Qatar": [
+        "Qatar",
+        "Qatari",
+        "Doha"
+      ],
+      "China": [
+        "China",
+        "Chinese",
+        "Beijing",
+        "Wang Yi"
+      ],
+      "UN": [
+        "United Nations",
+        "UN Security Council",
+        "UNSC",
+        "UN special envoy",
+        "Guterres"
+      ],
+      "Egypt": [
+        "Egypt",
+        "Egyptian",
+        "Cairo"
+      ],
+      "Iraq govt": [
+        "Iraqi government",
+        "Baghdad",
+        "al-Sudani",
+        "Sudani",
+        "Fuad Hussein"
+      ]
+    },
+    "houthi_figures": {
+      "Abdul-Malik al-Houthi": [
+        "Abdul-Malik al-Houthi",
+        "Abdul Malik al-Houthi",
+        "al-Houthi"
+      ],
+      "Yahya Saree": [
+        "Yahya Saree",
+        "Saree",
+        "Sarea"
+      ],
+      "Mohammed Abdulsalam": [
+        "Mohammed Abdulsalam",
+        "Abdulsalam"
+      ]
+    },
+    "yemen_gov": {
+      "PLC": [
+        "Presidential Leadership Council",
+        "PLC",
+        "Rashad al-Alimi",
+        "al-Alimi"
+      ],
+      "STC": [
+        "Southern Transitional Council",
+        "STC",
+        "Aidarous al-Zubaidi",
+        "al-Zubaidi"
+      ]
+    }
+  },
+  "manual_baseline_note": "手工基线=T2/T3 权威转写（探测期 2026-09-19 检索），逐条带来源与等级；窗口内新增事件由爬虫动态收录",
+  "pact_baseline": [
+    {
+      "date": "2025-09-17",
+      "event": "沙特-巴基斯坦签署《战略共同防御协议》（麦加协议前置）",
+      "source": "Al Jazeera/IDSA",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-08-07",
+      "event": "沙特+土耳其+巴基斯坦在麦加签署《麦加共同威慑协议》——对任一成员的武装攻击视为对全体（类北约第5条）；联合军演/情报共享/AI 与无人系统共同研发；对成员国之外不针对任何国家",
+      "source": "Al Jazeera/The National/IDSA",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-08-08",
+      "event": "土耳其外长 Fidan：协议不限于三国，『必要时应把所有国家纳入伞下』；埃及是唯一被官方点名的候选国",
+      "source": "Al Jazeera (Anadolu)",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-08-14",
+      "event": "埃及外长 Abdelatty：加入前须研究宪法/法律/技术问题；Fidan 称『下一阶段埃及会加入』",
+      "source": "The National",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-08-26",
+      "event": "伊朗宣布新进攻学说（8 日后开始攻击海湾停泊船只）",
+      "source": "Solace Global",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-09-17",
+      "event": "巴基斯坦军方：将『不惜一切』支持沙特，包括协助保卫麦加与麦地那",
+      "source": "央视新闻/路透",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-09-18",
+      "event": "巴基斯坦向沙特交付新军援：火炮系统、无人机及无人机防御系统；已部署装备重新部署配合大规模防御行动",
+      "source": "德新社(伊斯兰堡消息人士)",
+      "tier": "T3"
+    }
+  ],
+  "houthi_baseline": [
+    {
+      "date": "2026-06",
+      "event": "胡塞宣布对沙特冲突进入『新阶段』（要求解除对胡塞港口空海封锁），随后宣布对沙特海空封锁",
+      "source": "UK Commons Library CBP-10427",
+      "tier": "T2"
+    },
+    {
+      "date": "2026-07-20",
+      "event": "胡塞开始攻击沙特领土与红海沙特关联船只（本轮升级起点）",
+      "source": "Intl Crisis Group",
+      "tier": "T2"
+    },
+    {
+      "date": "2026-09-03",
+      "event": "胡塞对也门西岸政府军发动地面攻势；至 9-11 声称攻占约 5400 平方公里",
+      "source": "新华社/ICG",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-09-11",
+      "event": "政府军失守 Mokha 港与祖巴卜；胡塞占领曼德海峡核心要地丕林岛——2022 年停火以来首次控制线变动",
+      "source": "ICG/新华社/UK Commons Library",
+      "tier": "T2"
+    },
+    {
+      "date": "2026-09-16",
+      "event": "路透：美方官员与胡塞代表（常驻马斯喀特的 Mohammed Abdulsalam）在美国驻阿曼使馆闭门会晤；胡塞承诺延续 2025 美胡塞停火、不袭美国/以色列船只、保障曼德海峡通航不收通行费——唯独沙特船只不在豁免之列",
+      "source": "Reuters via 头条转述/ICG",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-09-17",
+      "event": "胡塞称一周内遭沙特 300 次空袭；胡塞发言人誓言报复（否认袭击麦加、指沙特撒谎）",
+      "source": "胡塞军事发言人经央视转述",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-09-18",
+      "event": "沙特经阿曼向胡塞提议：两周停火+利雅得与胡塞领导层直接对话（先谈人道诉求再谈全面协议）",
+      "source": "Al-Akhbar（真主党系媒体）经耶路撒冷邮报转述",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-09-19",
+      "event": "利雅得凌晨遭空袭（Olaya 区两声巨响/导弹拦截）；沙特 7 地区首次发布安全警报后解除；塔伊夫拦截胡塞无人机碎片致 1 死 2 伤",
+      "source": "Reuters/央视",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-09-18",
+      "event": "联合国难民署：一周内近 3000 人从也门逃往吉布提；也门西海岸超 10 万人流离失所",
+      "source": "UNHCR 经新华社转述",
+      "tier": "T1"
+    }
+  ],
+  "iraq_baseline": [
+    {
+      "date": "2026-02-28",
+      "event": "美以对伊开战当日，Jurf Al Sakhar（真主旅驻地）遭导弹袭击致 2 死 5 伤；伊拉克伊斯兰抵抗宣布 16 次行动；真主旅/Nujaba/Sayyid al-Shuhada 宣布参战袭击美军；伊拉克关闭领空",
+      "source": "The National",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-03-07",
+      "event": "疑似民兵火箭弹袭击美国驻巴格达使馆（被防空拦截）",
+      "source": "ISW 经检索转述",
+      "tier": "T2"
+    },
+    {
+      "date": "2026-03-13",
+      "event": "美军空袭安巴尔省 PMF 总部致至少 15 死（巴格达坚持死者为正规军）",
+      "source": "The Insider",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-03-14",
+      "event": "美国驻巴格达使馆要求所有美国公民立即离开伊拉克",
+      "source": "ISW",
+      "tier": "T2"
+    },
+    {
+      "date": "2026-03-25",
+      "event": "伊拉克国家安全委员会下令：部队遇袭可无需上级命令直接还击（明确指向美军航空兵）",
+      "source": "The Insider",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-04-10",
+      "event": "PMF 战报：开战至停火其人员约 80 死 270+ 伤；真主旅称 25 名指挥官与成员阵亡",
+      "source": "PMF/真主旅 Telegram 经 Meir Amit 转述",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-04-08",
+      "event": "伊拉克伊斯兰抵抗开战以来声称 823+ 次袭击（导弹/无人机，主要目标驻伊及地区美军设施）",
+      "source": "Meir Amit (Telegram 汇编)",
+      "tier": "T2"
+    },
+    {
+      "date": "2026-04-11",
+      "event": "Asharq Al-Awsat：IRGC 拒绝伊拉克政府与什叶派协调框架停止袭击的请求，继续『影子军事监督』民兵行动",
+      "source": "Asharq Al-Awsat 经 Meir Amit 转述",
+      "tier": "T3"
+    }
+  ],
+  "gulf_baseline": [
+    {
+      "date": "2026-03",
+      "event": "联合国安理会第 2817 号决议：最强烈谴责伊朗袭击阿拉伯国家、要求停止违反国际法行为并尊重霍尔木兹航行自由",
+      "source": "QNA 声明引述",
+      "tier": "T1"
+    },
+    {
+      "date": "2026-09-08",
+      "event": "伊朗袭击致美军人员死于科威特/约旦/沙特：科威特民用港口简易指挥中心遭单向攻击无人机、约旦 Muwaffaq Salti 空军基地、沙特 Prince Sultan 空军基地（5 架 KC-135 受损）；胡塞袭击沙特南部 73 人受伤",
+      "source": "CrisisBrief 情报汇编",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-09-12",
+      "event": "卡塔尔在 IAEA 会议声明：最强烈谴责胡塞袭击沙特民用与经济设施及伊朗对约旦/巴林/科威特/阿联酋主权的侵犯",
+      "source": "QNA",
+      "tier": "T1"
+    },
+    {
+      "date": "2026-09-15",
+      "event": "伊朗革命卫队声称在霍尔木兹东部上空击落美 MQ-1 无人机；UKMTO 记录 9-13/9-15 两起海峡船只遭不明投射物袭击",
+      "source": "Security On Screen/UKMTO",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-09-16",
+      "event": "霍尔木兹通行量骤降：9-16 仅 3 艘（前日 12 艘，10 日均约 17）",
+      "source": "Security On Screen",
+      "tier": "T3"
+    },
+    {
+      "date": "2026-09-16",
+      "event": "特朗普：美国与伊朗战争『接近尾声』；CENTCOM 发言人：海峡通行『持续流动』、拒绝伊朗控制水道之说；Trump 预计 9-22 联大期间会见海湾六国领导人",
+      "source": "Security On Screen",
+      "tier": "T3"
+    }
+  ],
+  "output": {
+    "digest_prefix": "mideast-digest"
+  },
+  "report": {
+    "known_limitations": [
+      "海湾核心媒体（The National/Arab News/Al Arabiya/Gulf News）403/404 防护未绕过——沙特/阿联酋视角靠 aawsat（沙特系，实测可用）+ gnews 转述层，区域立场覆盖有偏（卡塔尔系 Al Jazeera 完整、沙特系仅 aawsat 一源）",
+      "ISW 每日 Iran Update（伊拉克民兵袭击计数权威）RSS 403——窗口内民兵袭击计数依赖 gnews 转述，完整性有缺口，只看方向",
+      "CENTCOM 403、伊拉克官方通讯社 SSL 中断、卡塔尔通讯社无 RSS——美军伤亡与海湾官方声明全部经 T3 转述，无一手直连",
+      "民兵组织（伊拉克伊斯兰抵抗/胡塞）声称的袭击次数与战果为单方 Telegram 口径，本程序仅收录 T3 转述并标注『声称』，不做核实",
+      "T4（Al-Masirah 等当事方宣传、社交媒体）不采集——不可核验",
+      "立场词表（升级/降温）与 kind 分类是启发式；否定翻转/曲撇号归一已内置，但双否定、讽刺语仍可能误判，逐条附 context 供人工复核",
+      "gnews 通道返回的是转述层标题，可能滞后于事件数小时；快照≠实时态势",
+      "手工基线为 2026-09-19 探测期 T2/T3 检索转写，成员国/控制线变动后须回源官方公报逐条核验"
+    ]
+  },
+  "glossary": {
+    "ar": {
+      "حكومة": "政府",
+      "انتخابات": "选举",
+      "عقوبات": "制裁",
+      "نفط": "石油",
+      "غزة": "加沙",
+      "حماس": "哈马斯",
+      "وقف إطلاق النار": "停火",
+      "اتفاق": "协议",
+      "جيش": "军队",
+      "رئيس الوزراء": "总理",
+      "حرب": "战争",
+      "صواريخ": "导弹",
+      "مساعدات": "援助",
+      "مفاوضات": "谈判",
+      "برميل": "桶"
+    },
+    "he": {
+      "ממשלה": "政府",
+      "בחירות": "选举",
+      "ראש הממשלה": "总理",
+      "כנסת": "议会",
+      "צהל": "以色列国防军",
+      "תקיפה": "袭击/打击",
+      "הסכם": "协议",
+      "הפסקת אש": "停火",
+      "חטופים": "被扣押人员",
+      "עזה": "加沙",
+      "חמאס": "哈马斯",
+      "חיזבאללה": "真主党",
+      "איראן": "伊朗",
+      "טילים": "导弹",
+      "מלחמה": "战争"
+    }
+  }
+}

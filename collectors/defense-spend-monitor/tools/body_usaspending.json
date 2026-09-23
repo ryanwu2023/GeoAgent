@@ -1,0 +1,20 @@
+{
+  "filters": {
+    "keywords": ["missile"],
+    "time_period": [{"start_date": "2026-06-01", "end_date": "2026-09-17"}],
+    "award_type_codes": ["A", "B", "C", "D"]
+  },
+  "fields": [
+    "Award ID",
+    "Recipient Name",
+    "Award Amount",
+    "Description",
+    "Start Date",
+    "Awarding Agency",
+    "Awarding Sub Agency"
+  ],
+  "sort": "Award Amount",
+  "order": "desc",
+  "limit": 5,
+  "page": 1
+}

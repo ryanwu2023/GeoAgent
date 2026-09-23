@@ -18,6 +18,11 @@ from backend.paths import collector_data_root, collector_source_root
 from scripts.integrate_collectors import load_registry
 
 
+def serialize_for_console(value) -> str:
+    """Return JSON that is safe even when Windows stdout still uses GBK."""
+    return json.dumps(value, ensure_ascii=True, indent=2)
+
+
 def select_collectors(registry: list[dict], ids: list[str], topic: str | None) -> list[dict]:
     wanted = set(ids)
     return [
@@ -107,10 +112,9 @@ def main() -> int:
     report_dir = PROJECT_ROOT / "data" / "collection-runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     report_dir.mkdir(parents=True, exist_ok=True)
     (report_dir / "results.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps(results, ensure_ascii=False, indent=2))
+    print(serialize_for_console(results))
     return 0 if all(item["returncode"] in (0, "not_provided") for item in results) else 1
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

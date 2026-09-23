@@ -1,0 +1,10 @@
+{
+  "category": "psc",
+  "filters": {
+    "agencies": [{"type": "awarding", "tier": "toptier", "name": "Department of Defense"}],
+    "time_period": [{"start_date": "2025-10-01", "end_date": "2026-09-17"}],
+    "award_type_codes": ["A", "B", "C", "D"]
+  },
+  "limit": 25,
+  "page": 1
+}

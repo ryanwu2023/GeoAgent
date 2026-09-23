@@ -1,0 +1,926 @@
+{
+ "parse_ver": 3,
+ "schema_ver": 2,
+ "window_days": 30,
+ "max_age_days": 45,
+ "per_source_max": 200,
+ "summary_max_chars": 1200,
+ "request_timeout": 30,
+ "min_interval_per_host": 1.2,
+ "prune_after_days": 365,
+ "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+ "sources": [
+  {
+   "id": "un-press",
+   "url": "https://press.un.org/en/rss.xml",
+   "tier": "T1",
+   "publisher": "United Nations",
+   "enabled": true,
+   "note": "UN 新闻稿（秘书处/人道影响），2026-09-19 实测 200/rss；diplomacy 项目同源在用"
+  },
+  {
+   "id": "crisisgroup",
+   "url": "https://www.crisisgroup.org/rss.xml",
+   "tier": "T2",
+   "publisher": "International Crisis Group",
+   "enabled": true,
+   "note": "国际危机组织研究（2026-09-19 实测 200/rss）"
+  },
+  {
+   "id": "euromaidan",
+   "url": "https://euromaidanpress.com/feed/",
+   "tier": "T3",
+   "publisher": "Euromaidan Press",
+   "enabled": true,
+   "note": "乌独立英文媒体（OSINT 向），2026-09-19 实测 200/rss"
+  },
+  {
+   "id": "kyivpost",
+   "url": "https://www.kyivpost.com/feed",
+   "tier": "T3",
+   "publisher": "Kyiv Post",
+   "enabled": true,
+   "note": "换路径实测可用（/rss/feed 404），2026-09-19 实测 200/rss 100 条"
+  },
+  {
+   "id": "tass",
+   "url": "https://tass.com/rss/v2.xml",
+   "tier": "T3",
+   "publisher": "TASS",
+   "enabled": true,
+   "note": "俄国家通讯社（俄方官方立场窗口，标注使用），2026-09-19 实测 200/rss 100 条"
+  },
+  {
+   "id": "moscowtimes",
+   "url": "https://www.themoscowtimes.com/rss/news",
+   "tier": "T3",
+   "publisher": "Moscow Times",
+   "enabled": true,
+   "note": "独立俄媒英文，2026-09-19 实测 200/rss"
+  },
+  {
+   "id": "gn-pokrovsk",
+   "url": "https://news.google.com/rss/search?q=(Pokrovsk+OR+Dobropillia+OR+Myrnohrad)+front+Ukraine&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "波克罗夫斯克方向；依赖代理出口可达 google（2026-09-19 晚出口 50465 对 google 域全断，7897 时段可用；断连自动留档，恢复自动回补）"
+  },
+  {
+   "id": "gn-donbas",
+   "url": "https://news.google.com/rss/search?q=(Donetsk+OR+Donbas+OR+Kostiantynivka+OR+Kramatorsk+OR+%22fortress+belt%22)+frontline&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "顿巴斯-堡垒带；出口依赖同上"
+  },
+  {
+   "id": "gn-kharkiv",
+   "url": "https://news.google.com/rss/search?q=(Kharkiv+OR+Kupiansk+OR+Kupyansk+OR+Vovchansk+OR+Borova)+front&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "哈尔科夫方向；出口依赖同上"
+  },
+  {
+   "id": "gn-lyman",
+   "url": "https://news.google.com/rss/search?q=(Lyman+OR+%22Operation+Vivaldi%22+OR+Siversk+OR+%22Chasiv+Yar%22)+Ukraine+front&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "莱曼/恰西夫亚尔；出口依赖同上"
+  },
+  {
+   "id": "gn-drone",
+   "url": "https://news.google.com/rss/search?q=Russia+Ukraine+(drone+attack+OR+Shahed+OR+Geran+OR+kamikaze+drones)+overnight&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "无人机战；出口依赖同上"
+  },
+  {
+   "id": "gn-missile",
+   "url": "https://news.google.com/rss/search?q=Russia+Ukraine+(missile+strike+OR+ballistic+OR+Iskander+OR+KN-23+OR+%22glide+bombs%22)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "导弹/滑翔弹；出口依赖同上"
+  },
+  {
+   "id": "gn-ua-strike",
+   "url": "https://news.google.com/rss/search?q=Ukraine+strike+Russia+(refinery+OR+depot+OR+ATACMS+OR+%22Storm+Shadow%22+OR+Flamingo+OR+Neptune)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "乌纵深打击俄境；出口依赖同上"
+  },
+  {
+   "id": "gn-blacksea",
+   "url": "https://news.google.com/rss/search?q=(%22Black+Sea%22+OR+%22Sea+of+Azov%22)+(naval+drone+OR+fleet+OR+%22Odesa%22+OR+port+OR+shipping)+Ukraine&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "黑海/亚速海；出口依赖同上"
+  },
+  {
+   "id": "gn-airdef",
+   "url": "https://news.google.com/rss/search?q=Ukraine+(air+defense+OR+air+defences)+(intercept+OR+Patriot+OR+NASAMS)+drones&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "防空能力；出口依赖同上"
+  },
+  {
+   "id": "gn-front-gen",
+   "url": "https://news.google.com/rss/search?q=Ukraine+General+Staff+(clashes+OR+combat+engagements)+front+day&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "每日战报通道；出口依赖同上"
+  },
+  {
+   "id": "gn-kursk",
+   "url": "https://news.google.com/rss/search?q=(Kursk+OR+Sumy+OR+Belgorod)+(border+OR+incursion+OR+shelling+OR+drone)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "苏梅/库尔斯克边境带；出口依赖同上"
+  },
+  {
+   "id": "gn-zaporizhzhia",
+   "url": "https://news.google.com/rss/search?q=(Zaporizhzhia+OR+Kherson)+(front+OR+assault+OR+shelling+OR+crossing)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "南部方向；出口依赖同上"
+  },
+  {
+   "id": "gn-energy",
+   "url": "https://news.google.com/rss/search?q=Russia+strikes+Ukraine+(energy+OR+grid+OR+power+OR+heating)+winter&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "能源基础设施打击；出口依赖同上"
+  },
+  {
+   "id": "ukrinform",
+   "url": "https://www.ukrinform.net/rubric-ato/feed",
+   "tier": "T2",
+   "publisher": "Ukrinform",
+   "enabled": false,
+   "note": "2026-09-19 实测 404（/rss/ato、/rss/news、block-by-rubric 三路径均 404）；总参战报经 gn-front-gen/gn-donbas 转述覆盖，待路径恢复复测"
+  },
+  {
+   "id": "isw",
+   "url": "https://www.understandingwar.org/rss.xml",
+   "tier": "T2",
+   "publisher": "ISW",
+   "enabled": false,
+   "note": "2026-09-19 实测 403（isw.pub 短链亦 403）；ISW 评估经 gnews 转述引用"
+  },
+  {
+   "id": "kyiv-independent",
+   "url": "https://kyivindependent.com/feed/",
+   "tier": "T3",
+   "publisher": "Kyiv Independent",
+   "enabled": false,
+   "note": "2026-09-19 实测 404（/feed/dynamic、/rss 亦 404）"
+  },
+  {
+   "id": "mil-in-ua",
+   "url": "https://mil.in.ua/en/feed/",
+   "tier": "T3",
+   "publisher": "Mil.in.ua",
+   "enabled": false,
+   "note": "2026-09-19 实测 403"
+  },
+  {
+   "id": "pravda-ua",
+   "url": "https://www.pravda.com.ua/eng/rss/",
+   "tier": "T3",
+   "publisher": "Ukrainska Pravda EN",
+   "enabled": false,
+   "note": "2026-09-19 实测 403"
+  },
+  {
+   "id": "armyinform",
+   "url": "https://armyinform.com.ua/feed",
+   "tier": "T3",
+   "publisher": "ArmyInform",
+   "enabled": false,
+   "note": "2026-09-19 实测连接失败(status 0)"
+  },
+  {
+   "id": "meduza-en",
+   "url": "https://meduza.io/en/rss",
+   "tier": "T3",
+   "publisher": "Meduza EN",
+   "enabled": false,
+   "note": "2026-09-19 实测 404；/rss/all 仅俄语版（词表不匹配），弃用"
+  },
+  {
+   "id": "novaya-eu",
+   "url": "https://novayagazeta.eu/rss/all.xml",
+   "tier": "T3",
+   "publisher": "Novaya Gazeta EU",
+   "enabled": false,
+   "note": "2026-09-19 实测 403"
+  },
+  {
+   "id": "aljazeera",
+   "url": "https://www.aljazeera.com/xml/rss/all.xml",
+   "tier": "T3",
+   "publisher": "Al Jazeera",
+   "enabled": false,
+   "note": "2026-09-19 实测连接失败(status 0，重试亦 0)；mideast 项目同期可用，疑似出口路由问题留档复测"
+  },
+  {
+   "id": "reuters-world",
+   "url": "https://www.reuters.com/world/rss",
+   "tier": "T3",
+   "publisher": "Reuters",
+   "enabled": false,
+   "note": "2026-09-19 实测连接失败(status 0)"
+  },
+  {
+   "id": "defence-blog",
+   "url": "https://defenceblog.com/feed/",
+   "tier": "T3",
+   "publisher": "Defence Blog",
+   "enabled": false,
+   "note": "2026-09-19 实测 200 但返回 114B 普通 HTML（非 feed）"
+  },
+  {
+   "id": "moscowtimes2",
+   "url": "https://www.themoscowtimes.com/rss",
+   "tier": "T3",
+   "publisher": "Moscow Times",
+   "enabled": false,
+   "note": "备用路径；主 feed 可用，此路径留档"
+  },
+  {
+   "id": "globaltimes",
+   "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+   "tier": "T3",
+   "publisher": "Global Times 环球时报英文版",
+   "enabled": false,
+   "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担"
+  },
+  {
+   "id": "cgtn-world",
+   "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+   "tier": "T3",
+   "publisher": "CGTN 中国环球电视网",
+   "enabled": true,
+   "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）"
+  }
+ ],
+ "buckets": {
+  "donbas_front": {
+   "label": "顿巴斯/堡垒带战线（波克罗夫斯克为主）",
+   "require_all": [
+    [
+     "pokrovsk",
+     "dobropillia",
+     "myrnohrad",
+     "kostiantynivka",
+     "kramatorsk",
+     "slovyansk",
+     "slaviansk",
+     "chasiv yar",
+     "chasyv yar",
+     "siversk",
+     "toretsk",
+     "lyman",
+     "kramatorsk",
+     "druzhkivka",
+     "fortress belt",
+     "donetsk region",
+     "donetsk oblast",
+     "donbas",
+     "kurakhove",
+     "selidove",
+     "hirnyk",
+     "udachne"
+    ],
+    [
+     "front",
+     "frontline",
+     "front line",
+     "assault",
+     "advance",
+     "offensive",
+     "clash",
+     "repel",
+     "attack",
+     "seiz",
+     "captur",
+     "retreat",
+     "encircl",
+     "breach",
+     "shell",
+     "strike",
+     "infiltrat",
+     "liberat",
+     "recaptur",
+     "drone",
+     "struck"
+    ]
+   ]
+  },
+  "kharkiv_front": {
+   "label": "哈尔科夫方向（库皮扬斯克/沃夫昌斯克）",
+   "require_all": [
+    [
+     "kharkiv",
+     "kupiansk",
+     "kupyansk",
+     "vovchansk",
+     "borova",
+     "velykyi burluk",
+     "oskil",
+     "oskol",
+     "derhachi",
+     "izium",
+     "izyum",
+     "kivsharivka",
+     "petropavlivka"
+    ],
+    [
+     "front",
+     "frontline",
+     "front line",
+     "assault",
+     "advance",
+     "offensive",
+     "clash",
+     "repel",
+     "attack",
+     "seiz",
+     "captur",
+     "encircl",
+     "breach",
+     "shell",
+     "strike",
+     "infiltrat",
+     "liberat",
+     "recaptur",
+     "bridgehead",
+     "struck"
+    ]
+   ]
+  },
+  "other_fronts": {
+   "label": "其他方向（南部/边境带）",
+   "require_all": [
+    [
+     "zaporizhzhia",
+     "zaporizhia",
+     "kherson",
+     "huliaipole",
+     "orikhiv",
+     "kursk",
+     "sumy",
+     "belgorod",
+     "dnipro river",
+     "dnipro sector"
+    ],
+    [
+     "front",
+     "frontline",
+     "assault",
+     "advance",
+     "offensive",
+     "clash",
+     "repel",
+     "attack",
+     "seiz",
+     "captur",
+     "incursion",
+     "shell",
+     "strike",
+     "crossing",
+     "liberat",
+     "recaptur",
+     "drone",
+     "struck"
+    ]
+   ]
+  },
+  "drone_war": {
+   "label": "无人机战（Shahed/Geran/FPV）",
+   "require_all": [
+    [
+     "shahed",
+     "geran",
+     "gerbera",
+     "kamikaze drone",
+     "strike drone",
+     "attack drone",
+     "drone attack",
+     "drones",
+     "uav",
+     "fpv",
+     "jet-powered drone",
+     "long-range drone",
+     "unmanned aircraft"
+    ],
+    [
+     "launch",
+     "attack",
+     "strike",
+     "intercept",
+     "down",
+     "shot down",
+     "hit",
+     "barrage",
+     "swarm",
+     "neutraliz",
+     "suppress",
+     "salvo",
+     "wave",
+     "struck"
+    ]
+   ]
+  },
+  "long_range": {
+   "label": "导弹远程打击与纵深作战",
+   "require_all": [
+    [
+     "missile",
+     "ballistic",
+     "iskander",
+     "kn-23",
+     "kinzhal",
+     "kalibr",
+     "onyx",
+     "glide bomb",
+     "kab",
+     "s8000",
+     "banderol",
+     "atacms",
+     "storm shadow",
+     "scalp",
+     "neptune",
+     "flamingo",
+     "tomahawk",
+     "cruise missile",
+     "hypersonic"
+    ],
+    [
+     "strike",
+     "attack",
+     "launch",
+     "hit",
+     "fired",
+     "target",
+     "destroy",
+     "intercept",
+     "salvo",
+     "barrage",
+     "raid",
+     "struck"
+    ]
+   ]
+  },
+  "black_sea": {
+   "label": "黑海/亚速海海上战线",
+   "require_all": [
+    [
+     "black sea",
+     "sea of azov",
+     "azov",
+     "naval drone",
+     "sea baby",
+     "magura",
+     "odesa",
+     "chornomorsk",
+     "grain corridor",
+     "grain deal",
+     "port of odesa",
+     "black sea fleet",
+     "sevastopol",
+     "novorossiysk"
+    ],
+    [
+     "navy",
+     "naval",
+     "maritime",
+     "fleet",
+     "port",
+     "shipping",
+     "vessel",
+     "tanker",
+     "cargo",
+     "attack",
+     "strike",
+     "drone",
+     "escort",
+     "shipping lane",
+     "struck"
+    ]
+   ]
+  },
+  "air_defense": {
+   "label": "乌克兰防空能力",
+   "require_all": [
+    [
+     "air defense",
+     "air defence",
+     "air defenses",
+     "air defences",
+     "intercept",
+     "interception",
+     "patriot",
+     "nasams",
+     "iris-t",
+     "hawk",
+     "gepard",
+     "mobile fire group",
+     "electronic warfare",
+     "anti-aircraft"
+    ],
+    [
+     "drones",
+     "missile",
+     "drone",
+     "shahed",
+     "geran",
+     "uav",
+     "targets",
+     "aerial",
+     "barrage",
+     "struck"
+    ]
+   ]
+  },
+  "claims_intel": {
+   "label": "双方声称与核实（战场信息战）",
+   "require_all": [
+    [
+     "claim",
+     "claims",
+     "claimed",
+     "assert",
+     "says its forces",
+     "unverified",
+     "unconfirmed",
+     "could not be verified",
+     "not independently",
+     "assess",
+     "geolocated",
+     "milblogger",
+     "military blogger",
+     "war monitor",
+     "osint"
+    ],
+    [
+     "russia",
+     "russian",
+     "ukraine",
+     "ukrainian",
+     "moscow",
+     "kyiv",
+     "struck"
+    ]
+   ]
+  }
+ },
+ "flags": {
+  "ru_claim": [
+   "russia(?:n\\s+(?:ministry\\s+of\\s+defen[cs]e|mod|forces|military|officials|milbloggers?))?\\s+(?:says|said|claims?|claimed|asserts?)",
+   "according\\s+to\\s+(?:the\\s+)?russian",
+   "russian\\s+milbloggers?",
+   "moscow\\s+(?:says|said|claims?|claimed)"
+  ],
+  "ua_claim": [
+   "ukraine(?:'s?\\s+(?:general\\s+staff|armed\\s+forces|military|officials|air\\s+force))?\\s+(?:says|said|claims?|reported)",
+   "according\\s+to\\s+(?:the\\s+)?ukrainian",
+   "general\\s+staff\\s+(?:of\\s+the\\s+armed\\s+forces|said|reported)",
+   "kyiv\\s+(?:says|said|claims?|claimed)"
+  ],
+  "unverified": [
+   "not\\s+(?:been\\s+)?independently\\s+verified",
+   "could\\s+not\\s+be\\s+verified",
+   "unverified",
+   "unconfirmed",
+   "claims\\s+(?:are|were)\\s+(?:contested|disputed)",
+   "no\\s+evidence\\s+(?:of|that)"
+  ],
+  "encirclement_alert": [
+   "encircl\\w+",
+   "cut off",
+   "trapped",
+   "siege",
+   "cauldron"
+  ]
+ },
+ "stance": {
+  "escalate": [
+   "escalat",
+   "intensif",
+   "massive strike",
+   "largest attack",
+   "record",
+   "heaviest",
+   "wave of",
+   "barrage",
+   "full-scale offensive",
+   "major push",
+   "storm",
+   "bombard",
+   "massed"
+  ],
+  "deescalate": [
+   "wind down",
+   "pull back",
+   "pullback",
+   "halt",
+   "pause",
+   "truce",
+   "ceasefire",
+   "cease-fire",
+   "stand down",
+   "reduce",
+   "lull",
+   "de-escalat",
+   "quiet",
+   "lull in fighting"
+  ]
+ },
+ "entities": {
+  "mil_bloggers": {
+   "Rybar": [
+    "rybar"
+   ],
+   "War Mapper": [
+    "war mapper"
+   ],
+   "Military Blogger (generic)": [
+    "military blogger",
+    "milblogger"
+   ],
+   "Two Majors": [
+    "two majors"
+   ]
+  },
+  "third_party_assessors": {
+   "ISW": [
+    "institute for the study of war",
+    "isw"
+   ],
+   "DeepState": [
+    "deepstate"
+   ]
+  },
+  "rus_commanders": {
+   "Gerasimov": [
+    "gerasimov"
+   ],
+   "Belousov": [
+    "belousov"
+   ],
+   "Teplinsky": [
+    "teplinsky"
+   ],
+   "Surovikin": [
+    "surovikin"
+   ]
+  },
+  "ukr_commanders": {
+   "Syrskiy": [
+    "syrskiy",
+    "syrsky"
+   ],
+   "Budanov": [
+    "budanov"
+   ],
+   "Biletsky": [
+    "biletsky"
+   ],
+   "Zelensky": [
+    "zelensky",
+    "zelenskyy",
+    "zelenskii"
+   ]
+  }
+ },
+ "baseline": {
+  "war_start": "2022-02-24",
+  "note": "战线基线（2026-09-19 探测期快照，随报告 §4 逐期滚动）：俄控顿涅茨克州约 81%、卢甘斯克约 99%；波克罗夫斯克=最激烈方向（泽连斯基：全战线 1/3 交战发生于此，俄在城郊集结约 17 万；俄宣称控制 90%，ISW 评估俄军在城内'行动趋于自如'但乌方未证实失守）；莱曼以北乌军'维瓦尔第行动'反攻累计清剿/解放约 85 km²；俄军 8 月单月净推进约 124 km²（约为去年同期 1/4，3 月曾整线净推进为零）；空中战役：9-12/13 单夜 453 架无人机（拦截/压制 405-409，约 90%），喷气式 Geran-4/5 拦截率仅约 60%（乌方口径），S8000 Banderol 导弹无人机首次批量出现；俄弹道导弹库存集结约 24 枚（Iskander-M/KN-23，布良斯克/库尔斯克/沃罗涅日/罗斯托夫）；黑海：敖德萨/切尔诺莫斯克港持续遭打击（救援拖船 Sapphire 被击中），无人机从克里米亚与亚速海水域发射",
+  "rows": [
+   {
+    "date": "2026-09-17",
+    "event": "俄控顿涅茨克州约 81%、卢甘斯克约 99%（OSINT 口径）",
+    "tier": "T3",
+    "source": "quanta.report 综述"
+   },
+   {
+    "date": "2026-09-17",
+    "event": "波克罗夫斯克=最激烈方向：全战线约 1/3 交战发生于此，俄在城郊集结约 17 万（泽连斯基口径）；俄宣称控制 90%，ISW 评估俄军'行动趋于自如'但未证实失守",
+    "tier": "T2",
+    "source": "ISW 评估/转述"
+   },
+   {
+    "date": "2026-09-15",
+    "event": "莱曼以北乌军'维瓦尔第行动'反攻：第 3 军比列茨基确认清剿/解放约 85 km²，装甲进入 Serednie",
+    "tier": "T3",
+    "source": "乌方公开表态"
+   },
+   {
+    "date": "2026-09-18",
+    "event": "俄军 8 月单月净推进约 124 km²，约为去年同期 1/4；2026-03 曾整线净推进为零（ISW 口径）",
+    "tier": "T2",
+    "source": "ISW/CNN 转述"
+   },
+   {
+    "date": "2026-09-18",
+    "event": "每日战报量级：9-16 全线 278 次交战、9-18 波克罗夫斯克 25 次进攻（乌总参口径）",
+    "tier": "T3",
+    "source": "Ukrinform 转写"
+   }
+  ],
+  "air_rows": [
+   {
+    "date": "2026-09-12",
+    "event": "单夜 453 架无人机（含喷气式 Shahed/Gerbera/诱饵/S8000 Banderol），拦截/压制 405-409（约 90%）",
+    "tier": "T3",
+    "source": "乌空军口径/Ukrinform"
+   },
+   {
+    "date": "2026-09-13",
+    "event": "喷气式 Geran-4/5（600 km/h、90 kg 战斗部）拦截率仅约 60%（乌方口径）——与总体 90% 分母不同",
+    "tier": "T3",
+    "source": "分析机构转述"
+   },
+   {
+    "date": "2026-09-13",
+    "event": "俄弹道导弹集结约 24 枚（Iskander-M/KN-23；布良斯克/库尔斯克/沃罗涅日/罗斯托夫），基辅大规模空袭风险窗口预警",
+    "tier": "T3",
+    "source": "OSINT 转述"
+   },
+   {
+    "date": "2026-09-13",
+    "event": "敖德萨/切尔诺莫斯克港持续遭打击（救援拖船 Sapphire 被击中）；无人机自克里米亚与亚速海水域发射",
+    "tier": "T3",
+    "source": "多源转述"
+   },
+   {
+    "date": "2026-09-13",
+    "event": "乌纵深打击：Dovzhansk 弹药库、Bashkortostan 炼厂等；特朗普施压乌方放缓打击俄炼厂（全球柴油短缺口径）",
+    "tier": "T3",
+    "source": "多源转述"
+   }
+  ]
+ },
+ "report": {
+  "title": "俄乌冲突军事战线监测",
+  "sections": [
+   [
+    "1",
+    "态势速览（窗口 30 天）"
+   ],
+   [
+    "2",
+    "信号桶 × 信源等级交叉表"
+   ],
+   [
+    "4",
+    "战线基线与口径"
+   ],
+   [
+    "9",
+    "已知偏差与数据源清单"
+   ]
+  ],
+  "known_limitations": [
+   "战线战报全部来自交战方或其转述（乌总参/俄国防部口径），flags 标注 ru_claim/ua_claim；推进/包围类表述几乎必然未经独立核实。",
+   "拦截率数字分母不一（全部来袭目标 vs 喷气式 Geran 单独口径），只逐条保留原文，禁止相加平均。",
+   "每日交战次数/伤亡数为单一官方来源口径（乌总参），俄方无对应公开对照。",
+   "gnews 通道依赖代理出口可达 google：2026-09-19 晚出口 50465 对 google 域全断（下午 7897 可用），断连期窗口覆盖不完整，出口恢复后自动回补。",
+   "TASS 为俄方官方立场窗口（标注使用），其军事内容视为俄方口径而非独立事实。",
+   "ISW 直连 403，其评估仅经 gnews 转述引用，等级 T2→转述层引用。",
+   "军事温度（升温/降温）词表为启发式，只看方向不看强度；政治/外交内容可能混入。"
+  ]
+ },
+ "glossary": {
+  "ru": {
+   "Государственная дума": "国家杜马（议会下院）",
+   "депутат": "议员",
+   "выборы": "选举",
+   "голосование": "投票",
+   "бюджет": "预算",
+   "дефицит": "赤字",
+   "профицит": "盈余",
+   "нефть": "石油",
+   "нефтепродукт": "石油产品",
+   "газ": "天然气",
+   "экспорт": "出口",
+   "импорт": "进口",
+   "рубль": "卢布",
+   "курс": "汇率",
+   "инфляция": "通胀",
+   "цена": "价格",
+   "добыча": "开采/产量",
+   "баррель": "桶",
+   "Минфин": "财政部",
+   "Минобороны": "国防部",
+   "Минэкономразвития": "经济发展部",
+   "Центробанк": "中央银行",
+   "ЦБ": "央行",
+   "Росстат": "国家统计局",
+   "Правительство": "政府",
+   "Кремль": "克里姆林宫（俄总统府）",
+   "президент": "总统",
+   "Путин": "普京",
+   "Мишустин": "米舒斯京",
+   "Лавров": "拉夫罗夫",
+   "Песков": "佩斯科夫",
+   "Белоусов": "别洛乌索夫",
+   "санкции": "制裁",
+   "мобилизация": "动员",
+   "армия": "军队",
+   "ракета": "导弹",
+   "беспилотник": "无人机",
+   "дроны": "无人机",
+   "удар": "打击",
+   "обстрел": "炮击",
+   "фронт": "前线",
+   "переговоры": "谈判",
+   "соглашение": "协议",
+   "прекращение огня": "停火",
+   "мирный": "和平的",
+   "зарплата": "工资",
+   "безработица": "失业",
+   "рабочая сила": "劳动力",
+   "кадровый дефицит": "用工/人才缺口",
+   "ВВП": "GDP（国内生产总值）",
+   "налог": "税",
+   "тариф": "关税/费率",
+   "порт": "港口",
+   "танкер": "油轮",
+   "трубопровод": "管道",
+   "Газпром": "俄气（俄罗斯天然气工业股份公司）",
+   "Роснефть": "俄油（俄罗斯石油公司）",
+   "Лукойл": "卢克石油",
+   "НПЗ": "炼油厂",
+   "ОПЕК": "OPEC（石油输出国组织）",
+   "Украина": "乌克兰",
+   "Киев": "基辅",
+   "Москва": "莫斯科",
+   "ВСУ": "乌克兰武装部队",
+   "СВО": "「特别军事行动」（俄方对俄乌战争的官方称谓）",
+   "Госдума": "国家杜马",
+   "Совет Федерации": "联邦委员会（议会上院）",
+   "законопроект": "法律草案",
+   "закон": "法律",
+   "указ": "总统令",
+   "заявление": "声明",
+   "заявил": "表示/声明",
+   "сообщил": "通报",
+   "поставки": "供应/交付",
+   "вооружение": "武器装备",
+   "оборона": "国防",
+   "США": "美国"
+  },
+  "uk": {
+   "Україна": "乌克兰",
+   "Зеленський": "泽连斯基",
+   "Верховна Рада": "最高拉达（乌克兰议会）",
+   "Кабінет Міністрів": "部长内阁",
+   "Міністерство оборони": "国防部",
+   "Збройні сили": "武装部队",
+   "допомога": "援助",
+   "зброя": "武器",
+   "постачання": "供应/交付",
+   "санкції": "制裁",
+   "переговори": "谈判",
+   "припинення вогню": "停火",
+   "обстріл": "炮击",
+   "ракета": "导弹",
+   "безпілотник": "无人机",
+   "дрон": "无人机",
+   "бюджет": "预算",
+   "дефіцит": "赤字",
+   "експорт": "出口",
+   "зерно": "粮食",
+   "врожай": "收成",
+   "порт": "港口",
+   "мобілізація": "动员",
+   "енергетика": "能源",
+   "електроенергія": "电力",
+   "АЕС": "核电站",
+   "ППО": "防空",
+   "позика": "贷款",
+   "кредит": "贷款/信贷",
+   "грант": "赠款",
+   "МВФ": "IMF（国际货币基金组织）",
+   "ЄС": "EU（欧盟）",
+   "НАТО": "北约",
+   "Київ": "基辅",
+   "Харків": "哈尔科夫",
+   "Одеса": "敖德萨",
+   "Дніпро": "第聂伯罗"
+  }
+ }
+}

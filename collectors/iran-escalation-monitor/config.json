@@ -1,0 +1,4458 @@
+{
+  "version": "1.0.0",
+  "project": "iran-escalation-monitor",
+  "topic": "伊朗战备与升级动态监测（六大关注域 × 当事方对照）",
+  "generated_at": "2026-09-18",
+  "generated_by": "tools/build_config.py（源清单来自 tools/_probe_round*.json 实测）",
+  "lookback_hours": 336,
+  "per_source_max": 0,
+  "per_source_max_note": "0 = 不限制。★ 截断按 feed 顺序取前 N 条，会**静默丢弃窗口内记录**，与「合并源 = 窗口内全部」直接冲突。若确需限制请显式设为正数，报告 §2 会在该源标注「⚠️截断」。",
+  "stale_days": 45,
+  "request": {
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "headers": {
+      "Accept": "application/rss+xml,application/atom+xml,application/xml;q=0.9,text/xml;q=0.8,application/json;q=0.7,*/*;q=0.6",
+      "Accept-Language": "en-US,en;q=0.9,fa;q=0.8",
+      "Accept-Encoding": "gzip, deflate",
+      "Cache-Control": "no-cache",
+      "Pragma": "no-cache",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "none",
+      "Upgrade-Insecure-Requests": "1"
+    },
+    "note": "浏览器常规请求头。★ 实测「只带 UA」会 403、补上 Sec-Fetch-* 后 200 —— 这是 403→200 的开关，不是可选项。",
+    "timeout": 30,
+    "retries": 3,
+    "retry_backoff_sec": 2.0,
+    "delay_between_sources_sec": 1.2
+  },
+  "relevance": {
+    "display_threshold": 3,
+    "strong": [
+      "strait of hormuz",
+      "hormuz",
+      "bab el-mandeb",
+      "bab al-mandeb",
+      "red sea shipping",
+      "aircraft carrier",
+      "carrier strike group",
+      "us navy",
+      "u.s. navy",
+      "warship",
+      "anti-ship missile",
+      "anti-ship ballistic",
+      "asbm",
+      "naval mine",
+      "drone boat",
+      "nuclear test",
+      "nuclear weapon",
+      "nuclear warhead",
+      "uranium enrichment",
+      "weapons grade",
+      "undersea cable",
+      "submarine cable",
+      "subsea cable",
+      "fiber optic cable",
+      "oil refinery",
+      "oil terminal",
+      "abqaiq",
+      "ras tanura",
+      "kharg",
+      "ballistic missile",
+      "cruise missile",
+      "hypersonic",
+      "close the strait",
+      "blockade",
+      "chokepoint",
+      "آمادگی",
+      "تنگه هرمز",
+      "دریای سرخ",
+      "باب‌المندب",
+      "موشک بالستیک",
+      "موشک کروز",
+      "پهپاد",
+      "ناوشکن",
+      "ناو هواپیمابر",
+      "هسته‌ای",
+      "غنی‌سازی",
+      "آزمایش هسته‌ای",
+      "پالایشگاه",
+      "کابل زیردریایی",
+      "رزمایش"
+    ],
+    "medium": [
+      "iran",
+      "iranian",
+      "irgc",
+      "revolutionary guard",
+      "tehran",
+      "persian gulf",
+      "gulf of oman",
+      "centcom",
+      "fifth fleet",
+      "5th fleet",
+      "navcent",
+      "pentagon",
+      "defense department",
+      "houthi",
+      "ansarallah",
+      "yemen",
+      "saudi",
+      "uae",
+      "kuwait",
+      "qatar",
+      "bahrain",
+      "oman",
+      "iraq",
+      "destroyer",
+      "frigate",
+      "amphibious",
+      "marine",
+      "naval",
+      "navy",
+      "missile",
+      "drone",
+      "uav",
+      "refinery",
+      "oil",
+      "gas",
+      "energy infrastructure",
+      "pipeline",
+      "tanker",
+      "shipping",
+      "vessel",
+      "iaea",
+      "enrichment",
+      "nuclear",
+      "centrifuge",
+      "fordow",
+      "natanz",
+      "isfahan",
+      "arak",
+      "cable",
+      "telecom",
+      "internet",
+      "escalation",
+      "retaliation",
+      "strike",
+      "attack",
+      "readiness",
+      "mobilization",
+      "drill",
+      "exercise",
+      "سپاه",
+      "ایران",
+      "خلیج فارس",
+      "نیروی دریایی",
+      "موشک",
+      "پدافند",
+      "رزمی",
+      "تهران",
+      "نفت",
+      "انرژی",
+      "تأسیسات",
+      "هسته‌ای",
+      "مذاکره",
+      "تحریم",
+      "نفتی"
+    ],
+    "anchor": [
+      "iran",
+      "iranian",
+      "irgc",
+      "tehran",
+      "khamenei",
+      "revolutionary guard",
+      "sepah",
+      "hormuz",
+      "gulf",
+      "persian gulf",
+      "bab el-mandeb",
+      "red sea",
+      "suez",
+      "saudi",
+      "emirati",
+      "uae",
+      "kuwait",
+      "qatar",
+      "bahrain",
+      "yemen",
+      "houthi",
+      "us",
+      "u.s.",
+      "american",
+      "centcom",
+      "pentagon",
+      "washington",
+      "ایران",
+      "تهران",
+      "سپاه",
+      "خلیج",
+      "هرمز",
+      "دریای سرخ",
+      "عربستان",
+      "یمن",
+      "یمنی"
+    ],
+    "domain": [
+      "military",
+      "armed forces",
+      "navy",
+      "naval",
+      "air force",
+      "missile",
+      "drone",
+      "uav",
+      "warfare",
+      "combat",
+      "strike",
+      "attack",
+      "weapon",
+      "nuclear",
+      "submarine",
+      "carrier",
+      "warship",
+      "radar",
+      "air defense",
+      "sanctions",
+      "troops",
+      "deployment",
+      "نظامی",
+      "ارتش",
+      "رزم",
+      "موشک",
+      "پهپاد",
+      "هسته‌ای",
+      "دریایی",
+      "رزمی"
+    ],
+    "note": "anchor=当事方/地区词，domain=军事领域词。展示闸门要求【信号命中】且【anchor≥1 或 domain≥1 或该源本身是主题锚定源】。全部记录仍完整写入 JSONL。"
+  },
+  "signals": {
+    "us_naval_attack": {
+      "zone": "naval_platform",
+      "label": "攻击美方海上平台",
+      "weight": 5,
+      "require_all": [
+        [
+          "attack",
+          "strike",
+          "hitting",
+          "hit",
+          "target",
+          "sink",
+          "sunk",
+          "damage",
+          "destroy",
+          "intercept",
+          "repel",
+          "repelled",
+          "fire on",
+          "fired on",
+          "board",
+          "seize",
+          "seizure",
+          "harass",
+          "swarm",
+          "engage",
+          "engaged",
+          "pound",
+          "assault",
+          "ambush",
+          "ram",
+          "حمله",
+          "هدف",
+          "غرق",
+          "اصابت",
+          "سرنگون",
+          "توقیف",
+          "struck",
+          "targeted",
+          "launch"
+        ],
+        [
+          "us navy",
+          "u.s. navy",
+          "american warship",
+          "warship",
+          "aircraft carrier",
+          "carrier",
+          "destroyer",
+          "frigate",
+          "amphibious",
+          "uss ",
+          "5th fleet",
+          "fifth fleet",
+          "navcent",
+          "naval base",
+          "aegis",
+          "arleigh burke",
+          "littoral combat",
+          "ناوشکن",
+          "ناو هواپیمابر",
+          "ناو آمریکایی",
+          "نیروی دریایی آمریکا"
+        ]
+      ],
+      "note": "★ 二维要求：必须有「动作」且有「美方海上平台」。单靠 attack 会命中一切攻击新闻。"
+    },
+    "anti_ship_weapon": {
+      "zone": "naval_platform",
+      "label": "反舰武器使用/宣称",
+      "weight": 3,
+      "phrases": [
+        "anti-ship missile",
+        "anti-ship ballistic",
+        "anti-ship cruise",
+        "asbm",
+        "naval mine",
+        "sea mine",
+        "mine the water",
+        "drone boat",
+        "unmanned surface vessel",
+        "usv",
+        "suicide boat",
+        "explosive boat",
+        "swarm attack",
+        "fast attack craft",
+        "موشک ضدکشتی",
+        "مین دریایی",
+        "قایق انتحاری",
+        "شناور بدون سرنشین"
+      ]
+    },
+    "us_naval_reinforce": {
+      "zone": "naval_platform",
+      "label": "美方海上增援/前出",
+      "weight": 3,
+      "require_all": [
+        [
+          "deploy",
+          "deployment",
+          "surge",
+          "reinforce",
+          "reposition",
+          "send",
+          "sail",
+          "sailing",
+          "transit",
+          "arrive",
+          "arrived",
+          "heading to",
+          "divert",
+          "redirect",
+          "second carrier",
+          "اعزام",
+          "استقرار",
+          "تقویت"
+        ],
+        [
+          "carrier",
+          "carrier strike group",
+          "csg",
+          "warship",
+          "destroyer",
+          "navy",
+          "fleet",
+          "amphibious ready group",
+          "arg",
+          "marines"
+        ]
+      ]
+    },
+    "naval_platform_mentioned": {
+      "zone": "naval_platform",
+      "label": "美方海上平台提及",
+      "weight": 1,
+      "phrases": [
+        "us navy",
+        "u.s. navy",
+        "warship",
+        "aircraft carrier",
+        "carrier strike group",
+        "destroyer",
+        "frigate",
+        "amphibious ready group",
+        "uss ",
+        "5th fleet",
+        "fifth fleet",
+        "navcent",
+        "centcom naval",
+        "naval forces central",
+        "ناوشکن",
+        "ناو هواپیمابر",
+        "نیروی دریایی آمریکا"
+      ]
+    },
+    "hormuz_threat": {
+      "zone": "chokepoint",
+      "label": "霍尔木兹封锁威胁",
+      "weight": 5,
+      "require_all": [
+        [
+          "close",
+          "closing",
+          "closure",
+          "block",
+          "blockade",
+          "shut",
+          "seal off",
+          "choke off",
+          "cut off",
+          "mine",
+          "control",
+          "threaten",
+          "disrupt",
+          "halt",
+          "stop",
+          "بستن",
+          "بسته",
+          "مسدود",
+          "کنترل",
+          "تهدید"
+        ],
+        [
+          "hormuz",
+          "strait",
+          "persian gulf",
+          "gulf of oman",
+          "هرمز",
+          "تنگه",
+          "خلیج فارس"
+        ]
+      ]
+    },
+    "hormuz_mention": {
+      "zone": "chokepoint",
+      "label": "霍尔木兹提及",
+      "weight": 1,
+      "phrases": [
+        "hormuz",
+        "strait of hormuz",
+        "persian gulf",
+        "gulf of oman",
+        "هرمز",
+        "تنگه هرمز",
+        "خلیج فارس"
+      ]
+    },
+    "babelmandeb_threat": {
+      "zone": "chokepoint",
+      "label": "曼德海峡/红海威胁",
+      "weight": 5,
+      "require_all": [
+        [
+          "close",
+          "closing",
+          "closure",
+          "block",
+          "blockade",
+          "shut",
+          "attack",
+          "strike",
+          "target",
+          "hijack",
+          "seize",
+          "seizure",
+          "harass",
+          "disrupt",
+          "halt",
+          "suspend",
+          "mine",
+          "threaten",
+          "بستن",
+          "مسدود",
+          "حمله",
+          "توقیف",
+          "تهدید",
+          "struck",
+          "targeted"
+        ],
+        [
+          "bab el-mandeb",
+          "bab al-mandeb",
+          "mandeb",
+          "red sea",
+          "gulf of aden",
+          "suez",
+          "باب‌المندب",
+          "دریای سرخ",
+          "خلیج عدن",
+          "سوئز"
+        ]
+      ]
+    },
+    "shipping_interdiction": {
+      "zone": "chokepoint",
+      "label": "商船扣押/袭扰",
+      "weight": 4,
+      "require_all": [
+        [
+          "seize",
+          "seized",
+          "seizure",
+          "hijack",
+          "hijacked",
+          "board",
+          "boarded",
+          "detain",
+          "impound",
+          "capture",
+          "attack",
+          "attacked",
+          "strike",
+          "harass",
+          "intercept",
+          "divert",
+          "توقیف",
+          "ربایش",
+          "حمله",
+          "توقیف شده",
+          "struck",
+          "targeted"
+        ],
+        [
+          "tanker",
+          "oil tanker",
+          "merchant vessel",
+          "merchant ship",
+          "cargo ship",
+          "container ship",
+          "bulk carrier",
+          "vessel",
+          "shipping",
+          "maritime",
+          "port",
+          "نفتکش",
+          "کشتی تجاری",
+          "شناور",
+          "بندر"
+        ]
+      ]
+    },
+    "chokepoint_drill": {
+      "zone": "chokepoint",
+      "label": "海峡附近演习",
+      "weight": 3,
+      "require_all": [
+        [
+          "drill",
+          "exercise",
+          "maneuver",
+          "war game",
+          "live fire",
+          "naval drill",
+          "simulation",
+          "رزمایش",
+          "مانور"
+        ],
+        [
+          "strait",
+          "hormuz",
+          "persian gulf",
+          "gulf of oman",
+          "red sea",
+          "bab el-mandeb",
+          "naval",
+          "fleet",
+          "تنگه",
+          "هرمز",
+          "خلیج",
+          "دریا"
+        ]
+      ]
+    },
+    "dual_front": {
+      "zone": "chokepoint",
+      "label": "双线/两线施压表述",
+      "weight": 4,
+      "phrases": [
+        "two fronts",
+        "two chokepoints",
+        "dual pressure",
+        "simultaneous pressure",
+        "both straits",
+        "two straits",
+        "multiple fronts",
+        "northern and southern",
+        "در دو جبهه",
+        "دو تنگه",
+        "دو جبهه"
+      ]
+    },
+    "energy_strike": {
+      "zone": "energy_infra",
+      "label": "打击能源设施",
+      "weight": 5,
+      "require_all": [
+        [
+          "strike",
+          "struck",
+          "attack",
+          "attacked",
+          "target",
+          "targeted",
+          "bomb",
+          "drone",
+          "missile",
+          "sabotage",
+          "sabotaged",
+          "hit",
+          "hitting",
+          "damage",
+          "destroy",
+          "set ablaze",
+          "explosion",
+          "حمله",
+          "هدف",
+          "انفجار",
+          "خرابکاری",
+          "اصابت"
+        ],
+        [
+          "refinery",
+          "oil facility",
+          "oil terminal",
+          "oil field",
+          "gas field",
+          "gas plant",
+          "pipeline",
+          "petrochemical",
+          "loading terminal",
+          "desalination",
+          "power plant",
+          "energy infrastructure",
+          "aramco",
+          "adnoc",
+          "پالایشگاه",
+          "تأسیسات نفتی",
+          "میدان نفتی",
+          "خط لوله",
+          "پتروشیمی",
+          "تأسیسات"
+        ]
+      ]
+    },
+    "energy_facility_named": {
+      "zone": "energy_infra",
+      "label": "点名能源设施",
+      "weight": 3,
+      "phrases": [
+        "abqaiq",
+        "ras tanura",
+        "kharg",
+        "khark",
+        "shaybah",
+        "khurais",
+        "yanbu",
+        "fujairah",
+        "ruwais",
+        "mina al-ahmadi",
+        "mina saud",
+        "basra terminal",
+        "bandar abbas",
+        "jubail",
+        "ras laffan",
+        "north field",
+        "south pars",
+        "خورج",
+        "عسلویه",
+        "پارس جنوبی",
+        "بندرعباس"
+      ]
+    },
+    "energy_threat": {
+      "zone": "energy_infra",
+      "label": "能源断供威胁",
+      "weight": 4,
+      "require_all": [
+        [
+          "cut off",
+          "cut the flow",
+          "halt",
+          "disrupt",
+          "choke off",
+          "stop the flow",
+          "shut down",
+          "strangle",
+          "blockade",
+          "deny access",
+          "target",
+          "قطع",
+          "متوقف",
+          "مسدود"
+        ],
+        [
+          "oil",
+          "gas",
+          "energy",
+          "export",
+          "supply",
+          "shipment",
+          "barrel",
+          "crude",
+          "نفت",
+          "گاز",
+          "انرژی",
+          "صادرات"
+        ]
+      ]
+    },
+    "cable_threat": {
+      "zone": "cable",
+      "label": "海底光缆切断威胁",
+      "weight": 5,
+      "require_all": [
+        [
+          "cut",
+          "cutting",
+          "sever",
+          "severed",
+          "damage",
+          "damaged",
+          "sabotage",
+          "sabotaged",
+          "target",
+          "attack",
+          "disrupt",
+          "destroy",
+          "break",
+          "tamper",
+          "قطع",
+          "خرابکاری",
+          "تخریب",
+          "آسیب"
+        ],
+        [
+          "undersea cable",
+          "submarine cable",
+          "subsea cable",
+          "fiber optic cable",
+          "fibre optic",
+          "internet cable",
+          "data cable",
+          "telecom cable",
+          "cable system",
+          "کابل زیردریایی",
+          "کابل مخابراتی",
+          "فیبر نوری"
+        ]
+      ]
+    },
+    "cable_incident": {
+      "zone": "cable",
+      "label": "光缆中断事故",
+      "weight": 3,
+      "phrases": [
+        "cable cut",
+        "cable damaged",
+        "cable outage",
+        "cable severed",
+        "cable fault",
+        "internet outage",
+        "internet blackout",
+        "connectivity disrupted",
+        "cable break",
+        "قطع کابل",
+        "اختلال اینترنت"
+      ]
+    },
+    "cable_named": {
+      "zone": "cable",
+      "label": "点名光缆系统",
+      "weight": 2,
+      "phrases": [
+        "aae-1",
+        "sea-me-we",
+        "smw",
+        "falcon",
+        "2africa",
+        "imewe",
+        "europe india gateway",
+        "blue raman",
+        "red sea cable",
+        "smw5",
+        "smw-5",
+        "seacom",
+        "eassy",
+        "teams cable",
+        "gulf bridge",
+        "gbi"
+      ]
+    },
+    "nuclear_test": {
+      "zone": "nuclear",
+      "label": "核试验/核爆",
+      "weight": 6,
+      "phrases": [
+        "nuclear test",
+        "nuclear testing",
+        "nuclear explosion",
+        "nuclear detonation",
+        "atomic test",
+        "atomic explosion",
+        "nuclear device",
+        "nuclear yield",
+        "underground nuclear",
+        "test a nuclear",
+        "detonate a nuclear",
+        "nuclear blast",
+        "seismic event nuclear",
+        "آزمایش هسته‌ای",
+        "انفجار هسته‌ای",
+        "آزمایش اتمی"
+      ]
+    },
+    "enrichment_milestone": {
+      "zone": "nuclear",
+      "label": "浓缩里程碑",
+      "weight": 5,
+      "phrases": [
+        "uranium enrichment",
+        "enrich uranium",
+        "enrichment level",
+        "60 percent",
+        "60%",
+        "90 percent",
+        "90%",
+        "weapons grade",
+        "weapon-grade",
+        "highly enriched",
+        "heu",
+        "uranium metal",
+        "centrifuge cascade",
+        "ir-9",
+        "ir-6",
+        "advanced centrifuge",
+        "غنی‌سازی اورانیوم",
+        "غنی‌سازی",
+        "سانتریفیوژ",
+        "درصد غنی‌سازی"
+      ]
+    },
+    "weaponization": {
+      "zone": "nuclear",
+      "label": "核武器化",
+      "weight": 5,
+      "phrases": [
+        "nuclear warhead",
+        "nuclear weapon",
+        "nuclear bomb",
+        "atomic bomb",
+        "nuclear breakout",
+        "weaponization",
+        "weaponisation",
+        "nuclear payload",
+        "nuclear capable",
+        "nuclear threshold",
+        "nuclear deterrent",
+        "کلاهک هسته‌ای",
+        "سلاح هسته‌ای",
+        "بمب اتمی"
+      ]
+    },
+    "iaea_standoff": {
+      "zone": "nuclear",
+      "label": "IAEA 对峙/退出 NPT",
+      "weight": 4,
+      "phrases": [
+        "iaea",
+        "safeguards",
+        "board of governors",
+        "snapback",
+        "jcpoa",
+        "npt",
+        "non-proliferation",
+        "additional protocol",
+        "inspectors",
+        "resolution against iran",
+        "censure",
+        "آژانس بین‌المللی انرژی اتمی",
+        "پادمان",
+        "برجام",
+        "ان‌پی‌تی",
+        "بازرسان"
+      ]
+    },
+    "readiness_claim": {
+      "zone": "readiness",
+      "label": "战备状态声明",
+      "weight": 3,
+      "phrases": [
+        "combat readiness",
+        "operational readiness",
+        "readiness level",
+        "military readiness",
+        "force readiness",
+        "fully prepared",
+        "fully ready",
+        "combat ready",
+        "combat-ready",
+        "highest state of readiness",
+        "state of readiness",
+        "ready to respond",
+        "ready for any",
+        "prepared for any",
+        "on high alert",
+        "highest alert",
+        "high state of alert",
+        "war readiness",
+        "آمادگی",
+        "آماده",
+        "آمادگی کامل",
+        "آماده مقابله",
+        "رزمی",
+        "توان رزمی",
+        "حالت آماده‌باش"
+      ]
+    },
+    "missile_drill": {
+      "zone": "readiness",
+      "label": "导弹试射/演习",
+      "weight": 3,
+      "phrases": [
+        "ballistic missile",
+        "cruise missile",
+        "hypersonic",
+        "missile test",
+        "missile launch",
+        "test-fired",
+        "test fired",
+        "launched missiles",
+        "missile drill",
+        "missile exercise",
+        "missile salvo",
+        "precision strike missile",
+        "موشک بالستیک",
+        "موشک کروز",
+        "هایپرسونیک",
+        "آزمایش موشک",
+        "شلیک موشک",
+        "پرتاب موشک"
+      ]
+    },
+    "exercise": {
+      "zone": "readiness",
+      "label": "军事演习",
+      "weight": 3,
+      "phrases": [
+        "military exercise",
+        "naval exercise",
+        "war game",
+        "war games",
+        "military drill",
+        "live fire",
+        "joint exercise",
+        "large-scale drill",
+        "maneuver",
+        "readiness drill",
+        "رزمایش",
+        "مانور نظامی",
+        "رزمایش نظامی"
+      ]
+    },
+    "denial": {
+      "zone": "readiness",
+      "label": "否认/驳斥",
+      "weight": 2,
+      "phrases": [
+        "deny",
+        "denial",
+        "reject",
+        "refute",
+        "dismiss",
+        "fabricate",
+        "baseless",
+        "unfounded",
+        "untrue",
+        "false claim",
+        "no truth",
+        "not true",
+        "categorically deny",
+        "تکذیب",
+        "رد",
+        "بی‌اساس",
+        "دروغ",
+        "جعلی"
+      ]
+    },
+    "attrition_admit": {
+      "zone": "readiness",
+      "label": "战损/伤亡承认",
+      "weight": 3,
+      "phrases": [
+        "casualty",
+        "casualties",
+        "killed in action",
+        "losses",
+        "suffered losses",
+        "damage to",
+        "sunk",
+        "shot down",
+        "shoot down",
+        "shoots down",
+        "destroyed by",
+        "martyrs",
+        "شهید",
+        "تلفات",
+        "خسارت",
+        "سرنگون",
+        "غرق"
+      ]
+    },
+    "deterrence_threat": {
+      "zone": "readiness",
+      "label": "威慑/报复威胁",
+      "weight": 4,
+      "phrases": [
+        "will respond",
+        "will retaliate",
+        "retaliation",
+        "retaliate",
+        "retaliatory",
+        "revenge",
+        "harsh response",
+        "severe response",
+        "decisive response",
+        "crushing response",
+        "punish",
+        "will strike",
+        "will target",
+        "heavy price",
+        "consequences will be",
+        "no red line",
+        "پاسخ",
+        "پاسخ کوبنده",
+        "انتقام",
+        "تلافی",
+        "مجازات",
+        "خط قرمز",
+        "strong response",
+        "vows response",
+        "vow to respond"
+      ]
+    },
+    "future_threat": {
+      "zone": "foresight",
+      "label": "未来时威胁（将要做）",
+      "weight": 5,
+      "phrases": [
+        "will strike",
+        "will attack",
+        "will target",
+        "will hit",
+        "will close",
+        "will block",
+        "will blockade",
+        "will destroy",
+        "will respond",
+        "will retaliate",
+        "will launch",
+        "are about to",
+        "intend to attack",
+        "intends to",
+        "plan to attack",
+        "planning to attack",
+        "plans to strike",
+        "preparing to strike",
+        "poised to",
+        "set to strike",
+        "خواهد زد",
+        "خواهد حمله",
+        "قصد دارد",
+        "برنامه دارد",
+        "در حال آماده‌سازی"
+      ]
+    },
+    "condition_ultimatum": {
+      "zone": "foresight",
+      "label": "条件式/最后通牒",
+      "weight": 5,
+      "phrases": [
+        "if you",
+        "if they",
+        "if the us",
+        "if israel",
+        "unless",
+        "otherwise we will",
+        "in response to any",
+        "any aggression will",
+        "will not hesitate",
+        "no choice but",
+        "last warning",
+        "final warning",
+        "ultimatum",
+        "deadline",
+        "red line",
+        "act of war",
+        "will be met with",
+        "at any cost",
+        "در صورت",
+        "اگر",
+        "واکنش",
+        "هشدار نهایی",
+        "اولتیماتوم",
+        "خط قرمز"
+      ]
+    },
+    "imminent_indicator": {
+      "zone": "foresight",
+      "label": "临战/迫近信号",
+      "weight": 5,
+      "phrases": [
+        "imminent",
+        "imminently",
+        "within days",
+        "within hours",
+        "in the coming days",
+        "in the coming weeks",
+        "shortly",
+        "at any moment",
+        "on the verge of",
+        "about to happen",
+        "preparations under way",
+        "preparations are under way",
+        "final stages",
+        "final stage",
+        "ready to launch",
+        "active preparations",
+        "high probability of attack",
+        "indicators of",
+        "warning signs",
+        "به‌زودی",
+        "در روزهای آینده",
+        "مراحل نهایی",
+        "آماده پرتاب",
+        "قریب‌الوقوع"
+      ]
+    },
+    "mobilization": {
+      "zone": "foresight",
+      "label": "兵力动员/调动",
+      "weight": 4,
+      "phrases": [
+        "mobilize",
+        "mobilization",
+        "mobilise",
+        "deploy forces",
+        "troop movement",
+        "reinforcement",
+        "alert level",
+        "reserve call-up",
+        "call up reserves",
+        "force posture",
+        "surge forces",
+        "activation of reserves",
+        "counter-mobilization",
+        "بسیج",
+        "فراخوان",
+        "اعزام نیرو",
+        "استقرار نیرو",
+        "تحرکات نظامی"
+      ]
+    },
+    "escalation_ladder": {
+      "zone": "foresight",
+      "label": "升级阶梯表述",
+      "weight": 4,
+      "phrases": [
+        "escalate",
+        "escalation",
+        "escalatory",
+        "next phase",
+        "next stage",
+        "phase two",
+        "phase three",
+        "unprecedented step",
+        "further steps",
+        "new phase",
+        "widening",
+        "open confrontation",
+        "full-scale",
+        "large-scale attack",
+        "all-out",
+        "تشدید",
+        "مرحله بعد",
+        "مرحله جدید",
+        "تقابل"
+      ]
+    }
+  },
+  "claims": {
+    "action_claim": [
+      "strike",
+      "struck",
+      "hit",
+      "hitting",
+      "destroy",
+      "down",
+      "shoot down",
+      "shoots down",
+      "shooting down",
+      "shot down",
+      "seize",
+      "seizure",
+      "board",
+      "repel",
+      "repelled",
+      "intercept",
+      "launch",
+      "carry out",
+      "carried out",
+      "target",
+      "kill",
+      "sink",
+      "sank",
+      "sunk",
+      "damage",
+      "capture",
+      "foil",
+      "thwart",
+      "attack",
+      "اصابت",
+      "سرنگون",
+      "توقیف",
+      "هدف قرار",
+      "منجر شد"
+    ],
+    "denial": [
+      "deny",
+      "denial",
+      "reject",
+      "refute",
+      "dismiss",
+      "fabricate",
+      "baseless",
+      "unfounded",
+      "untrue",
+      "no evidence",
+      "not true",
+      "false claim",
+      "dismissed as",
+      "تکذیب",
+      "رد کرد",
+      "بی‌اساس",
+      "دروغ"
+    ],
+    "acknowledgement": [
+      "confirmed",
+      "acknowledged",
+      "admitted",
+      "we lost",
+      "suffered",
+      "accepts responsibility",
+      "claimed responsibility",
+      "took credit",
+      "تأیید",
+      "اعتراف",
+      "مسئولیت",
+      "confirm"
+    ],
+    "readiness_declaration": [
+      "readiness",
+      "ready",
+      "prepared",
+      "on alert",
+      "fully operational",
+      "combat ready",
+      "state of alert",
+      "mobilized",
+      "آمادگی",
+      "آماده",
+      "آماده‌باش",
+      "عملیاتی"
+    ],
+    "threat_warning": [
+      "threaten",
+      "threat",
+      "warn",
+      "warning",
+      "will respond",
+      "will retaliate",
+      "consequences",
+      "heavy price",
+      "no choice",
+      "punish",
+      "تهدید",
+      "هشدار",
+      "پاسخ",
+      "انتقام",
+      "عواقب",
+      "retaliate"
+    ],
+    "foresight_plan": [
+      "plan",
+      "planning",
+      "will",
+      "intend",
+      "about to",
+      "prepare",
+      "preparing",
+      "upcoming",
+      "next phase",
+      "soon",
+      "imminent",
+      "considering",
+      "weighing",
+      "decision to",
+      "approved plan",
+      "قصد",
+      "برنامه",
+      "به‌زودی",
+      "در حال بررسی",
+      "تصمیم"
+    ],
+    "attribution": [
+      "blamed",
+      "accused",
+      "attributed to",
+      "responsibility for",
+      "mastermind",
+      "orchestrated",
+      "proxy",
+      "backed by",
+      "masterminded by",
+      "متهم",
+      "انگشت اتهام",
+      "مسئولیت"
+    ],
+    "negotiation_diplomacy": [
+      "negotiation",
+      "talks",
+      "deal",
+      "agreement",
+      "diplomatic",
+      "mediation",
+      "ceasefire",
+      "truce",
+      "sanctions relief",
+      "nuclear deal",
+      "مذاکره",
+      "توافق",
+      "آتش‌بس",
+      "دیپلماسی"
+    ]
+  },
+  "cross_anchors": [
+    {
+      "id": "hormuz",
+      "label": "霍尔木兹海峡",
+      "re": "(?:Hormuz|هرمز)"
+    },
+    {
+      "id": "babelmandeb",
+      "label": "曼德海峡 / 红海",
+      "re": "(?:Bab\\s*[ae]l[- ]?Mandeb|Mandeb|Red Sea|Gulf of Aden|دریای سرخ|باب‌المندب|خلیج عدن)"
+    },
+    {
+      "id": "us_naval",
+      "label": "美军海上平台",
+      "re": "(?:US Navy|U\\.S\\. Navy|warship|aircraft carrier|carrier strike group|destroyer|USS [A-Z]|5th Fleet|Fifth Fleet|NAVCENT|ناوشکن|ناو هواپیمابر)"
+    },
+    {
+      "id": "energy_facility",
+      "label": "能源设施",
+      "re": "(?:refinery|oil (?:facility|terminal|field)|gas (?:field|plant)|pipeline|petrochemical|Abqaiq|Ras Tanura|Kharg|Shaybah|Khurais|Ras Laffan|پالایشگاه|تأسیسات نفتی)"
+    },
+    {
+      "id": "subsea_cable",
+      "label": "海底光缆",
+      "re": "(?:undersea cable|submarine cable|subsea cable|fibre? optic cable|internet cable|AAE-1|SEA-ME-WE|SMW\\d|FALCON|2Africa|IMEWE|کابل زیردریایی)"
+    },
+    {
+      "id": "nuclear_program",
+      "label": "核计划",
+      "re": "(?:nuclear test|nuclear weapon|nuclear warhead|enrich(?:ment)?|uranium|centrifuge|IAEA|JCPOA|NPT|Fordow|Natanz|Isfahan|Arak|هسته‌ای|غنی‌سازی|آژانس|برجام)"
+    },
+    {
+      "id": "missile_program",
+      "label": "导弹计划",
+      "re": "(?:ballistic missile|cruise missile|hypersonic|missile (?:test|launch|salvo)|anti-ship missile|ASBM|موشک)"
+    },
+    {
+      "id": "gulf_shipping",
+      "label": "海湾航运",
+      "re": "(?:tanker|merchant vessel|cargo ship|container ship|bulk carrier|shipping|maritime traffic|نفتکش|کشتی تجاری)"
+    },
+    {
+      "id": "military_drill",
+      "label": "军事演习",
+      "re": "(?:military (?:exercise|drill)|naval (?:exercise|drill)|war game|live fire|large-scale drill|رزمایش)"
+    },
+    {
+      "id": "houthi_front",
+      "label": "胡塞 / 也门战线",
+      "re": "(?:Houthi|Ansarallah|Yemen|انصارالله|یمن)"
+    }
+  ],
+  "window": {
+    "cross_match_days": 7,
+    "note": "同一议题锚点下，双方表态落在 ±N 天内即视为「同期对照」。"
+  },
+  "history": {
+    "start": "2026-02-01",
+    "start_label": "美伊冲突起始月（用于区分「未收录」与「真的没有」）",
+    "note": "历史回填起点；日常运行只刷新最近窗口。改此值会使周趋势区间变化。"
+  },
+  "schedule": {
+    "cron_hint": "每日 07:30 与 19:30",
+    "note": "建议每日两次；前瞻域的「临战迫近」类表述寿命很短，一天一跑易漏。"
+  },
+  "zones": [
+    {
+      "id": "naval_platform",
+      "name": "打击美军海上作战平台",
+      "order": 1,
+      "desc": "对美军舰艇/航母/驱逐舰/两栖舰的攻击、交战、拦截、驱离；反舰导弹与无人艇蜂群；美方增援与否认。"
+    },
+    {
+      "id": "chokepoint",
+      "name": "霍尔木兹 / 曼德海峡双线施压",
+      "order": 2,
+      "desc": "威胁封锁或关闭海峡、海峡附近演习、对商船的扣押与袭扰、两线同时施压的表述。"
+    },
+    {
+      "id": "energy_infra",
+      "name": "打击美方盟友关键能源设施",
+      "order": 3,
+      "desc": "对炼油厂/油气田/油码头/管道的打击与打击威胁；点名式设施（Abqaiq、Ras Tanura、Kharg 等）。"
+    },
+    {
+      "id": "cable",
+      "name": "切断海峡海底光缆",
+      "order": 4,
+      "desc": "对海底光缆的切断/破坏威胁；光缆中断事故；点名光缆系统（AAE-1、SEA-ME-WE、FALCON 等）。"
+    },
+    {
+      "id": "nuclear",
+      "name": "核试验与核计划里程碑",
+      "order": 5,
+      "desc": "核试验/核爆；浓缩里程碑（60%→90%→武器级）；IAEA 对峙与退出 NPT；武器化表述。"
+    },
+    {
+      "id": "readiness",
+      "name": "一般战备与军事准备",
+      "order": 6,
+      "desc": "战备状态声明、导弹试射、军事演习、否认与战损承认、威慑与报复威胁。"
+    },
+    {
+      "id": "foresight",
+      "name": "升级前瞻（未来 1–4 周）",
+      "order": 7,
+      "desc": "★ 未来时/条件式/临战式表述：「将会打击」「若不……则」「已进入最后阶段」「随时」。这是本项目的核心增量：不问「已经发生了什么」，而问「下一步要做什么」。"
+    }
+  ],
+  "outlet_map": {
+    "note": "★ 聚合器源（Google News）会把多个不同立场媒体的内容混在同一个源里。必须按「实际发布媒体」重新判定当事方，否则会把流亡/反对派媒体算成「伊方官方表态」——那是严重的定性错误。",
+    "rules": [
+      {
+        "match": [
+          "centcom",
+          "u.s. central command",
+          "us central command"
+        ],
+        "party": "us",
+        "publisher": "美国中央司令部（CENTCOM）",
+        "tier": "T1"
+      },
+      {
+        "match": [
+          "defense.gov",
+          "war.gov",
+          "department of defense",
+          "pentagon",
+          "dod"
+        ],
+        "party": "us",
+        "publisher": "美国国防部",
+        "tier": "T1"
+      },
+      {
+        "match": [
+          "state.gov",
+          "state department",
+          "u.s. department of state"
+        ],
+        "party": "us",
+        "publisher": "美国国务院",
+        "tier": "T1"
+      },
+      {
+        "match": [
+          "whitehouse",
+          "white house"
+        ],
+        "party": "us",
+        "publisher": "美国白宫",
+        "tier": "T1"
+      },
+      {
+        "match": [
+          "usni",
+          "u.s. naval institute"
+        ],
+        "party": "third",
+        "publisher": "美国海军学会新闻（USNI News）",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "gcaptain",
+          "g captain"
+        ],
+        "party": "third",
+        "publisher": "gCaptain（航运）",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "maritime-executive",
+          "the maritime executive"
+        ],
+        "party": "third",
+        "publisher": "The Maritime Executive",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "splash247"
+        ],
+        "party": "third",
+        "publisher": "Splash 247（航运）",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "freightwaves"
+        ],
+        "party": "third",
+        "publisher": "FreightWaves",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "offshore energy",
+          "offshore-energy"
+        ],
+        "party": "third",
+        "publisher": "Offshore Energy",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "oilprice"
+        ],
+        "party": "third",
+        "publisher": "OilPrice.com",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "subtelforum",
+          "submarine telecoms forum"
+        ],
+        "party": "third",
+        "publisher": "Submarine Telecoms Forum",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "datacenterdynamics",
+          "data center dynamics"
+        ],
+        "party": "third",
+        "publisher": "Data Center Dynamics",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "lightreading",
+          "light reading"
+        ],
+        "party": "third",
+        "publisher": "Light Reading（电信）",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "totaltele",
+          "total telecom"
+        ],
+        "party": "third",
+        "publisher": "Total Telecom",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "capacitymedia",
+          "capacity media"
+        ],
+        "party": "third",
+        "publisher": "Capacity Media",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "twz",
+          "the war zone",
+          "thedrive"
+        ],
+        "party": "third",
+        "publisher": "The War Zone",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "navalnews",
+          "naval news"
+        ],
+        "party": "third",
+        "publisher": "Naval News",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "seapower"
+        ],
+        "party": "third",
+        "publisher": "Seapower Magazine",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "defensenews",
+          "defense news"
+        ],
+        "party": "third",
+        "publisher": "Defense News",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "breakingdefense",
+          "breaking defense"
+        ],
+        "party": "third",
+        "publisher": "Breaking Defense",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "al jazeera",
+          "aljazeera"
+        ],
+        "party": "third",
+        "publisher": "半岛电视台（Al Jazeera）",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "bbc"
+        ],
+        "party": "third",
+        "publisher": "英国广播公司（BBC）",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "france24",
+          "france 24"
+        ],
+        "party": "third",
+        "publisher": "France 24",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "middle east eye"
+        ],
+        "party": "third",
+        "publisher": "Middle East Eye",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "al-monitor",
+          "al monitor"
+        ],
+        "party": "third",
+        "publisher": "Al-Monitor",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "times of israel"
+        ],
+        "party": "third",
+        "publisher": "The Times of Israel",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "jerusalem post",
+          "jpost"
+        ],
+        "party": "third",
+        "publisher": "The Jerusalem Post",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "arab news",
+          "arabnews"
+        ],
+        "party": "third",
+        "publisher": "Arab News（沙特）",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "reuters"
+        ],
+        "party": "third",
+        "publisher": "路透社",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "associated press",
+          "ap news"
+        ],
+        "party": "third",
+        "publisher": "美联社（AP）",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "irna",
+          "irna.ir"
+        ],
+        "party": "iran",
+        "publisher": "伊朗伊斯兰共和国通讯社（IRNA）",
+        "tier": "T1"
+      },
+      {
+        "match": [
+          "tasnim",
+          "تسنیم"
+        ],
+        "party": "iran",
+        "publisher": "塔斯尼姆通讯社（Tasnim，IRGC 关联）",
+        "tier": "T1"
+      },
+      {
+        "match": [
+          "fars news",
+          "farsnews",
+          "فارس"
+        ],
+        "party": "iran",
+        "publisher": "法尔斯通讯社（Fars，IRGC 关联）",
+        "tier": "T1"
+      },
+      {
+        "match": [
+          "mehr news",
+          "mehrnews",
+          "مهر"
+        ],
+        "party": "iran",
+        "publisher": "梅赫尔通讯社（Mehr）",
+        "tier": "T2"
+      },
+      {
+        "match": [
+          "isna",
+          "isna.ir"
+        ],
+        "party": "iran",
+        "publisher": "伊朗学生通讯社（ISNA）",
+        "tier": "T2"
+      },
+      {
+        "match": [
+          "sepah news",
+          "sepahnews",
+          "sepahnews.ir"
+        ],
+        "party": "iran",
+        "publisher": "Sepah News（IRGC 官方新闻社）",
+        "tier": "T1"
+      },
+      {
+        "match": [
+          "defa press",
+          "defapress",
+          "دفاع"
+        ],
+        "party": "iran",
+        "publisher": "Defa Press（伊朗国防部关联）",
+        "tier": "T1"
+      },
+      {
+        "match": [
+          "mashregh",
+          "مشرق"
+        ],
+        "party": "iran",
+        "publisher": "Mashregh News（IRGC 关联）",
+        "tier": "T1"
+      },
+      {
+        "match": [
+          "kayhan",
+          "کیهان"
+        ],
+        "party": "iran",
+        "publisher": "Kayhan（最高领袖系）",
+        "tier": "T2"
+      },
+      {
+        "match": [
+          "press tv",
+          "presstv"
+        ],
+        "party": "iran",
+        "publisher": "Press TV（伊朗国家对外广播）",
+        "tier": "T2"
+      },
+      {
+        "match": [
+          "parstoday",
+          "pars today"
+        ],
+        "party": "iran",
+        "publisher": "Pars Today（伊朗对外广播）",
+        "tier": "T1"
+      },
+      {
+        "match": [
+          "tehran times"
+        ],
+        "party": "iran",
+        "publisher": "Tehran Times",
+        "tier": "T2"
+      },
+      {
+        "match": [
+          "abna",
+          "abna24"
+        ],
+        "party": "iran",
+        "publisher": "ABNA 24",
+        "tier": "T2"
+      },
+      {
+        "match": [
+          "iran international",
+          "iranintl"
+        ],
+        "party": "iran_opp",
+        "publisher": "Iran International（流亡反对派媒体）",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "radio farda",
+          "rferl",
+          "radio liberty"
+        ],
+        "party": "iran_opp",
+        "publisher": "Radio Farda / RFE-RL（美国资助，流亡）",
+        "tier": "T3"
+      },
+      {
+        "match": [
+          "manoto"
+        ],
+        "party": "iran_opp",
+        "publisher": "Manoto TV（流亡）",
+        "tier": "T3"
+      }
+    ]
+  },
+  "sources": [
+    {
+      "id": "gnews-babelmandeb",
+      "party": "third",
+      "zone": "chokepoint",
+      "tier": "T3",
+      "publisher": "曼德海峡专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=%22Bab+el-Mandeb%22+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "ESF",
+        "latest": "Fri, 11 Sep 2026 15:41:08 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "霍尔木兹 / 曼德海峡双线施压"
+    },
+    {
+      "id": "gnews-hormuz",
+      "party": "third",
+      "zone": "chokepoint",
+      "tier": "T3",
+      "publisher": "霍尔木兹海峡专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=%22Strait+of+Hormuz%22+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "ESF",
+        "latest": "Tue, 15 Sep 2026 13:39:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "霍尔木兹 / 曼德海峡双线施压"
+    },
+    {
+      "id": "gnews-houthi",
+      "party": "third",
+      "zone": "chokepoint",
+      "tier": "T3",
+      "publisher": "胡塞武装袭船专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Houthi+attack+shipping+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 92,
+        "server": "ESF",
+        "latest": "Sat, 12 Sep 2026 05:57:08 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "霍尔木兹 / 曼德海峡双线施压"
+    },
+    {
+      "id": "gnews-redsea",
+      "party": "third",
+      "zone": "chokepoint",
+      "tier": "T3",
+      "publisher": "红海航运安全专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=%22Red+Sea%22+shipping+attack+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 82,
+        "server": "ESF",
+        "latest": "Wed, 16 Sep 2026 04:30:32 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "霍尔木兹 / 曼德海峡双线施压"
+    },
+    {
+      "id": "gnews-hormuz-drill",
+      "party": "third",
+      "zone": "chokepoint",
+      "tier": "T3",
+      "publisher": "霍尔木兹演习专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Iran+Hormuz+drill+OR+%22naval+exercise%22+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 64,
+        "server": "ESF",
+        "latest": "Sat, 05 Sep 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "霍尔木兹 / 曼德海峡双线施压"
+    },
+    {
+      "id": "gnews-iran-escalation",
+      "party": "third",
+      "zone": "chokepoint",
+      "tier": "T3",
+      "publisher": "伊朗军事升级专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Iran+escalation+military+readiness+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 58,
+        "server": "ESF",
+        "latest": "Wed, 16 Sep 2026 09:00:14 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "霍尔木兹 / 曼德海峡双线施压"
+    },
+    {
+      "id": "gnews-hormuz-closure",
+      "party": "third",
+      "zone": "chokepoint",
+      "tier": "T3",
+      "publisher": "封锁霍尔木兹专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Iran+%22close+the+Strait%22+OR+%22blockade+Hormuz%22+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 44,
+        "server": "ESF",
+        "latest": "Sun, 30 Aug 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "霍尔木兹 / 曼德海峡双线施压"
+    },
+    {
+      "id": "lightreading",
+      "party": "third",
+      "zone": "cable",
+      "tier": "T3",
+      "publisher": "Light Reading（电信）",
+      "url": "https://www.lightreading.com/rss.xml",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 50,
+        "server": "cloudflare",
+        "latest": "Fri, 18 Sep 2026 05:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "切断海峡海底光缆"
+    },
+    {
+      "id": "gnews-cable2",
+      "party": "third",
+      "zone": "cable",
+      "tier": "T3",
+      "publisher": "海底光缆切断专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=%22undersea+cable%22+OR+%22submarine+cable%22+cut+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 27,
+        "server": "ESF",
+        "latest": "Thu, 20 Aug 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "切断海峡海底光缆"
+    },
+    {
+      "id": "datacenterdynamics",
+      "party": "third",
+      "zone": "cable",
+      "tier": "T3",
+      "publisher": "Data Center Dynamics",
+      "url": "https://www.datacenterdynamics.com/en/rss/",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 20,
+        "server": "cloudflare",
+        "latest": "Fri, 18 Sep 2026 07:00:00 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "切断海峡海底光缆"
+    },
+    {
+      "id": "gnews-cable-redsea",
+      "party": "third",
+      "zone": "cable",
+      "tier": "T3",
+      "publisher": "红海光缆专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=submarine+cable+Red+Sea+damage+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 20,
+        "server": "ESF",
+        "latest": "Thu, 10 Sep 2026 14:43:51 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "切断海峡海底光缆"
+    },
+    {
+      "id": "capacitymedia",
+      "party": "third",
+      "zone": "cable",
+      "tier": "T3",
+      "publisher": "Capacity Media",
+      "url": "https://www.capacitymedia.com/rss",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 10,
+        "server": "cloudflare",
+        "latest": "Thu, 17 Sep 2026 14:04:29 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "切断海峡海底光缆"
+    },
+    {
+      "id": "subtelforum",
+      "party": "third",
+      "zone": "cable",
+      "tier": "T3",
+      "publisher": "Submarine Telecoms Forum",
+      "url": "https://subtelforum.com/feed/",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 10,
+        "server": "cloudflare",
+        "latest": "Thu, 17 Sep 2026 16:00:00 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "切断海峡海底光缆"
+    },
+    {
+      "id": "totaltele",
+      "party": "third",
+      "zone": "cable",
+      "tier": "T3",
+      "publisher": "Total Telecom",
+      "url": "https://www.totaltele.com/rss",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 10,
+        "server": "nginx",
+        "latest": "Thu, 17 Sep 2026 15:34:18 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "切断海峡海底光缆"
+    },
+    {
+      "id": "gnews-cable",
+      "party": "third",
+      "zone": "cable",
+      "tier": "T3",
+      "publisher": "海底光缆中断专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=(%22undersea+cable%22+OR+%22submarine+cable%22)+cut+Red+Sea+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 4,
+        "server": "ESF",
+        "latest": "Thu, 03 Sep 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "切断海峡海底光缆"
+    },
+    {
+      "id": "iaea-news",
+      "party": "third",
+      "zone": "nuclear",
+      "tier": "T1",
+      "publisher": "国际原子能机构（IAEA）",
+      "url": "https://www.iaea.org/feeds/news",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 150,
+        "server": "cloudflare",
+        "latest": "Thu, 17 Sep 26 17:39:01 +0200"
+      },
+      "stale_days": 45,
+      "zone_name": "核试验与核计划里程碑"
+    },
+    {
+      "id": "gnews-iran-nuclear-test",
+      "party": "third",
+      "zone": "nuclear",
+      "tier": "T3",
+      "publisher": "伊朗核试验专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Iran+nuclear+test+OR+weaponization+OR+%22nuclear+device%22+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "ESF",
+        "latest": "Sat, 22 Aug 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "核试验与核计划里程碑"
+    },
+    {
+      "id": "gnews-nuclear",
+      "party": "third",
+      "zone": "nuclear",
+      "tier": "T3",
+      "publisher": "伊朗核问题专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Iran+nuclear+(test+OR+enrichment+OR+IAEA)+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "ESF",
+        "latest": "Mon, 14 Sep 2026 21:21:33 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "核试验与核计划里程碑"
+    },
+    {
+      "id": "gnews-iran-missile",
+      "party": "third",
+      "zone": "nuclear",
+      "tier": "T3",
+      "publisher": "伊朗导弹试射专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Iran+ballistic+missile+test+OR+launch+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 62,
+        "server": "ESF",
+        "latest": "Thu, 10 Sep 2026 16:34:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "核试验与核计划里程碑"
+    },
+    {
+      "id": "armscontrol",
+      "party": "third",
+      "zone": "nuclear",
+      "tier": "T2",
+      "publisher": "美国军控协会（Arms Control Association）",
+      "url": "https://www.armscontrol.org/rss.xml",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 10,
+        "server": "cloudflare",
+        "latest": "Wed, 16 Sep 2026 13:54:06 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "核试验与核计划里程碑"
+    },
+    {
+      "id": "armscontrolwonk",
+      "party": "third",
+      "zone": "nuclear",
+      "tier": "T2",
+      "publisher": "Arms Control Wonk",
+      "url": "https://www.armscontrolwonk.com/feed/",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 10,
+        "server": "ESF",
+        "latest": "Thu, 16 Jul 2026 15:42:46 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "核试验与核计划里程碑"
+    },
+    {
+      "id": "fas-feed",
+      "party": "third",
+      "zone": "nuclear",
+      "tier": "T2",
+      "publisher": "美国科学家联盟（FAS）",
+      "url": "https://fas.org/feed/",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 1,
+        "server": "nginx",
+        "latest": "Tue, 14 Feb 2023 13:25:17 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "核试验与核计划里程碑"
+    },
+    {
+      "id": "gnews-iran-threat",
+      "party": "third",
+      "zone": "foresight",
+      "tier": "T3",
+      "publisher": "伊朗威胁表态专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Iran+threat+OR+warning+OR+%22will+respond%22+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "ESF",
+        "latest": "Mon, 14 Sep 2026 21:20:54 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "升级前瞻（未来 1–4 周）"
+    },
+    {
+      "id": "gnews-iran-imminent",
+      "party": "third",
+      "zone": "foresight",
+      "tier": "T3",
+      "publisher": "伊朗迫近行动专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Iran+%22imminent%22+OR+%22about+to%22+OR+%22preparing+to%22+attack+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 53,
+        "server": "ESF",
+        "latest": "Mon, 14 Sep 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "升级前瞻（未来 1–4 周）"
+    },
+    {
+      "id": "parstoday",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T1",
+      "publisher": "Pars Today（伊朗对外广播）",
+      "url": "https://parstoday.ir/en/rss",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 120,
+        "server": "cloudflare",
+        "latest": "Fri, 18 Sep 2026 07:09:29 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "presstv",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T2",
+      "publisher": "Press TV（伊朗国家对外广播）",
+      "url": "https://www.presstv.ir/rss.xml",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "（该 feed 的日期格式非标准，源内最新日期未能自动解析） | 2026-09-20 终审：日期格式非标准（无法自动解析，不进时间窗）+ SSL 证书校验失败；保留启用，需换路径或降级 TLS 后再测。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 107,
+        "server": "nginx",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "atlanticcouncil",
+      "party": "third",
+      "zone": "think",
+      "tier": "T2",
+      "publisher": "大西洋理事会（Atlantic Council）",
+      "url": "https://www.atlanticcouncil.org/feed/",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "nginx",
+        "latest": "Thu, 17 Sep 2026 21:09:47 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "think"
+    },
+    {
+      "id": "defapress",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T1",
+      "publisher": "Defa Press（伊朗国防部关联）",
+      "url": "https://defapress.ir/fa/rss/allnews",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "",
+        "latest": "18 Sep 2026 11:58:48 +0330"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "gnews-centcom",
+      "party": "us",
+      "zone": "us-official",
+      "tier": "T3",
+      "publisher": "美国中央司令部（经 Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=site%3Acentcom.mil&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "ESF",
+        "latest": "Sat, 05 Sep 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "us-official"
+    },
+    {
+      "id": "gnews-fars",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T3",
+      "publisher": "Fars News（经 Google News）",
+      "url": "https://news.google.com/rss/search?q=site%3Afarsnews.ir&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "ESF",
+        "latest": "Wed, 25 Apr 2018 00:11:47 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "gnews-iran-usnavy",
+      "party": "third",
+      "zone": "naval",
+      "tier": "T3",
+      "publisher": "伊朗 vs 美舰专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Iran+US+warship+OR+carrier+OR+destroyer+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "ESF",
+        "latest": "Tue, 08 Sep 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "naval"
+    },
+    {
+      "id": "gnews-irgc",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T3",
+      "publisher": "IRGC 相关报道（经 Google News）",
+      "url": "https://news.google.com/rss/search?q=IRGC+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "ESF",
+        "latest": "Sat, 05 Sep 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "gnews-irna",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T3",
+      "publisher": "IRNA（经 Google News）",
+      "url": "https://news.google.com/rss/search?q=site%3Airna.ir&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "ESF",
+        "latest": "Wed, 16 Sep 2026 07:56:27 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "gnews-kharg",
+      "party": "third",
+      "zone": "energy",
+      "tier": "T3",
+      "publisher": "哈尔克岛/油码头专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Kharg+Island+OR+%22oil+terminal%22+Iran+strike+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "ESF",
+        "latest": "Wed, 09 Sep 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "energy"
+    },
+    {
+      "id": "gnews-reuters-iran",
+      "party": "third",
+      "zone": "third",
+      "tier": "T3",
+      "publisher": "路透社（经 Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=site%3Areuters.com+Iran+military+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "ESF",
+        "latest": "Thu, 17 Sep 2026 12:02:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "third"
+    },
+    {
+      "id": "kayhan",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T2",
+      "publisher": "Kayhan（最高领袖系）",
+      "url": "https://kayhan.ir/fa/rss/allnews",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "Apache2",
+        "latest": "16 Sep 2026 21:35:30 +0330"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "sepahnews",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T1",
+      "publisher": "Sepah News（IRGC 官方新闻社）",
+      "url": "https://sepahnews.ir/fa/rss/allnews",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "2026-09-20 终审：SSL CERTIFICATE_VERIFY_FAILED（自签名链）；引擎已有 tls 降级通道，待该源命中降级后再测。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 100,
+        "server": "",
+        "latest": "18 Sep 2026 04:12:09 +0330"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "gnews-gulf-energy",
+      "party": "third",
+      "zone": "energy",
+      "tier": "T3",
+      "publisher": "海湾能源安全专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Saudi+OR+UAE+OR+Kuwait+oil+facility+attack+Iran+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 96,
+        "server": "ESF",
+        "latest": "Tue, 08 Sep 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "energy"
+    },
+    {
+      "id": "maritime-exec",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T3",
+      "publisher": "The Maritime Executive",
+      "url": "https://www.maritime-executive.com/articles.rss",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 94,
+        "server": "cloudflare",
+        "latest": "2026-09-17T22:44:00-04:00"
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "gnews-abqaiq",
+      "party": "third",
+      "zone": "energy",
+      "tier": "T3",
+      "publisher": "海湾能源设施遇袭专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=(Abqaiq+OR+%22Ras+Tanura%22+OR+Kharg+Island)+attack+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 87,
+        "server": "ESF",
+        "latest": "Wed, 09 Sep 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "energy"
+    },
+    {
+      "id": "dod-news",
+      "party": "us",
+      "zone": "us-official",
+      "tier": "T1",
+      "publisher": "美国国防部（五角大楼）",
+      "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=60",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 60,
+        "server": "",
+        "latest": "Thu, 17 Sep 2026 23:14:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "us-official"
+    },
+    {
+      "id": "dod-releases",
+      "party": "us",
+      "zone": "us-official",
+      "tier": "T1",
+      "publisher": "美国国防部（新闻稿）",
+      "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=9&Site=945&max=60",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 60,
+        "server": "",
+        "latest": "Thu, 17 Sep 2026 22:15:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "us-official"
+    },
+    {
+      "id": "gnews-iran-navy-drill",
+      "party": "third",
+      "zone": "naval",
+      "tier": "T3",
+      "publisher": "伊朗海军演习专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Iran+naval+drill+OR+exercise+Persian+Gulf+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 53,
+        "server": "ESF",
+        "latest": "Mon, 14 Sep 2026 21:20:54 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "naval"
+    },
+    {
+      "id": "gnews-oilattack",
+      "party": "third",
+      "zone": "energy",
+      "tier": "T3",
+      "publisher": "海湾油设施遇袭专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=oil+facility+drone+strike+Gulf+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 53,
+        "server": "ESF",
+        "latest": "Thu, 17 Sep 2026 16:30:47 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "energy"
+    },
+    {
+      "id": "gnews-iran-irgc-navy",
+      "party": "third",
+      "zone": "naval",
+      "tier": "T3",
+      "publisher": "IRGC 海军专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=IRGC+navy+OR+%22Iranian+Navy%22+drill+OR+attack+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 51,
+        "server": "ESF",
+        "latest": "Tue, 08 Sep 2026 07:00:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "naval"
+    },
+    {
+      "id": "arabnews",
+      "party": "third",
+      "zone": "energy",
+      "tier": "T3",
+      "publisher": "Arab News（沙特）",
+      "url": "https://www.arabnews.com/rss.xml",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "2026-09-20 终审：HTTP 403（站点侧风控）；保留启用待出口变化。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 50,
+        "server": "cloudflare",
+        "latest": "Fri, 18 Sep 2026 08:22:22 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "energy"
+    },
+    {
+      "id": "freightwaves",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T3",
+      "publisher": "FreightWaves",
+      "url": "https://www.freightwaves.com/feed",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 50,
+        "server": "nginx",
+        "latest": "Fri, 18 Sep 2026 03:47:37 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "gnews-us-carrier",
+      "party": "third",
+      "zone": "naval",
+      "tier": "T3",
+      "publisher": "美军航母部署专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=US+aircraft+carrier+Middle+East+deploy+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "2026-09-20 终审：WinError 10060 连接超时（google 对该出口临时限流的特征）；非永久失效，留档待自动回补。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 50,
+        "server": "ESF",
+        "latest": "Sat, 12 Sep 2026 01:23:00 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "naval"
+    },
+    {
+      "id": "twz",
+      "party": "third",
+      "zone": "naval",
+      "tier": "T3",
+      "publisher": "The War Zone",
+      "url": "https://www.twz.com/feed",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 49,
+        "server": "nginx",
+        "latest": "Thu, 17 Sep 2026 17:46:47 -0400"
+      },
+      "stale_days": 45,
+      "zone_name": "naval"
+    },
+    {
+      "id": "dvids-centcom",
+      "party": "us",
+      "zone": "us-official",
+      "tier": "T1",
+      "publisher": "美国中央司令部公共事务办公室（DVIDS）",
+      "url": "https://www.dvidshub.net/rss/unit/72",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 45,
+        "server": "Apache",
+        "latest": "Thu, 17 Sep 2026 14:08:41 -0400"
+      },
+      "stale_days": 45,
+      "zone_name": "us-official"
+    },
+    {
+      "id": "abna24",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T2",
+      "publisher": "ABNA 24",
+      "url": "https://en.abna24.com/rss",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 30,
+        "server": "nginx",
+        "latest": "Thu, 17 Sep 2026 18:00:43 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "bbc-me",
+      "party": "third",
+      "zone": "third",
+      "tier": "T3",
+      "publisher": "英国广播公司（BBC）中东",
+      "url": "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 30,
+        "server": "Belfrage",
+        "latest": "Thu, 17 Sep 2026 20:34:30 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "third"
+    },
+    {
+      "id": "france24-me",
+      "party": "third",
+      "zone": "third",
+      "tier": "T3",
+      "publisher": "France 24（中东）",
+      "url": "https://www.france24.com/en/middle-east/rss",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 30,
+        "server": "",
+        "latest": "Fri, 18 Sep 2026 06:29:47 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "third"
+    },
+    {
+      "id": "irna-en",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T1",
+      "publisher": "伊朗伊斯兰共和国通讯社（IRNA）",
+      "url": "https://en.irna.ir/rss",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 30,
+        "server": "ArvanCloud",
+        "latest": "Fri, 18 Sep 2026 08:27:03 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "isna-en",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T2",
+      "publisher": "伊朗学生通讯社（ISNA）",
+      "url": "https://en.isna.ir/rss",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 30,
+        "server": "ArvanCloud",
+        "latest": "Fri, 18 Sep 2026 08:00:57 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "mashreghnews",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T1",
+      "publisher": "Mashregh News（IRGC 关联）",
+      "url": "https://www.mashreghnews.ir/rss",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 30,
+        "server": "nginx",
+        "latest": "Fri, 18 Sep 2026 08:08:42 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "mehr-en",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T2",
+      "publisher": "梅赫尔通讯社（Mehr）",
+      "url": "https://en.mehrnews.com/rss",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 30,
+        "server": "MizbanCloud",
+        "latest": "Fri, 18 Sep 2026 08:31:47 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "tehrantimes",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T2",
+      "publisher": "Tehran Times",
+      "url": "https://www.tehrantimes.com/rss",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 30,
+        "server": "MizbanCloud",
+        "latest": "Fri, 18 Sep 2026 08:23:32 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "usni-news",
+      "party": "third",
+      "zone": "naval",
+      "tier": "T3",
+      "publisher": "美国海军学会新闻（USNI News）",
+      "url": "https://news.usni.org/feed",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 30,
+        "server": "cloudflare",
+        "latest": "Thu, 17 Sep 2026 21:07:30 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "naval"
+    },
+    {
+      "id": "jpost",
+      "party": "third",
+      "zone": "third",
+      "tier": "T3",
+      "publisher": "The Jerusalem Post",
+      "url": "https://www.jpost.com/rss/rssfeedsfrontpage.aspx",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 26,
+        "server": "nginx/1.26.1",
+        "latest": "Fri, 18 Sep 2026 09:33:52 GMT"
+      },
+      "stale_days": 45,
+      "zone_name": "third"
+    },
+    {
+      "id": "aljazeera",
+      "party": "third",
+      "zone": "third",
+      "tier": "T3",
+      "publisher": "半岛电视台（Al Jazeera）",
+      "url": "https://www.aljazeera.com/xml/rss/all.xml",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 25,
+        "server": "nginx",
+        "latest": "Fri, 18 Sep 2026 07:54:49 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "third"
+    },
+    {
+      "id": "defensenews-naval",
+      "party": "third",
+      "zone": "naval",
+      "tier": "T3",
+      "publisher": "Defense News（海军版）",
+      "url": "https://www.defensenews.com/arc/outboundfeeds/rss/category/naval/",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 25,
+        "server": "openresty",
+        "latest": "Thu, 17 Sep 2026 14:13:21 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "naval"
+    },
+    {
+      "id": "aei",
+      "party": "third",
+      "zone": "think",
+      "tier": "T2",
+      "publisher": "美国企业研究所（AEI）",
+      "url": "https://www.aei.org/feed/",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 24,
+        "server": "cloudflare",
+        "latest": "Thu, 17 Sep 2026 19:56:08 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "think"
+    },
+    {
+      "id": "almonitor",
+      "party": "third",
+      "zone": "third",
+      "tier": "T3",
+      "publisher": "Al-Monitor",
+      "url": "https://www.al-monitor.com/rss",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 20,
+        "server": "nginx",
+        "latest": "2026-09-18T01:46:33-0400"
+      },
+      "stale_days": 45,
+      "zone_name": "third"
+    },
+    {
+      "id": "hellenic-shipping",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T3",
+      "publisher": "Hellenic Shipping News",
+      "url": "https://www.hellenicshippingnews.com/feed/",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 20,
+        "server": "cloudflare",
+        "latest": "Thu, 17 Sep 2026 21:00:59 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "mideasteye",
+      "party": "third",
+      "zone": "third",
+      "tier": "T3",
+      "publisher": "Middle East Eye",
+      "url": "https://www.middleeasteye.net/rss",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 20,
+        "server": "",
+        "latest": "Fri, 18 Sep 2026 09:25:59 +0100"
+      },
+      "stale_days": 45,
+      "zone_name": "third"
+    },
+    {
+      "id": "oilprice",
+      "party": "third",
+      "zone": "energy",
+      "tier": "T3",
+      "publisher": "OilPrice.com",
+      "url": "https://oilprice.com/rss/main",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 15,
+        "server": "Apache/2.4.68 () PHP/8.2.33",
+        "latest": "Fri, 18 Sep 2026 03:30:27 -0500"
+      },
+      "stale_days": 45,
+      "zone_name": "energy"
+    },
+    {
+      "id": "timesofisrael",
+      "party": "third",
+      "zone": "third",
+      "tier": "T3",
+      "publisher": "The Times of Israel",
+      "url": "https://www.timesofisrael.com/feed/",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 15,
+        "server": "cloudflare",
+        "latest": "Fri, 18 Sep 2026 08:29:43 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "third"
+    },
+    {
+      "id": "gcaptain",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T3",
+      "publisher": "gCaptain（航运）",
+      "url": "https://gcaptain.com/feed/",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 12,
+        "server": "cloudflare",
+        "latest": "Thu, 17 Sep 2026 21:36:57 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "stimson",
+      "party": "third",
+      "zone": "think",
+      "tier": "T2",
+      "publisher": "史汀生中心（Stimson）",
+      "url": "https://www.stimson.org/feed/",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 12,
+        "server": "cloudflare",
+        "latest": "Tue, 08 Sep 2026 22:09:37 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "think"
+    },
+    {
+      "id": "crisisgroup",
+      "party": "third",
+      "zone": "think",
+      "tier": "T2",
+      "publisher": "国际危机组织（Crisis Group）",
+      "url": "https://www.crisisgroup.org/rss",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 10,
+        "server": "cloudflare",
+        "latest": "Monday, September 14, 2026 - 17:03"
+      },
+      "stale_days": 45,
+      "zone_name": "think"
+    },
+    {
+      "id": "marinelink",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T3",
+      "publisher": "MarineLink",
+      "url": "https://www.marinelink.com/rss",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 10,
+        "server": "Microsoft-IIS/10.0",
+        "latest": "Thu, 17 Sep 2026 19:27:59 Z"
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "naval-news",
+      "party": "third",
+      "zone": "naval",
+      "tier": "T3",
+      "publisher": "Naval News",
+      "url": "https://www.navalnews.com/feed/",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 10,
+        "server": "o2switch-PowerBoost-v3",
+        "latest": "Thu, 17 Sep 2026 14:50:33 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "naval"
+    },
+    {
+      "id": "offshore-energy",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T3",
+      "publisher": "Offshore Energy",
+      "url": "https://www.offshore-energy.biz/feed/",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 10,
+        "server": "cloudflare",
+        "latest": "Thu, 17 Sep 2026 15:27:24 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "seapower",
+      "party": "third",
+      "zone": "naval",
+      "tier": "T3",
+      "publisher": "Seapower Magazine",
+      "url": "https://seapowermagazine.org/feed/",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 10,
+        "server": "cloudflare",
+        "latest": "Thu, 17 Sep 2026 17:51:06 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "naval"
+    },
+    {
+      "id": "splash247",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T3",
+      "publisher": "Splash 247（航运）",
+      "url": "https://splash247.com/feed/",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 10,
+        "server": "cloudflare",
+        "latest": "Fri, 18 Sep 2026 08:22:30 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "state-press",
+      "party": "us",
+      "zone": "us-official",
+      "tier": "T1",
+      "publisher": "美国国务院（新闻稿）",
+      "url": "https://www.state.gov/rss-feed/press-releases/feed/",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "2026-09-20 终审：HTTP 407 代理需认证（出口对该站要求鉴权）；保留启用，换出口或走直连后再测。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 10,
+        "server": "Apache",
+        "latest": "Thu, 17 Sep 2026 19:46:53 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "us-official"
+    },
+    {
+      "id": "baird-maritime",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T3",
+      "publisher": "Baird Maritime",
+      "url": "https://www.bairdmaritime.com/feed",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 2,
+        "server": "cloudflare",
+        "latest": "Fri, 18 Sep 2026 05:14:20 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "mei-edu",
+      "party": "third",
+      "zone": "think",
+      "tier": "T2",
+      "publisher": "中东研究所（MEI）",
+      "url": "https://www.mei.edu/rss",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 1,
+        "server": "cloudflare",
+        "latest": "Mon, 05 May 2025 18:41:22 +0000"
+      },
+      "stale_days": 45,
+      "zone_name": "think"
+    },
+    {
+      "id": "submarinenetworks",
+      "party": "third",
+      "zone": "cable",
+      "tier": "T3",
+      "publisher": "Submarine Networks",
+      "url": "https://www.submarinenetworks.com/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`submarinenetworks.com/rss` 返回 **HTTP 404**。替代：`subtelforum`（已启用）。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "nginx",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "切断海峡海底光缆"
+    },
+    {
+      "id": "telegeography",
+      "party": "third",
+      "zone": "cable",
+      "tier": "T2",
+      "publisher": "TeleGeography",
+      "url": "https://www.telegeography.com/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`telegeography.com/rss` 返回 **HTTP 404**。替代：`subtelforum` / `datacenterdynamics`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "Apache",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "切断海峡海底光缆"
+    },
+    {
+      "id": "iaea-pressrss",
+      "party": "third",
+      "zone": "nuclear",
+      "tier": "T1",
+      "publisher": "国际原子能机构（IAEA）",
+      "url": "https://www.iaea.org/news/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`iaea.org/news/rss` 返回 **HTTP 403**。**已改用可用的 `iaea-news`（`/feeds/news`，实测 150 条）**，本条保留仅作留档。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 403,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "核试验与核计划里程碑"
+    },
+    {
+      "id": "iranwatch",
+      "party": "third",
+      "zone": "nuclear",
+      "tier": "T2",
+      "publisher": "Iran Watch（威斯康星项目）",
+      "url": "https://www.iranwatch.org/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`iranwatch.org/rss` 返回 **HTTP 403**，`Server: cloudflare`。替代：`armscontrol` / `isis-online`（后者亦 404）。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 403,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "核试验与核计划里程碑"
+    },
+    {
+      "id": "isis-online",
+      "party": "third",
+      "zone": "nuclear",
+      "tier": "T2",
+      "publisher": "科学与国际安全研究所（ISIS）",
+      "url": "https://isis-online.org/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`isis-online.org/rss` 返回 **HTTP 404**，`Server: cloudflare`。替代：`armscontrol`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "核试验与核计划里程碑"
+    },
+    {
+      "id": "nti-feed",
+      "party": "third",
+      "zone": "nuclear",
+      "tier": "T2",
+      "publisher": "核威胁倡议组织（NTI）",
+      "url": "https://www.nti.org/feed/",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`nti.org/feed` 返回 **HTTP 200 + 831 字节的 RSS 外壳但 0 条目**（feed 为空/已停更）。替代：`armscontrol` / `thebulletin`（后者亦 403）。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "核试验与核计划里程碑"
+    },
+    {
+      "id": "thebulletin",
+      "party": "third",
+      "zone": "nuclear",
+      "tier": "T2",
+      "publisher": "Bulletin of the Atomic Scientists",
+      "url": "https://thebulletin.org/feed/",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`thebulletin.org/feed` 返回 **HTTP 403**，`Server: cloudflare`。替代：`armscontrol` / `armscontrolwonk`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 403,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "核试验与核计划里程碑"
+    },
+    {
+      "id": "almayadeen-en",
+      "party": "third",
+      "zone": "third",
+      "tier": "T3",
+      "publisher": "Al Mayadeen English",
+      "url": "https://english.almayadeen.net/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`english.almayadeen.net/rss` 返回 **HTTP 403**，`Server: cloudflare`。替代：`aljazeera` / `mideasteye`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 403,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "third"
+    },
+    {
+      "id": "amwaj",
+      "party": "third",
+      "zone": "third",
+      "tier": "T3",
+      "publisher": "Amwaj.media",
+      "url": "https://amwaj.media/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`amwaj.media/rss` 返回 **HTTP 429（限流）**，`Server: Vercel`。该站对非浏览器请求限流严格，**不做绕过**。替代：`almonitor` / `mideasteye`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 429,
+        "items": 0,
+        "server": "Vercel",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "third"
+    },
+    {
+      "id": "bimco",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T3",
+      "publisher": "BIMCO（航运协会）",
+      "url": "https://www.bimco.org/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`bimco.org/rss` 返回 **HTTP 404**。替代：`gcaptain` / `splash247`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "brookings",
+      "party": "third",
+      "zone": "think",
+      "tier": "T2",
+      "publisher": "布鲁金斯学会（Brookings）",
+      "url": "https://www.brookings.edu/feed/",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`brookings.edu/feed` 返回 **HTTP 200 但为站点首页 HTML（171KB，0 条目）**。替代：`atlanticcouncil` / `aei`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "think"
+    },
+    {
+      "id": "carnegie",
+      "party": "third",
+      "zone": "think",
+      "tier": "T2",
+      "publisher": "卡内基国际和平基金会",
+      "url": "https://carnegieendowment.org/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`carnegieendowment.org/rss` 返回 **HTTP 200 但为 HTML 页（70KB，0 条目）**，`Server: envoy`。替代：`atlanticcouncil` / `stimson`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 0,
+        "server": "envoy",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "think"
+    },
+    {
+      "id": "centcom-afpims",
+      "party": "us",
+      "zone": "us-official",
+      "tier": "T1",
+      "publisher": "美国中央司令部（官网 RSS，Site id 不匹配）",
+      "url": "https://www.centcom.mil/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=1060&max=60",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`centcom.mil` 的 AFPIMS `RSS.ashx`（Site=1060）返回 **HTTP 200 + 空响应体** —— 与 navy.mil 同一现象：Site id 不匹配时不报错、只给空体。该 Site id 未能反查成功。替代：`gnews-centcom`（取标题层）+ `dvids-centcom`（取一手内容）。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 0,
+        "server": "",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "us-official"
+    },
+    {
+      "id": "chathamhouse",
+      "party": "third",
+      "zone": "think",
+      "tier": "T2",
+      "publisher": "查塔姆研究所（Chatham House）",
+      "url": "https://www.chathamhouse.org/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`chathamhouse.org/rss` 返回 **HTTP 403**，`Server: cloudflare`。替代：`crisisgroup`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 403,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "think"
+    },
+    {
+      "id": "csis-analysis",
+      "party": "third",
+      "zone": "think",
+      "tier": "T2",
+      "publisher": "战略与国际研究中心（CSIS）",
+      "url": "https://www.csis.org/rss/analysis",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`csis.org/rss/analysis` 返回 **HTTP 404** —— 端点已变更。替代：`atlanticcouncil` / `stimson`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "think"
+    },
+    {
+      "id": "dvids-navcent",
+      "party": "third",
+      "zone": "naval",
+      "tier": "T1",
+      "publisher": "dvids-navcent",
+      "url": "https://www.dvidshub.net/rss/unit/232",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`dvidshub.net/rss/unit/232` 返回 **HTTP 404** —— unit id 232 不是 NAVCENT/第五舰队。★ 需要从 `dvidshub.net/unit/<SLUG>` 页面反查真实 unit id（本项目暂无该页面抓取能力）。替代：`dvids-centcom`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "Apache",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "naval"
+    },
+    {
+      "id": "farsnews-direct",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T1",
+      "publisher": "Fars News（官网，JS 渲染）",
+      "url": "https://www.farsnews.ir/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`farsnews.ir/rss` 返回 **HTTP 200 但是 HTML 页面（4.0KB，0 条目）**，`Server: ninja` —— 该站已改为 JS 渲染，静态解析取不到条目。替代：`gnews-fars`（带 site 过滤的 Google News 查询）。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "ninja",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "farsnews-en",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T1",
+      "publisher": "Fars News 英文（官网，JS 渲染）",
+      "url": "https://www.farsnews.ir/en/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`farsnews.ir/en/rss` 同为 **HTTP 200 + JS 渲染 HTML（0 条目）**。替代：`gnews-fars`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 0,
+        "server": "ninja",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "gnews-tasnim",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T3",
+      "publisher": "Tasnim（经 Google News）",
+      "url": "https://news.google.com/rss/search?q=site%3Atasnimnews.com&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": true,
+      "note": "【实测 2026-09-18】HTTP 200 Server=ESF；200 但解析出 0 条目（疑似 HTML/JS 页）: <?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><rss ",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 0,
+        "server": "ESF",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "imo-pressbrief",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T1",
+      "publisher": "国际海事组织（IMO）",
+      "url": "https://www.imo.org/en/MediaCentre/PressBriefings/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`imo.org/.../PressBriefings/rss` 返回 **HTTP 200 + 60KB HTML（0 条目）**，`Server: Microsoft-IIS/10.0` —— 该路径不是 feed。替代：`ukmto` 不可用，改用 `gcaptain`/`maritime-exec` 转述 IMO 通告。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 0,
+        "server": "Microsoft-IIS/10.0",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "iranintl",
+      "party": "iran_opp",
+      "zone": "iran-opp",
+      "tier": "T3",
+      "publisher": "Iran International（流亡反对派媒体）",
+      "url": "https://www.iranintl.com/en/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`iranintl.com/en/rss` 返回 **HTTP 200 但是 Next.js 客户端渲染页（82KB，0 条目）**，`Server: cloudflare`。替代：暂无；该源为流亡反对派媒体，缺它只影响「反对派视角」的覆盖面，不影响当事方对照。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "iran-opp"
+    },
+    {
+      "id": "iranpress",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T1",
+      "publisher": "Iran Press",
+      "url": "https://iranpress.com/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`iranpress.com/rss` 网络层失败：`SSL: SSLV3_ALERT_HANDSHAKE_FAILURE`，两个出口一致 → 站点已禁用旧 TLS 版本，标准库无法握手。**不做降级绕过**。替代：`parstoday` / `irna-en`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": null,
+        "items": 0,
+        "server": "",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "irgc-official",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T1",
+      "publisher": "伊斯兰革命卫队（irgc.ir）",
+      "url": "https://irgc.ir/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`irgc.ir/rss` 不可达。替代：`sepahnews`（IRGC 官方新闻社，已启用）+ `gnews-irgc`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": null,
+        "items": 0,
+        "server": "",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "isw",
+      "party": "third",
+      "zone": "think",
+      "tier": "T2",
+      "publisher": "战争研究所（ISW）",
+      "url": "https://www.understandingwar.org/rss.xml",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`understandingwar.org/rss.xml` 返回 **HTTP 403**，两个出口一致 → 站点侧。替代：`crisisgroup` / `atlanticcouncil`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 403,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "think"
+    },
+    {
+      "id": "khamenei-en",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T1",
+      "publisher": "最高领袖办公室英文站",
+      "url": "https://english.khamenei.ir/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`english.khamenei.ir/rss` 返回 **HTTP 403**，两个出口一致 → 判为站点侧拒绝（非出口问题，因为同出口下其他伊朗源正常）。替代：`parstoday` / `irna-en` 转述最高领袖表态。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 403,
+        "items": 0,
+        "server": "",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "marad-msci",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T1",
+      "publisher": "美国海事署（MARAD）海事安全通告",
+      "url": "https://www.maritime.dot.gov/msci/2026-000-advisories-rss.xml",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】美国海事署 (MARAD) 海事安全通告端点 404/403（`Server: AkamaiGHost`）。端点命名规则不公开。替代：经航运媒体转述。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 403,
+        "items": 0,
+        "server": "AkamaiGHost",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "marad-rss",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T1",
+      "publisher": "美国海事署（MARAD）",
+      "url": "https://www.maritime.dot.gov/rss.xml",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`maritime.dot.gov/rss.xml` 返回 **HTTP 403**（`Server: AkamaiGHost`）。★ 注意：403 在换出口后仍复现，但同出口下 defense.gov 正常，故判为**该站点侧**的路径限制（也可能需要特定 Referer）。替代：经航运媒体转述。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 403,
+        "items": 0,
+        "server": "AkamaiGHost",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "mod-iran",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T1",
+      "publisher": "伊朗国防部（mod.ir）",
+      "url": "https://mod.ir/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】伊朗国防部 `mod.ir/rss` 不可达（网络层失败/非 feed 端点）。替代：`defapress`（国防部关联的 Defa Press）。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": null,
+        "items": 0,
+        "server": "",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "naval-technology",
+      "party": "third",
+      "zone": "naval",
+      "tier": "T3",
+      "publisher": "Naval Technology",
+      "url": "https://www.naval-technology.com/feed/",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`naval-technology.com/feed` 返回 **HTTP 403**，`Server: Varnish`。替代：`naval-news` / `usni-news`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 403,
+        "items": 0,
+        "server": "Varnish",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "naval"
+    },
+    {
+      "id": "navyrecognition",
+      "party": "third",
+      "zone": "naval",
+      "tier": "T3",
+      "publisher": "Navy Recognition",
+      "url": "https://www.navyrecognition.com/index.php?format=feed&type=rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`navyrecognition.com/...rss` 返回 **HTTP 403**，`Server: cloudflare`。替代：`naval-news`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 403,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "naval"
+    },
+    {
+      "id": "porttechnology",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T3",
+      "publisher": "Port Technology",
+      "url": "https://www.porttechnology.org/feed/",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`porttechnology.org/feed` 返回 **HTTP 403**，`Server: cloudflare`。替代：`gcaptain`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 403,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "radiofarda",
+      "party": "iran_opp",
+      "zone": "iran-opp",
+      "tier": "T3",
+      "publisher": "Radio Farda / RFE-RL（美国资助，流亡）",
+      "url": "https://www.rferl.org/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`rferl.org/rss` 返回 **HTTP 200 + 11 字节（内容为 `Invalid url`）** —— 该端点需带具体频道参数，裸 `/rss` 无效。未找到公开的 Radio Farda 频道 feed。替代：暂无。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 0,
+        "server": "",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "iran-opp"
+    },
+    {
+      "id": "rusi",
+      "party": "third",
+      "zone": "think",
+      "tier": "T2",
+      "publisher": "英国皇家联合军种研究院（RUSI）",
+      "url": "https://rusi.org/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`rusi.org/rss` 返回 **HTTP 404**，`Server: AmazonS3`。替代：`crisisgroup`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "AmazonS3",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "think"
+    },
+    {
+      "id": "safety4sea",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T3",
+      "publisher": "SAFETY4SEA",
+      "url": "https://safety4sea.com/feed/",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`safety4sea.com/feed` 返回 **HTTP 200 + 490KB HTML 但 0 条目**，且首次尝试伴随 `SSL: UNEXPECTED_EOF` —— 判为站点侧（同出口下其他海事源正常）。替代：`gcaptain` / `maritime-exec` / `splash247`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 200,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "seatrade-maritime",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T3",
+      "publisher": "Seatrade Maritime News",
+      "url": "https://www.seatrade-maritime.com/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`seatrade-maritime.com/rss` 返回 **HTTP 404**，`Server: cloudflare`。替代：`gcaptain`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "tasnim-direct",
+      "party": "iran",
+      "zone": "iran-official",
+      "tier": "T1",
+      "publisher": "Tasnim（官网 RSS）",
+      "url": "https://www.tasnimnews.com/en/rss/feed/0/7/0/all-news",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`tasnimnews.com/en/rss/...` 网络层失败：一次 `Tunnel connection failed: 502`、一次 `SSL: UNEXPECTED_EOF_WHILE_READING`。两个出口、3 次重试均未成功。**不排除是本地出口抖动**，日后可复测。替代：`gnews-tasnim`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": null,
+        "items": 0,
+        "server": "",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "iran-official"
+    },
+    {
+      "id": "thenational-ae",
+      "party": "third",
+      "zone": "energy",
+      "tier": "T3",
+      "publisher": "The National（阿联酋）",
+      "url": "https://www.thenationalnews.com/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`thenationalnews.com/rss` 返回 **HTTP 404**。替代：`arabnews`（沙特）。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "openresty",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "energy"
+    },
+    {
+      "id": "treasury-ofac",
+      "party": "us",
+      "zone": "us-official",
+      "tier": "T1",
+      "publisher": "treasury-ofac",
+      "url": "https://home.treasury.gov/rss/press-releases.xml",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`home.treasury.gov/rss/press-releases.xml` 返回 **HTTP 404** —— 端点已变更（财政部新闻稿 RSS 路径调整过多次）。替代：`state-press` + `dod-releases` 覆盖美方制裁/政策表态。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "nginx",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "us-official"
+    },
+    {
+      "id": "ukmto",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T1",
+      "publisher": "英国海事贸易行动办公室（UKMTO）",
+      "url": "https://www.ukmto.org/rss",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`ukmto.org/rss` 返回 **HTTP 404**，`Server: cloudflare`。该站未提供公开 RSS 端点（官网为 JS 渲染）。★ 这是本主题最遗憾的缺口 —— UKMTO 是红海/亚丁湾海事安全通告的**一手发布方**。替代：经 `gcaptain`/`maritime-exec` 转述其通告；日后若拿到端点应优先启用。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "ukmto-news",
+      "party": "third",
+      "zone": "maritime",
+      "tier": "T1",
+      "publisher": "英国海事贸易行动办公室（UKMTO）",
+      "url": "https://www.ukmto.org/news",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`ukmto.org/news` 返回 **HTTP 404**。见 `ukmto` 条。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "cloudflare",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "maritime"
+    },
+    {
+      "id": "washinstitute",
+      "party": "third",
+      "zone": "think",
+      "tier": "T2",
+      "publisher": "华盛顿近东政策研究所",
+      "url": "https://www.washingtoninstitute.org/rss.xml",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "note": "【实测 2026-09-18】`washingtoninstitute.org/rss.xml` 返回 **HTTP 404**。替代：`aei` / `atlanticcouncil`。",
+      "probe": {
+        "date": "2026-09-18",
+        "http": 404,
+        "items": 0,
+        "server": "nginx",
+        "latest": null
+      },
+      "stale_days": 45,
+      "zone_name": "think"
+    },
+    {
+      "id": "globaltimes",
+      "party": "third",
+      "zone": "third",
+      "zone_name": "third",
+      "tier": "T3",
+      "publisher": "Global Times 环球时报英文版",
+      "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+      "enabled": false,
+      "topic_anchored": false,
+      "aggregator": false,
+      "probe": {
+        "date": "2026-09-19",
+        "http": 200,
+        "items": 50,
+        "latest": "Sat, 19 Sep 2026 22:09:17 GMT"
+      },
+      "stale_days": 30,
+      "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担"
+    },
+    {
+      "id": "cgtn-world",
+      "party": "third",
+      "zone": "third",
+      "zone_name": "third",
+      "tier": "T3",
+      "publisher": "CGTN 中国环球电视网",
+      "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+      "enabled": true,
+      "topic_anchored": false,
+      "aggregator": false,
+      "probe": {
+        "date": "2026-09-19",
+        "http": 200,
+        "items": 50,
+        "latest": "Fri, 18 Sep 2026 14:52:16 GMT"
+      },
+      "stale_days": 30,
+      "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）（多域通稿源）"
+    }
+  ],
+  "glossary": {
+    "fa": {
+      "نفت": "石油",
+      "تحریم": "制裁",
+      "تورم": "通胀",
+      "دلار": "美元",
+      "بودجه": "预算",
+      "انتخابات": "选举",
+      "دولت": "政府",
+      "مجلس": "议会",
+      "رئیس‌جمهور": "总统",
+      "ارز": "外汇/货币",
+      "گاز": "天然气",
+      "صادرات": "出口",
+      "واردات": "进口",
+      "برجام": "伊核协议（JCPOA）",
+      "سپاه": "伊斯兰革命卫队",
+      "آژانس": "国际原子能机构（IAEA）",
+      "غنیسازی": "铀浓缩"
+    }
+  }
+}

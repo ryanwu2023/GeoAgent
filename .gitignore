@@ -14,6 +14,7 @@ collectors/**/__pycache__/
 collectors/**/*.pyc
 collectors/**/logs/
 collectors/**/_probe*/
+collectors/**/_probe*
 collectors/**/*.bak*
 *.sqlite
 *.sqlite3

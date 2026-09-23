@@ -1,0 +1,123 @@
+{
+ "note": "被 title_include/title_exclude 过滤掉的标题，供人工回扫确认没有误杀（每个源最多留 300 条）",
+ "gated": {
+  "cbo-reports": [
+   {
+    "title": "CBO's 2026 Long-Term Projections for Social Security",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 1640, HEIRS Act of 2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 2801, Canterbury Shaker Village National Heritage Area Study Authorization Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 4259, Blue Skies for Taiwan Act of 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "CBO's Panel of Health Advisers, 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 164, Midnight Rules Relief Act of 2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Legislation considered under suspension of the Rules of the House of Representatives during the week of September 14, 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 4429, Connected Vehicle Security Act of 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 4570, U.S. Technology Procurement and Access to Trusted Hardware Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 9342, GPO Modernization Act of 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 3334, USCP Empowerment Act of 2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 8052, Veteran Infection Prevention Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 4122, Health Care for Energy Workers Act of 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "Monthly Budget Review: August 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 4219, National Wildlife Refuge System Invasive Species Strike Team Act of 2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 9340, Ratepayer Protection Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 9339, Affordable Innovation for the Grid Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 9617, CHARM Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 6529, Protecting Families from AI Data Center Energy Costs Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "The Effects of Changing Temperatures on the Medicare Population",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 2732, Bonuses for Cost-Cutters Act of 2026",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 2733, Duplication Scoring Act of 2025",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 3340, Modernizing Access to Our Public Oceans Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 9332, Load Forecasting Enhancement Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 252, Guidance Out Of Darkness Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 3720, Bay Area Ridge National Scenic Trail Feasibility Study Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "S. 3010, 21st Century Dyslexia Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 6633, High-Capacity Grid Act",
+    "reason": "title_include 未命中"
+   },
+   {
+    "title": "H.R. 3872, an act to amend the Mineral Leasing Act for Acquired Lands to make that act applicable to hardrock minerals",
+    "reason": "title_include 未命中"
+   }
+  ]
+ }
+}

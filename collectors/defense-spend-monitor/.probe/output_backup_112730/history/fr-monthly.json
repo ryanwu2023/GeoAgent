@@ -1,0 +1,50 @@
+{
+ "fetched_at": "2026-09-18T03:16:30.175354+00:00",
+ "terms": [
+  "Defense Production Act",
+  "munitions",
+  "emergency supplemental appropriations"
+ ],
+ "cells": {
+  "2026-02": {
+   "Defense Production Act": 42,
+   "munitions": 19,
+   "emergency supplemental appropriations": 17
+  },
+  "2026-03": {
+   "Defense Production Act": 29,
+   "munitions": 10,
+   "emergency supplemental appropriations": 10
+  },
+  "2026-04": {
+   "Defense Production Act": 36,
+   "munitions": 9,
+   "emergency supplemental appropriations": 12
+  },
+  "2026-05": {
+   "Defense Production Act": 93,
+   "munitions": 48,
+   "emergency supplemental appropriations": 17
+  },
+  "2026-06": {
+   "Defense Production Act": 39,
+   "munitions": 9,
+   "emergency supplemental appropriations": 16
+  },
+  "2026-07": {
+   "Defense Production Act": 42,
+   "munitions": 10,
+   "emergency supplemental appropriations": 21
+  },
+  "2026-08": {
+   "Defense Production Act": 42,
+   "munitions": 17,
+   "emergency supplemental appropriations": 20
+  },
+  "2026-09": {
+   "Defense Production Act": 11,
+   "munitions": 4,
+   "emergency supplemental appropriations": 6
+  }
+ }
+}

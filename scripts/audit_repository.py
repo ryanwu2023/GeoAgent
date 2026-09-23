@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 
-SKIP_DIRS = {".git", ".superpowers", "node_modules", "dist", "data", "__pycache__", ".pytest_cache", "output", "logs"}
+SKIP_DIRS = {".git", ".superpowers", "node_modules", "dist", "data", "__pycache__", ".pytest_cache"}
 BLOCKED_SUFFIXES = {".sqlite", ".sqlite3", ".db", ".bin", ".argomodel", ".pem", ".p12"}
 PERSONAL_PATH = re.compile(r"(?i)[A-Z]:[/\\]Users[/\\][^/\\\"'\s]+")
 SECRET_ASSIGNMENT = re.compile(r"(?im)(?:api[_-]?key|secret[_-]?key|access[_-]?token|password)[ \t]*[\"']?[ \t]*[:=][ \t]*[\"']?([^\"'\s,}]+)")
@@ -15,7 +15,9 @@ SECRET_ASSIGNMENT = re.compile(r"(?im)(?:api[_-]?key|secret[_-]?key|access[_-]?t
 
 def _skip(path: Path, root: Path) -> bool:
     relative = path.relative_to(root)
-    return any(part in SKIP_DIRS for part in relative.parts)
+    if any(part in SKIP_DIRS for part in relative.parts):
+        return True
+    return bool(relative.parts and relative.parts[0] == "collectors" and any(part in {"output", "logs"} for part in relative.parts))
 
 
 def audit_repository(root: Path, max_file_mb: float = 20) -> list[dict]:

@@ -1,0 +1,196 @@
+{
+  "_comment": "公开来源海军动态监测 — 数据源配置。新增源只需按同样结构追加一项。",
+  "_verified_at": "2026-09-17 实测（经 http://127.0.0.1:7897 代理）",
+  "lookback_hours": 336,
+  "request": {
+    "timeout_sec": 25,
+    "retries": 3,
+    "delay_between_sources_sec": 2.0,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "respect_robots": true,
+    "stale_after_days": 14
+  },
+  "sources": [
+    {
+      "id": "usni-news",
+      "name": "USNI News — 主站（含 Fleet Tracker 全文）",
+      "url": "https://news.usni.org/feed",
+      "type": "rss",
+      "priority": "high",
+      "tags": [
+        "news",
+        "fleet-tracker"
+      ],
+      "enabled": true,
+      "note": "实测最可靠来源。每周一的 Fleet Tracker 会出现在此 feed 中，且 description 内含完整正文（约 1 万字）。 | 2026-09-19 复测 HTTP 403（出口 IP 被拦）；此前长期为最可靠源，保留启用待出口恢复"
+    },
+    {
+      "id": "usni-fleet-tracker",
+      "name": "USNI News — Fleet Tracker 分类 feed",
+      "url": "https://news.usni.org/category/fleet-tracker/feed",
+      "type": "rss",
+      "priority": "high",
+      "tags": [
+        "fleet-tracker",
+        "deployment"
+      ],
+      "enabled": false,
+      "note": "【2026-09-17 实测已失效】该分类 feed 内容停留在 2026-08-24，加 ?nocache=1 亦同，属源站问题。Fleet Tracker 改由 usni-news 主站 feed 提供（按标题匹配）。若日后恢复，把 enabled 改回 true 即可。"
+    },
+    {
+      "id": "navy-mil-news",
+      "name": "U.S. Navy — News Stories",
+      "url": "https://www.navy.mil/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=1067&max=50",
+      "type": "rss",
+      "priority": "normal",
+      "tags": [
+        "news",
+        "official"
+      ],
+      "enabled": true,
+      "note": "实测 HTTP 200。注意：必须带完整浏览器请求头，仅有 User-Agent 会被 Akamai 返 403。 | 2026-09-19 复测隧道 502（出口对 .mil 失败）；保留启用待出口恢复"
+    },
+    {
+      "id": "navy-mil-press",
+      "name": "U.S. Navy — Press Releases",
+      "url": "https://www.navy.mil/DesktopModules/ArticleCS/RSS.ashx?ContentType=2&Site=1067&max=50",
+      "type": "rss",
+      "priority": "high",
+      "tags": [
+        "press-release",
+        "official"
+      ],
+      "enabled": true,
+      "note": " | 2026-09-19 复测隧道 502（同上）；保留启用待出口恢复"
+    },
+    {
+      "id": "dod-news",
+      "name": "U.S. DoD — News",
+      "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=50",
+      "type": "rss",
+      "priority": "normal",
+      "tags": [
+        "dod",
+        "official"
+      ],
+      "enabled": true,
+      "url_alternates": [
+        "https://www.war.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=50"
+      ],
+      "note": "【2026-09-17 修正】旧 URL 的 ContentType=800 已 404，正确值为 ContentType=1。该端点经 Akamai 各边缘节点不稳定，会间歇性 404，故配 war.gov 镜像作备用（实测两者 50 条内容完全一致）。 | 2026-09-19 复测 HTTP 403（出口 IP 被拦）；保留启用待出口恢复"
+    },
+    {
+      "id": "globaltimes",
+      "name": "Global Times 环球时报英文版",
+      "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+      "type": "rss",
+      "priority": "normal",
+      "tags": [
+        "china-media"
+      ],
+      "enabled": false,
+      "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担"
+    },
+    {
+      "id": "cgtn-world",
+      "name": "CGTN 世界频道",
+      "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+      "type": "rss",
+      "priority": "normal",
+      "tags": [
+        "china-media"
+      ],
+      "enabled": true,
+      "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）"
+    }
+  ],
+  "relevance_keywords": [
+    "carrier",
+    "carrier strike group",
+    "csg",
+    "amphibious ready group",
+    "arg",
+    "destroyer",
+    "cruiser",
+    "frigate",
+    "littoral combat ship",
+    "submarine",
+    "guided-missile",
+    "ballistic missile",
+    "deployment",
+    "deployed",
+    "redeploy",
+    "strait of hormuz",
+    "persian gulf",
+    "arabian gulf",
+    "gulf of oman",
+    "red sea",
+    "bab el-mandeb",
+    "gulf of aden",
+    "suez",
+    "mediterranean",
+    "indo-pacific",
+    "south china sea",
+    "taiwan strait",
+    "east china sea",
+    "philippine sea",
+    "western pacific",
+    "centcom",
+    "fifth fleet",
+    "5th fleet",
+    "sixth fleet",
+    "7th fleet",
+    "seventh fleet",
+    "carrier strike",
+    "flight operations",
+    "transit",
+    "exercise",
+    "drill",
+    "patrol",
+    "maritime",
+    "naval",
+    "航母",
+    "打击群",
+    "两栖戒备群",
+    "驱逐舰",
+    "巡洋舰",
+    "潜艇",
+    "部署",
+    "海峡",
+    "中东",
+    "波斯湾",
+    "红海",
+    "地中海",
+    "印太",
+    "南海",
+    "台海"
+  ],
+  "tracker_title_match": [
+    "fleet and marine tracker"
+  ],
+  "place_exclude_phrases": [
+    "Newport Manual"
+  ],
+  "ship_hull_prefixes": [
+    "CVN",
+    "CV",
+    "DDG",
+    "CG",
+    "FFG",
+    "LHA",
+    "LHD",
+    "LPD",
+    "LSD",
+    "LCS",
+    "SSN",
+    "SSBN",
+    "SSGN",
+    "MCM",
+    "ESB",
+    "EPF",
+    "T-AO",
+    "T-AKE",
+    "AS"
+  ],
+  "exclude_keywords": []
+}

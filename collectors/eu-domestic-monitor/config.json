@@ -1,0 +1,1014 @@
+{
+  "parse_ver": 1,
+  "schema_ver": 1,
+  "window_days": 30,
+  "max_age_days": 45,
+  "per_source_max": 200,
+  "summary_max_chars": 1200,
+  "request_timeout": 30,
+  "min_interval_per_host": 1.2,
+  "prune_after_days": 365,
+  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  "sources": [
+    {
+      "id": "elysee-feed",
+      "url": "https://www.elysee.fr/feed",
+      "tier": "T1",
+      "publisher": "Présidence de la République (FR)",
+      "enabled": true,
+      "note": "法国总统府官方（法国对乌/对俄政策一手；2026-09-19 实测 200/rss 50 条；rss.xml 路径 404 已留档）"
+    },
+    {
+      "id": "governo-it",
+      "url": "https://www.governo.it/rss.xml",
+      "tier": "T1",
+      "publisher": "Governo Italiano (IT)",
+      "enabled": true,
+      "note": "意大利政府官方（对乌援助/联盟动态一手；2026-09-19 实测 200/rss 10 条；/it/rss 路径 404 已留档）"
+    },
+    {
+      "id": "europarl-en",
+      "url": "https://www.europarl.europa.eu/rss/doc/top-stories/en.xml",
+      "tier": "T1",
+      "publisher": "European Parliament (EN)",
+      "enabled": true,
+      "note": "欧洲议会官方要闻（欧盟机构一手；2026-09-19 实测 200/rss 10 条） | 2026-09-20 终审：HTTP 202（欧洲议会 RSS 异步渲染，等 2 秒重试仍是 202），**不是失败**；换出口大概率同样 202，勿据此停用。"
+    },
+    {
+      "id": "delors",
+      "url": "https://institutdelors.eu/feed/",
+      "tier": "T2",
+      "publisher": "Jacques Delors Institute",
+      "enabled": true,
+      "note": "欧洲政策研究智库（T2 分析层；2026-09-19 实测 200/rss 50 条；注意：pubDate 为活动日期含未来日期，未到期条目全部落『无日期』分节）"
+    },
+    {
+      "id": "lefigaro-pol",
+      "url": "https://www.lefigaro.fr/rss/figaro_politique.xml",
+      "tier": "T3",
+      "publisher": "Le Figaro Politique (FR)",
+      "enabled": true,
+      "note": "费加罗报政治版（法国选举/民调报道主力；2026-09-19 实测 200/rss 20 条）"
+    },
+    {
+      "id": "france24-fr",
+      "url": "https://www.france24.com/fr/rss",
+      "tier": "T3",
+      "publisher": "France 24 (FR)",
+      "enabled": true,
+      "note": "France24 法语（对乌/对俄态度报道；2026-09-19 探测 200/rss 24 条；同日两次运行一次超时一次成功——偶发，保留启用观察；en 路径超时已留档）"
+    },
+    {
+      "id": "franceinfo",
+      "url": "https://www.francetvinfo.fr/titres.rss",
+      "tier": "T3",
+      "publisher": "franceinfo (FR)",
+      "enabled": true,
+      "note": "法国公共电视新闻（政治/选举覆盖；2026-09-19 实测 200/rss 30 条）"
+    },
+    {
+      "id": "bfmtv-pol",
+      "url": "https://www.bfmtv.com/rss/politique/",
+      "tier": "T3",
+      "publisher": "BFMTV Politique (FR)",
+      "enabled": true,
+      "note": "BFMTV 政治（法国民调/竞选报道主力；2026-09-19 实测 200/rss 30 条）"
+    },
+    {
+      "id": "bfmtv-inter",
+      "url": "https://www.bfmtv.com/rss/international/",
+      "tier": "T3",
+      "publisher": "BFMTV International (FR)",
+      "enabled": true,
+      "note": "BFMTV 国际（2026-09-19 实测 200/rss 30 条）"
+    },
+    {
+      "id": "ansa-top",
+      "url": "https://www.ansa.it/sito/notizie/topnews/topnews_rss.xml",
+      "tier": "T3",
+      "publisher": "ANSA Top (IT)",
+      "enabled": true,
+      "note": "安莎社头条（意大利通讯社；2026-09-19 实测 200/rss 10 条；english/rss 404 已留档）"
+    },
+    {
+      "id": "ansa-politica",
+      "url": "https://www.ansa.it/sito/notizie/politica/politica_rss.xml",
+      "tier": "T3",
+      "publisher": "ANSA Politica (IT)",
+      "enabled": true,
+      "note": "安莎社政治版（意大利选举/联盟报道主力；2026-09-19 实测 200/rss 8 条）"
+    },
+    {
+      "id": "ilsole-italia",
+      "url": "https://www.ilsole24ore.com/rss/italia.xml",
+      "tier": "T3",
+      "publisher": "Il Sole 24 Ore (IT)",
+      "enabled": true,
+      "note": "意24小时太阳报（经济/政治；2026-09-19 实测 200/rss 12 条）"
+    },
+    {
+      "id": "repubblica",
+      "url": "https://www.repubblica.it/rss/homepage/rss2.0.xml",
+      "tier": "T3",
+      "publisher": "La Repubblica (IT)",
+      "enabled": true,
+      "note": "共和报（意大利主流；2026-09-19 实测 200/rss 30 条）"
+    },
+    {
+      "id": "euobserver",
+      "url": "https://euobserver.com/rss",
+      "tier": "T3",
+      "publisher": "EUobserver (EN)",
+      "enabled": true,
+      "note": "欧盟事务独立媒体（欧盟机构/成员国博弈；2026-09-19 实测 200/rss 20 条；/rss.xml 410 已留档）"
+    },
+    {
+      "id": "telex-en",
+      "url": "https://telex.hu/rss/english",
+      "tier": "T3",
+      "publisher": "Telex Hungary (EN)",
+      "enabled": true,
+      "note": "匈牙利独立媒体英文（匈牙利对乌态度/阻挠行为窗口；2026-09-19 实测 200/rss 50 条）"
+    },
+    {
+      "id": "xinhua-home",
+      "url": "https://english.news.cn/home.htm",
+      "type": "html_listing",
+      "link_pattern": "<a[^>]+href=[\"'](https://english\\.news\\.cn/20\\d{6}/[0-9a-f]+/c\\.html)[\"'][^>]*>(.*?)</a>",
+      "date_re": "/(20\\d{6})/",
+      "tier": "T3",
+      "publisher": "Xinhua 新华社英文",
+      "enabled": true,
+      "note": "新华社英文首页列表页（用户指定通道；worldrss 停更 2018 故用首页解析，仅标题无摘要）；2026-09-19 实测 200/html 103 链接"
+    },
+    {
+      "id": "chinanews-scroll",
+      "url": "https://www.chinanews.com.cn/rss/scroll-news.xml",
+      "tier": "T3",
+      "publisher": "中国新闻网",
+      "enabled": true,
+      "note": "中文即时新闻窗口（涉欧中文报道），2026-09-19 实测 200/rss 30 条当日"
+    },
+    {
+      "id": "gn-france",
+      "url": "https://news.google.com/rss/search?q=France+2027+presidential+(%22Le+Pen%22+OR+%22Rassemblement+national%22+OR+%22National+Rally%22+OR+Bardella)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "法国2027大选通道；依赖代理出口可达 google（2026-09-19 出口 50465 对 google 域全断，断连自动留档，恢复自动回补）"
+    },
+    {
+      "id": "gn-italy",
+      "url": "https://news.google.com/rss/search?q=Italy+election+2027+(Meloni+OR+coalition+OR+poll+OR+%22Brothers+of+Italy%22)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "意大利大选通道；出口依赖同上"
+    },
+    {
+      "id": "gn-eu-ua",
+      "url": "https://news.google.com/rss/search?q=(EU+OR+Europe+OR+France+OR+Italy+OR+Germany)+Ukraine+(military+aid+OR+weapons+OR+support+OR+assistance)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "欧洲对乌援助态度通道；出口依赖同上"
+    },
+    {
+      "id": "gn-eu-ru",
+      "url": "https://news.google.com/rss/search?q=(EU+OR+France+OR+Italy+OR+Germany+OR+Europe)+Russia+(sanctions+OR+talks+OR+peace+OR+deterrence)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "欧洲对俄立场通道；出口依赖同上"
+    },
+    {
+      "id": "gn-xinhua",
+      "url": "https://news.google.com/rss/search?q=Xinhua+(EU+OR+Europe+OR+France+OR+Italy+OR+Ukraine)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "新华社涉欧报道聚合搜索（用户指定）；出口依赖同上"
+    },
+    {
+      "id": "gn-china-eu",
+      "url": "https://news.google.com/rss/search?q=(China+OR+Beijing)+(EU+OR+France+OR+Italy)+(Ukraine+OR+Russia+OR+trade+OR+summit)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "中欧关系/中国视角通道；出口依赖同上"
+    },
+    {
+      "id": "lemonde-une",
+      "url": "https://www.lemonde.fr/rss/une.xml",
+      "tier": "T3",
+      "publisher": "Le Monde (FR)",
+      "enabled": false,
+      "note": "2026-09-19 实测：超时×3（une/en_continu/en_international 三路径同超时，疑 CDN 风控或出口路由）；法国主力源，出口变更后复测"
+    },
+    {
+      "id": "lemonde-en-int",
+      "url": "https://www.lemonde.fr/en/international/rss_full.xml",
+      "tier": "T3",
+      "publisher": "Le Monde (EN)",
+      "enabled": false,
+      "note": "2026-09-19 实测超时（同上）"
+    },
+    {
+      "id": "lefigaro-actu",
+      "url": "https://www.lefigaro.fr/rss/figaro_actualites.xml",
+      "tier": "T3",
+      "publisher": "Le Figaro (FR)",
+      "enabled": false,
+      "note": "2026-09-19 实测：超时（politique 版可用，本版不必要）"
+    },
+    {
+      "id": "lefigaro-econ",
+      "url": "https://www.lefigaro.fr/rss/figaro_economie.xml",
+      "tier": "T3",
+      "publisher": "Le Figaro (FR)",
+      "enabled": false,
+      "note": "2026-09-19 实测：超时"
+    },
+    {
+      "id": "france24-en",
+      "url": "https://www.france24.com/en/rss",
+      "tier": "T3",
+      "publisher": "France 24 (EN)",
+      "enabled": false,
+      "note": "2026-09-19 实测：超时（fr 路径 723ms 可用，疑 en 路径源端问题）"
+    },
+    {
+      "id": "politicoeu",
+      "url": "https://www.politico.eu/feed/",
+      "tier": "T3",
+      "publisher": "Politico EU",
+      "enabled": false,
+      "note": "2026-09-19 实测：超时×2（/feed 与 /politics/feed 同超时；欧盟政治核心源，出口变更后复测）"
+    },
+    {
+      "id": "euronews",
+      "url": "https://www.euronews.com/rss",
+      "tier": "T3",
+      "publisher": "Euronews",
+      "enabled": false,
+      "note": "2026-09-19 实测：超时（en/fr/it 三路径同超时）；留档复测"
+    },
+    {
+      "id": "euractiv",
+      "url": "https://www.euractiv.com/feed/",
+      "tier": "T3",
+      "publisher": "EURACTIV",
+      "enabled": false,
+      "note": "2026-09-19 实测 403"
+    },
+    {
+      "id": "consilium",
+      "url": "https://www.consilium.europa.eu/en/rss/",
+      "tier": "T1",
+      "publisher": "Council of the EU",
+      "enabled": false,
+      "note": "2026-09-19 实测 403（/rss /newsroom/rss 两路径同 403，疑源端 WAF）；欧盟理事会一手缺失留档，经 europarl/媒体覆盖"
+    },
+    {
+      "id": "ec-presscorner",
+      "url": "https://ec.europa.eu/commission/presscorner/home/rss",
+      "tier": "T1",
+      "publisher": "European Commission",
+      "enabled": false,
+      "note": "2026-09-19 实测 200 但返回 21KB HTML（JS 壳，非 feed）；欧委会一手缺失留档"
+    },
+    {
+      "id": "ecfr",
+      "url": "https://ecfr.eu/feed/",
+      "tier": "T2",
+      "publisher": "ECFR",
+      "enabled": false,
+      "note": "2026-09-19 实测 403"
+    },
+    {
+      "id": "bruegel",
+      "url": "https://www.bruegel.org/feed",
+      "tier": "T2",
+      "publisher": "Bruegel",
+      "enabled": false,
+      "note": "2026-09-19 实测：连接失败×2（/feed 与 /rss.xml 同断）"
+    },
+    {
+      "id": "ceps",
+      "url": "https://www.ceps.eu/feed/",
+      "tier": "T2",
+      "publisher": "CEPS",
+      "enabled": false,
+      "note": "2026-09-19 实测 403"
+    },
+    {
+      "id": "montaigne",
+      "url": "https://www.institutmontaigne.org/rss.xml",
+      "tier": "T2",
+      "publisher": "Institut Montaigne",
+      "enabled": false,
+      "note": "2026-09-19 实测：连接失败"
+    },
+    {
+      "id": "ansa-en",
+      "url": "https://www.ansa.it/english/rss/eng.xml",
+      "tier": "T3",
+      "publisher": "ANSA (EN)",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（it 路径两条可用）"
+    },
+    {
+      "id": "ilpost",
+      "url": "https://www.ilpost.it/feed/",
+      "tier": "T3",
+      "publisher": "Il Post (IT)",
+      "enabled": false,
+      "note": "2026-09-19 实测 403"
+    },
+    {
+      "id": "corriere",
+      "url": "https://www.corriere.it/rss/homepage.xml",
+      "tier": "T3",
+      "publisher": "Corriere della Sera (IT)",
+      "enabled": false,
+      "note": "2026-09-19 实测 200/rss 69 条但最新条目 2024-05（停更 2 年+，假活 feed 陷阱）；改用 repubblica/ansa"
+    },
+    {
+      "id": "governo-it-it",
+      "url": "https://www.governo.it/it/rss",
+      "tier": "T1",
+      "publisher": "Governo Italiano",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（/rss.xml 可用）"
+    },
+    {
+      "id": "elysee-rss",
+      "url": "https://www.elysee.fr/rss.xml",
+      "tier": "T1",
+      "publisher": "Élysée",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（/feed 可用）"
+    },
+    {
+      "id": "euobserver-rssxml",
+      "url": "https://euobserver.com/rss.xml",
+      "tier": "T3",
+      "publisher": "EUobserver",
+      "enabled": false,
+      "note": "2026-09-19 实测 410（/rss 可用）"
+    },
+    {
+      "id": "polski",
+      "url": "https://www.polskieradio.pl/395/rss",
+      "tier": "T3",
+      "publisher": "Polskie Radio (EN)",
+      "enabled": false,
+      "note": "2026-09-19 实测 404；波兰窗口经 gnews 覆盖"
+    },
+    {
+      "id": "telex-hu",
+      "url": "https://telex.hu/rss/main",
+      "tier": "T3",
+      "publisher": "Telex (HU)",
+      "enabled": false,
+      "note": "未单独启用：english 版已 50 条/日，避免同主机重复"
+    },
+    {
+      "id": "globaltimes",
+      "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+      "tier": "T3",
+      "publisher": "Global Times 环球时报英文版",
+      "enabled": false,
+      "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担"
+    },
+    {
+      "id": "cgtn-world",
+      "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+      "tier": "T3",
+      "publisher": "CGTN 中国环球电视网",
+      "enabled": true,
+      "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）"
+    }
+  ],
+  "buckets": {
+    "france_2027": {
+      "label": "法国2027总统大选预备（勒庞/国民联盟民调）",
+      "require_all": [
+        [
+          "presidential election",
+          "presidential race",
+          "élection présidentielle",
+          "présidentielle",
+          "rx:\\bprésidentielle?s?\\b",
+          "rx:\\bélect\\w*",
+          "rx:\\bélector\\w*",
+          "rx:\\bballot\\w*",
+          "vote",
+          "campaign",
+          "rx:\\bcampagne\\b",
+          "candidacy",
+          "candidate",
+          "rx:\\bcandidat\\w*",
+          "poll",
+          "survey",
+          "rx:\\bsondag\\w*",
+          "intention de vote",
+          "primary",
+          "rx:\\bprimaires?\\b"
+        ],
+        [
+          "le pen",
+          "rassemblement national",
+          "national rally",
+          "bardella",
+          "macron",
+          "élysée",
+          "elysee",
+          "front national",
+          "rx:\\ble pen\\b",
+          "rx:\\brassemblement\\b",
+          "rx:\\bbardella\\b",
+          "rx:\\bmacron\\b",
+          "rx:\\bélysée\\b",
+          "rx:\\brensemblement\\b"
+        ]
+      ]
+    },
+    "italy_election": {
+      "label": "意大利大选（2027-12 前）与执政联盟",
+      "require_all": [
+        [
+          "election",
+          "ballot",
+          "vote",
+          "poll",
+          "campaign",
+          "coalition",
+          "candidacy",
+          "candidate",
+          "rx:\\belezion\\w*",
+          "rx:\\bvot\\w*",
+          "rx:\\bsondagg\\w*",
+          "rx:\\bcoalizion\\w*",
+          "summit",
+          "rx:\\bvertice\\b",
+          "rx:\\bnuovo governo\\b",
+          "rx:\\bcrisi di governo\\b",
+          "rx:\\bgiuramento\\b"
+        ],
+        [
+          "meloni",
+          "fratelli d'italia",
+          "brothers of italy",
+          "lega",
+          "salvini",
+          "conte",
+          "five star",
+          "cinque stelle",
+          "m5s",
+          "italy",
+          "italian",
+          "rx:\\bmeloni\\b",
+          "rx:\\bfratelli\\b",
+          "rx:\\bsalvini\\b",
+          "rx:\\bconte\\b",
+          "rx:\\bsterren\\b",
+          "rx:\\bcoalizion\\w*",
+          "rx:\\bcentrosinistr\\w*",
+          "rx:\\bcentrodestr\\w*"
+        ]
+      ]
+    },
+    "ua_aid_attitude": {
+      "label": "各国对乌军事援助态度",
+      "require_all": [
+        [
+          "military aid",
+          "military support",
+          "military assistance",
+          "defense aid",
+          "defence aid",
+          "aid package",
+          "aid to ukraine",
+          "weapon",
+          "arms",
+          "armament",
+          "aide militaire",
+          "rx:\\barmement\\w*",
+          "rx:\\barmes\\b",
+          "rx:\\bsostegn\\w*",
+          "rx:\\baiut\\w* militare\\b"
+        ],
+        [
+          "ukraine",
+          "ukrainian",
+          "kyiv",
+          "kiev",
+          "zelensk",
+          "rx:\\bukrain\\w*",
+          "rx:\\bkiev\\b",
+          "rx:\\bzelensk\\w*",
+          "rx:\\bkiew\\b",
+          "rx:\\bucrain\\w*"
+        ],
+        [
+          "support",
+          "oppos",
+          "block",
+          "veto",
+          "pledg",
+          "deliver",
+          "approv",
+          "reduc",
+          "cut",
+          "halt",
+          "suspend",
+          "limit",
+          "restrict",
+          "increas",
+          "boost",
+          "delay",
+          "curb",
+          "continue",
+          "rx:\\bsoutien\\b",
+          "rx:\\bsostegn\\w*"
+        ]
+      ]
+    },
+    "russia_policy": {
+      "label": "各国对俄政策与战争立场",
+      "require_all": [
+        [
+          "russia",
+          "russian",
+          "moscow",
+          "kremlin",
+          "putin",
+          "rx:\\brussie\\b",
+          "rx:\\brussi\\w*",
+          "rx:\\bmoscou\\b",
+          "rx:\\bmosca\\b"
+        ],
+        [
+          "sanction",
+          "embargo",
+          "diplomat",
+          "negotiation",
+          "peace plan",
+          "peace talks",
+          "frozen asset",
+          "seized asset",
+          "normalization",
+          "rapprochement",
+          "détente",
+          "engagement",
+          "deterrence",
+          "rx:\\bsanction\\w*",
+          "rx:\\bdiplomat\\w*",
+          "rx:\\bnégociation\\w*",
+          "rx:\\bambasciat\\w*",
+          "dialogue",
+          "rx:\\bdialogue\\b",
+          "rx:\\bdialogo\\b",
+          "rx:\\bnormalis\\w*",
+          "rx:\\bnormaliz\\w*"
+        ]
+      ]
+    },
+    "eu_politics": {
+      "label": "欧盟机构运作与成员国博弈",
+      "require_all": [
+        [
+          "european commission",
+          "european council",
+          "council of the european union",
+          "european parliament",
+          "european union",
+          "member state",
+          "brussels",
+          "berlaymont",
+          "college of commissioners",
+          "eu summit",
+          "unanimity",
+          "qualified majority",
+          "rx:\\bcommission europé\\w*",
+          "rx:\\bconseil europé\\w*",
+          "rx:\\bparlement europé\\w*",
+          "rx:\\bunion europé\\w*",
+          "rx:\\bbruxelles\\b"
+        ],
+        [
+          "summit",
+          "budget",
+          "treaty",
+          "veto",
+          "unanimity",
+          "coalition",
+          "government",
+          "parliament",
+          "prime minister",
+          "minister",
+          "president",
+          "election",
+          "orbán",
+          "orban",
+          "hungary",
+          "hongrie",
+          "ungheria",
+          "rx:\\bsommet\\b",
+          "rx:\\bbudget\\b",
+          "rx:\\bveto\\b",
+          "rx:\\bunanimité\\b",
+          "rx:\\bgoverno\\b",
+          "rx:\\bcapo di governo\\b"
+        ]
+      ]
+    },
+    "china_xinhua": {
+      "label": "中国视角（新华社/中欧关系）",
+      "require_all": [
+        [
+          "china",
+          "chinese",
+          "beijing",
+          "xinhua",
+          "wang yi",
+          "xi jinping",
+          "sino-european",
+          "rx:\\bchine\\b",
+          "rx:\\bpekin\\b",
+          "rx:\\bpechino\\b",
+          "rx:\\bcina\\b"
+        ],
+        [
+          "ukraine",
+          "eu",
+          "european",
+          "war",
+          "peace",
+          "sanction",
+          "trade",
+          "summit",
+          "rx:\\bukrain\\w*",
+          "rx:\\bsanction\\w*",
+          "rx:\\bcommercio\\b"
+        ],
+        [
+          "russia",
+          "russian",
+          "ukraine",
+          "ukrainian",
+          "war",
+          "peace",
+          "sanction",
+          "trade",
+          "summit",
+          "talks",
+          "rx:\\bruss\\w*",
+          "rx:\\brussie\\b",
+          "rx:\\bucrain\\w*",
+          "rx:\\bukrain\\w*",
+          "rx:\\bmosca\\b"
+        ]
+      ]
+    }
+  },
+  "flags": {
+    "polling_data": [
+      "poll\\w*",
+      "survey",
+      "sondage",
+      "sondaggio",
+      "intention de vote",
+      "ifop",
+      "elabe",
+      "harris interactive",
+      "yougov",
+      "ipsos",
+      "opinionway",
+      "bva",
+      "europelects",
+      "cluster17",
+      "rx:\\bsondag\\w*",
+      "rx:\\bintenzioni di voto\\b"
+    ],
+    "campaign_prep": [
+      "candidacy",
+      "candidate",
+      "primary",
+      "investiture",
+      "nomination",
+      "campaign launch",
+      "rx:\\bcandidature\\b",
+      "rx:\\bprimaires?\\b",
+      "rx:\\bcandidata\\b"
+    ],
+    "aid_commitment": [
+      "pledge\\w*",
+      "commit\\w*",
+      "approv\\w*",
+      "authoriz\\w*",
+      "allocat\\w*",
+      "aid package",
+      "signed",
+      "adopted",
+      "rx:\\bdotazione\\b"
+    ],
+    "aid_restriction": [
+      "block\\w*",
+      "veto\\w*",
+      "oppos\\w*",
+      "suspend\\w*",
+      "curtail\\w*",
+      "reduc\\w* aid",
+      "cut\\w* aid",
+      "halt\\w* aid",
+      "limit\\w*",
+      "restrict\\w*",
+      "delay\\w*",
+      "refus\\w*",
+      "skeptical",
+      "against arming"
+    ],
+    "russia_engagement": [
+      "dialog\\w*",
+      "negotiat\\w*",
+      "normaliz\\w*",
+      "normalis\\w*",
+      "rapprochement",
+      "lift sanctions",
+      "ease sanctions",
+      "relax\\w*",
+      "peace plan",
+      "peace talks",
+      "engagement with moscow",
+      "rx:\\bnégociation\\w*",
+      "rx:\\bdialogo\\b"
+    ]
+  },
+  "stance": {
+    "escalate": [
+      "reduc",
+      "cut",
+      "halt",
+      "suspend",
+      "block",
+      "oppos",
+      "opposition",
+      "veto",
+      "curtail",
+      "limit",
+      "restrict",
+      "delay",
+      "weaken",
+      "refus",
+      "skeptical",
+      "normaliz",
+      "normalis",
+      "rapprochement",
+      "détente",
+      "retreat",
+      "withdraw",
+      "scale back",
+      "wind down",
+      "freeze aid",
+      "rx:\\brefus\\w*",
+      "lift sanctions",
+      "lift\\w* sanction",
+      "soften\\w*"
+    ],
+    "deescalate": [
+      "increas",
+      "boost",
+      "expand",
+      "strengthen",
+      "pledge",
+      "approv",
+      "reaffirm",
+      "reinforc",
+      "accelerat",
+      "intensif",
+      "support for ukraine",
+      "support kyiv",
+      "support ukraine",
+      "military backing"
+    ]
+  },
+  "entities": {
+    "people": {
+      "Macron": [
+        "macron"
+      ],
+      "Le Pen": [
+        "le pen",
+        "marine le pen",
+        "rx:\\ble pen\\b"
+      ],
+      "Bardella": [
+        "bardella"
+      ],
+      "Mélenchon": [
+        "mélenchon",
+        "melenchon"
+      ],
+      "Meloni": [
+        "meloni"
+      ],
+      "Salvini": [
+        "salvini"
+      ],
+      "Conte": [
+        "rx:\\bconte\\b"
+      ],
+      "von der Leyen": [
+        "von der leyen",
+        "vonderleyen"
+      ],
+      "Kallas": [
+        "kaja kallas",
+        "rx:\\bkallas\\b"
+      ],
+      "Orbán": [
+        "orbán",
+        "orban",
+        "rx:\\borbán\\b"
+      ],
+      "Merz": [
+        "rx:\\bmerz\\b"
+      ],
+      "Zelensky": [
+        "zelensk"
+      ],
+      "Putin": [
+        "putin"
+      ]
+    },
+    "institutions": {
+      "Rassemblement National": [
+        "rassemblement national",
+        "national rally",
+        "rx:\\brassemblement\\b"
+      ],
+      "Élysée": [
+        "élysée",
+        "elysee"
+      ],
+      "Fratelli d'Italia": [
+        "fratelli d'italia",
+        "brothers of italy"
+      ],
+      "Lega": [
+        "rx:\\blega\\b"
+      ],
+      "M5S": [
+        "cinque stelle",
+        "five star",
+        "rx:\\bm5s\\b"
+      ],
+      "European Commission": [
+        "european commission",
+        "berlaymont"
+      ],
+      "European Council": [
+        "european council"
+      ],
+      "European Parliament": [
+        "european parliament"
+      ],
+      "Quirinale": [
+        "rx:\\bquirinale\\b"
+      ]
+    }
+  },
+  "baseline": {
+    "note": "结构性基线（2026-09-19 首次运行录入，均为可核验的结构性事实或明确标注口径的历史数字；动态民调一律以窗口内报道+来源为准）",
+    "rows": [
+      {
+        "date": "2027-04/05",
+        "event": "法国总统选举（两轮制，第一轮惯例 4 月最后一个周日、第二轮相隔两周）；外交与军队职权由总统掌握——『勒庞上台→欧盟援助受限』经由总统职权实现，非议会投票机制",
+        "tier": "T1",
+        "source": "法国宪法/选举法框架"
+      },
+      {
+        "date": "2022-04-24",
+        "event": "上届总统选举第二轮：马克龙 58.5% 对勒庞 41.5%（对比例照；2017 年第二轮勒庞 33.9%）",
+        "tier": "T1",
+        "source": "法国内政部官方结果"
+      },
+      {
+        "date": "2027-12 前",
+        "event": "意大利议会任期届满前须举行大选（上届 2022-09；梅洛尼中右联盟胜选，FdI 单党第一约 26%）",
+        "tier": "T1",
+        "source": "意大利宪法框架/内政部 2022 结果"
+      },
+      {
+        "date": "2026-09",
+        "event": "欧盟共同外交（含对俄制裁）需 27 国一致（unanimity）；单一成员国即可阻挠——窗口内匈牙利相关条目多属此类",
+        "tier": "T1",
+        "source": "EU 条约框架"
+      }
+    ],
+    "capability_rows": [
+      {
+        "date": "2026-09-19",
+        "event": "民调口径：投票意向≠实际投票；2022 两轮民调普遍低估 RN，机构间方法差异大（Ifop/Elabe/BVA/Harris/Cluster17），禁横向平均；flags 的 polling_data 逐条标注",
+        "tier": "T2",
+        "source": "口径说明"
+      },
+      {
+        "date": "2026-09-19",
+        "event": "传导链条口径：欧盟对乌援助由成员国政府决定；民调领先≠上台≠必然缩减援助（RN 立场本身有演变），本监测只记录报道中的表态与立场词，不外推选举结果",
+        "tier": "T2",
+        "source": "口径说明"
+      },
+      {
+        "date": "2026-09-19",
+        "event": "立场归属口径：支持/反对在报道中常以引语转述出现（『某人说X』是事实，X 是立场），entities 逐条标注人物；跨实体引语混排时立场词可能错位归属，配合正文核对",
+        "tier": "T2",
+        "source": "口径说明"
+      }
+    ]
+  },
+  "report": {
+    "title": "欧盟内政×俄乌战争监测（法国2027/意大利大选/对乌援助态度/对俄立场/欧盟机构）",
+    "known_limitations": [
+      "传导链条：选举→政府组成→援助政策是间接链条；本监测记录报道中的立场表态，不预测选举结果，不把民调领先外推为『欧盟援助能力受限』的实现。",
+      "民调口径：投票意向≠实际投票；2022 两轮民调普遍低估 RN；机构间方法差异大，禁横向平均。",
+      "半总统制结构：法国外交与军队由总统掌握，国民议会多数不直接决定对乌援助；意大利援助由政府（内阁）决定。",
+      "EU 制裁与部分援助工具需 27 国一致（unanimity），单一成员国即可阻挠；欧盟层面政策与成员国双边立场分开读。",
+      "立场词表（扩张/收缩）为启发式，只看方向不看强度；支持/反对常以引语转述出现，实体归属经 entities 标注但混排引语可能错位，配合正文核对。",
+      "gnews 6 通道依赖代理出口可达 google：2026-09-19 出口 50465 对 google 域全断，断连期覆盖不完整，恢复后自动回补。",
+      "Le Monde/Politico EU/Euronews/EURACTIV/欧盟理事会等主力源本出口不可达（超时/403）已留档；欧盟英语政治报道覆盖依赖 EUobserver+欧洲议会+gnews。",
+      "中文窗口（新华社首页仅标题无摘要）桶命中依赖标题词；新华社深度涉欧报道依赖 gnews 断连通道。",
+      "delors 源 pubDate 为活动日期（含未来日期），未到期条目全部落『无日期』分节，不参与窗口统计。",
+      "法意语匹配用词形族启发式（英语 SUF + rx: 精确正则），屈折覆盖不保证完整；漏检可能，靠多源交叉缓解。"
+    ]
+  },
+  "glossary": {
+    "fr": {
+      "élection": "选举",
+      "présidentielle": "总统选举",
+      "sondage": "民调",
+      "Rassemblement national": "国民联盟（勒庞所属政党）",
+      "Le Pen": "勒庞",
+      "Macron": "马克龙",
+      "gouvernement": "政府",
+      "Premier ministre": "总理",
+      "Assemblée nationale": "国民议会",
+      "dissolution": "解散（议会）",
+      "Ukraine": "乌克兰",
+      "Russie": "俄罗斯",
+      "aide": "援助",
+      "sanctions": "制裁",
+      "défense": "国防",
+      "budget": "预算",
+      "déficit": "赤字",
+      "dette": "债务",
+      "Union européenne": "欧盟",
+      "Commission européenne": "欧盟委员会",
+      "Conseil européen": "欧洲理事会",
+      "OTAN": "北约",
+      "énergie": "能源",
+      "gaz": "天然气",
+      "électricité": "电力",
+      "grève": "罢工",
+      "manifestation": "示威",
+      "électeurs": "选民",
+      "sommet": "峰会",
+      "traité": "条约",
+      "cession": "转让/让与",
+      "armement": "武器装备",
+      "livraison": "交付",
+      "soutien": "支持"
+    },
+    "it": {
+      "elezioni": "选举",
+      "governo": "政府",
+      "Meloni": "梅洛尼",
+      "Presidente del Consiglio": "总理（部长会议主席）",
+      "Camera dei deputati": "众议院",
+      "Senato": "参议院",
+      "Ucraina": "乌克兰",
+      "Russia": "俄罗斯",
+      "aiuti": "援助",
+      "sanzioni": "制裁",
+      "difesa": "国防",
+      "bilancio": "预算",
+      "deficit": "赤字",
+      "debito": "债务",
+      "Unione europea": "欧盟",
+      "NATO": "北约",
+      "energia": "能源",
+      "gas": "天然气",
+      "sciopero": "罢工",
+      "sondaggio": "民调",
+      "vertice": "峰会",
+      "summit": "峰会",
+      "decreto": "法令",
+      "legge": "法律",
+      "forniture": "供应",
+      "missili": "导弹",
+      "spesa": "支出"
+    }
+  }
+}

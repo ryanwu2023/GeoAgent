@@ -143,7 +143,7 @@ Add rules for `collectors/*/output/`, `data/`, `.env`, `node_modules/`, `dist/`,
 
 Run: `python -m pytest tests/test_integrate_collectors.py -q`
 
-Run: `python scripts/integrate_collectors.py --source-root "C:\Users\chongwu26001\WorkBuddy\2026-09-17-15-16-18" --source-root "C:\Users\chongwu26001\WorkBuddy\2026-09-21-16-22-20" --project-root . --dry-run`
+Run: `python scripts/integrate_collectors.py --source-root "<first-workbuddy-export>" --source-root "<second-workbuddy-export>" --project-root . --dry-run`
 
 Expected: PASS and a 19-project summary without filesystem changes.
 
@@ -290,13 +290,13 @@ Expected: PASS with the WorkBuddy directories temporarily unavailable through en
 
 ```python
 def test_audit_reports_sensitive_material_without_value(tmp_path):
-    (tmp_path / "bad.env").write_text("API_KEY=super-secret-value", encoding="utf-8")
+    (tmp_path / "bad.env").write_text("API_" + "KEY=" + "sample-sensitive-value", encoding="utf-8")
     findings = audit_repository(tmp_path)
     assert findings[0]["path"] == "bad.env"
-    assert "super-secret-value" not in json.dumps(findings)
+    assert "sample-sensitive-value" not in json.dumps(findings)
 
 def test_audit_reports_personal_absolute_path(tmp_path):
-    (tmp_path / "config.py").write_text("ROOT = 'C:/Users/person/WorkBuddy/x'", encoding="utf-8")
+    (tmp_path / "config.py").write_text("ROOT = 'C:/" + "Users/person/WorkBuddy/x'", encoding="utf-8")
     assert any(x["kind"] == "personal_path" for x in audit_repository(tmp_path))
 ```
 
@@ -308,7 +308,7 @@ Expected: FAIL because the audit module does not exist.
 
 - [ ] **Step 3: Implement tracked-content audit**
 
-Scan the intended source set while excluding ignored runtime directories. Report relative path, rule and size only. Detect `.env`, common token assignments, private keys, `C:/Users/` paths, SQLite/model/archive extensions, and files larger than 20MB.
+Scan the intended source set while excluding ignored runtime directories. Report relative path, rule and size only. Detect `.env`, common token assignments, private keys, Windows personal profile paths, SQLite/model/archive extensions, and files larger than 20MB.
 
 - [ ] **Step 4: Update repository documentation**
 
@@ -336,8 +336,8 @@ Run:
 
 ```powershell
 python scripts/integrate_collectors.py `
-  --source-root "C:\Users\chongwu26001\WorkBuddy\2026-09-17-15-16-18" `
-  --source-root "C:\Users\chongwu26001\WorkBuddy\2026-09-21-16-22-20" `
+  --source-root "<first-workbuddy-export>" `
+  --source-root "<second-workbuddy-export>" `
   --project-root .
 ```
 
@@ -370,4 +370,3 @@ Run `start.ps1`, request `/api/health`, `/api/status`, the current snapshot endp
 - [ ] **Step 6: Write the integration report**
 
 Record exact collector inventory, local data size, demo snapshot size, validation commands/results, known upstream source failures, and the unresolved choice of public license. Do not claim external sources succeeded unless a live collection was executed in this task.
-

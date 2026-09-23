@@ -1,0 +1,1087 @@
+{
+  "parse_ver": 1,
+  "schema_ver": 1,
+  "window_days": 30,
+  "max_age_days": 45,
+  "per_source_max": 200,
+  "summary_max_chars": 1200,
+  "request_timeout": 30,
+  "min_interval_per_host": 1.2,
+  "prune_after_days": 365,
+  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  "sources": [
+    {
+      "id": "kremlin-en",
+      "url": "http://en.kremlin.ru/feeds/news",
+      "tier": "T1",
+      "publisher": "President of Russia (EN)",
+      "enabled": true,
+      "note": "俄总统府官方新闻（唯一可用 T1 官方一手；2026-09-19 实测 200/rss 20 条）"
+    },
+    {
+      "id": "interfax",
+      "url": "https://www.interfax.ru/rss.asp",
+      "tier": "T3",
+      "publisher": "Interfax (RU)",
+      "enabled": true,
+      "note": "俄最大独立通讯社（俄语）；经济/预算/央行快讯主力，2026-09-19 实测 200/rss 25 条当日"
+    },
+    {
+      "id": "tass",
+      "url": "https://tass.com/rss/v2.xml",
+      "tier": "T3",
+      "publisher": "TASS (EN)",
+      "enabled": true,
+      "note": "俄国家通讯社英文（国家立场框架，标注使用）；2026-09-19 实测 200/rss 100 条"
+    },
+    {
+      "id": "ria",
+      "url": "https://ria.ru/export/rss2/archive/index.xml",
+      "tier": "T3",
+      "publisher": "RIA Novosti (RU)",
+      "enabled": true,
+      "note": "俄国家通讯社俄语（国家立场，标注使用）；2026-09-19 实测 200/rss 100 条当日"
+    },
+    {
+      "id": "vedomosti",
+      "url": "https://www.vedomosti.ru/rss/news",
+      "tier": "T3",
+      "publisher": "Vedomosti (RU)",
+      "enabled": true,
+      "note": "俄商业日报（财政/宏观/劳动力报道主力）；2026-09-19 实测 200/rss 200 条当日"
+    },
+    {
+      "id": "kommersant",
+      "url": "https://www.kommersant.ru/RSS/news.xml",
+      "tier": "T3",
+      "publisher": "Kommersant (RU)",
+      "enabled": true,
+      "note": "俄商业大众报（2026-09-19 实测 200/rss 488 条；section_economics 403 已留档）"
+    },
+    {
+      "id": "iz",
+      "url": "https://iz.ru/xml/rss/all.xml",
+      "tier": "T3",
+      "publisher": "Izvestia (RU)",
+      "enabled": true,
+      "note": "消息报（2026-09-19 探测 200/rss 50 条；同日运行期 403——疑同主机限频，保留启用待下次运行自动回补；连续 403 再降级停用） | 2026-09-20 实测 /xml/rss/all.xml、/export/rss/index.xml、/rss、/arc/... 四个路径全部 403；无可用备用地址，保留启用待出口变化。 | 2026-09-20 终审：HTTP 403（站点侧风控，三个出口轮换均被拒）；保留启用待出口变化，已进「信源健康」告警。"
+    },
+    {
+      "id": "lenta",
+      "url": "https://lenta.ru/rss/news",
+      "tier": "T3",
+      "publisher": "Lenta.ru (RU)",
+      "enabled": true,
+      "note": "俄头部新闻门户（2026-09-19 实测 200/rss 200 条；rss/economics 404 已留档）"
+    },
+    {
+      "id": "moscowtimes",
+      "url": "https://www.themoscowtimes.com/rss/news",
+      "tier": "T3",
+      "publisher": "Moscow Times (EN)",
+      "enabled": true,
+      "note": "独立俄媒英文（被列『外国代理人』，流亡运营；对内政批评视角，标注使用）；2026-09-19 实测 200/rss 50 条"
+    },
+    {
+      "id": "meduza-ru",
+      "url": "https://meduza.io/rss/all",
+      "tier": "T3",
+      "publisher": "Meduza (RU)",
+      "enabled": true,
+      "note": "独立俄媒俄语（被列『外国代理人』，流亡运营；标注使用）；2026-09-19 实测 200/rss 30 条；en/rss 404 已留档"
+    },
+    {
+      "id": "xinhua-home",
+      "url": "https://english.news.cn/home.htm",
+      "type": "html_listing",
+      "link_pattern": "<a[^>]+href=[\"'](https://english\\.news\\.cn/20\\d{6}/[0-9a-f]+/c\\.html)[\"'][^>]*>(.*?)</a>",
+      "date_re": "/(20\\d{6})/",
+      "tier": "T3",
+      "publisher": "Xinhua 新华社英文",
+      "enabled": true,
+      "note": "新华社英文首页列表页（用户指定通道；worldrss 已停更 2018-01 故改用首页解析，仅标题无摘要）；2026-09-19 实测 200/html 104 链接"
+    },
+    {
+      "id": "chinanews-scroll",
+      "url": "https://www.chinanews.com.cn/rss/scroll-news.xml",
+      "tier": "T3",
+      "publisher": "中国新闻网",
+      "enabled": true,
+      "note": "中文即时新闻窗口（涉俄中文报道），2026-09-19 实测 200/rss 30 条当日"
+    },
+    {
+      "id": "gn-duma",
+      "url": "https://news.google.com/rss/search?q=Russia+(%22State+Duma%22+OR+%22Duma+election%22+OR+%22parliamentary+election%22+OR+%22single+voting+day%22)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "杜马选举通道；依赖代理出口可达 google（2026-09-19 出口 50465 对 google 域 502 全断，断连自动留档，恢复自动回补）"
+    },
+    {
+      "id": "gn-oil",
+      "url": "https://news.google.com/rss/search?q=Russia+(oil+OR+crude+OR+%22oil+products%22+OR+diesel+OR+gasoline)+(export+OR+shipments+OR+ban+OR+discount+OR+%22shadow+fleet%22)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "油品出口通道；出口依赖同上"
+    },
+    {
+      "id": "gn-deficit",
+      "url": "https://news.google.com/rss/search?q=Russia+(%22budget+deficit%22+OR+%22oil+and+gas+revenues%22+OR+%22federal+budget%22+OR+fiscal)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "财政赤字/预算通道；出口依赖同上"
+    },
+    {
+      "id": "gn-milspend",
+      "url": "https://news.google.com/rss/search?q=Russia+(%22military+spending%22+OR+%22defense+budget%22+OR+%22military+budget%22+OR+%22defense+spending%22)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "军费开支通道；出口依赖同上"
+    },
+    {
+      "id": "gn-ruble",
+      "url": "https://news.google.com/rss/search?q=(ruble+OR+rouble)+(exchange+rate+OR+%22central+bank%22+OR+%22key+rate%22+OR+devaluation)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "卢布汇率/货币政策通道；出口依赖同上"
+    },
+    {
+      "id": "gn-labor",
+      "url": "https://news.google.com/rss/search?q=Russia+(%22labor+shortage%22+OR+%22labour+shortage%22+OR+%22workforce+shortage%22+OR+unemployment+OR+%22labor+market%22)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "劳动力短缺通道；出口依赖同上"
+    },
+    {
+      "id": "gn-xinhua",
+      "url": "https://news.google.com/rss/search?q=Xinhua+Russia&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "新华社涉俄报道聚合搜索（用户指定）；出口依赖同上"
+    },
+    {
+      "id": "gn-china-ru",
+      "url": "https://news.google.com/rss/search?q=(China+OR+Beijing)+Russia+(economy+OR+trade+OR+energy+OR+%22Power+of+Siberia%22)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "中俄经贸/中国视角通道；出口依赖同上"
+    },
+    {
+      "id": "cbr-press",
+      "url": "https://www.cbr.ru/eng/press/pr/?getrss=1",
+      "tier": "T1",
+      "publisher": "Central Bank of Russia",
+      "enabled": false,
+      "note": "2026-09-19 实测：直连 SSL 证书链失败（疑本地代理解密），SSL 放行后可连但 getrss 参数已不返回 RSS（返回 23KB JS 壳，无文章链接）；利率/汇率数据经 interfax/vedomosti 转述覆盖，出口变更后复测"
+    },
+    {
+      "id": "cbr-rates-page",
+      "url": "https://www.cbr.ru/eng/currency_base/daily/",
+      "tier": "T1",
+      "publisher": "Central Bank of Russia",
+      "enabled": false,
+      "note": "2026-09-19 实测：SSL 放行后 200 但为动态 JS 页（无静态汇率表可解析）；官方汇率经媒体转述覆盖"
+    },
+    {
+      "id": "rosstat",
+      "url": "https://rosstat.gov.ru/rss",
+      "tier": "T1",
+      "publisher": "Rosstat",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（SSL 放行同 404）；失业率/劳动力数据经 vedomosti/interfax 转述覆盖"
+    },
+    {
+      "id": "minfin",
+      "url": "https://minfin.gov.ru/ru/press-center/rss",
+      "tier": "T1",
+      "publisher": "Ministry of Finance",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（两路径变体同 404）；首页 200 但为门户 JS 壳无法按列表解析；月度预算执行经 vedomosti/interfax 转述覆盖"
+    },
+    {
+      "id": "duma-news",
+      "url": "https://duma.gov.ru/rss/news/",
+      "tier": "T1",
+      "publisher": "State Duma",
+      "enabled": false,
+      "note": "2026-09-19 实测：https 经代理隧道 502（本出口不可达），http 路径 404；杜马动态经俄媒与 gnews 覆盖，出口变更后复测"
+    },
+    {
+      "id": "cikrf-election",
+      "url": "https://cikrf.ru/rss/",
+      "tier": "T1",
+      "publisher": "Central Election Commission",
+      "enabled": false,
+      "note": "2026-09-19 实测：经代理隧道 502（本出口不可达）；选举官方结果以 CEC 为准，现经媒体转述（T3）覆盖，出口变更后复测"
+    },
+    {
+      "id": "government-ru",
+      "url": "https://government.ru/rss/allnews/rss.xml",
+      "tier": "T1",
+      "publisher": "Government of Russia",
+      "enabled": false,
+      "note": "2026-09-19 实测：隧道 502 / 超时（本出口不可达，en 路径同）；留档复测"
+    },
+    {
+      "id": "mid-ru",
+      "url": "https://www.mid.ru/ru/rss/?id=main",
+      "tier": "T1",
+      "publisher": "Ministry of Foreign Affairs",
+      "enabled": false,
+      "note": "2026-09-19 实测：SSL 放行后 200 但返回 6KB JS 壳（非 feed）；外交部不属于本监测核心域"
+    },
+    {
+      "id": "rt",
+      "url": "https://www.rt.com/rss/news/",
+      "tier": "T3",
+      "publisher": "RT",
+      "enabled": false,
+      "note": "2026-09-19 实测：SSL 证书链失败（代理 TLS 解密）；SSL 放行后 200/rss 100 条可用，但与 TASS/RIA 国家立场窗口重复度高且需放宽证书校验，本轮不启用，留档复测"
+    },
+    {
+      "id": "rbc",
+      "url": "https://rssexport.rbc.ru/rbcnews/news/30/top.rss",
+      "tier": "T3",
+      "publisher": "RBC (RU)",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（main/economics/top 三变体同 404，rbc.ru/rss/news 401）；RBC 经 gnews 聚合层覆盖"
+    },
+    {
+      "id": "meduza-en",
+      "url": "https://meduza.io/en/rss",
+      "tier": "T3",
+      "publisher": "Meduza (EN)",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（en/rss/all 同 404）；俄语主源 meduza-ru 在用"
+    },
+    {
+      "id": "kommersant-econ",
+      "url": "https://www.kommersant.ru/RSS/section_economics.xml",
+      "tier": "T3",
+      "publisher": "Kommersant (RU)",
+      "enabled": false,
+      "note": "2026-09-19 实测 403（主 RSS news.xml 可用）"
+    },
+    {
+      "id": "tass-politics",
+      "url": "https://tass.com/politics/rss",
+      "tier": "T3",
+      "publisher": "TASS (EN)",
+      "enabled": false,
+      "note": "2026-09-19 实测 404（economics/press-releases 分类路径同 404）；主 feed v2.xml 在用"
+    },
+    {
+      "id": "carnegie",
+      "url": "https://carnegieendowment.org/rss/sol/?fa=en",
+      "tier": "T2",
+      "publisher": "Carnegie Endowment",
+      "enabled": false,
+      "note": "2026-09-19 实测 200 但返回 HTML 页面（非 feed）；T2 研究层暂缺，留档复测"
+    },
+    {
+      "id": "csis",
+      "url": "https://www.csis.org/analysis/feed",
+      "tier": "T2",
+      "publisher": "CSIS",
+      "enabled": false,
+      "note": "2026-09-19 实测：隧道 502（本出口不可达；ua-aid 同日同断）；留档复测"
+    },
+    {
+      "id": "reuters-biz",
+      "url": "https://www.reuters.com/rssfeed/businessNews/",
+      "tier": "T3",
+      "publisher": "Reuters",
+      "enabled": false,
+      "note": "2026-09-19 实测：隧道 502（本出口不可达）；留档复测"
+    },
+    {
+      "id": "bloomberg",
+      "url": "https://feeds.bloomberg.com/markets/news.rss",
+      "tier": "T3",
+      "publisher": "Bloomberg",
+      "enabled": false,
+      "note": "2026-09-19 实测：隧道 502（本出口不可达）；留档复测"
+    },
+    {
+      "id": "vedomosti-section",
+      "url": "https://www.vedomosti.ru/rss/economics",
+      "tier": "T3",
+      "publisher": "Vedomosti (RU)",
+      "enabled": false,
+      "note": "2026-09-19 实测未单独启用：主 feed rss/news 已 200 条/日覆盖全版面，避免同主机重复条目"
+    },
+    {
+      "id": "xinhua-worldrss",
+      "url": "http://www.news.cn/english/rss/worldrss.xml",
+      "tier": "T3",
+      "publisher": "Xinhua 新华社英文",
+      "enabled": false,
+      "note": "2026-09-19（ukraine-aid 项目同日实测）200/rss 但停更于 2018-01（假活 feed）；改用 xinhua-home 首页解析"
+    },
+    {
+      "id": "cnworld",
+      "url": "http://www.news.cn/world/rss.xml",
+      "tier": "T3",
+      "publisher": "新华网中文",
+      "enabled": false,
+      "note": "2026-09-19 实测 404；中文窗口经 chinanews-scroll 覆盖"
+    },
+    {
+      "id": "ifri",
+      "url": "https://www.ifri.org/en/rss",
+      "tier": "T2",
+      "publisher": "IFRI",
+      "enabled": false,
+      "note": "2026-09-19 实测 403"
+    },
+    {
+      "id": "globaltimes",
+      "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+      "tier": "T3",
+      "publisher": "Global Times 环球时报英文版",
+      "enabled": false,
+      "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担"
+    },
+    {
+      "id": "cgtn-world",
+      "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+      "tier": "T3",
+      "publisher": "CGTN 中国环球电视网",
+      "enabled": true,
+      "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）"
+    }
+  ],
+  "buckets": {
+    "duma_election": {
+      "label": "国家杜马选举（2026-09 单一投票日）",
+      "require_all": [
+        [
+          "election",
+          "ballot",
+          "single voting day",
+          "campaign",
+          "poll",
+          "vote",
+          "rx:\\bвыбор\\w*",
+          "rx:\\bизбир\\w*",
+          "rx:\\bявк\\w*",
+          "rx:\\bкандидат\\w*",
+          "rx:\\bбюллетен\\w*",
+          "rx:\\bголосов\\w*"
+        ],
+        [
+          "state duma",
+          "duma",
+          "parliament",
+          "united russia",
+          "kprf",
+          "ldpr",
+          "cec",
+          "central election commission",
+          "rx:\\bгосдум\\w*",
+          "rx:\\bдум[аыуе]\\b",
+          "rx:\\bпарламент\\w*",
+          "rx:\\bдепутат\\w*",
+          "rx:\\bединая россия\\w*",
+          "rx:\\bкпрф\\b",
+          "rx:\\bлдпр\\b",
+          "rx:\\bизбирком\\w*",
+          "rx:\\bци\\w* россии",
+          "lower house"
+        ]
+      ]
+    },
+    "oil_exports": {
+      "label": "油品出口与石油收入",
+      "require_all": [
+        [
+          "oil export",
+          "crude export",
+          "oil product",
+          "refined product",
+          "petroleum product",
+          "diesel",
+          "gasoline",
+          "fuel",
+          "urals",
+          "espo",
+          "shadow fleet",
+          "oil revenue",
+          "seaborne crude",
+          "export duty",
+          "oil ban",
+          "fuel ban",
+          "price cap",
+          "tanker",
+          "petrochemical",
+          "rx:\\bнефт\\w*",
+          "rx:\\bдизел\\w*",
+          "rx:\\bбензин\\w*",
+          "rx:\\bтоплив\\w*",
+          "rx:\\bтанкер\\w*",
+          "rx:\\bнефтепровод\\w*",
+          "rx:\\bэкспортн\\w* пошлин\\w*"
+        ],
+        [
+          "putin",
+          "kremlin",
+          "moscow",
+          "russian",
+          "russia",
+          "russian federation",
+          "energy ministry",
+          "novak",
+          "rosneft",
+          "gazprom",
+          "transneft",
+          "lukoil",
+          "novatek",
+          "rx:\\bросси\\w*",
+          "rx:\\bмоскв\\w*",
+          "rx:\\bминэнерго\\w*",
+          "rx:\\bновак\\w*",
+          "rx:\\bроснефт\\w*",
+          "rx:\\bгазпром\\w*",
+          "rx:\\bтранснефт\\w*",
+          "rx:\\bлукойл\\w*",
+          "rx:\\bноватэк\\w*"
+        ]
+      ]
+    },
+    "fiscal_deficit": {
+      "label": "财政赤字与预算执行",
+      "require_all": [
+        [
+          "budget deficit",
+          "fiscal deficit",
+          "deficit",
+          "oil and gas revenue",
+          "non-oil revenue",
+          "budget revenue",
+          "budget spending",
+          "treasury",
+          "borrowing",
+          "budget revision",
+          "fiscal rule",
+          "rx:\\bдефицит\\w*",
+          "rx:\\bзаимствован\\w*",
+          "rx:\\bрезервн\\w* фонд\\w*",
+          "national wealth fund",
+          "rx:\\bфнб\\b",
+          "rx:\\bдефицит\\w* бюджет\\w*"
+        ],
+        [
+          "federal budget",
+          "state budget",
+          "budget",
+          "revenue",
+          "spending",
+          "ministry of finance",
+          "minfin",
+          "ofz",
+          "billion rubles",
+          "trillion rubles",
+          "rx:\\bбюджет\\w*",
+          "rx:\\bминфин\\w*",
+          "rx:\\bказначейств\\w*",
+          "rx:\\bогфз\\w*",
+          "rx:\\bмлрд\\b",
+          "rx:\\bтрлн\\b",
+          "rx:\\bрубл\\w*"
+        ]
+      ]
+    },
+    "military_spending": {
+      "label": "军费开支",
+      "require_all": [
+        [
+          "military spending",
+          "defense spending",
+          "defence spending",
+          "military budget",
+          "defense budget",
+          "military expenditure",
+          "war spending",
+          "arms spending",
+          "national defense",
+          "defense order",
+          "defense industry",
+          "military-industrial",
+          "military keynesianism",
+          "rx:\\bоборон\\w*",
+          "rx:\\bвоенн\\w* расход\\w*",
+          "rx:\\bвоенн\\w* бюджет\\w*",
+          "rx:\\bвоенн\\w* экономик\\w*",
+          "rx:\\bгособоронзаказ\\w*"
+        ],
+        [
+          "budget",
+          "spending",
+          "expenditure",
+          "billion",
+          "trillion",
+          "percent of gdp",
+          "gdp",
+          "finance ministry",
+          "minfin",
+          "rx:\\bбюджет\\w*",
+          "rx:\\bмлрд\\b",
+          "rx:\\bтрлн\\b",
+          "rx:\\bввп\\b",
+          "rx:\\bминфин\\w*",
+          "rx:\\bрасход\\w*",
+          "rx:\\bрубл\\w*"
+        ],
+        [
+          "russia",
+          "russian",
+          "moscow",
+          "kremlin",
+          "putin",
+          "russian federation",
+          "rx:\\bросси\\w*",
+          "rx:\\bпутин\\w*",
+          "rx:\\bкремл\\w*",
+          "rx:\\bфедеральн\\w*",
+          "rx:\\bминобороны\\w*",
+          "rx:\\bгосбюджет\\w*"
+        ]
+      ]
+    },
+    "ruble_fx": {
+      "label": "卢布汇率与货币政策",
+      "require_all": [
+        [
+          "ruble",
+          "rouble",
+          "exchange rate",
+          "currency market",
+          "devaluation",
+          "moscow exchange",
+          "moex",
+          "currency control",
+          "capital control",
+          "rx:\\bрубл\\w*",
+          "rx:\\bкурс\\w*",
+          "rx:\\bдевальвац\\w*",
+          "rx:\\bмосбирж\\w*",
+          "rx:\\bдоллар\\w*",
+          "key rate",
+          "policy rate",
+          "interest rate",
+          "rate cut",
+          "rate hike",
+          "rx:\\bключев\\w* ставк\\w*",
+          "rx:\\bставк\\w* цб",
+          "rx:\\bкурс валют\\w*",
+          "rx:\\bвалют\\w* интервенц\\w*"
+        ],
+        [
+          "central bank",
+          "bank of russia",
+          "cbr",
+          "key rate",
+          "policy rate",
+          "interest rate",
+          "rate cut",
+          "rate hike",
+          "inflation",
+          "rx:\\bцентробанк\\w*",
+          "rx:\\bцб\\b",
+          "rx:\\bключев\\w* ставк\\w*",
+          "rx:\\bставк\\w*",
+          "rx:\\bинфляц\\w*",
+          "rx:\\bнабиуллин\\w*",
+          "rx:\\bденежн\\w* кредитн\\w*",
+          "rx:\\bбанк росси\\w*",
+          "rx:\\bэкспорт\\w*"
+        ]
+      ]
+    },
+    "labor_shortage": {
+      "label": "劳动力短缺与劳动力市场",
+      "require_all": [
+        [
+          "labor shortage",
+          "labour shortage",
+          "workforce shortage",
+          "worker shortage",
+          "staff shortage",
+          "labor deficit",
+          "labor market",
+          "labour market",
+          "unemployment",
+          "vacancies",
+          "wage growth",
+          "wages",
+          "migrant worker",
+          "hiring",
+          "personnel",
+          "rx:\\bдефицит\\w* кадров\\w*",
+          "rx:\\bкадров\\w* голод\\w*",
+          "rx:\\bнехватк\\w*",
+          "rx:\\bбезработиц\\w*",
+          "rx:\\bваканси\\w*",
+          "rx:\\bзарплат\\w*",
+          "rx:\\bмигрант\\w*",
+          "rx:\\bрынок труд\\w*",
+          "rx:\\bзанятост\\w*"
+        ],
+        [
+          "labor",
+          "labour",
+          "workers",
+          "employment",
+          "workforce",
+          "economy",
+          "economic",
+          "industry",
+          "enterprises",
+          "rx:\\bтруд\\w*",
+          "rx:\\bкадр\\w*",
+          "rx:\\bработник\\w*",
+          "rx:\\bзанят\\w*",
+          "rx:\\bпредприят\\w*",
+          "rx:\\bэкономик\\w*",
+          "rx:\\bзарплат\\w*"
+        ]
+      ]
+    },
+    "china_xinhua": {
+      "label": "中国视角（新华社/中俄经贸）",
+      "require_all": [
+        [
+          "china",
+          "chinese",
+          "beijing",
+          "xinhua",
+          "wang yi",
+          "li hui",
+          "xi jinping",
+          "sino-russian",
+          "power of siberia",
+          "rx:\\bкита\\w*",
+          "rx:\\bпекин\\w*",
+          "rx:\\bси цзиньпин\\w*"
+        ],
+        [
+          "putin",
+          "kremlin",
+          "moscow",
+          "russian",
+          "russia",
+          "russian federation",
+          "trade",
+          "energy",
+          "gas pipeline",
+          "sanctions",
+          "rx:\\bросси\\w*",
+          "rx:\\bпутин\\w*",
+          "rx:\\bторгов\\w*",
+          "rx:\\bэнергетик\\w*",
+          "rx:\\bгазопровод\\w*",
+          "rx:\\bсила сибири\\w*"
+        ],
+        [
+          "trade",
+          "energy",
+          "gas pipeline",
+          "sanctions",
+          "cooperation",
+          "negotiation",
+          "summit",
+          "talks",
+          "power of siberia",
+          "rx:\\bторгов\\w*",
+          "rx:\\bэнергетик\\w*",
+          "rx:\\bгазопровод\\w*",
+          "rx:\\bсанкци\\w*",
+          "rx:\\bсотрудничеств\\w*",
+          "rx:\\bпереговор\\w*",
+          "rx:\\bсаммит\\w*",
+          "rx:\\bвстреч\\w*",
+          "rx:\\bсила сибири\\w*"
+        ]
+      ]
+    }
+  },
+  "flags": {
+    "official_data": [
+      "rosstat",
+      "ministry of finance",
+      "minfin",
+      "central bank",
+      "bank of russia",
+      "cbr (?:reported|published|said|data)",
+      "election commission",
+      "rx:\\bросстат\\w*",
+      "rx:\\bминфин\\w*",
+      "rx:\\bцентробанк\\w*",
+      "rx:\\bизбирком\\w*",
+      "rx:\\bци\\w* россии"
+    ],
+    "forecast_estimate": [
+      "forecast\\w*",
+      "estimate[ds]?",
+      "expect\\w*",
+      "project\\w*",
+      "predict\\w*",
+      "outlook",
+      "projection",
+      "rx:\\bпрогноз\\w*",
+      "rx:\\bожидает\\w*",
+      "rx:\\bоценк\\w*"
+    ],
+    "easing_measure": [
+      "subsid\\w*",
+      "exemption",
+      "deferral",
+      "support measure",
+      "stimulus",
+      "rebate",
+      "rx:\\bсубсид\\w*",
+      "rx:\\bльгот\\w*",
+      "rx:\\bотсрочк\\w*",
+      "rx:\\bподдержк\\w*",
+      "rx:\\bиндексаци\\w*"
+    ],
+    "restriction_measure": [
+      "export ban",
+      "export duty",
+      "restriction\\w*",
+      "curb\\w*",
+      "mobiliz\\w*",
+      "nationaliz\\w*",
+      "capital control",
+      "export quota",
+      "rx:\\bзапрет\\w*",
+      "rx:\\bограничен\\w*",
+      "rx:\\bпошлин\\w*",
+      "rx:\\bквот\\w*",
+      "rx:\\bмобилиз\\w*",
+      "rx:\\bнационализ\\w*"
+    ]
+  },
+  "stance": {
+    "escalate": [
+      "widen",
+      "worsen",
+      "deepen",
+      "shortfall",
+      "surge",
+      "jump",
+      "soar",
+      "plunge",
+      "slide",
+      "drop",
+      "fall",
+      "decline",
+      "shrink",
+      "record high",
+      "record low",
+      "crisis",
+      "exceed",
+      "accelerat",
+      "rx:\\bнехватк\\w*",
+      "rx:\\bдефицит\\w*"
+    ],
+    "deescalate": [
+      "narrow",
+      "improve",
+      "recover",
+      "rebound",
+      "stabiliz",
+      "stabilis",
+      "ease",
+      "easing",
+      "replenish",
+      "cool",
+      "moderat",
+      "rx:\\bснижен\\w*",
+      "rx:\\bулучшен\\w*",
+      "rx:\\bвосстановл\\w*",
+      "rx:\\bстабилиз\\w*",
+      "rx:\\bзамедлен\\w*"
+    ]
+  },
+  "entities": {
+    "people": {
+      "Putin": [
+        "putin",
+        "rx:\\bпутин\\w*"
+      ],
+      "Mishustin": [
+        "mishustin",
+        "rx:\\bмишустин\\w*"
+      ],
+      "Siluanov": [
+        "siluanov",
+        "rx:\\bсилуанов\\w*"
+      ],
+      "Nabiullina": [
+        "nabiullina",
+        "rx:\\bнабиуллин\\w*"
+      ],
+      "Belousov": [
+        "belousov",
+        "rx:\\bбелоусов\\w*"
+      ],
+      "Novak": [
+        "novak",
+        "rx:\\bновак\\w*"
+      ],
+      "Volodin": [
+        "volodin",
+        "rx:\\bволодин\\w*"
+      ],
+      "Matviyenko": [
+        "matviyenko",
+        "rx:\\bматвиенк\\w*"
+      ]
+    },
+    "institutions": {
+      "State Duma": [
+        "state duma",
+        "rx:\\bгосдум\\w*",
+        "rx:\\bдум[аыуе]\\b"
+      ],
+      "CBR": [
+        "central bank",
+        "bank of russia",
+        "rx:\\bцентробанк\\w*",
+        "rx:\\bцб\\b"
+      ],
+      "Minfin": [
+        "minfin",
+        "ministry of finance",
+        "rx:\\bминфин\\w*"
+      ],
+      "Rosstat": [
+        "rosstat",
+        "rx:\\bросстат\\w*"
+      ],
+      "CEC": [
+        "central election commission",
+        "rx:\\bизбирком\\w*"
+      ],
+      "United Russia": [
+        "united russia",
+        "rx:\\bединая россия\\w*"
+      ],
+      "KPRF": [
+        "kprf",
+        "rx:\\bкпрф\\b"
+      ],
+      "LDPR": [
+        "ldpr",
+        "rx:\\bлдпр\\b"
+      ]
+    },
+    "companies": {
+      "Rosneft": [
+        "rosneft",
+        "rx:\\bроснефт\\w*"
+      ],
+      "Gazprom": [
+        "gazprom",
+        "rx:\\bгазпром\\w*"
+      ],
+      "Lukoil": [
+        "lukoil",
+        "rx:\\bлукойл\\w*"
+      ],
+      "Transneft": [
+        "transneft",
+        "rx:\\bтранснефт\\w*"
+      ],
+      "Novatek": [
+        "novatek",
+        "rx:\\bноватэк\\w*"
+      ]
+    }
+  },
+  "baseline": {
+    "note": "结构性基线（2026-09-19 首次运行录入，均为可核验的结构性事实或明确标注口径的计划数字；动态数字一律以窗口内报道+来源为准）",
+    "rows": [
+      {
+        "date": "2026-09-20",
+        "event": "第八届国家杜马选举单一投票日（450 席：225 比例代表 + 225 单席选区；上一届 2021-09 统俄党获 324 席）。官方结果以中央选举委员会（CEC）为准——本出口 CEC 不可达，先经媒体转述（T3）",
+        "tier": "T1",
+        "source": "CEC/俄媒综合"
+      },
+      {
+        "date": "2021-09-19",
+        "event": "上届（第八届之前同届）杜马选举：统俄党 324/450 席，得票率约 49.8%（对比例照）",
+        "tier": "T1",
+        "source": "CEC 2019 公开结果"
+      },
+      {
+        "date": "2025-10",
+        "event": "2026 联邦预算（计划口径）：国防支出约 13 万亿卢布量级、占联邦支出近 1/3——计划数≠执行数≠预测数，禁混加；随财政部月度执行报告滚动核对",
+        "tier": "T2",
+        "source": "俄财政部预算文件/媒体综合"
+      }
+    ],
+    "capability_rows": [
+      {
+        "date": "2026-09-19",
+        "event": "汇率口径：官方汇率为 CBR 交易日定价（次日公布），市场汇率为 MOEX 盘中价；两者可差数十字戈比。黑市/平行汇率仅出现在独立媒体转述中，标注来源后单列，禁与官方汇率相加平均",
+        "tier": "T2",
+        "source": "口径说明"
+      },
+      {
+        "date": "2026-09-19",
+        "event": "赤字口径：财政部月度『初步执行数据』为估计口径，季度/年度决算为核准口径；月度数字禁直接年化外推",
+        "tier": "T2",
+        "source": "口径说明"
+      },
+      {
+        "date": "2026-09-19",
+        "event": "油品出口：官方无逐日/逐月完整披露，量与折扣依赖 Kpler/Vortexa 类船期数据与行业媒体转述（T3）；禁运/限价（price cap）语境下『出口量』与『出口收入』必须分开读——量稳收入降是常态组合",
+        "tier": "T3",
+        "source": "口径说明"
+      }
+    ]
+  },
+  "report": {
+    "title": "俄罗斯内政监测（杜马选举/油品出口/财政/军费/卢布/劳动力）",
+    "known_limitations": [
+      "金额口径纪律：计划(план) ≠ 执行(факт) ≠ 预测(прогноз)，flags 的 forecast_estimate 逐条标注预测语境；卢布计价与美元计价数字禁相加。",
+      "汇率口径：CBR 官方汇率、MOEX 市场汇率、独立媒体转述的平行汇率三层不可混读；『卢布贬值』的基期必须逐条核对。",
+      "油品出口无官方逐日披露：量与折扣依赖船期数据与行业媒体转述（T3）；禁运/限价语境下『量稳收入降』为常态组合，出口量与出口收入分开读。",
+      "军费数字以计划口径为主（预算文件），执行口径仅出现在财政部月报转述中；『军费占 GDP/支出比例』的分母口径随来源不同，禁横向平均。",
+      "俄官方机构直达源本出口不可达（CBR JS 壳/Rosstat 404/Minfin 404/Duma、CEC 502），官方统计全部经俄媒转述（T3）——单一来源口径，待出口恢复回补官方一手。",
+      "俄语源匹配用前缀词干启发式（рубл→рубля/рублю…），屈折形态覆盖不保证完整；漏检可能，靠多源交叉缓解。",
+      "选举报道在 2026-09-20 前后会出现 coverage 尖峰，属周期效应，不可读作事件强度突变；票数与席位以 CEC 为准（现经 T3 转述）。",
+      "gnews 8 通道依赖代理出口可达 google：2026-09-19 出口 50465 对 google 域 502 全断，断连期覆盖不完整，恢复后自动回补。",
+      "立场词表（恶化/缓解）为启发式，只看方向不看强度；'record' 等词可能受非监测语境干扰。"
+    ]
+  },
+  "glossary": {
+    "ru": {
+      "Государственная дума": "国家杜马（议会下院）",
+      "депутат": "议员",
+      "выборы": "选举",
+      "голосование": "投票",
+      "бюджет": "预算",
+      "дефицит": "赤字",
+      "профицит": "盈余",
+      "нефть": "石油",
+      "нефтепродукт": "石油产品",
+      "газ": "天然气",
+      "экспорт": "出口",
+      "импорт": "进口",
+      "рубль": "卢布",
+      "курс": "汇率",
+      "инфляция": "通胀",
+      "цена": "价格",
+      "добыча": "开采/产量",
+      "баррель": "桶",
+      "Минфин": "财政部",
+      "Минобороны": "国防部",
+      "Минэкономразвития": "经济发展部",
+      "Центробанк": "中央银行",
+      "ЦБ": "央行",
+      "Росстат": "国家统计局",
+      "Правительство": "政府",
+      "Кремль": "克里姆林宫（俄总统府）",
+      "президент": "总统",
+      "Путин": "普京",
+      "Мишустин": "米舒斯京",
+      "Лавров": "拉夫罗夫",
+      "Песков": "佩斯科夫",
+      "Белоусов": "别洛乌索夫",
+      "санкции": "制裁",
+      "мобилизация": "动员",
+      "армия": "军队",
+      "ракета": "导弹",
+      "беспилотник": "无人机",
+      "дроны": "无人机",
+      "удар": "打击",
+      "обстрел": "炮击",
+      "фронт": "前线",
+      "переговоры": "谈判",
+      "соглашение": "协议",
+      "прекращение огня": "停火",
+      "мирный": "和平的",
+      "зарплата": "工资",
+      "безработица": "失业",
+      "рабочая сила": "劳动力",
+      "кадровый дефицит": "用工/人才缺口",
+      "ВВП": "GDP（国内生产总值）",
+      "налог": "税",
+      "тариф": "关税/费率",
+      "порт": "港口",
+      "танкер": "油轮",
+      "трубопровод": "管道",
+      "Газпром": "俄气（俄罗斯天然气工业股份公司）",
+      "Роснефть": "俄油（俄罗斯石油公司）",
+      "Лукойл": "卢克石油",
+      "НПЗ": "炼油厂",
+      "ОПЕК": "OPEC（石油输出国组织）",
+      "Украина": "乌克兰",
+      "Киев": "基辅",
+      "Москва": "莫斯科",
+      "ВСУ": "乌克兰武装部队",
+      "СВО": "「特别军事行动」（俄方对俄乌战争的官方称谓）",
+      "Госдума": "国家杜马",
+      "Совет Федерации": "联邦委员会（议会上院）",
+      "законопроект": "法律草案",
+      "закон": "法律",
+      "указ": "总统令",
+      "заявление": "声明",
+      "заявил": "表示/声明",
+      "сообщил": "通报",
+      "поставки": "供应/交付",
+      "вооружение": "武器装备",
+      "оборона": "国防",
+      "США": "美国"
+    },
+    "uk": {
+      "Україна": "乌克兰",
+      "Зеленський": "泽连斯基",
+      "Верховна Рада": "最高拉达（乌克兰议会）",
+      "Кабінет Міністрів": "部长内阁",
+      "Міністерство оборони": "国防部",
+      "Збройні сили": "武装部队",
+      "допомога": "援助",
+      "зброя": "武器",
+      "постачання": "供应/交付",
+      "санкції": "制裁",
+      "переговори": "谈判",
+      "припинення вогню": "停火",
+      "обстріл": "炮击",
+      "ракета": "导弹",
+      "безпілотник": "无人机",
+      "дрон": "无人机",
+      "бюджет": "预算",
+      "дефіцит": "赤字",
+      "експорт": "出口",
+      "зерно": "粮食",
+      "врожай": "收成",
+      "порт": "港口",
+      "мобілізація": "动员",
+      "енергетика": "能源",
+      "електроенергія": "电力",
+      "АЕС": "核电站",
+      "ППО": "防空",
+      "позика": "贷款",
+      "кредит": "贷款/信贷",
+      "грант": "赠款",
+      "МВФ": "IMF（国际货币基金组织）",
+      "ЄС": "EU（欧盟）",
+      "НАТО": "北约",
+      "Київ": "基辅",
+      "Харків": "哈尔科夫",
+      "Одеса": "敖德萨",
+      "Дніпро": "第聂伯罗"
+    }
+  }
+}

@@ -6,10 +6,11 @@ from collections import Counter
 from datetime import datetime
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from backend.store import snapshots,get_snapshot,ROOT
+from backend.paths import collector_read_root
 
 def run():
     snapshot=get_snapshot(snapshots()[0]['id'])
-    crawler=Path('C:/Users/chongwu26001/WorkBuddy/2026-09-17-15-16-18')
+    crawler=collector_read_root()
     lines=['# 全量爬虫接入与质量审查',f"快照：{snapshot['id']}；导入时间：{snapshot['created_at']}。",'本次检查本地输出、适配代码与采集日志；没有重新运行全部爬虫，也没有逐条核实外部报道。',
       f"已接入 {len(snapshot.get('projects',[]))} 个有输出的项目；归并后 {len(snapshot['records'])} 条来源记录，{len(snapshot['observations'])} 个指标定义。",
       '## 项目清单','以下数量为跨项目去重后各项目涉及的记录数，不可直接相加。主题候选数量不代表已验证事件。',

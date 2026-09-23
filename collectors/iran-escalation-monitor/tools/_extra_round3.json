@@ -1,0 +1,18 @@
+[
+ {"id":"gnews-irgc","zone":"iran-official","tier":"T3","url":"https://news.google.com/rss/search?q=IRGC+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen"},
+ {"id":"gnews-tasnim","zone":"iran-official","tier":"T3","url":"https://news.google.com/rss/search?q=site%3Atasnimnews.com&hl=en-US&gl=US&ceid=US%3Aen"},
+ {"id":"gnews-fars","zone":"iran-official","tier":"T3","url":"https://news.google.com/rss/search?q=site%3Afarsnews.ir&hl=en-US&gl=US&ceid=US%3Aen"},
+ {"id":"gnews-irna","zone":"iran-official","tier":"T3","url":"https://news.google.com/rss/search?q=site%3Airna.ir&hl=en-US&gl=US&ceid=US%3Aen"},
+ {"id":"gnews-iran-navy-drill","zone":"naval","tier":"T3","url":"https://news.google.com/rss/search?q=Iran+naval+drill+OR+exercise+Persian+Gulf+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen"},
+ {"id":"gnews-us-carrier","zone":"naval","tier":"T3","url":"https://news.google.com/rss/search?q=US+aircraft+carrier+Middle+East+deploy+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen"},
+ {"id":"gnews-kharg","zone":"energy","tier":"T3","url":"https://news.google.com/rss/search?q=Kharg+Island+OR+%22oil+terminal%22+Iran+strike+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen"},
+ {"id":"gnews-hormuz-drill","zone":"chokepoint","tier":"T3","url":"https://news.google.com/rss/search?q=Iran+Hormuz+drill+OR+%22naval+exercise%22+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen"},
+ {"id":"gnews-iran-threat","zone":"foresight","tier":"T3","url":"https://news.google.com/rss/search?q=Iran+threat+OR+warning+OR+%22will+respond%22+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen"},
+ {"id":"gnews-iran-imminent","zone":"foresight","tier":"T3","url":"https://news.google.com/rss/search?q=Iran+%22imminent%22+OR+%22about+to%22+OR+%22preparing+to%22+attack+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen"},
+ {"id":"gnews-reuters-iran","zone":"third","tier":"T3","url":"https://news.google.com/rss/search?q=site%3Areuters.com+Iran+military+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen"},
+ {"id":"almayadeen-en","zone":"third","tier":"T3","url":"https://english.almayadeen.net/rss"},
+ {"id":"mod-iran","zone":"iran-official","tier":"T1","url":"https://mod.ir/rss"},
+ {"id":"irgc-official","zone":"iran-official","tier":"T1","url":"https://irgc.ir/rss"},
+ {"id":"imo-pressbrief","zone":"maritime","tier":"T1","url":"https://www.imo.org/en/MediaCentre/PressBriefings/rss"},
+ {"id":"bimco","zone":"maritime","tier":"T3","url":"https://www.bimco.org/rss"}
+]

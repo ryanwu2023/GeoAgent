@@ -1,0 +1,688 @@
+{
+ "parse_ver": 1,
+ "schema_ver": 1,
+ "window_days": 30,
+ "max_age_days": 45,
+ "per_source_max": 200,
+ "summary_max_chars": 1200,
+ "request_timeout": 30,
+ "min_interval_per_host": 1.2,
+ "prune_after_days": 365,
+ "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+ "sources": [
+  {
+   "id": "gcaptain",
+   "url": "https://gcaptain.com/feed/",
+   "tier": "T3",
+   "publisher": "gCaptain",
+   "enabled": true,
+   "note": "海运新闻（事故/制裁/保险/海盗），2026-09-20 实测 200/rss 12 条、最新当日"
+  },
+  {
+   "id": "splash247",
+   "url": "https://splash247.com/feed/",
+   "tier": "T3",
+   "publisher": "Splash 247",
+   "enabled": true,
+   "note": "航运媒体（运费/租船/保险），2026-09-20 实测 200/rss 10 条"
+  },
+  {
+   "id": "theloadstar",
+   "url": "https://theloadstar.com/feed/",
+   "tier": "T3",
+   "publisher": "The Loadstar",
+   "enabled": true,
+   "note": "货运与运价（集装箱/多式联运），2026-09-20 实测 200/rss 10 条"
+  },
+  {
+   "id": "hellenicshipping",
+   "url": "https://www.hellenicshippingnews.com/feed/",
+   "tier": "T3",
+   "publisher": "Hellenic Shipping News",
+   "enabled": true,
+   "note": "航运与大宗商品（干散/油轮运价转载），2026-09-20 实测 200/rss 20 条"
+  },
+  {
+   "id": "shippingitaly",
+   "url": "https://www.shippingitaly.it/feed/",
+   "tier": "T3",
+   "publisher": "Shipping Italy",
+   "enabled": true,
+   "note": "欧洲航运（港口/地中海航线），2026-09-20 实测 200/rss 10 条"
+  },
+  {
+   "id": "oilprice",
+   "url": "https://oilprice.com/rss/main",
+   "tier": "T3",
+   "publisher": "OilPrice.com",
+   "enabled": true,
+   "note": "油气市场（供给中断/价格），2026-09-20 实测 200/rss 15 条"
+  },
+  {
+   "id": "naturalgasworld",
+   "url": "https://www.naturalgasworld.com/rss",
+   "tier": "T3",
+   "publisher": "Natural Gas World",
+   "enabled": true,
+   "note": "天然气行业（LNG/管道/欧洲气价）；2026-09-20 实测 /rss 200/rss 20 条（原 /feed 为 200 但 0 条）"
+  },
+  {
+   "id": "gie-agsi",
+   "url": "https://agsi.gie.eu/",
+   "tier": "T2",
+   "publisher": "GIE AGSI（欧洲储气）",
+   "enabled": false,
+   "note": "【2026-09-20 实测 200 但为交互页面，无 RSS/开放 JSON】储气量数据需 API key，未取；留档待接入"
+  },
+  {
+   "id": "world-grain",
+   "url": "https://www.world-grain.com/rss/articles",
+   "tier": "T3",
+   "publisher": "World Grain",
+   "enabled": true,
+   "note": "谷物行业（出口/价格）；2026-09-20 实测 /rss/articles 200/rss 30 条（/rss 返回 200 但非 RSS、/feed 404）"
+  },
+  {
+   "id": "kyivpost",
+   "url": "https://www.kyivpost.com/feed",
+   "tier": "T3",
+   "publisher": "Kyiv Post",
+   "enabled": true,
+   "note": "乌媒英文（经济/出口/能源遭袭），2026-09-20 实测 200/rss 100 条"
+  },
+  {
+   "id": "euromaidan",
+   "url": "https://euromaidanpress.com/feed/",
+   "tier": "T3",
+   "publisher": "Euromaidan Press",
+   "enabled": true,
+   "note": "乌独立英文媒体（OSINT 向），2026-09-19 实测 200/rss"
+  },
+  {
+   "id": "tass",
+   "url": "https://tass.com/rss/v2.xml",
+   "tier": "T3",
+   "publisher": "TASS (EN)",
+   "enabled": true,
+   "note": "俄国家通讯社英文（国家立场框架，标注使用），2026-09-19 实测 200/rss 100 条"
+  },
+  {
+   "id": "moscowtimes",
+   "url": "https://www.themoscowtimes.com/rss/news",
+   "tier": "T3",
+   "publisher": "Moscow Times (EN)",
+   "enabled": true,
+   "note": "独立俄媒英文（卢布/央行/资本管制报道主力），2026-09-19 实测 200/rss 50 条"
+  },
+  {
+   "id": "vedomosti",
+   "url": "https://www.vedomosti.ru/rss/news",
+   "tier": "T3",
+   "publisher": "Vedomosti (RU)",
+   "enabled": true,
+   "note": "俄商业日报（能源出口/汇率/预算），2026-09-19 实测 200/rss"
+  },
+  {
+   "id": "interfax",
+   "url": "https://www.interfax.ru/rss.asp",
+   "tier": "T3",
+   "publisher": "Interfax (RU)",
+   "enabled": true,
+   "note": "俄通讯社（事故/停产快讯），2026-09-19 实测 200/rss"
+  },
+  {
+   "id": "un-press",
+   "url": "https://press.un.org/en/rss.xml",
+   "tier": "T1",
+   "publisher": "United Nations",
+   "enabled": true,
+   "note": "UN 新闻稿（黑海粮食/人道影响的一手口径），2026-09-19 实测 200/rss"
+  },
+  {
+   "id": "crisisgroup",
+   "url": "https://www.crisisgroup.org/rss.xml",
+   "tier": "T2",
+   "publisher": "International Crisis Group",
+   "enabled": true,
+   "note": "机构分析（冲突经济影响），2026-09-19 实测 200/rss"
+  },
+  {
+   "id": "xinhua-home",
+   "url": "https://english.news.cn/home.htm",
+   "type": "html_listing",
+   "link_pattern": "<a[^>]+href=[\"'](https://english\\.news\\.cn/20\\d{6}/[0-9a-f]+/c\\.html)[\"'][^>]*>(.*?)</a>",
+   "date_re": "/(20\\d{6})/",
+   "tier": "T3",
+   "publisher": "Xinhua 新华社英文",
+   "enabled": true,
+   "note": "新华社英文首页列表页（用户指定通道；仅标题无摘要），2026-09-19 实测 200/html 104 链接"
+  },
+  {
+   "id": "cgtn-world",
+   "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+   "tier": "T3",
+   "publisher": "CGTN 中国环球电视网",
+   "enabled": true,
+   "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条"
+  },
+  {
+   "id": "xinhua-worldrss",
+   "url": "http://www.xinhuanet.com/english/worldrss.xml",
+   "tier": "T3",
+   "publisher": "Xinhua 新华社英文",
+   "enabled": false,
+   "note": "【2026-09-19 实测停更：末条 2018-01，属假活 feed】改用 xinhua-home 首页解析；留档不复测"
+  },
+  {
+   "id": "gn-ttf-gas",
+   "url": "https://news.google.com/rss/search?q=TTF+gas+price+Europe&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News（TTF 气价）",
+   "enabled": true,
+   "note": "聚合检索；2026-09-20 上午实测 200/100 条，08:40 后出口被限流 502（信源健康会告警，出口恢复自动回补）"
+  },
+  {
+   "id": "gn-war-risk",
+   "url": "https://news.google.com/rss/search?q=war+risk+insurance+shipping&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News（战争险）",
+   "enabled": true,
+   "note": "聚合检索（战争险附加费/保费）；同上限流风险"
+  },
+  {
+   "id": "gn-blacksea-grain",
+   "url": "https://news.google.com/rss/search?q=Black+Sea+grain+corridor&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News（黑海粮食）",
+   "enabled": true,
+   "note": "聚合检索（黑海走廊/谷物出口）；同上限流风险"
+  },
+  {
+   "id": "gn-ruble",
+   "url": "https://news.google.com/rss/search?q=ruble+exchange+rate&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News（卢布）",
+   "enabled": true,
+   "note": "聚合检索（卢布/格里夫纳/地区资产）；同上限流风险"
+  },
+  {
+   "id": "gn-oil-supply",
+   "url": "https://news.google.com/rss/search?q=oil+supply+disruption+refinery+attack&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News（供应中断）",
+   "enabled": true,
+   "note": "聚合检索（炼厂/管道/出口中断）；同上限流风险"
+  }
+ ],
+ "buckets": {
+  "supply_loss": {
+   "label": "供应损失与产能中断",
+   "require_all": [
+    [
+     "supply disruption",
+     "supply loss",
+     "output cut",
+     "production halt",
+     "shut in",
+     "outage",
+     "shutdown",
+     "offline",
+     "damaged",
+     "damage to",
+     "struck",
+     "attack on",
+     "fire at",
+     "explosion",
+     "force majeure",
+     "sabotage",
+     "drone hit",
+     "capacity lost",
+     "exports halted",
+     "loading suspended",
+     "offline capacity",
+     "refinery",
+     "cut exports",
+     "export cut",
+     "export ban",
+     "export halt",
+     "embargo",
+     "quota",
+     "restrict exports",
+     "curtail exports",
+     "output reduction",
+     "throughput cut",
+     "shut the",
+     "cut off",
+     "flows halted",
+     "flows stopped",
+     "suspend flows",
+     "pipeline shut",
+     "stopped pumping",
+     "suspended pumping",
+     "halted pumping",
+     "export curbs",
+     "export restrictions",
+     "restrict",
+     "curtail",
+     "reduce output"
+    ],
+    [
+     "oil",
+     "gas",
+     "crude",
+     "refinery",
+     "pipeline",
+     "lng",
+     "petroleum",
+     "diesel",
+     "fuel",
+     "energy",
+     "terminal",
+     "oilfield",
+     "gas field",
+     "storage site"
+    ]
+   ]
+  },
+  "freight_insurance": {
+   "label": "运费与保险（战争险）",
+   "require_all": [
+    [
+     "freight rate",
+     "freight cost",
+     "shipping cost",
+     "war risk",
+     "war risk premium",
+     "insurance premium",
+     "insurance cover",
+     "underwrit",
+     "hull war",
+     "cargo insurance",
+     "charter rate",
+     "tanker rate",
+     "voyage",
+     "rerouting",
+     "re-routing",
+     "divert",
+     "transit",
+     "canal",
+     "baltic dry",
+     "bdi",
+     "delay",
+     "surcharge",
+     "additional premium"
+    ],
+    [
+     "ship",
+     "vessel",
+     "tanker",
+     "freight",
+     "shipping",
+     "insur",
+     "charter",
+     "port",
+     "canal",
+     "maritime",
+     "fleet",
+     "cargo",
+     "suez",
+     "red sea",
+     "black sea",
+     "hormuz"
+    ]
+   ]
+  },
+  "eu_gas": {
+   "label": "欧洲天然气（TTF/库存/LNG）",
+   "require_all": [
+    [
+     "ttf",
+     "dutch ttf",
+     "gas price",
+     "gas prices",
+     "storage level",
+     "storage site",
+     "injection",
+     "withdrawal",
+     "lng cargo",
+     "lng import",
+     "regasification",
+     "pipeline gas",
+     "gas supply",
+     "gas demand",
+     "price cap",
+     "supply security",
+     "storage target",
+     "winter gas"
+    ],
+    [
+     "europe",
+     "european",
+     "eu ",
+     "ttf",
+     "gas",
+     "lng",
+     "netherlands",
+     "germany",
+     "france",
+     "italy",
+     "spain",
+     "nord stream",
+     "ukraine transit"
+    ]
+   ]
+  },
+  "grain_food": {
+   "label": "粮食与农产品（黑海/出口）",
+   "require_all": [
+    [
+     "grain",
+     "wheat",
+     "corn",
+     "maize",
+     "barley",
+     "sunflower",
+     "fertiliz",
+     "harvest",
+     "crop",
+     "export corridor",
+     "corridor",
+     "food security",
+     "food price",
+     "grain deal",
+     "silk route",
+     "blockade",
+     "shipments of grain",
+     "agricultural export"
+    ],
+    [
+     "ukraine",
+     "black sea",
+     "grain",
+     "wheat",
+     "corn",
+     "crop",
+     "harvest",
+     "food",
+     "fertilizer",
+     "odessa",
+     "danube",
+     "constanta"
+    ]
+   ]
+  },
+  "regional_assets": {
+   "label": "地区资产（汇率/股债）",
+   "require_all": [
+    [
+     "ruble",
+     "rouble",
+     "hryvnia",
+     "exchange rate",
+     "depreciat",
+     "devalu",
+     "currency",
+     "stock market",
+     "moscow exchange",
+     "index",
+     "shares",
+     "bond yield",
+     "sovereign",
+     "capital outflow",
+     "key rate",
+     "interest rate",
+     "inflation",
+     "gold",
+     "safe haven",
+     "sell-off",
+     "rally",
+     "record high",
+     "record low"
+    ],
+    [
+     "russia",
+     "russian",
+     "ukraine",
+     "ukrainian",
+     "ruble",
+     "hryvnia",
+     "moscow exchange",
+     "emerging market",
+     "currency",
+     "market",
+     "central bank",
+     "investors",
+     "bond"
+    ]
+   ]
+  }
+ },
+ "flags": {
+  "announced_only": [
+   "announc\\w*",
+   "plan\\w*",
+   "intend\\w*",
+   "propos\\w*",
+   "consider\\w*",
+   "will\\s+(?:cut|halt|raise|ship|supply|impose)",
+   "expected\\s+to",
+   "is\\s+set\\s+to",
+   "prepar\\w*",
+   "could\\s+(?:cut|halt|raise)"
+  ],
+  "confirmed_action": [
+   "struck",
+   "strikes",
+   "damaged",
+   "destroyed",
+   "halted",
+   "suspended",
+   "shut",
+   "sank",
+   "closed",
+   "resumed",
+   "delivered",
+   "arrived",
+   "exported",
+   "loaded",
+   "cut off",
+   "knocked out"
+  ],
+  "price_spike": [
+   "surge\\w*",
+   "jump\\w*",
+   "soar\\w*",
+   "spike\\w*",
+   "rally\\w*",
+   "record high",
+   "climb\\w*",
+   "rose sharply",
+   "highest since"
+  ],
+  "price_fall": [
+   "fall\\w*",
+   "drop\\w*",
+   "slide\\w*",
+   "declin\\w*",
+   "ease\\w*",
+   "retreat\\w*",
+   "record low",
+   "lowest since",
+   "slump\\w*"
+  ]
+ },
+ "stance": {
+  "escalate": [
+   "tighten",
+   "rise",
+   "ris",
+   "increas",
+   "surge",
+   "spike",
+   "climb",
+   "jump",
+   "record high",
+   "widen",
+   "escalat",
+   "worsen",
+   "boost",
+   "higher",
+   "upward",
+   "supply risk",
+   "disruption",
+   "shortage",
+   "strain",
+   "premium",
+   "surcharge"
+  ],
+  "deescalate": [
+   "ease",
+   "fall",
+   "drop",
+   "declin",
+   "retreat",
+   "slump",
+   "relief",
+   "recover",
+   "stabilis",
+   "narrow",
+   "lower",
+   "downward",
+   "resum",
+   "reopen",
+   "cooling",
+   "abate",
+   "cut",
+   "halt",
+   "paus",
+   "suspend",
+   "delay",
+   "freeze",
+   "slash",
+   "weaken"
+  ]
+ },
+ "entities": {
+  "routes": {
+   "Red Sea / Suez": [
+    "red sea",
+    "suez",
+    "bab el-mandeb",
+    "bab-el-mandeb"
+   ],
+   "Black Sea": [
+    "black sea",
+    "kerch",
+    "bosphorus",
+    "danube"
+   ],
+   "Hormuz": [
+    "hormuz",
+    "strait of hormuz"
+   ],
+   "Baltic": [
+    "baltic",
+    "baltic sea",
+    "primorsk",
+    "ust-luga"
+   ]
+  },
+  "commodities": {
+   "Crude / Brent": [
+    "crude",
+    "brent",
+    "wti",
+    "oil"
+   ],
+   "Natural gas / TTF": [
+    "gas",
+    "ttf",
+    "lng",
+    "natural gas"
+   ],
+   "Grain": [
+    "grain",
+    "wheat",
+    "corn",
+    "maize",
+    "barley"
+   ],
+   "Fertilizer": [
+    "fertilizer",
+    "fertiliser",
+    "ammonia",
+    "urea"
+   ]
+  },
+  "institutions": {
+   "EU / Commission": [
+    "european commission",
+    "eu ",
+    "brussels"
+   ],
+   "IEA": [
+    "iea",
+    "international energy agency"
+   ],
+   "Central banks": [
+    "central bank",
+    "cbr",
+    "ecb",
+    "fed",
+    "national bank of ukraine"
+   ]
+  }
+ },
+ "baseline": {
+  "note": "基线为**人工录入**快照，随各期滚动更新；本表**不填未核实数字**。当前为空（2026-09-20 建项，尚无经人工核对的基线条目）。",
+  "rows": [],
+  "capability_rows": []
+ },
+ "report": {
+  "title": "冲突冲击·资产传导证据监测",
+  "known_limitations": [
+   "传导链只报**证据**不做因果断言：供应中断/运价/气价/粮价/地区资产五类信号分别列示，不写『因此』。",
+   "价格与运价一律带**单位**（$/桶、€/MWh、$/吨、指数点、bp）；不同单位不可比较，不可相加。",
+   "宣布 ≠ 已发生：flags 标 announced_only 的条目只是**说了要做什么**，confirmed_action 才是已执行的动作。",
+   "承诺 ≠ 交付：运力/保险/援助类数字若出现，承诺额与已交付额分开标注，两者不可相加。",
+   "战争险费率为**个案报价**（船/航次/船旗而异），公开报道只能给区间或个案，不能当市场均价。",
+   "gnews 5 通道依赖代理出口可达 google：2026-09-20 08:40 起该出口被限流 502，断连期窗口不完整，出口恢复自动回补。",
+   "新华社首页解析**只有标题**（无摘要），因此该源只按标题判定，正文口径不参与。"
+  ]
+ },
+ "glossary": {
+  "ru": {
+   "нефть": "石油",
+   "газ": "天然气",
+   "экспорт": "出口",
+   "рубль": "卢布",
+   "курс": "汇率",
+   "бюджет": "预算",
+   "НПЗ": "炼油厂",
+   "порт": "港口",
+   "танкер": "油轮",
+   "трубопровод": "管道",
+   "санкции": "制裁",
+   "удар": "打击",
+   "добыча": "开采/产量",
+   "цена": "价格",
+   "Минфин": "财政部",
+   "ЦБ": "央行",
+   "Центробанк": "中央银行",
+   "Минэнерго": "能源部",
+   "Газпром": "俄气",
+   "Роснефть": "俄油",
+   "Лукойл": "卢克石油",
+   "инфляция": "通胀"
+  },
+  "uk": {
+   "Україна": "乌克兰",
+   "зерно": "粮食",
+   "експорт": "出口",
+   "порт": "港口",
+   "енергетика": "能源",
+   "Збройні сили": "武装部队",
+   "допомога": "援助"
+  }
+ }
+}

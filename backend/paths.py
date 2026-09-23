@@ -11,6 +11,11 @@ def collector_source_root() -> Path:
     return project_root() / "collectors"
 
 
+def knowledge_root() -> Path:
+    configured = os.getenv("KNOWLEDGE_ROOT")
+    return Path(configured) if configured else project_root() / "knowledge"
+
+
 def collector_data_root() -> Path:
     configured = os.getenv("COLLECTOR_DATA_ROOT")
     return Path(configured) if configured else project_root() / "data" / "collector-output"
@@ -23,4 +28,3 @@ def collector_read_root() -> Path:
     runtime = collector_data_root()
     recognizable = any(runtime.glob("*/output/ALL-records.jsonl")) or any(runtime.glob("*/output/geo-v6.json")) or (runtime / "taco-monitor/output/taco-latest.csv").is_file()
     return runtime if recognizable else project_root() / "examples" / "demo-data"
-

@@ -1,0 +1,926 @@
+{
+ "parse_ver": 1,
+ "schema_ver": 1,
+ "window_days": 30,
+ "max_age_days": 45,
+ "per_source_max": 200,
+ "summary_max_chars": 1200,
+ "request_timeout": 30,
+ "min_interval_per_host": 1.2,
+ "prune_after_days": 365,
+ "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+ "sources": [
+  {
+   "id": "whitehouse-actions",
+   "url": "https://www.whitehouse.gov/presidential-actions/feed/",
+   "tier": "T1",
+   "publisher": "White House (EN)",
+   "enabled": true,
+   "note": "总统行动（行政令/特使任命/对俄乌决定一手），2026-09-19 实测 200/rss 30 条 fresh 09-18"
+  },
+  {
+   "id": "whitehouse-news",
+   "url": "https://www.whitehouse.gov/news/feed/",
+   "tier": "T1",
+   "publisher": "White House (EN)",
+   "enabled": true,
+   "note": "白宫新闻（特使动态/会谈通报一手），2026-09-19 实测 200/rss 30 条；/feed/ 404 已留档"
+  },
+  {
+   "id": "un-news",
+   "url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml",
+   "tier": "T1",
+   "publisher": "UN News (EN)",
+   "enabled": true,
+   "note": "联合国新闻（安理会/秘书长斡旋一手），2026-09-19 实测 200/rss 30 条"
+  },
+  {
+   "id": "kremlin-en",
+   "url": "http://en.kremlin.ru/feeds/news",
+   "tier": "T1",
+   "publisher": "Kremlin (EN)",
+   "enabled": true,
+   "note": "克里姆林宫英文（俄方官方立场/谈判授权一手），2026-09-19 实测 200/rss 20 条 fresh 09-19"
+  },
+  {
+   "id": "crisisgroup",
+   "url": "https://www.crisisgroup.org/rss.xml",
+   "tier": "T2",
+   "publisher": "International Crisis Group",
+   "enabled": true,
+   "note": "危机组织（T2 冲突分析层），2026-09-19 同日同出口在 ukraine-aid-monitor 实测 200/rss"
+  },
+  {
+   "id": "tass",
+   "url": "https://tass.com/rss/v2.xml",
+   "tier": "T3",
+   "publisher": "TASS (EN)",
+   "enabled": true,
+   "note": "塔斯社英文（俄方框架窗口；注意俄方口径），2026-09-19 实测 200/rss 88 条 fresh 09-19"
+  },
+  {
+   "id": "interfax",
+   "url": "https://www.interfax.ru/rss.asp",
+   "tier": "T3",
+   "publisher": "Interfax (RU)",
+   "enabled": true,
+   "note": "国际文传（俄语；俄方官方通报转述快），2026-09-19 实测 200/rss 25 条 fresh 09-19"
+  },
+  {
+   "id": "moscowtimes",
+   "url": "https://www.themoscowtimes.com/rss/news",
+   "tier": "T3",
+   "publisher": "Moscow Times (EN)",
+   "enabled": true,
+   "note": "莫斯科时报英文（俄国内部视角/流亡媒体），2026-09-19 实测 200/rss 50 条 fresh 09-19"
+  },
+  {
+   "id": "euromaidan",
+   "url": "https://euromaidanpress.com/feed/",
+   "tier": "T3",
+   "publisher": "Euromaidan Press (EN)",
+   "enabled": true,
+   "note": "乌克兰立场英文窗口，2026-09-19 实测 200/rss 29 条 fresh 09-18"
+  },
+  {
+   "id": "kyivpost",
+   "url": "https://www.kyivpost.com/feed",
+   "tier": "T3",
+   "publisher": "Kyiv Post (EN)",
+   "enabled": true,
+   "note": "基辅邮报（乌方框架主力；注意乌方口径），2026-09-19 实测 200/rss 100 条 fresh 09-19；/rss 404 已留档"
+  },
+  {
+   "id": "meduza-rss",
+   "url": "https://meduza.io/rss/all",
+   "tier": "T3",
+   "publisher": "Meduza (RU)",
+   "enabled": true,
+   "note": "Meduza 俄语全量（俄语独立窗口；en 路径 404 已留档），2026-09-19 实测 200/rss 30 条 fresh 09-19"
+  },
+  {
+   "id": "anadolu",
+   "url": "https://www.aa.com.tr/en/rss/default?cat=world",
+   "tier": "T3",
+   "publisher": "Anadolu Agency (EN)",
+   "enabled": true,
+   "note": "土耳其安纳多卢通讯社（协调方窗口：土方斡旋/黑海议题），2026-09-19 实测 200/rss 30 条 fresh 09-19"
+  },
+  {
+   "id": "xinhua-home",
+   "url": "https://english.news.cn/home.htm",
+   "type": "html_listing",
+   "link_pattern": "<a[^>]+href=[\"'](https://english\\.news\\.cn/20\\d{6}/[0-9a-f]+/c\\.html)[\"'][^>]*>(.*?)</a>",
+   "date_re": "/(20\\d{6})/",
+   "tier": "T3",
+   "publisher": "Xinhua 新华社英文",
+   "enabled": true,
+   "note": "新华社英文首页列表页（用户指定通道；仅标题无摘要），2026-09-19 实测 200/html 32 链接"
+  },
+  {
+   "id": "chinanews",
+   "url": "https://www.chinanews.com.cn/rss/scroll-news.xml",
+   "tier": "T3",
+   "publisher": "中国新闻网",
+   "enabled": true,
+   "note": "中文即时新闻窗口（涉俄乌中文报道），2026-09-19 实测 200/rss 30 条 fresh 09-19"
+  },
+  {
+   "id": "gn-us-envoy",
+   "url": "https://news.google.com/rss/search?q=(Witkoff+OR+Kellogg+OR+Rubio+OR+%22special+envoy%22)+(Russia+OR+Ukraine)+(talks+OR+meeting+OR+mediation+OR+proposal)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "美特使斡旋通道；依赖代理出口可达 google（2026-09-19 出口 50465 对 google 域全断，断连自动留档，恢复自动回补）"
+  },
+  {
+   "id": "gn-talks",
+   "url": "https://news.google.com/rss/search?q=(Russia+OR+Ukraine)+(peace+talks+OR+negotiations+OR+ceasefire+OR+memorandum)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "俄乌谈判进程通道；出口依赖同上"
+  },
+  {
+   "id": "gn-anchorage",
+   "url": "https://news.google.com/rss/search?q=Anchorage+(framework+OR+memorandum+OR+terms+OR+plan)+(Ukraine+OR+Russia)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "安克雷奇框架通道；出口依赖同上"
+  },
+  {
+   "id": "gn-eu-ua",
+   "url": "https://news.google.com/rss/search?q=(EU+OR+Europe)+(Ukraine)+(peace+OR+talks+OR+%22security+guarantees%22)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "欧盟对和谈态度通道；出口依赖同上"
+  },
+  {
+   "id": "gn-xinhua",
+   "url": "https://news.google.com/rss/search?q=Xinhua+(Ukraine+OR+Russia+OR+peace+OR+talks)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "新华社涉俄乌报道聚合搜索（用户指定）；出口依赖同上"
+  },
+  {
+   "id": "gn-china",
+   "url": "https://news.google.com/rss/search?q=(China+OR+Beijing)+(Russia+OR+Ukraine)+(peace+OR+talks+OR+mediation)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "enabled": true,
+   "note": "中国视角/中方斡旋通道；出口依赖同上"
+  },
+  {
+   "id": "state-rss-page",
+   "url": "https://www.state.gov/rss-page",
+   "tier": "T1",
+   "publisher": "US State Dept",
+   "enabled": false,
+   "note": "2026-09-19 实测 404；国务院一手缺失留档（press-releases/feed 返回 HTML 壳非 feed），经 whitehouse/UN/gnews 覆盖"
+  },
+  {
+   "id": "state-pressrel",
+   "url": "https://www.state.gov/press-releases/feed/",
+   "tier": "T1",
+   "publisher": "US State Dept",
+   "enabled": false,
+   "note": "2026-09-19 实测 200 但返回 221KB HTML（非 feed 壳页，嗅探无 rss 项）"
+  },
+  {
+   "id": "state-brief",
+   "url": "https://www.state.gov/press-briefings/feed/",
+   "tier": "T1",
+   "publisher": "US State Dept",
+   "enabled": false,
+   "note": "2026-09-19 实测 404"
+  },
+  {
+   "id": "whitehouse-root",
+   "url": "https://www.whitehouse.gov/feed/",
+   "tier": "T1",
+   "publisher": "White House",
+   "enabled": false,
+   "note": "2026-09-19 实测 404（presidential-actions/feed 与 news/feed 可用）"
+  },
+  {
+   "id": "ua-president",
+   "url": "https://www.president.gov.ua/en/rss",
+   "tier": "T1",
+   "publisher": "President of Ukraine",
+   "enabled": false,
+   "note": "2026-09-19 实测 403（/rss 同 403；疑 WAF）；乌克兰总统府一手缺失留档，经 kyivpost/euromaidan/gnews 覆盖"
+  },
+  {
+   "id": "ua-president2",
+   "url": "https://www.president.gov.ua/rss",
+   "tier": "T1",
+   "publisher": "President of Ukraine",
+   "enabled": false,
+   "note": "2026-09-19 实测 403（同上）"
+  },
+  {
+   "id": "ua-mfa",
+   "url": "https://mfa.gov.ua/en/rss",
+   "tier": "T1",
+   "publisher": "Ukraine MFA",
+   "enabled": false,
+   "note": "2026-09-19 实测 403（/rss 同 403）"
+  },
+  {
+   "id": "ua-mfa2",
+   "url": "https://mfa.gov.ua/rss",
+   "tier": "T1",
+   "publisher": "Ukraine MFA",
+   "enabled": false,
+   "note": "2026-09-19 实测 403（同上）"
+  },
+  {
+   "id": "eeas",
+   "url": "https://www.eeas.europa.eu/rss.xml",
+   "tier": "T1",
+   "publisher": "EEAS (EU)",
+   "enabled": false,
+   "note": "2026-09-19 实测 200 但返回 40KB HTML（JS 壳非 feed）；欧盟外交署一手缺失留档"
+  },
+  {
+   "id": "nato-rss",
+   "url": "https://www.nato.int/cps/en/natohq/rss.xml",
+   "tier": "T1",
+   "publisher": "NATO",
+   "enabled": false,
+   "note": "2026-09-19 实测 404（news_feed.rss 同 404）"
+  },
+  {
+   "id": "meduza-en",
+   "url": "https://meduza.io/en/rss",
+   "tier": "T3",
+   "publisher": "Meduza (EN)",
+   "enabled": false,
+   "note": "2026-09-19 实测 404（/rss/all 与 /en/rss/all、/en/feed 同 404；仅俄语版可用）"
+  },
+  {
+   "id": "kyivpost-rss",
+   "url": "https://www.kyivpost.com/rss",
+   "tier": "T3",
+   "publisher": "Kyiv Post",
+   "enabled": false,
+   "note": "2026-09-19 实测 404（/feed 可用）"
+  },
+  {
+   "id": "pravda-ua",
+   "url": "https://www.pravda.com.ua/eng/rss/",
+   "tier": "T3",
+   "publisher": "Ukrainska Pravda (EN)",
+   "enabled": false,
+   "note": "2026-09-19 实测 403（疑 WAF）"
+  },
+  {
+   "id": "dailysabah",
+   "url": "https://www.dailysabah.com/rssFeed/50?en",
+   "tier": "T3",
+   "publisher": "Daily Sabah (EN)",
+   "enabled": false,
+   "note": "2026-09-19 实测 status 0（连接失败）；土耳其窗口经 anadolu 覆盖"
+  },
+  {
+   "id": "turkey-mfa",
+   "url": "https://www.mfa.gov.tr/en.mfa-rss.en.mfa",
+   "tier": "T1",
+   "publisher": "Türkiye MFA",
+   "enabled": false,
+   "note": "2026-09-19 实测 200 但返回 64KB HTML（非 feed）；土耳其官方一手缺失留档，经 anadolu 覆盖"
+  },
+  {
+   "id": "un-seccon",
+   "url": "https://press.un.org/en/rss/press-releases.xml",
+   "tier": "T1",
+   "publisher": "UN Press",
+   "enabled": false,
+   "note": "2026-09-19 实测 404（安理会新闻稿一手缺失，经 un-news 覆盖）"
+  },
+  {
+   "id": "europa-ec",
+   "url": "https://ec.europa.eu/commission/presscorner/api/documents?language=en",
+   "tier": "T1",
+   "publisher": "European Commission",
+   "enabled": false,
+   "note": "2026-09-19 实测 400"
+  },
+  {
+   "id": "globaltimes",
+   "url": "https://www.globaltimes.cn/rss/outbrain.xml",
+   "tier": "T3",
+   "publisher": "Global Times 环球时报英文版",
+   "enabled": false,
+   "note": "2026-09-19 复核实测**停用**：rss/outbrain.xml 为推荐/常青内容流（50 条横跨 2025-11~2026-08，无新闻时效性），content/world/rss.xml/app 等 6 个新闻 RSS 变体路径全部连接失败；本轮运行抓到 50 条但全部被时效过滤正确排除（0 进桶）。中国官媒窗口由 cgtn-world（实测 48/50 条在 3 日内）承担"
+  },
+  {
+   "id": "cgtn-world",
+   "url": "https://www.cgtn.com/subscribe/rss/section/world.xml",
+   "tier": "T3",
+   "publisher": "CGTN 中国环球电视网",
+   "enabled": true,
+   "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）"
+  }
+ ],
+ "buckets": {
+  "us_envoy": {
+   "label": "美国特使与斡旋动向",
+   "require_all": [
+    [
+     "envoy",
+     "special envoy",
+     "special representative",
+     "witkoff",
+     "kellogg",
+     "rubio",
+     "delegation",
+     "shuttle diplomat",
+     "rx:\\bwitkoff\\b",
+     "rx:\\bkellogg\\b",
+     "rx:\\brubio\\b",
+     "спецпредставител",
+     "rx:\\bпосредник\\w*"
+    ],
+    [
+     "mediat",
+     "meeting",
+     "meet",
+     "talks",
+     "visit",
+     "travel",
+     "trip",
+     "hosted",
+     "proposal",
+     "plan",
+     "framework",
+     "rx:\\bvisit\\w*",
+     "визит",
+     "встреч"
+    ],
+    [
+     "russia",
+     "russian",
+     "moscow",
+     "kremlin",
+     "putin",
+     "ukraine",
+     "ukrainian",
+     "kyiv",
+     "kiev",
+     "zelensk",
+     "rx:\\bruss\\w*",
+     "rx:\\bmoscow\\b",
+     "rx:\\bukrain\\w*",
+     "росси",
+     "украин",
+     "москв",
+     "киев"
+    ]
+   ]
+  },
+  "talks_process": {
+   "label": "谈判进程与停火安排",
+   "require_all": [
+    [
+     "peace talks",
+     "peace plan",
+     "peace agreement",
+     "negotiation",
+     "negotiat",
+     "ceasefire",
+     "truce",
+     "memorandum",
+     "round of talks",
+     "rx:\\bпереговор\\w*",
+     "rx:\\bперемири\\w*",
+     "rx:\\bурегулир\\w*",
+     "peace deal",
+     "peace settlement",
+     "pact"
+    ],
+    [
+     "russia",
+     "russian",
+     "moscow",
+     "kremlin",
+     "putin",
+     "ukraine",
+     "ukrainian",
+     "kyiv",
+     "kiev",
+     "zelensk",
+     "rx:\\bruss\\w*",
+     "rx:\\bukrain\\w*",
+     "росси",
+     "украин"
+    ]
+   ]
+  },
+  "eu_stance": {
+   "label": "欧盟对和谈的态度",
+   "require_all": [
+    [
+     "european union",
+     "brussels",
+     "european council",
+     "european commission",
+     "von der leyen",
+     "kallas",
+     "member state",
+     "european leaders",
+     "european officials",
+     "european support",
+     "rx:\\beu\\b"
+    ],
+    [
+     "peace",
+     "talks",
+     "negotiat",
+     "ceasefire",
+     "security guarantee",
+     "territorial",
+     "summit",
+     "mediat",
+     "peace deal",
+     "peace settlement",
+     "sanction"
+    ]
+   ]
+  },
+  "ua_stance": {
+   "label": "乌克兰对和谈的态度",
+   "require_all": [
+    [
+     "ukraine",
+     "ukrainian",
+     "kyiv",
+     "kiev",
+     "zelensk",
+     "yermak",
+     "ermak",
+     "umerov",
+     "rx:\\bukrain\\w*",
+     "rx:\\bzelensk\\w*",
+     "украин",
+     "киев"
+    ],
+    [
+     "talks",
+     "negotiat",
+     "peace",
+     "ceasefire",
+     "concession",
+     "territory",
+     "territorial",
+     "sovereignty",
+     "capitulation",
+     "compromise",
+     "land swap",
+     "surrender",
+     "memorandum",
+     "rx:\\bconcess\\w*",
+     "rx:\\bуступ\\w*",
+     "peace deal",
+     "peace settlement"
+    ]
+   ]
+  },
+  "anchorage": {
+   "label": "安克雷奇框架（是否回到该框架）",
+   "require_all": [
+    [
+     "rx:\\banchorage\\b"
+    ],
+    [
+     "framework",
+     "terms",
+     "memorandum",
+     "agreement",
+     "summit",
+     "understanding",
+     "resume",
+     "return",
+     "basis",
+     "proposal",
+     "talks",
+     "deal",
+     "plan",
+     "format",
+     "rx:\\bframework\\b"
+    ]
+   ]
+  },
+  "china_xinhua": {
+   "label": "中国视角（新华社/中方斡旋）",
+   "require_all": [
+    [
+     "china",
+     "chinese",
+     "beijing",
+     "xinhua",
+     "wang yi",
+     "xi jinping",
+     "中国",
+     "中方",
+     "新华社"
+    ],
+    [
+     "eu",
+     "europe",
+     "european",
+     "russia",
+     "ukraine",
+     "peace",
+     "talks",
+     "sanction",
+     "欧洲",
+     "欧盟",
+     "俄罗斯",
+     "乌克兰",
+     "rx:\\bruss\\w*",
+     "rx:\\bukrain\\w*"
+    ],
+    [
+     "ukraine",
+     "ukrainian",
+     "talks",
+     "kyiv",
+     "zelensk",
+     "rx:\\bukrain\\w*",
+     "俄乌",
+     "停火",
+     "和谈",
+     "peace talks",
+     "peace plan",
+     "mediation",
+     "乌克兰",
+     "调停"
+    ]
+   ]
+  }
+ },
+ "flags": {
+  "envoy_travel": [
+   "rx:\\b(envoy|delegation|witkoff|kellogg|rubio|special\\s+representative)\\w*\\s+(visit\\w*|travel\\w*|met|meeting|arriv\\w*|fly\\w*|trip)",
+   "rx:\\bvisit\\w*\\s+by\\s+(the\\s+)?(envoy|delegation)",
+   "rx:\\b(arriv\\w*|fly\\w*)\\s+to\\s+\\w+\\s+(the\\s+)?(envoy|delegation)?",
+   "shuttle diplomac\\w*",
+   "delegation arrives",
+   "delegation visited",
+   "envoy arrives",
+   "envoy visited"
+  ],
+  "willingness_positive": [
+   "willing",
+   "ready to",
+   "open to",
+   "prepared to",
+   "expressed readiness",
+   "готов",
+   "agreed to meet",
+   "agreed to talk",
+   "agreed to resume"
+  ],
+  "willingness_negative": [
+   "refus\\w*",
+   "unwilling",
+   "walk(ing)? away",
+   "boycott",
+   "reject\\w*",
+   "no plans",
+   "distanc\\w*",
+   "отказ"
+  ],
+  "anchorage_return": [
+   "anchorage framework",
+   "anchorage terms",
+   "anchorage basis",
+   "anchorage format",
+   "anchorage understanding",
+   "anchorage memorandum",
+   "anchorage agreement",
+   "anchorage summit",
+   "return to anchorage",
+   "resume anchorage"
+  ],
+  "memorandum_draft": [
+   "memorandum",
+   "draft agreement",
+   "draft plan",
+   "draft proposal",
+   "rx:\\bмеморандум\\w*"
+  ],
+  "ceasefire_call": [
+   "ceasefire",
+   "truce",
+   "humanitarian pause",
+   "cessation of hostilities",
+   "rx:\\bперемири\\w*"
+  ]
+ },
+ "stance": {
+  "escalate": [
+   "reject\\w*",
+   "refus\\w*",
+   "boycott",
+   "walk(ing)? away",
+   "dead( ?-)?end",
+   "collaps\\w*",
+   "stall\\w*",
+   "hard( ?-)?line",
+   "ultimatum",
+   "offensiv",
+   "escalat\\w*",
+   "intensif\\w*",
+   "unacceptable",
+   "capitulation",
+   "отказ",
+   "rx:\\bсрыв\\w*"
+  ],
+  "deescalate": [
+   "compromise",
+   "concession",
+   "willing",
+   "ready to",
+   "resume talks",
+   "progress",
+   "breakthrough",
+   "ceasefire",
+   "truce",
+   "agree\\w*",
+   "memorandum",
+   "security guarantees",
+   "land swap",
+   "territorial concession",
+   "rx:\\bуступ\\w*",
+   "готов"
+  ]
+ },
+ "entities": {
+  "people": {
+   "Trump": [
+    "trump"
+   ],
+   "Witkoff": [
+    "witkoff"
+   ],
+   "Rubio": [
+    "rubio"
+   ],
+   "Kellogg": [
+    "kellogg"
+   ],
+   "Zelensky": [
+    "zelensk"
+   ],
+   "Putin": [
+    "putin"
+   ],
+   "Umerov": [
+    "umerov"
+   ],
+   "Yermak": [
+    "yermak",
+    "ermak"
+   ],
+   "Medinsky": [
+    "medinsky",
+    "medinskiy"
+   ],
+   "Lavrov": [
+    "lavrov"
+   ],
+   "Erdogan": [
+    "erdogan",
+    "erdoğan"
+   ],
+   "von der Leyen": [
+    "von der leyen"
+   ],
+   "Kallas": [
+    "kaja kallas",
+    "rx:\\bkallas\\b"
+   ]
+  },
+  "institutions": {
+   "Kremlin": [
+    "rx:\\bkremlin\\b"
+   ],
+   "White House": [
+    "white house"
+   ],
+   "European Commission": [
+    "european commission"
+   ],
+   "European Council": [
+    "european council"
+   ],
+   "NATO": [
+    "rx:\\bnato\\b"
+   ],
+   "United Nations": [
+    "united nations",
+    "rx:\\bun\\b security council"
+   ]
+  },
+  "frameworks": {
+   "Anchorage": [
+    "rx:\\banchorage\\b"
+   ]
+  }
+ },
+ "baseline": {
+  "note": "结构性基线（2026-09-19 首次运行录入；均为可核验的结构性事实或明确标注口径的历史事件；动态谈判进展一律以窗口内报道+来源为准）",
+  "rows": [
+   {
+    "date": "2025-08-15",
+    "event": "安克雷奇美俄峰会（阿拉斯加，特朗普×普京；无签署协议；后续谈判条款清单由此得名『安克雷奇框架』）",
+    "tier": "T1",
+    "source": "白宫/克里姆林宫官方通报"
+   },
+   {
+    "date": "2025-11/12",
+    "event": "28 点草案 → 日内瓦磋商 → 收敛为约 19 点『安克雷奇框架』条款清单（美乌磋商产物；口径：条款清单≠已签署协议，全文未公开）",
+    "tier": "T2",
+    "source": "美乌双方媒体通报汇总"
+   },
+   {
+    "date": "2022-02-24",
+    "event": "俄乌全面战争起点（结构性基线；2025 年后谈判多轨并行：伊斯坦布尔直谈/美特使穿梭/第三方斡旋）",
+    "tier": "T1",
+    "source": "UN/双方官方记录"
+   },
+   {
+    "date": "1994-12-05",
+    "event": "布达佩斯备忘录（乌克兰弃核换取安全保证；安全保证讨论的历史口径常被引用）",
+    "tier": "T1",
+    "source": "CSCE/UN 注册文本"
+   }
+  ],
+  "capability_rows": [
+   {
+    "date": "2026-09-19",
+    "event": "意愿≠行动口径：willingness_positive/negative 只记录报道中的意愿表态；特使出行（envoy_travel）是可核验行动，两者分层阅读",
+    "tier": "T2",
+    "source": "口径说明"
+   },
+   {
+    "date": "2026-09-19",
+    "event": "安克雷奇框架口径：条款清单全文未公开，媒体报道的『回到安克雷奇』指以该清单为基础重启谈判；具体条款数字（领土/军力上限）均系转述，不可当披露值",
+    "tier": "T2",
+    "source": "口径说明"
+   },
+   {
+    "date": "2026-09-19",
+    "event": "双方口径对立：TASS/Interfax（俄方框架）与 Kyiv Post/Euromaidan（乌方框架）对同一事件表述相反，逐条标 publisher，禁互相平均",
+    "tier": "T2",
+    "source": "口径说明"
+   },
+   {
+    "date": "2026-09-19",
+    "event": "斡旋多轨并行：伊斯坦布尔直谈/美特使穿梭/第三方（土耳其/海湾/梵蒂冈）各自独立记录，禁混为单一轨道；eu_stance/ua_stance 桶与 talks_process 重叠命中为设计（多视角）",
+    "tier": "T2",
+    "source": "口径说明"
+   }
+  ]
+ },
+ "report": {
+  "title": "俄乌外交斡旋监测（美特使/谈判进程/欧盟与乌克兰态度/安克雷奇框架/中国视角）",
+  "known_limitations": [
+   "意愿表达≠行动：willingness_positive/negative 是意愿旗标；特使出行（envoy_travel）为可核验动作；『愿意谈』与『实际派特使』分层阅读，不外推谈判结果。",
+   "安克雷奇框架全文未公开：媒体报道的条款内容（领土安排/军力上限/安全保证）均为二手转述，不可作为披露值引用；本监测只记录『是否回到该框架』的方向性报道。",
+   "俄乌双方官方口径对立（TASS/Interfax/kremlin vs Kyiv Post/Euromaidan/白宫）：同一事件表述相反，逐条标 publisher 与 tier，禁互相平均或合并计数。",
+   "乌克兰官方一手缺失：president.gov.ua 与 mfa.gov.ua 本出口 403（疑 WAF）已留档；乌方立场经 kyivpost/euromaidan/gnews 覆盖。",
+   "美国国务院一手缺失：state.gov 各 feed 路径为 404 或 HTML 壳已留档；美方立场经 whitehouse/UN/gnews 覆盖。",
+   "gnews 6 通道依赖代理出口可达 google：2026-09-19 出口 50465 对 google 域全断，断连期覆盖不完整，恢复后自动回补。",
+   "中文窗口（新华社首页仅标题无摘要；中新社俄语源）桶命中依赖标题词；新华社深度涉俄乌报道依赖 gn-xinhua 断连通道。",
+   "eu_stance/ua_stance 桶与 talks_process 存在重叠命中（同一条目可进多桶），为多视角设计；计数时按桶分列，勿跨桶加总。",
+   "俄语源匹配用前缀词干启发式（Interfax/Meduza 为俄语），屈折覆盖不保证完整；漏检可能，靠多源交叉缓解。",
+   "斡旋多轨并行（伊斯坦布尔/美特使/第三方），本监测按条目原文轨道记录，未做轨道归并；跨轨道混引时注意来源归属。"
+  ]
+ },
+ "glossary": {
+  "ru": {
+   "Государственная дума": "国家杜马（议会下院）",
+   "депутат": "议员",
+   "выборы": "选举",
+   "голосование": "投票",
+   "бюджет": "预算",
+   "дефицит": "赤字",
+   "профицит": "盈余",
+   "нефть": "石油",
+   "нефтепродукт": "石油产品",
+   "газ": "天然气",
+   "экспорт": "出口",
+   "импорт": "进口",
+   "рубль": "卢布",
+   "курс": "汇率",
+   "инфляция": "通胀",
+   "цена": "价格",
+   "добыча": "开采/产量",
+   "баррель": "桶",
+   "Минфин": "财政部",
+   "Минобороны": "国防部",
+   "Минэкономразвития": "经济发展部",
+   "Центробанк": "中央银行",
+   "ЦБ": "央行",
+   "Росстат": "国家统计局",
+   "Правительство": "政府",
+   "Кремль": "克里姆林宫（俄总统府）",
+   "президент": "总统",
+   "Путин": "普京",
+   "Мишустин": "米舒斯京",
+   "Лавров": "拉夫罗夫",
+   "Песков": "佩斯科夫",
+   "Белоусов": "别洛乌索夫",
+   "санкции": "制裁",
+   "мобилизация": "动员",
+   "армия": "军队",
+   "ракета": "导弹",
+   "беспилотник": "无人机",
+   "дроны": "无人机",
+   "удар": "打击",
+   "обстрел": "炮击",
+   "фронт": "前线",
+   "переговоры": "谈判",
+   "соглашение": "协议",
+   "прекращение огня": "停火",
+   "мирный": "和平的",
+   "зарплата": "工资",
+   "безработица": "失业",
+   "рабочая сила": "劳动力",
+   "кадровый дефицит": "用工/人才缺口",
+   "ВВП": "GDP（国内生产总值）",
+   "налог": "税",
+   "тариф": "关税/费率",
+   "порт": "港口",
+   "танкер": "油轮",
+   "трубопровод": "管道",
+   "Газпром": "俄气（俄罗斯天然气工业股份公司）",
+   "Роснефть": "俄油（俄罗斯石油公司）",
+   "Лукойл": "卢克石油",
+   "НПЗ": "炼油厂",
+   "ОПЕК": "OPEC（石油输出国组织）",
+   "Украина": "乌克兰",
+   "Киев": "基辅",
+   "Москва": "莫斯科",
+   "ВСУ": "乌克兰武装部队",
+   "СВО": "「特别军事行动」（俄方对俄乌战争的官方称谓）",
+   "Госдума": "国家杜马",
+   "Совет Федерации": "联邦委员会（议会上院）",
+   "законопроект": "法律草案",
+   "закон": "法律",
+   "указ": "总统令",
+   "заявление": "声明",
+   "заявил": "表示/声明",
+   "сообщил": "通报",
+   "поставки": "供应/交付",
+   "вооружение": "武器装备",
+   "оборона": "国防",
+   "США": "美国"
+  },
+  "uk": {
+   "Україна": "乌克兰",
+   "Зеленський": "泽连斯基",
+   "Верховна Рада": "最高拉达（乌克兰议会）",
+   "Кабінет Міністрів": "部长内阁",
+   "Міністерство оборони": "国防部",
+   "Збройні сили": "武装部队",
+   "допомога": "援助",
+   "зброя": "武器",
+   "постачання": "供应/交付",
+   "санкції": "制裁",
+   "переговори": "谈判",
+   "припинення вогню": "停火",
+   "обстріл": "炮击",
+   "ракета": "导弹",
+   "безпілотник": "无人机",
+   "дрон": "无人机",
+   "бюджет": "预算",
+   "дефіцит": "赤字",
+   "експорт": "出口",
+   "зерно": "粮食",
+   "врожай": "收成",
+   "порт": "港口",
+   "мобілізація": "动员",
+   "енергетика": "能源",
+   "електроенергія": "电力",
+   "АЕС": "核电站",
+   "ППО": "防空",
+   "позика": "贷款",
+   "кредит": "贷款/信贷",
+   "грант": "赠款",
+   "МВФ": "IMF（国际货币基金组织）",
+   "ЄС": "EU（欧盟）",
+   "НАТО": "北约",
+   "Київ": "基辅",
+   "Харків": "哈尔科夫",
+   "Одеса": "敖德萨",
+   "Дніпро": "第聂伯罗"
+  }
+ }
+}
