@@ -23,7 +23,7 @@ npm.cmd run build
 
 ## 接入现有数据
 
-默认读取 `C:/Users/chongwu26001/WorkBuddy/2026-09-17-15-16-18`，不执行或修改原爬虫。可在 `.env` 修改 `CRAWLER_ROOT`。点击“更新快照”重新读取：
+默认读取项目内 `data/collector-output`，不再依赖 WorkBuddy 绝对路径。可在 `.env` 修改 `CRAWLER_ROOT`。点击“更新快照”重新读取：
 
 - `naval-monitor/output/ALL-records.jsonl`
 - `defense-spend-monitor/output/ALL-records.jsonl` 及最新日期目录下的 `metrics-*.json`
@@ -44,6 +44,17 @@ npm.cmd run build
 ## 新爬虫扩展
 
 在任何子项目下输出 `output/geo-v6.json`，使用 `geo.v6/1` 协议。参见 [接入协议](docs/adapter-contract.md) 及 `examples/geo-v6.example.json`。示例是协议测试数据，默认不导入真实快照。
+
+项目内置 19 个采集器的统一注册表。常用命令：
+
+```powershell
+python scripts/collect.py --list
+python scripts/collect.py --id xinhua-monitor
+python scripts/collect.py --topic ukraine
+python scripts/collect.py --all
+```
+
+完整运行数据保存在 `data/collector-output` 并由 Git 忽略；`examples/demo-data` 是克隆仓库后的有限演示快照。公开发布前运行 `python scripts/audit_repository.py`，检查环境文件、疑似密钥、个人绝对路径和超大文件。本项目尚未选择开源许可证，公开仓库前需由仓库所有者确定。
 
 ## 验证
 
