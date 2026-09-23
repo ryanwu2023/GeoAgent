@@ -26,5 +26,5 @@ def collector_read_root() -> Path:
     if configured:
         return Path(configured)
     runtime = collector_data_root()
-    recognizable = any(runtime.glob("*/output/ALL-records.jsonl")) or any(runtime.glob("*/output/geo-v6.json")) or (runtime / "taco-monitor/output/taco-latest.csv").is_file()
+    recognizable = any(runtime.glob("*/output/ALL-records.jsonl")) or any(runtime.glob("*/output/LATEST-records.jsonl")) or any(runtime.glob("*/output/geo-v6.json")) or (runtime / "taco-monitor/output/taco-latest.csv").is_file()
     return runtime if recognizable else project_root() / "examples" / "demo-data"

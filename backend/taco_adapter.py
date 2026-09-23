@@ -27,13 +27,14 @@ def _number(value: str | None) -> float | None:
         return None
 
 
-def load_taco(root: Path, records: dict, observations: list, sources: list, read=None) -> None:
+def load_taco(root: Path, records: dict, observations: list, sources: list, read=None, manifests=None) -> None:
     output = root / "taco-monitor" / "output"
     csv_file = output / "taco-latest.csv"
     if not csv_file.is_file():
         sources.append({"id": "taco-monitor", "monitor": "taco-monitor", "name": "TACO资产压力监测", "state": "not_connected", "count": 0, "latest": None})
         return
     csv_text = read(csv_file) if read else csv_file.read_text(encoding="utf-8-sig")
+    raw_ref = manifests[-1]["archive"] if manifests else None
     rows = list(csv.DictReader(io.StringIO(csv_text)))
     status_file = output / "_source_status.json"
     status = {}
@@ -50,7 +51,7 @@ def load_taco(root: Path, records: dict, observations: list, sources: list, read
         "publisher": "项目内公开数据合成",
         "title": "TACO压力指数及公开输入序列",
         "text": "五项公开输入经标准化等权合成；指数用于观察资产压力，不是事件概率或收益预测。",
-        "url": "",
+        "url": "/api/archive/" + raw_ref if raw_ref else "",
         "published_at": status.get("run_date"),
         "fetched_at": status.get("run_date"),
         "first_seen": status.get("run_date"),
@@ -66,7 +67,7 @@ def load_taco(root: Path, records: dict, observations: list, sources: list, read
         "points": [],
         "origin_id": "taco-monitor",
         "adapters": ["taco-monitor"],
-        "raw_refs": [],
+        "raw_refs": [raw_ref] if raw_ref else [],
         "upstream_extractions": [],
     }
     for column, (name, unit, method) in SERIES.items():
@@ -112,4 +113,3 @@ def load_taco(root: Path, records: dict, observations: list, sources: list, read
         "checked_at": status.get("run_date"),
         "upstream": [{"id": key, "status": value.get("status"), "url": value.get("url")} for key, value in status_rows.items()],
     })
-

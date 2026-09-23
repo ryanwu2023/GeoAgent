@@ -27,3 +27,14 @@ def test_taco_adapter_discards_non_finite_values():
         if point["value"] is not None
     )
 
+
+def test_taco_methodology_record_links_frozen_raw_file():
+    records, observations, sources, manifests = {}, [], [], []
+
+    def read(path):
+        manifests.append({"archive": "frozen-taco.csv"})
+        return path.read_text(encoding="utf-8-sig")
+
+    load_taco(FIXTURE, records, observations, sources, read, manifests)
+    assert records["taco-methodology"]["raw_refs"] == ["frozen-taco.csv"]
+    assert records["taco-methodology"]["url"] == "/api/archive/frozen-taco.csv"

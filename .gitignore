@@ -16,6 +16,7 @@ collectors/**/logs/
 collectors/**/_probe*/
 collectors/**/_probe*
 collectors/**/.probe/
+collectors/**/state/
 collectors/**/*.bak*
 *.sqlite
 *.sqlite3

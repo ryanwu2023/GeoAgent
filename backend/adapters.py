@@ -174,7 +174,7 @@ def load_bundle(root: Path):
     load_finance(root,read,manifests,records,observations,sources)
 
     from .taco_adapter import load_taco
-    load_taco(root, records, observations, sources, read)
+    load_taco(root, records, observations, sources, read, manifests)
 
     # Extension contract: any child project can publish output/geo-v6.json.
     for file in sorted(root.glob("*/output/geo-v6.json")):

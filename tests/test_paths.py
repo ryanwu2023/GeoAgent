@@ -22,3 +22,15 @@ def test_knowledge_root_is_repository_local(monkeypatch):
     from backend.paths import knowledge_root, project_root
 
     assert knowledge_root() == project_root() / "knowledge"
+
+
+def test_latest_records_are_recognized_as_runtime_data(monkeypatch, tmp_path):
+    from backend.paths import collector_read_root
+
+    runtime = tmp_path / "runtime"
+    output = runtime / "sample-monitor" / "output"
+    output.mkdir(parents=True)
+    (output / "LATEST-records.jsonl").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("COLLECTOR_DATA_ROOT", str(runtime))
+    monkeypatch.delenv("CRAWLER_ROOT", raising=False)
+    assert collector_read_root() == runtime
