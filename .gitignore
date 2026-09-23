@@ -15,6 +15,7 @@ collectors/**/*.pyc
 collectors/**/logs/
 collectors/**/_probe*/
 collectors/**/_probe*
+collectors/**/.probe/
 collectors/**/*.bak*
 *.sqlite
 *.sqlite3

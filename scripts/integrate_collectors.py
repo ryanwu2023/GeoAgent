@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 
-EXCLUDED_DIRS = {".workbuddy", ".git", "__pycache__", ".pytest_cache", "logs", "_probe", "config-archive"}
+EXCLUDED_DIRS = {".workbuddy", ".git", ".probe", "__pycache__", ".pytest_cache", "logs", "_probe", "config-archive"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log"}
 RESEARCH_FILES = (
     "华泰中东简报.md",
@@ -120,4 +120,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
