@@ -18,5 +18,9 @@ def collector_data_root() -> Path:
 
 def collector_read_root() -> Path:
     configured = os.getenv("CRAWLER_ROOT")
-    return Path(configured) if configured else collector_data_root()
+    if configured:
+        return Path(configured)
+    runtime = collector_data_root()
+    recognizable = any(runtime.glob("*/output/ALL-records.jsonl")) or any(runtime.glob("*/output/geo-v6.json")) or (runtime / "taco-monitor/output/taco-latest.csv").is_file()
+    return runtime if recognizable else project_root() / "examples" / "demo-data"
 
