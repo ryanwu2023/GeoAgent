@@ -8,8 +8,9 @@ from concurrent.futures import ThreadPoolExecutor
 import httpx
 import inspect
 from urllib.request import getproxies
+from backend.paths import collector_data_root
 
-ROOT = Path('C:/Users/chongwu26001/WorkBuddy/2026-09-17-15-16-18/market-context-monitor/output')
+ROOT = collector_data_root() / 'market-context-monitor' / 'output'
 SERIES = [('BAMLH0A0HYM2','hy_oas','美国高收益债期权调整利差','基点',100),
           ('BAMLC0A0CM','ig_oas','美国投资级债期权调整利差','基点',100),
           ('T10YIE','breakeven10_fred','美国十年期盈亏平衡通胀率','%',1),

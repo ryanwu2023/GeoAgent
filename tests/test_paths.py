@@ -1,0 +1,18 @@
+from pathlib import Path
+
+
+def test_default_paths_are_inside_repository(monkeypatch):
+    monkeypatch.delenv("CRAWLER_ROOT", raising=False)
+    monkeypatch.delenv("COLLECTOR_DATA_ROOT", raising=False)
+    from backend.paths import collector_data_root, collector_source_root, project_root
+
+    assert collector_source_root() == project_root() / "collectors"
+    assert collector_data_root() == project_root() / "data" / "collector-output"
+
+
+def test_crawler_root_override_is_preserved(monkeypatch, tmp_path):
+    monkeypatch.setenv("CRAWLER_ROOT", str(tmp_path / "legacy data"))
+    from backend.paths import collector_read_root
+
+    assert collector_read_root() == tmp_path / "legacy data"
+

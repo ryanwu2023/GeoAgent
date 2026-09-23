@@ -7,8 +7,9 @@ from pathlib import Path
 import subprocess
 import sys
 from datetime import datetime, timezone
+from backend.paths import collector_source_root
 
-ROOT=Path('C:/Users/chongwu26001/WorkBuddy/2026-09-17-15-16-18')
+ROOT=collector_source_root()
 OUT=Path(__file__).resolve().parents[1]/'data'/'collection-runs'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')
 
 def main():

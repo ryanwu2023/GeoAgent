@@ -17,6 +17,7 @@ from .adapters import load_bundle
 from .research import filtered_records, metrics, analysis, coverage, answer, create_brief, model_status
 from .catalog import RULE_VERSION
 from .chinese import present_record, present_answer, translation_cache, source_name, start_translation, translation_status, localize_brief_markdown
+from .paths import collector_read_root
 
 def load_env():
     file = ROOT / ".env"
@@ -64,7 +65,7 @@ def validate_range(start, end):
 
 @app.get("/api/status")
 def status():
-    return {"model": model_status(), "translation":translation_status(), "crawler_root": os.getenv("CRAWLER_ROOT", "C:/Users/chongwu26001/WorkBuddy/2026-09-17-15-16-18"), "rule_version": RULE_VERSION, "snapshots": snapshots()}
+    return {"model": model_status(), "translation":translation_status(), "crawler_root": str(collector_read_root()), "rule_version": RULE_VERSION, "snapshots": snapshots()}
 
 @app.post("/api/model/check")
 async def check_model():
