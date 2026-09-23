@@ -1,0 +1,20 @@
+{
+  "schema_version": "geo.v6/1",
+  "name": "协议示例（测试数据，不代表真实事件）",
+  "as_of": "2026-09-18",
+  "records": [{
+    "id": "example-aid-1", "title": "示例：援助交付记录（非真实数据）",
+    "summary": "仅用于说明爬虫字段映射，不用于研究结论。",
+    "link": "https://example.org/aid-example", "source_id": "example",
+    "source_name": "协议示例", "tier": "未分级", "verification": "测试数据",
+    "topics": ["ukraine"], "dimensions": {"ukraine": "aid"},
+    "published": "2026-09-18T00:00:00Z", "fetched_at": "2026-09-18T01:00:00Z"
+  }],
+  "observations": [{
+    "id": "example-delivery", "name": "示例交付金额（非真实数据）",
+    "topic": "ukraine", "dimension": "aid", "unit": "USD", "frequency": "月度",
+    "scope": "示例项目", "method": "实际交付，非承诺或合同", "boundary": "测试数据不能推导真实情景",
+    "source_ids": ["example-aid-1"],
+    "history": [{"date":"2026-07-31","value":100},{"date":"2026-08-31","value":120}]
+  }]
+}

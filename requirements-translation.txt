@@ -1,0 +1,6 @@
+# Optional local Chinese translation; model files are downloaded separately.
+torch>=2.6
+transformers>=4.45,<6
+sentencepiece>=0.2
+sacremoses>=0.1
+ctranslate2>=4.6,<5
