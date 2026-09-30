@@ -7,7 +7,13 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 import httpx
 import inspect
+import sys
 from urllib.request import getproxies
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from backend.paths import collector_data_root
 
 ROOT = collector_data_root() / 'market-context-monitor' / 'output'
