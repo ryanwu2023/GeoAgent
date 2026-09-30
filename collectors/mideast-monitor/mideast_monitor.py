@@ -1008,7 +1008,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
     irq = [r for r in records if "iraq_militia" in r["buckets"]]
     if irq:
         for r in sorted(irq, key=lambda x: x.get("published") or "", reverse=True)[:30]:
-            ents = "、".join(dict.fromkeys(e for g in r["entities"].get("militias", []))) or "—"
+            ents = "、".join(dict.fromkeys(g for g in r["entities"].get("militias", []))) or "—"
             st = STANCE_LABEL.get(r.get("stance"), "—")
             W.append(f"- `{r['published'][:10] if r['published'] else '—'}` "
                      f"[{KIND_LABEL[r['kind']]}·{st}] {r['title']} — 民兵: {ents} "
