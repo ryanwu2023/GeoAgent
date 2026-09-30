@@ -1,8 +1,10 @@
-param([switch]$NoBrowser, [switch]$Build)
+param([switch]$NoBrowser, [switch]$Build, [switch]$NoCrawlers)
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 $statePath = Join-Path $PSScriptRoot 'data\server-process.json'
 $entryPath = Join-Path $PSScriptRoot 'scripts\serve.py'
+$crawlerStatePath = Join-Path $PSScriptRoot 'data\crawler-manager-process.json'
+$crawlerEntryPath = Join-Path $PSScriptRoot 'scripts\crawler_manager.py'
 $url = 'http://127.0.0.1:8000/'
 try {
     $listener = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
@@ -10,7 +12,7 @@ try {
         if (Test-Path -LiteralPath $statePath) {
             $saved = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
             $existing = Get-CimInstance Win32_Process -Filter "ProcessId=$($saved.processId)" -ErrorAction SilentlyContinue
-            if ($existing -and $existing.CommandLine.Contains($entryPath) -and $existing.CreationDate.ToUniversalTime().ToString('o') -eq $saved.createdAt -and $listener.OwningProcess -contains $saved.processId) {
+            if ($existing -and $existing.CommandLine.Contains($entryPath) -and $listener.OwningProcess -contains $saved.processId) {
                 Write-Host "Project is already running: $url"
                 if (-not $NoBrowser) { Start-Process $url }
                 exit 0
@@ -45,6 +47,11 @@ try {
     }
     if (-not $ready) { throw 'Server is starting slowly. See logs; stop.ps1 can stop the tracked process.' }
     Write-Host "Project started: $url"
+    if (-not $NoCrawlers) {
+        $crawlerProcess = Start-Process -FilePath $python -ArgumentList @('-u', ('"' + $crawlerEntryPath + '"')) -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $PSScriptRoot 'crawler-manager.stdout.log') -RedirectStandardError (Join-Path $PSScriptRoot 'crawler-manager.stderr.log') -PassThru
+        @{processId=$crawlerProcess.Id;entry=$crawlerEntryPath;startedAt=(Get-Date).ToUniversalTime().ToString('o')} | ConvertTo-Json | Set-Content -LiteralPath $crawlerStatePath -Encoding UTF8
+        Write-Host "Crawler manager started in background: PID $($crawlerProcess.Id)"
+    }
     Write-Host 'Stop: stop.bat / stop.ps1. Logs: server.stdout.log / server.stderr.log'
     if (-not $NoBrowser) { Start-Process $url }
 } catch { Write-Error $_ -ErrorAction Continue; exit 1 }

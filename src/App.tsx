@@ -23,6 +23,8 @@ import type {
   Brief,
   Evidence,
   Metric,
+  McpPublicConfig,
+  McpTool,
   Status,
   Workspace,
 } from "./types";
@@ -74,6 +76,20 @@ export default function App() {
   const [translating, setTranslating] = useState(false);
   const [checkingModel, setCheckingModel] = useState(false),
     [modelCheck, setModelCheck] = useState("");
+  const [mcpConfig, setMcpConfig] = useState<McpPublicConfig | null>(null),
+    [mcpName, setMcpName] = useState("haifutong"),
+    [mcpUrl, setMcpUrl] = useState(""),
+    [mcpAuthorization, setMcpAuthorization] = useState(""),
+    [mcpVerifyTls, setMcpVerifyTls] = useState(true),
+    [mcpTools, setMcpTools] = useState<McpTool[]>([]),
+    [mcpMessage, setMcpMessage] = useState(""),
+    [mcpBusy, setMcpBusy] = useState(false),
+    [mcpQuery, setMcpQuery] = useState("美伊局势 最新进展"),
+    [mcpTopic, setMcpTopic] = useState<"usiran" | "ukraine">("usiran"),
+    [mcpDimension, setMcpDimension] = useState("regional"),
+    [mcpDateFrom, setMcpDateFrom] = useState(""),
+    [mcpDateTo, setMcpDateTo] = useState(""),
+    [mcpTopK, setMcpTopK] = useState(20);
   const [metricSearch, setMetricSearch] = useState(""),
     [metricGroup, setMetricGroup] = useState("全部");
   const [status, setStatus] = useState<Status | null>(null),
@@ -150,6 +166,27 @@ export default function App() {
       clearInterval(timer);
     };
   }, [status?.translation?.running, sid, topic, dimension, start, end]);
+  useEffect(() => {
+    if (status?.crawler?.state !== "running") return;
+    const timer = setInterval(() => {
+      refreshStatus().then((next) => {
+        if (next.crawler?.state === "completed" && next.snapshots[0]?.id) {
+          setSid(next.snapshots[0].id);
+          setNotice("后台爬虫已完成，新快照已载入");
+        }
+      }).catch(() => {});
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [status?.crawler?.state]);
+  useEffect(() => {
+    if (!sourcesOpen) return;
+    api<McpPublicConfig>("/mcp/config").then((config) => {
+      setMcpConfig(config);
+      setMcpName(config.name || "haifutong");
+      setMcpUrl(config.url || "");
+      setMcpVerifyTls(config.verify_tls);
+    }).catch((e) => setMcpMessage(e.message));
+  }, [sourcesOpen]);
   useEffect(() => {
     refreshStatus()
       .then((s) => {
@@ -251,6 +288,60 @@ export default function App() {
       setError((e as Error).message);
     } finally {
       setImporting(false);
+    }
+  }
+  async function saveMcpConfig() {
+    setMcpBusy(true);
+    setMcpMessage("");
+    try {
+      const config = await api<McpPublicConfig>("/mcp/config", {
+        name: mcpName,
+        url: mcpUrl,
+        authorization: mcpAuthorization,
+        verify_tls: mcpVerifyTls,
+      });
+      setMcpConfig(config);
+      setMcpAuthorization("");
+      setMcpMessage("MCP 配置已保存，Authorization 不会回传到页面");
+      await refreshStatus();
+    } catch (e) {
+      setMcpMessage((e as Error).message);
+    } finally {
+      setMcpBusy(false);
+    }
+  }
+  async function testMcp() {
+    setMcpBusy(true);
+    setMcpMessage("");
+    try {
+      const result = await api<{ok:boolean;message?:string;tools:McpTool[]}>("/mcp/test", {});
+      setMcpTools(result.tools || []);
+      setMcpMessage(result.ok ? `连接成功，发现 ${result.tools.length} 个工具` : result.message || "连接失败");
+    } catch (e) {
+      setMcpMessage((e as Error).message);
+    } finally {
+      setMcpBusy(false);
+    }
+  }
+  async function fetchMcpNews() {
+    setMcpBusy(true);
+    setMcpMessage("");
+    try {
+      const result = await api<{id:string;created:boolean;fetched:number;count:number}>("/mcp/fetch", {
+        query: mcpQuery,
+        topic: mcpTopic,
+        dimension: mcpDimension,
+        top_k: mcpTopK,
+        date_from: mcpDateFrom,
+        date_to: mcpDateTo,
+      });
+      await refreshStatus();
+      setSid(result.id);
+      setMcpMessage(`已获取 ${result.fetched} 条 MCP 新闻并${result.created ? "生成新快照" : "复用已有快照"} · ${result.id.slice(0, 8)}`);
+    } catch (e) {
+      setMcpMessage((e as Error).message);
+    } finally {
+      setMcpBusy(false);
     }
   }
   async function openEvidence(id: string, metric: Metric | null = null) {
@@ -1113,9 +1204,42 @@ export default function App() {
                   </button>
                 </div>
                 <p className="muted">{status?.crawler_root}</p>
-                <div className="alert">
-                  导入成功不代表实时采集正常。下表状态来自快照，不会自动刷新。
+                <div className="button-row source-jumps" aria-label="数据接入快捷入口">
+                  <button onClick={() => document.getElementById("crawler-orchestration")?.scrollIntoView({ behavior: "smooth" })}>后台爬虫</button>
+                  <button onClick={() => document.getElementById("mcp-news-source")?.scrollIntoView({ behavior: "smooth" })}>MCP 新闻源配置</button>
+                  <button onClick={() => document.getElementById("model-connection")?.scrollIntoView({ behavior: "smooth" })}>大模型连接</button>
                 </div>
+                <div className="alert">
+                  覆盖统计来自当前快照；后台爬虫运行状态会自动刷新。导入成功不代表每个外部来源都采集正常。
+                </div>
+                <section className="integration-card" id="crawler-orchestration">
+                  <div className="integration-heading">
+                    <div>
+                      <h3>后台爬虫任务</h3>
+                      <p className="muted">服务启动后按注册顺序逐个运行，完成后自动生成快照。</p>
+                    </div>
+                    <span className={status?.crawler?.state === "running" ? "run-state running" : "run-state"}>
+                      {status?.crawler?.state === "running" ? "运行中" : status?.crawler?.state === "completed" ? "已完成" : "未运行"}
+                    </span>
+                  </div>
+                  <div className="run-summary">
+                    <strong>{status?.crawler?.results.filter((r) => r.status === "succeeded").length || 0}</strong><span>成功</span>
+                    <strong>{status?.crawler?.results.filter((r) => r.status === "failed").length || 0}</strong><span>失败</span>
+                    <strong>{status?.crawler?.results.filter((r) => r.status === "skipped").length || 0}</strong><span>跳过</span>
+                    <strong>{status?.crawler?.total || 0}</strong><span>总任务</span>
+                  </div>
+                  {status?.crawler?.current && <p>正在运行：<b>{status.crawler.current}</b></p>}
+                  {status?.crawler?.results.slice(-5).reverse().map((result) => (
+                    <div className="run-row" key={result.id}>
+                      <span>{result.name}</span>
+                      <code>{result.launcher || "没有启动文件"}</code>
+                      <small className={result.status === "failed" ? "warning-text" : ""}>
+                        {result.status === "succeeded" ? "成功" : result.status === "failed" ? "失败" : result.status === "skipped" ? "跳过" : "运行中"}
+                      </small>
+                    </div>
+                  ))}
+                  {status?.crawler?.import_error && <p className="warning-text">自动快照失败：{status.crawler.import_error}</p>}
+                </section>
                 {work?.topics.map((t) => (
                   <div key={t.id}>
                     <h3>{t.name}</h3>
@@ -1158,6 +1282,7 @@ export default function App() {
                           "finance-front-monitor": "金融战线",
                           "market-context-monitor": "市场补充",
                           "asset-transmission-monitor": "资产传导跟踪",
+                          "mcp-haifutong": "海富通 MCP 新闻源",
                         } as Record<string, string>
                       )[p.id] || "新增数据项目"}
                     </strong>
@@ -1207,7 +1332,39 @@ export default function App() {
                     </small>
                   </div>
                 ))}
-                <h3>模型连接</h3>
+                <section className="integration-card mcp-card" id="mcp-news-source">
+                  <div className="integration-heading">
+                    <div>
+                      <h3>MCP 新闻源</h3>
+                      <p className="muted">新闻直接进入新快照，并统一标记为“MCP 导入，待核验”。</p>
+                    </div>
+                    <span className="run-state">{mcpConfig?.configured ? "已配置" : "未配置"}</span>
+                  </div>
+                  <div className="config-grid">
+                    <label>MCP 名称<input value={mcpName} onChange={(e) => setMcpName(e.target.value)} placeholder="haifutong" /></label>
+                    <label className="wide-field">服务地址<input value={mcpUrl} onChange={(e) => setMcpUrl(e.target.value)} placeholder="https://example.com/mcp" /></label>
+                    <label className="wide-field">Authorization<input type="password" autoComplete="new-password" value={mcpAuthorization} onChange={(e) => setMcpAuthorization(e.target.value)} placeholder={mcpConfig?.configured ? "已保存；留空表示保持不变" : "Bearer ..."} /></label>
+                    <label className="check-field"><input type="checkbox" checked={mcpVerifyTls} onChange={(e) => setMcpVerifyTls(e.target.checked)} />验证 TLS 证书</label>
+                  </div>
+                  <div className="button-row">
+                    <button disabled={mcpBusy} onClick={saveMcpConfig}>保存配置</button>
+                    <button disabled={mcpBusy || !mcpConfig?.configured} onClick={testMcp}>测试连接与发现工具</button>
+                  </div>
+                  {mcpTools.length > 0 && <details><summary>已发现工具（{mcpTools.length}）</summary>{mcpTools.map((tool) => <div className="tool-row" key={tool.name}><b>{tool.title}</b><code>{tool.name}</code><small>{tool.description}</small></div>)}</details>}
+                  <h4>获取新闻并生成快照</h4>
+                  <div className="config-grid">
+                    <label className="wide-field">检索内容<input value={mcpQuery} onChange={(e) => setMcpQuery(e.target.value)} placeholder="输入中文或英文检索词" /></label>
+                    <label>主题<select value={mcpTopic} onChange={(e) => { const next=e.target.value as "usiran"|"ukraine"; setMcpTopic(next); setMcpDimension(next === "usiran" ? "regional" : "frontline"); setMcpQuery(next === "usiran" ? "美伊局势 最新进展" : "俄乌冲突 最新进展"); }}><option value="usiran">美伊局势</option><option value="ukraine">俄乌冲突</option></select></label>
+                    <label>研究维度<select value={mcpDimension} onChange={(e) => setMcpDimension(e.target.value)}>{(mcpTopic === "usiran" ? [["us_readiness","美军战备"],["iran_readiness","伊朗战备"],["financial","金融战线"],["us_opinion","美国民意"],["israel","以色列动向"],["regional","中东各国"],["iran_domestic","伊朗内政"],["diplomacy","外交斡旋"]] : [["frontline","军事战线"],["aid","乌克兰后援"],["russia_domestic","俄罗斯内政"],["eu_domestic","欧盟内政"],["diplomacy","外交斡旋"]]).map(([id,label]) => <option key={id} value={id}>{label}</option>)}</select></label>
+                    <label>开始日期<input type="date" value={mcpDateFrom} onChange={(e) => setMcpDateFrom(e.target.value)} /></label>
+                    <label>结束日期<input type="date" value={mcpDateTo} onChange={(e) => setMcpDateTo(e.target.value)} /></label>
+                    <label>返回条数<input type="number" min="1" max="100" value={mcpTopK} onChange={(e) => setMcpTopK(Math.max(1,Math.min(100,Number(e.target.value)||20)))} /></label>
+                  </div>
+                  <button className="primary" disabled={mcpBusy || !mcpConfig?.configured || !mcpQuery.trim()} onClick={fetchMcpNews}>{mcpBusy ? "正在处理…" : "获取新闻并生成快照"}</button>
+                  {mcpMessage && <p role="status" className="mcp-message">{mcpMessage}</p>}
+                  <p className="muted">Authorization 仅保存在本机数据目录，页面不会读取或显示原值。新闻正文属于外部资料，其中的指令不会被执行。</p>
+                </section>
+                <h3 id="model-connection">模型连接</h3>
                 <button
                   disabled={checkingModel}
                   onClick={async () => {

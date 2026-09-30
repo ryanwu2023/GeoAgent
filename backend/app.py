@@ -15,9 +15,10 @@ from pydantic import BaseModel, Field
 from .store import ROOT, snapshots, get_snapshot, save_snapshot, db, data_dir
 from .adapters import load_bundle
 from .research import filtered_records, metrics, analysis, coverage, answer, create_brief, model_status
-from .catalog import RULE_VERSION
+from .catalog import RULE_VERSION, topic_dimensions
 from .chinese import present_record, present_record_summary, present_answer, translation_cache, source_name, start_translation, translation_status, localize_brief_markdown
 from .paths import collector_data_root, collector_read_root, sync_local_collector_outputs
+from .mcp_news import McpClient, load_config as load_mcp_config, public_config as public_mcp_config, save_config as save_mcp_config, store_news
 
 def load_env():
     file = ROOT / ".env"
@@ -65,7 +66,87 @@ def validate_range(start, end):
 
 @app.get("/api/status")
 def status():
-    return {"model": model_status(), "translation":translation_status(), "crawler_root": str(collector_read_root()), "rule_version": RULE_VERSION, "snapshots": snapshots()}
+    crawler = {"state": "idle", "total": 0, "current": None, "results": []}
+    crawler_file = data_dir() / "crawler-runs" / "current.json"
+    if crawler_file.is_file():
+        try:
+            crawler = {**crawler, **json.loads(crawler_file.read_text(encoding="utf-8"))}
+        except (OSError, ValueError, TypeError):
+            crawler = {**crawler, "state": "status_error"}
+    return {"model": model_status(), "translation":translation_status(), "crawler_root": str(collector_read_root()), "crawler": crawler, "mcp": public_mcp_config(), "rule_version": RULE_VERSION, "snapshots": snapshots()}
+
+
+class McpConfigInput(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    url: str = Field(min_length=8, max_length=1000)
+    authorization: str = Field(default="", max_length=4000)
+    verify_tls: bool = True
+
+
+class McpFetchInput(BaseModel):
+    query: str = Field(min_length=2, max_length=500)
+    topic: Literal["usiran", "ukraine"]
+    dimension: str = Field(min_length=1, max_length=80)
+    top_k: int = Field(default=20, ge=1, le=100)
+    date_from: str = Field(default="", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+    date_to: str = Field(default="", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+
+
+@app.get("/api/mcp/config")
+def mcp_config():
+    return public_mcp_config()
+
+
+@app.post("/api/mcp/config")
+def update_mcp_config(body: McpConfigInput):
+    try:
+        return save_mcp_config(body.name, body.url, body.authorization, body.verify_tls)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@app.post("/api/mcp/test")
+async def test_mcp():
+    try:
+        client = McpClient()
+        tools = await client.list_tools()
+        return {
+            "ok": True,
+            "server": public_mcp_config(),
+            "tools": [
+                {"name": item.get("name"), "title": item.get("title") or item.get("name"), "description": item.get("description", "")[:300], "inputSchema": item.get("inputSchema", {})}
+                for item in tools
+            ],
+        }
+    except (ValueError, OSError, httpx.HTTPError, json.JSONDecodeError) as exc:
+        return {"ok": False, "message": f"MCP 连接失败：{type(exc).__name__}：{str(exc)[:300]}", "tools": []}
+
+
+@app.post("/api/mcp/fetch")
+async def fetch_mcp_news(body: McpFetchInput):
+    validate_range(body.date_from, body.date_to)
+    if body.dimension not in topic_dimensions(body.topic):
+        raise HTTPException(422, "主题与维度不匹配")
+    try:
+        config = load_mcp_config()
+        client = McpClient(config)
+        service = await client.call("service_status", {})
+        if not service.get("ok") or service.get("data", {}).get("overall") not in {None, "ok", "degraded"}:
+            raise ValueError("MCP 服务状态不可用")
+        arguments = {"query": body.query, "top_k": body.top_k, "mode": "hybrid"}
+        if body.date_from:
+            arguments["date_from"] = body.date_from
+        if body.date_to:
+            arguments["date_to"] = body.date_to
+        envelope = await client.call("knowledge_search", arguments)
+        _, fetched = store_news(config, body.query, body.topic, body.dimension, envelope)
+        root = collector_read_root()
+        bundle = load_bundle(root)
+        sid, created = save_snapshot(bundle)
+        start_translation()
+        return {"ok": True, "id": sid, "created": created, "fetched": fetched, "count": len(bundle["records"]), "errors": bundle["errors"]}
+    except (ValueError, OSError, KeyError, TypeError, httpx.HTTPError, json.JSONDecodeError) as exc:
+        raise HTTPException(422, f"MCP 新闻导入失败：{type(exc).__name__}：{str(exc)[:300]}") from exc
 
 @app.post("/api/model/check")
 async def check_model():
