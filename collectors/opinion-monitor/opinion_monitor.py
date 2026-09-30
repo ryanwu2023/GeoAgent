@@ -950,7 +950,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
     W.append("")
     W.append("| 日期 | 机构 | 数值·方向 | 口径句（context） | 来源/等级 | 原文 |")
     W.append("|---|---|---|---|---|---|")
-    for r in sorted([x for x in records if x["kind"] == "fact_poll"],
+    for r in sorted([x for x in records if x.get("polls")],
                     key=lambda x: x.get("published") or "", reverse=True):
         for p in (r.get("polls") or []):
             ctx = p["context"].replace("|", "/").replace(chr(10), " ")
@@ -963,7 +963,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
                      f"| **{fmt_pct(p['value'])}%** "
                      f"{ {'anti':'反战/不满','pro':'支持/认可','other':'—'}[p['direction']] }{scope_tag} "
                      f"| {ctx} | {r['publisher']} / {r['tier']} | {_row_link(r)} |")
-    if not any(r["kind"] == "fact_poll" for r in records):
+    if not any(r.get("polls") for r in records):
         W.append("| — | 本窗口未捕获民调报道 | — | — | — | — |")
     W.append("")
     # §3 意见领袖
