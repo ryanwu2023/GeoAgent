@@ -6,11 +6,23 @@ $entryPath = Join-Path $PSScriptRoot 'scripts\serve.py'
 $url = "http://$BindHost`:$Port/"
 $crawlerStatePath = Join-Path $PSScriptRoot 'data\crawler-manager-process.json'
 $crawlerEntryPath = Join-Path $PSScriptRoot 'scripts\crawler_manager.py'
+
+function Read-JsonUtf8([string]$Path) {
+    $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+    return $text | ConvertFrom-Json
+}
+
+function Write-JsonUtf8Bom([object]$Value, [string]$Path) {
+    $json = $Value | ConvertTo-Json
+    $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+    [System.IO.File]::WriteAllText($Path, $json, $utf8Bom)
+}
+
 try {
     $listener = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
     if ($listener) {
         if (Test-Path -LiteralPath $statePath) {
-            $saved = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+            $saved = Read-JsonUtf8 $statePath
             $existing = Get-CimInstance Win32_Process -Filter "ProcessId=$($saved.processId)" -ErrorAction SilentlyContinue
             if ($existing -and $existing.CommandLine.Contains($entryPath) -and $existing.CreationDate.ToUniversalTime().ToString('o') -eq $saved.createdAt -and $listener.OwningProcess -contains $saved.processId) {
                 Write-Host "Project is already running: $url"
@@ -42,7 +54,7 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $PSScriptRoot 'data') -Force | Out-Null
     $process = Start-Process -FilePath $python -ArgumentList @('-u', ('"' + $entryPath + '"'), '--host', $BindHost, '--port', "$Port") -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $PSScriptRoot 'server.stdout.log') -RedirectStandardError (Join-Path $PSScriptRoot 'server.stderr.log') -PassThru
     $identity = Get-CimInstance Win32_Process -Filter "ProcessId=$($process.Id)"
-    @{processId=$process.Id;createdAt=$identity.CreationDate.ToUniversalTime().ToString('o');entry=$entryPath;url=$url} | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding UTF8
+    Write-JsonUtf8Bom @{processId=$process.Id;createdAt=$identity.CreationDate.ToUniversalTime().ToString('o');entry=$entryPath;url=$url} $statePath
     $ready = $false
     for ($attempt=0; $attempt -lt 30; $attempt++) {
         $process.Refresh()
@@ -57,7 +69,7 @@ try {
     if (-not $NoCrawlers) {
         $crawlerProcess = Start-Process -FilePath $python -ArgumentList @('-u', ('"' + $crawlerEntryPath + '"'), '--import-url', ($url+'api/import')) -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $PSScriptRoot 'crawler-manager.stdout.log') -RedirectStandardError (Join-Path $PSScriptRoot 'crawler-manager.stderr.log') -PassThru
         $crawlerIdentity = Get-CimInstance Win32_Process -Filter "ProcessId=$($crawlerProcess.Id)"
-        @{processId=$crawlerProcess.Id;entry=$crawlerEntryPath;createdAt=$crawlerIdentity.CreationDate.ToUniversalTime().ToString('o');startedAt=(Get-Date).ToUniversalTime().ToString('o')} | ConvertTo-Json | Set-Content -LiteralPath $crawlerStatePath -Encoding UTF8
+        Write-JsonUtf8Bom @{processId=$crawlerProcess.Id;entry=$crawlerEntryPath;createdAt=$crawlerIdentity.CreationDate.ToUniversalTime().ToString('o');startedAt=(Get-Date).ToUniversalTime().ToString('o')} $crawlerStatePath
         Write-Host "Crawler manager started in background: PID $($crawlerProcess.Id)"
     }
     Write-Host 'Stop: stop.bat / stop.ps1. Logs: server.stdout.log / server.stderr.log'
