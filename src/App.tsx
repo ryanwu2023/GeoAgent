@@ -240,11 +240,12 @@ export default function App() {
         created: boolean;
         count: number;
         errors: unknown[];
+        sync?: { projects: number; files: number; bytes: number };
       }>("/import", {});
       await refreshStatus();
       setSid(r.id);
       setNotice(
-        `${r.created ? "已冻结新快照" : "数据未变化，使用已有快照"} · ${r.count} 条归并记录${r.errors.length ? ` · ${r.errors.length} 条解析异常` : ""}`,
+        `${r.created ? "已冻结新快照" : "数据未变化，使用已有快照"} · ${r.count} 条归并记录${r.sync?.files ? ` · 已同步 ${r.sync.projects} 个爬虫的 ${r.sync.files} 个新文件` : ""}${r.errors.length ? ` · ${r.errors.length} 条解析异常` : ""}`,
       );
     } catch (e) {
       setError((e as Error).message);

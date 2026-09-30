@@ -17,7 +17,7 @@ from .adapters import load_bundle
 from .research import filtered_records, metrics, analysis, coverage, answer, create_brief, model_status
 from .catalog import RULE_VERSION
 from .chinese import present_record, present_record_summary, present_answer, translation_cache, source_name, start_translation, translation_status, localize_brief_markdown
-from .paths import collector_read_root
+from .paths import collector_data_root, collector_read_root, sync_local_collector_outputs
 
 def load_env():
     file = ROOT / ".env"
@@ -83,12 +83,15 @@ def import_data():
     if not root.is_dir():
         raise HTTPException(400, "爬虫目录不存在，请在 .env 设置 CRAWLER_ROOT")
     try:
+        sync = {"projects": 0, "files": 0, "bytes": 0}
+        if root.resolve() == collector_data_root().resolve():
+            sync = sync_local_collector_outputs(data_root=root)
         bundle = load_bundle(root)
         sid, created = save_snapshot(bundle)
         start_translation()
     except (ValueError, OSError, KeyError, TypeError) as exc:
         raise HTTPException(422, f"数据导入未完成：{type(exc).__name__}：{str(exc)[:180]}") from exc
-    return {"id": sid, "created": created, "errors": bundle["errors"], "count": len(bundle["records"])}
+    return {"id": sid, "created": created, "errors": bundle["errors"], "count": len(bundle["records"]), "sync": sync}
 
 @app.get("/api/workspace")
 def workspace(snapshot_id: str, topic: Topic = "all", dimension: str = "", start: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$"), end: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")):

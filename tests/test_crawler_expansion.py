@@ -28,6 +28,7 @@ def test_finance_archive_shared_market_and_missing(tmp_path,monkeypatch):
     row={'series':'dgs10','label':'10年美债收益率','unit':'%','cadence':'daily','bucket':'rates','date':'2026-09-18','value':5.01,'window':[['2026-09-17',4.94],['2026-09-18',5.01]],'run_tag':'2026-09-19T01:08','step':1,'new_point':False}
     (folder/'LATEST-records.jsonl').write_text(json.dumps(row),encoding='utf-8')
     bundle=load_bundle(tmp_path)
+    bundle['created_at']='2026-09-19T01:08:00+00:00'
     assert bundle['records'][0]['raw_refs']
     assert bundle['observations'][0]['shared_market']
     rates=next(a for a in analysis(bundle,'ukraine')['assets'] if a['id']=='rates')
