@@ -190,7 +190,14 @@ def test_collector_retry_action_only_queues_failed_items(tmp_path, monkeypatch):
     monkeypatch.setattr("backend.app.collector_jobs.submit", lambda **kwargs: captured.append(kwargs) or Job())
     response = client.post("/api/collector/runs/run-failed/retry")
     assert response.status_code == 202
-    assert captured == [{"ids": ["xinhua-monitor"], "auto_import": True, "allow_partial_import": False}]
+    assert captured == [{"ids": ["xinhua-monitor"], "auto_import": True, "allow_partial_import": False, "exclude_ids": ["taco-monitor"]}]
+
+
+def test_manual_run_rejects_explicitly_excluded_collector():
+    client = TestClient(app)
+    response = client.post("/api/collector/runs", json={"ids": ["taco-monitor"]})
+    assert response.status_code == 409
+    assert "排除" in response.text
 
 
 def test_collector_review_gate_and_partial_import_require_explicit_approval(tmp_path, monkeypatch):

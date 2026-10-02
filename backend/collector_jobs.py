@@ -38,6 +38,7 @@ class CollectorJob:
     error: str | None = None
     auto_import: bool = True
     allow_partial_import: bool = False
+    exclude_ids: list[str] = field(default_factory=list)
 
     def public(self) -> dict[str, Any]:
         return {
@@ -45,6 +46,7 @@ class CollectorJob:
             "run_id": self.run_id,
             "status": self.status,
             "ids": self.ids,
+            "exclude_ids": self.exclude_ids,
             "topic": self.topic,
             "submitted_at": self.submitted_at,
             "finished_at": self.finished_at,
@@ -88,6 +90,7 @@ class CollectorJobManager:
         retry_backoff_sec: float = 1.0,
         auto_import: bool = True,
         allow_partial_import: bool = False,
+        exclude_ids: list[str] | None = None,
     ) -> CollectorJob:
         self._preflight_lock()
         run_name = f"manual-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
@@ -98,6 +101,7 @@ class CollectorJobManager:
             topic=topic,
             auto_import=auto_import,
             allow_partial_import=allow_partial_import,
+            exclude_ids=list(exclude_ids or []),
         )
         with self._lock:
             self._jobs[job.request_id] = job
@@ -115,6 +119,7 @@ class CollectorJobManager:
                     run_id_override=job.run_id,
                     auto_import=job.auto_import,
                     allow_partial_import=job.allow_partial_import,
+                    exclude_ids=job.exclude_ids,
                 )
                 job.report = report
                 job.run_id = report["run_id"]

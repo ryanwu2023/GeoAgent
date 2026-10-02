@@ -960,6 +960,10 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     },
   ];
 
+  // 运行页只负责回答“这次抓取跑到哪里、哪里需要处理”。
+  // 导入、快照和问答/简报属于后续工作区，分别在采集池和快照视图中展示。
+  const collectionStages = pipelineStages.filter((stage) => ["run", "sources", "gate"].includes(stage.id));
+
   return (
     <section className="collector-monitor" aria-label="采集管线监控">
       <div className="collector-command-bar">
@@ -1004,12 +1008,12 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
 
       {pipelineView === "run" && <section className="pipeline-run-view" aria-label="当前运行流程">
         <div className="pipeline-view-heading">
-          <div><span className="collector-kicker"><Activity size={14} /> 当前批次 · {runtimeRunId || "尚未连接运行批次"}</span><h2>加工流程与门禁</h2><p>每个阶段都显示当前可核对的数据；未由运行报告提供的数字明确标为“未记录”。</p></div>
+          <div><span className="collector-kicker"><Activity size={14} /> 当前批次 · {runtimeRunId || "尚未连接运行批次"}</span><h2>抓取进度</h2><p>这里只显示本次采集的执行进度、来源健康和输出门禁；导入、快照与分析请在对应视图继续。</p></div>
           <div className="pipeline-heading-actions"><span className={`pipeline-state-pill ${gateBlocked ? "warning" : gatePassed ? "success" : "pending"}`}>{gateBlocked ? "存在门禁阻断" : gatePassed ? "流程已落盘" : "等待运行"}</span><button onClick={() => openPipelineView("pool")}>查看采集池 <ChevronRight size={14} /></button></div>
         </div>
 
-        <div className="pipeline-stage-track" role="list" aria-label="加工阶段">
-          {pipelineStages.map((stage, index) => {
+        <div className="pipeline-stage-track" role="list" aria-label="抓取阶段">
+          {collectionStages.map((stage, index) => {
             const StageIcon = stage.icon;
             const activate = stage.action?.handler;
             return <article key={stage.id} className={`pipeline-stage-card state-${stage.status} ${activate ? "is-actionable" : ""}`} role={activate ? "button" : "listitem"} tabIndex={activate ? 0 : undefined} onClick={activate} onKeyDown={activate ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } : undefined}>
@@ -1024,22 +1028,14 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
 
         <div className="pipeline-audit-grid">
           <section className="pipeline-audit-panel">
-            <div className="pipeline-panel-heading"><div><span className="collector-kicker"><ListChecks size={13} /> 人工核对清单</span><h3>本次批次需要确认什么</h3></div><span className="pipeline-panel-note">不通过不会改变工作快照</span></div>
-            <div className="pipeline-check-list">
-              <label><input type="checkbox" checked={reviewStatus("sources") === "accepted"} onChange={(event) => void updateReview("sources", event.target.checked ? "accepted" : "pending")} /><span><b>来源健康</b><small>确认失败来源、空响应和连续失败是否可接受。</small></span><select aria-label="来源健康核对状态" value={reviewStatus("sources")} onChange={(event) => void updateReview("sources", event.target.value as ReviewStatus)}><option value="pending">待核对</option><option value="accepted">已通过</option><option value="rejected">需处理</option></select></label>
-              <label><input type="checkbox" checked={reviewStatus("candidates") === "accepted"} onChange={(event) => void updateReview("candidates", event.target.checked ? "accepted" : "pending")} /><span><b>候选加工</b><small>查看过滤审计，确认主题和信号桶没有误杀核心候选。</small></span><select aria-label="候选加工核对状态" value={reviewStatus("candidates")} onChange={(event) => void updateReview("candidates", event.target.value as ReviewStatus)}><option value="pending">待核对</option><option value="accepted">已通过</option><option value="rejected">需处理</option></select></label>
-              <label><input type="checkbox" checked={reviewStatus("gate") === "accepted"} onChange={(event) => void updateReview("gate", event.target.checked ? "accepted" : "pending")} /><span><b>发布门禁</b><small>确认是否允许部分成功数据进入导入和快照。</small></span><select aria-label="发布门禁核对状态" value={reviewStatus("gate")} onChange={(event) => void updateReview("gate", event.target.value as ReviewStatus)}><option value="pending">待核对</option><option value="accepted">已通过</option><option value="rejected">需处理</option></select></label>
-              <label><input type="checkbox" checked={reviewStatus("import") === "accepted"} onChange={(event) => void updateReview("import", event.target.checked ? "accepted" : "pending")} /><span><b>清洗统计</b><small>核对全局重复合并、无效记录和指标数量。</small></span><select aria-label="清洗统计核对状态" value={reviewStatus("import")} onChange={(event) => void updateReview("import", event.target.value as ReviewStatus)}><option value="pending">待核对</option><option value="accepted">已通过</option><option value="rejected">需处理</option></select></label>
-            </div>
-            <div className="pipeline-action-row"><button onClick={showFailedCollectors}>查看失败来源</button><button onClick={() => void openPipelineDetail("candidate")}>查看过滤审计</button><button onClick={() => void openPipelineDetail("import")}>查看导入明细</button>{gateBlocked && <><button onClick={() => void decideGate("approved")}>批准门禁</button><button onClick={() => void decideGate("rejected")}>拒绝门禁</button></>}</div>
+            <div className="pipeline-panel-heading"><div><span className="collector-kicker"><ListChecks size={13} /> 抓取核对</span><h3>本批次需要处理什么</h3></div><span className="pipeline-panel-note">不会在这里修改快照</span></div>
+            <p className="pipeline-panel-note">只针对来源失败、空响应和输出门禁做人工判断；清洗明细、快照版本和分析入口分别在其他视图。</p>
+            <div className="pipeline-action-row"><button onClick={showFailedCollectors}>查看失败来源</button><button onClick={openSourceAudit}>查看来源状态</button>{gateBlocked && <><button onClick={() => void decideGate("approved")}>批准输出</button><button onClick={() => void decideGate("rejected")}>阻断输出</button></>}</div>
           </section>
-
-          <section className={`pipeline-pending-snapshot ${snapshotNeedsReview ? "needs-review" : "confirmed"}`}>
-            <div className="pipeline-panel-heading"><div><span className="collector-kicker"><Archive size={13} /> 快照决策</span><h3>{snapshotNeedsReview ? "待确认快照" : "当前工作快照"}</h3></div><span className="pipeline-panel-note">版本与运行批次分离</span></div>
-            <div className="pipeline-snapshot-id">{pendingSnapshotId ? pendingSnapshotId : "尚未生成快照"}</div>
-            <div className="pipeline-snapshot-stats"><div><span>记录</span><b>{metric(importRecords)}</b></div><div><span>指标</span><b>{metric(importObservations)}</b></div><div><span>错误</span><b>{metric(importErrors, "0")}</b></div></div>
-            <p>{snapshotNeedsReview ? "这版快照已经生成，但还没有设为当前问答和简报使用的工作版本。" : workingSnapshotId ? "当前页面已选择工作快照，问答和简报可以继续。" : "没有可供确认的快照。"}</p>
-            <div className="pipeline-action-row"><button className="primary" onClick={confirmWorkingSnapshot} disabled={!pendingSnapshotId || !snapshotNeedsReview}><FileCheck2 size={14} /> {snapshotNeedsReview ? "确认并设为工作快照" : "已设为工作快照"}</button><button onClick={() => openPipelineView("snapshots")}><History size={14} /> 查看版本</button></div>
+          <section className="pipeline-pending-snapshot confirmed">
+            <div className="pipeline-panel-heading"><div><span className="collector-kicker"><Archive size={13} /> 后续工作区</span><h3>抓取完成后</h3></div><span className="pipeline-panel-note">按需继续</span></div>
+            <p>先在“采集池与来源”查看已抓取记录和过滤条件，再生成快照；快照生成后到“快照版本谱系”选择工作版本。</p>
+            <div className="pipeline-action-row"><button onClick={() => openPipelineView("pool")}>查看采集池</button><button onClick={() => openPipelineView("snapshots")}><History size={14} /> 查看快照列表</button></div>
           </section>
         </div>
       </section>}

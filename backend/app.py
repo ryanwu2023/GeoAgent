@@ -417,7 +417,12 @@ def start_collector_run(request: CollectorRunRequest):
     unknown = sorted(set(request.ids) - known)
     if unknown:
         raise HTTPException(422, f"采集器不存在或已停用：{', '.join(unknown)}")
-    configured_allow_partial = bool(load_config().get("allow_partial_import", False))
+    config = load_config()
+    configured_exclude_ids = sorted(set(config.get("exclude_ids", [])))
+    explicitly_excluded = sorted(set(request.ids) & set(configured_exclude_ids))
+    if explicitly_excluded:
+        raise HTTPException(409, f"采集器已在调度配置中排除，不能手动执行：{', '.join(explicitly_excluded)}")
+    configured_allow_partial = bool(config.get("allow_partial_import", False))
     try:
         job = collector_jobs.submit(
             ids=request.ids,
@@ -427,6 +432,7 @@ def start_collector_run(request: CollectorRunRequest):
             retry_backoff_sec=request.retry_backoff_sec,
             auto_import=request.auto_import,
             allow_partial_import=configured_allow_partial if request.allow_partial_import is None else request.allow_partial_import,
+            exclude_ids=configured_exclude_ids,
         )
     except CollectorBusyError as exc:
         raise HTTPException(409, f"已有采集服务运行中：{str(exc)}") from exc
@@ -442,7 +448,16 @@ def retry_collector_run(run_id: str):
     if not failed_ids:
         raise HTTPException(422, "该运行没有可重试的失败采集器")
     try:
-        job = collector_jobs.submit(ids=failed_ids, auto_import=True, allow_partial_import=bool(load_config().get("allow_partial_import", False)))
+        config = load_config()
+        allowed_failed_ids = [item for item in failed_ids if item not in set(config.get("exclude_ids", []))]
+        if not allowed_failed_ids:
+            raise HTTPException(409, "该批次失败项都已被当前调度配置排除，无需重试")
+        job = collector_jobs.submit(
+            ids=allowed_failed_ids,
+            auto_import=True,
+            allow_partial_import=bool(config.get("allow_partial_import", False)),
+            exclude_ids=list(config.get("exclude_ids", [])),
+        )
     except CollectorBusyError as exc:
         raise HTTPException(409, f"已有采集服务运行中：{str(exc)}") from exc
     return {**job.public(), "source": "collector-job", "retry_of": run_id}
