@@ -775,6 +775,18 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     }
   }
 
+  function generateSnapshotFromPool() {
+    if (!runtimeRunId) {
+      setNotice("当前没有可生成快照的采集批次。");
+      return;
+    }
+    if (runtimeRunStatus === "partial" && reviewStatus("gate") !== "accepted") {
+      setNotice("本批次存在失败采集器，请先在当前运行流程批准输出门禁。");
+      return;
+    }
+    void retryImport(runtimeRunStatus === "partial");
+  }
+
   async function openConfig() {
     setConfigOpen(true);
     setConfigLoading(true);
@@ -1002,8 +1014,8 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
 
       <nav className="collector-view-switcher" aria-label="管线视图">
         <button className={pipelineView === "run" ? "selected" : ""} onClick={() => openPipelineView("run")}><Activity size={14} /> 当前运行流程</button>
-        <button className={pipelineView === "pool" ? "selected" : ""} onClick={() => openPipelineView("pool")}><Server size={14} /> 采集池与来源</button>
-        <button className={pipelineView === "snapshots" ? "selected" : ""} onClick={() => openPipelineView("snapshots")}><History size={14} /> 快照版本谱系{snapshotSummaries.length ? ` (${snapshotSummaries.length})` : ""}</button>
+        <button className={pipelineView === "pool" ? "selected" : ""} onClick={() => openPipelineView("pool")}><Server size={14} /> 已抓取数据</button>
+        <button className={pipelineView === "snapshots" ? "selected" : ""} onClick={() => openPipelineView("snapshots")}><History size={14} /> 快照版本{snapshotSummaries.length ? ` (${snapshotSummaries.length})` : ""}</button>
       </nav>
 
       {pipelineView === "run" && <section className="pipeline-run-view" aria-label="当前运行流程">
@@ -1034,14 +1046,14 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           </section>
           <section className="pipeline-pending-snapshot confirmed">
             <div className="pipeline-panel-heading"><div><span className="collector-kicker"><Archive size={13} /> 后续工作区</span><h3>抓取完成后</h3></div><span className="pipeline-panel-note">按需继续</span></div>
-            <p>先在“采集池与来源”查看已抓取记录和过滤条件，再生成快照；快照生成后到“快照版本谱系”选择工作版本。</p>
-            <div className="pipeline-action-row"><button onClick={() => openPipelineView("pool")}>查看采集池</button><button onClick={() => openPipelineView("snapshots")}><History size={14} /> 查看快照列表</button></div>
+            <p>先在“已抓取数据”查看来源、记录和过滤条件，再生成快照；快照生成后到“快照版本”选择工作版本。</p>
+            <div className="pipeline-action-row"><button onClick={() => openPipelineView("pool")}>查看已抓取数据</button><button onClick={() => openPipelineView("snapshots")}><History size={14} /> 查看快照列表</button></div>
           </section>
         </div>
       </section>}
 
       {pipelineView === "snapshots" && <section className="pipeline-snapshot-view" aria-label="快照版本谱系">
-        <div className="pipeline-view-heading"><div><span className="collector-kicker"><History size={14} /> 数据版本</span><h2>快照版本谱系</h2><p>快照是完整分析数据包；运行批次可以不生成快照，也可以复用同一版本。</p></div><div className="pipeline-heading-actions"><span className="pipeline-state-pill pending">当前工作快照：{workingSnapshotId ? shortId(workingSnapshotId) : "未选择"}</span><button onClick={() => openPipelineView("run")}>返回当前流程 <ChevronRight size={14} /></button></div></div>
+        <div className="pipeline-view-heading"><div><span className="collector-kicker"><History size={14} /> 数据版本</span><h2>快照版本</h2><p>这里浏览不可变版本；调整过滤条件不会修改旧版本，而是生成新的派生快照。</p></div><div className="pipeline-heading-actions"><span className="pipeline-state-pill pending">当前工作快照：{workingSnapshotId ? shortId(workingSnapshotId) : "未选择"}</span><button onClick={() => openPipelineView("run")}>返回抓取进度 <ChevronRight size={14} /></button></div></div>
         <div className="snapshot-lineage">
           {snapshotSummaries.length ? snapshotSummaries.map((snapshot, index) => {
             const isPending = snapshot.id === pendingSnapshotId && snapshot.id !== workingSnapshotId;
@@ -1051,7 +1063,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
               <div className="snapshot-lineage-content"><div className="snapshot-lineage-heading"><div><strong>{shortId(snapshot.id)}</strong><small>{snapshot.created_at.replace("T", " ").slice(0, 16)}</small></div><div className="snapshot-badges">{isWorking && <em className="working">当前工作</em>}{isPending && <em className="pending">待确认</em>}</div></div>
                 <div className="snapshot-stat-grid"><div><span>记录</span><b>{metric(snapshot.records)}</b></div><div><span>指标</span><b>{metric(snapshot.observations)}</b></div><div><span>来源</span><b>{metric(snapshot.sources)}</b></div><div><span>错误</span><b>{metric(snapshot.errors, "0")}</b></div><div><span>新记录</span><b>{metric(snapshot.import_stats?.new)}</b></div><div><span>修订</span><b>{metric(snapshot.import_stats?.revised)}</b></div></div>
                 <div className="snapshot-cleaning-note">清洗：原始 {metric(snapshot.cleaning?.raw_records)} · 合并重复 {metric(snapshot.cleaning?.duplicates_merged)} · 无效 {metric(snapshot.cleaning?.invalid_records, "0")}</div>
-                <div className="pipeline-action-row"><button className={isWorking ? "primary" : ""} onClick={() => void chooseWorkingSnapshot(snapshot.id)}><FileCheck2 size={14} /> {isWorking ? "当前工作快照" : "设为工作快照"}</button><button onClick={() => onSnapshotInspect?.(snapshot.id)}>查看数据范围</button></div>
+                <div className="pipeline-action-row"><button className={isWorking ? "primary" : ""} onClick={() => void chooseWorkingSnapshot(snapshot.id)}><FileCheck2 size={14} /> {isWorking ? "当前工作快照" : "设为工作快照"}</button><button onClick={() => onSnapshotInspect?.(snapshot.id)}>查看 / 调整范围</button></div>
               </div>
             </article>;
           }) : <div className="pipeline-empty-state"><Database size={22} /><strong>暂无快照版本</strong><span>采集通过导入门禁后，版本会出现在这里。</span></div>}
@@ -1060,7 +1072,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       </section>}
 
       {pipelineView === "pool" && <>
-      <div className="collector-pool-strip"><div><span>采集池</span><strong>{collectors.length ? `${collectors.length} 个采集器` : "暂无真实采集器"}</strong><small>当前页面展示最近持久化运行报告，不代表实时心跳。</small></div><div><span>来源状态</span><strong>{sourceSummary.total ? `${sourceSummary.healthy} / ${sourceSummary.total}` : "未记录"}</strong><small>成功来源 · 当前 run 范围</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={sourceSummary.failed || sourceSummary.missing ? "warning" : ""}>{sourceSummary.total ? `${sourceSummary.failed} / ${sourceSummary.empty} / ${sourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供批次产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors}>失败来源</button><button onClick={() => void retryCurrentRun()}>补采失败</button><button onClick={() => openPipelineView("snapshots")}>版本谱系</button></div></div>
+      <div className="collector-pool-strip"><div><span>已抓取数据</span><strong>{collectors.length ? `${collectors.length} 个来源采集器` : "暂无真实采集数据"}</strong><small>以下列表按最近批次展示来源、状态、产物和错误；不是服务心跳。</small></div><div><span>来源状态</span><strong>{sourceSummary.total ? `${sourceSummary.healthy} / ${sourceSummary.total}` : "未记录"}</strong><small>成功来源 · 当前 run 范围</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={sourceSummary.failed || sourceSummary.missing ? "warning" : ""}>{sourceSummary.total ? `${sourceSummary.failed} / ${sourceSummary.empty} / ${sourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供批次产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors}>失败来源</button><button onClick={() => void retryCurrentRun()}>补采失败</button><button className="primary" onClick={generateSnapshotFromPool}>生成快照</button><button onClick={() => openPipelineView("snapshots")}>快照版本</button></div></div>
 
       <div className="collector-mobile-toolbar">
         <button onClick={() => setFiltersOpen(true)}><Filter size={15} /> 筛选</button>
