@@ -1174,20 +1174,20 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             </div>
           </div>
           <div className="batch-source-panel">
-            <div className="batch-panel-heading"><span className="collector-kicker"><Server size={13} /> 本批次采集源</span><strong>{collectors.length} 个</strong></div>
+            <div className="batch-panel-heading"><span className="collector-kicker"><Server size={13} /> 本批次采集源</span><strong>{collectors.length ? `${collectors.length} 个` : runtimeRunStatus === "running" ? "采集中…" : "0 个"}</strong></div>
             <div className="batch-source-list">
               {collectors.map((collector) => { const MetaIcon = statusMeta[collector.status].icon; return <button key={collector.id} className={collector.id === selectedId ? "selected" : ""} onClick={() => selectCollector(collector.id)}><span className="batch-source-status"><MetaIcon size={14} /></span><span><b>{collector.name}</b><small>{collector.id} · {collector.stage}</small></span><em className={statusMeta[collector.status].className}>{statusMeta[collector.status].label}</em><small>{collector.outputs} 个产物 · {collector.finishedAt}</small></button>; })}
-              {!collectors.length && <div className="batch-list-empty">该批次没有采集器记录。</div>}
+              {!collectors.length && <div className="batch-list-empty">{runtimeRunStatus === "running" ? "采集器正在排队或执行，状态每 3 秒自动刷新…" : "该批次没有采集器记录。"}</div>}
             </div>
           </div>
           <div className="batch-detail-panel">
-            <div className="batch-panel-heading"><span className="collector-kicker"><ListChecks size={13} /> 源详情 · {selected?.name || "未选择"}</span><strong>{selected ? statusMeta[selected.status].label : "—"}</strong></div>
+            <div className="batch-panel-heading"><span className="collector-kicker"><ListChecks size={13} /> 源详情 · {selected?.name || "未选择"}</span><strong>{selected ? statusMeta[selected.status].label : runtimeRunStatus === "running" ? "等待状态" : "—"}</strong></div>
             {selected ? <>
               <div className="batch-detail-summary"><span>阶段 <b>{selected.stage}</b></span><span>产物 <b>{selected.outputs}</b></span><span>耗时 <b>{selected.elapsed}</b></span><span>来源 <b>{selected.sourceHealth}</b></span></div>
               <div className="batch-source-detail"><span>错误信息</span><strong className={selected.errorMessage ? "bad" : "ok"}>{selected.errorType || "无错误"}</strong><p>{selected.errorMessage || "本次采集没有记录错误。"}</p></div>
               <div className="batch-event-list">{ledgerEvents.filter((event) => !event.collector_id || event.collector_id === selected.id).map((event) => <button key={event.id}><span><b>{event.event_type}</b><small>{event.created_at.replace("T", " ").slice(0, 19)}</small></span><em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{eventStatusLabel(event.status)}</em><p>{event.message || "已记录"}</p></button>)}{!ledgerEvents.length && <div className="batch-list-empty">暂无事件记录。</div>}</div>
               <pre className="batch-log-tail">{collectorLog?.available ? collectorLog.content || "（日志为空）" : "当前源暂无可读日志尾部"}</pre>
-            </> : <div className="batch-list-empty">从中间列表选择一个采集源查看详情。</div>}
+            </> : <div className="batch-list-empty">{runtimeRunStatus === "running" ? "批次正在运行，选择的采集器状态和日志会自动出现在这里。" : "从中间列表选择一个采集源查看详情。"}</div>}
           </div>
         </section>
 
