@@ -221,11 +221,13 @@ type CollectorSourcesPayload = {
 
 type SourceRecordPreview = {
   id?: string;
+  source_id?: string;
   title?: string;
   summary?: string;
   publisher?: string;
   published?: string;
   fetched_at?: string;
+  first_seen?: string;
   url?: string;
   [key: string]: unknown;
 };
@@ -411,6 +413,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const [sourceStateFilter, setSourceStateFilter] = useState<SourceStateFilter>("all");
   const [selectedSourceKey, setSelectedSourceKey] = useState("");
   const [sourceRecordPreview, setSourceRecordPreview] = useState<SourceRecordsPayload | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<SourceRecordPreview | null>(null);
   const [selectedId, setSelectedId] = useState("iran-escalation-monitor");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
@@ -962,8 +965,10 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     let cancelled = false;
     if (!selectedFetchedSource) {
       setSourceRecordPreview(null);
+      setSelectedRecord(null);
       return () => { cancelled = true; };
     }
+    setSelectedRecord(null);
     const params = new URLSearchParams({ collector_id: selectedFetchedSource.collectorId, source_id: selectedFetchedSource.id, limit: "30" });
     api<SourceRecordsPayload>(`/collector/source-records?${params.toString()}`)
       .then((payload) => { if (!cancelled) setSourceRecordPreview(payload); })
@@ -1220,7 +1225,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
         <div className="fetched-data-heading"><div><span className="collector-kicker"><Database size={13} /> 全局数据池 · 不限批次</span><h2>浏览已抓取来源记录</h2><p>列表来自所有已发布采集产物；第一列是来源稳定标识（用于追溯，不是文件夹名称）。当前运行批次只影响上方“补采”和快照操作。</p></div><div className="fetched-data-filters"><label className="fetched-data-filter"><Search size={14} /><input value={sourceQuery} onChange={(event) => setSourceQuery(event.target.value)} placeholder="搜索来源、发布方或采集器" aria-label="搜索已抓取数据" /></label><select value={sourceStateFilter} onChange={(event) => setSourceStateFilter(event.target.value as SourceStateFilter)} aria-label="来源状态筛选"><option value="all">全部来源状态</option><option value="ok">正常</option><option value="failed">失败 / 空响应</option><option value="disabled">已停用</option><option value="unknown">未记录</option></select></div></div>
         <div className="fetched-data-table" role="table" aria-label="已抓取来源列表">
           <div className="fetched-data-row heading" role="row"><span>来源标识 / 发布方</span><span>采集器</span><span>采集统计数</span><span>最近抓取</span><span>状态</span></div>
-          {fetchedSourceRows.slice(0, 80).map((source) => { const sourceKey = `${source.collectorId}:${source.id}`; return <button key={sourceKey} className={`fetched-data-row ${sourceKey === selectedSourceKey ? "selected" : ""}`} role="row" onClick={() => setSelectedSourceKey(sourceKey)}>
+          {fetchedSourceRows.slice(0, 80).map((source) => { const sourceKey = `${source.collectorId}:${source.id}`; return <button key={sourceKey} className={`fetched-data-row ${sourceKey === selectedSourceKey ? "selected" : ""}`} role="row" onClick={() => { setSelectedSourceKey(sourceKey); setSelectedRecord(null); }}>
             <span><b>{source.id}</b><small>{source.publisher || "发布方未记录"}</small></span><span>{source.collectorId}</span><span>{source.entries ?? source.kept ?? "未记录"}</span><span>{source.updatedAt ? source.updatedAt.replace("T", " ").slice(0, 16) : "未记录"}</span><em className={source.state === "ok" ? "ok" : source.state === "disabled" ? "disabled" : "bad"}>{source.state || "未知"}</em>
           </button>; })}
           {!fetchedSourceRows.length && <div className="fetched-data-empty"><Database size={20} /><strong>{allFetchedSourceRows.length ? "没有符合当前筛选条件的来源记录" : "全局数据池暂无可浏览的来源记录"}</strong><span>{allFetchedSourceRows.length ? "调整搜索词或来源状态筛选。" : sourcePoolEmptyReason}</span>{!allFetchedSourceRows.length && <div className="fetched-data-empty-actions"><button onClick={() => openPipelineView("run")}>查看当前批次日志</button><button className="primary" onClick={() => queueRun([], "重新执行采集")}>重新执行采集</button></div>}</div>}
@@ -1228,7 +1233,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
         {allFetchedSourceRows.length > 0 && <small className="fetched-data-more">当前显示 {Math.min(fetchedSourceRows.length, 80)} / {allFetchedSourceRows.length} 条来源记录；筛选仅作用于浏览。</small>}
       </section>
 
-      {selectedFetchedSource && <section className="fetched-data-detail" aria-label="来源记录详情"><div><span className="collector-kicker"><ListChecks size={13} /> 来源记录详情</span><h3>{selectedFetchedSource.id}</h3><p>{selectedFetchedSource.publisher || "发布方未记录"} · 采集器 {selectedFetchedSource.collectorId}</p></div><div className="fetched-data-detail-grid"><span>状态 <b>{selectedFetchedSource.state || "未记录"}</b></span><span>采集统计 <b>{selectedFetchedSource.entries ?? selectedFetchedSource.kept ?? "未记录"}</b></span><span>可浏览条目 <b>{sourceRecordPreview ? sourceRecordPreview.total : "读取中…"}</b></span><span>最近抓取 <b>{selectedFetchedSource.updatedAt ? selectedFetchedSource.updatedAt.replace("T", " ").slice(0, 16) : "未记录"}</b></span><span>连续失败 <b>{selectedFetchedSource.consecutive_failures ?? "未记录"}</b></span></div><p className="fetched-data-detail-error">{selectedFetchedSource.error || "采集统计是来源返回的抓取数量；可浏览条目是去重、过滤后已经落盘的标准化记录，两者可能不同。"}</p><div className="fetched-record-preview"><div className="fetched-record-preview-heading"><span>已落盘条目预览</span><small>{sourceRecordPreview ? `已加载 ${sourceRecordPreview.records.length} / 共 ${sourceRecordPreview.total} 条` : "正在读取…"}</small></div>{sourceRecordPreview?.records.map((record, index) => <article key={String(record.id || index)}><strong>{record.title || "无标题记录"}</strong><span>{record.publisher || selectedFetchedSource.publisher || "发布方未记录"} · {record.published || record.fetched_at || "时间未记录"}</span><p>{record.summary || "无摘要"}</p>{record.url && <a href={record.url} target="_blank" rel="noreferrer">查看原文</a>}</article>)}{sourceRecordPreview && !sourceRecordPreview.records.length && <div className="fetched-record-empty">该来源没有可读取的条目文件。</div>}</div></section>}
+      {selectedFetchedSource && <section className="fetched-data-detail" aria-label="来源记录详情"><div><span className="collector-kicker"><ListChecks size={13} /> 来源记录详情</span><h3>{selectedFetchedSource.id}</h3><p>{selectedFetchedSource.publisher || "发布方未记录"} · 采集器 {selectedFetchedSource.collectorId}</p></div><div className="fetched-data-detail-grid"><span>状态 <b>{selectedFetchedSource.state || "未记录"}</b></span><span>采集统计 <b>{selectedFetchedSource.entries ?? selectedFetchedSource.kept ?? "未记录"}</b></span><span>可浏览条目 <b>{sourceRecordPreview ? sourceRecordPreview.total : "读取中…"}</b></span><span>最近抓取 <b>{selectedFetchedSource.updatedAt ? selectedFetchedSource.updatedAt.replace("T", " ").slice(0, 16) : "未记录"}</b></span><span>连续失败 <b>{selectedFetchedSource.consecutive_failures ?? "未记录"}</b></span></div><p className="fetched-data-detail-error">{selectedFetchedSource.error || "采集统计是来源返回的抓取数量；可浏览条目是去重、过滤后已经落盘的标准化记录，两者可能不同。"}</p><div className="fetched-record-preview"><div className="fetched-record-preview-heading"><span>已落盘条目预览</span><small>{sourceRecordPreview ? `已加载 ${sourceRecordPreview.records.length} / 共 ${sourceRecordPreview.total} 条` : "正在读取…"}</small></div>{sourceRecordPreview?.records.map((record, index) => <article key={String(record.id || index)} className={selectedRecord?.id === record.id ? "selected" : ""} role="button" tabIndex={0} onClick={() => setSelectedRecord(record)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedRecord(record); } }}><strong>{record.title || "无标题记录"}</strong><span>{record.publisher || selectedFetchedSource.publisher || "发布方未记录"} · {record.published || record.fetched_at || "时间未记录"}</span><p>{record.summary || "无摘要"}</p>{record.url && <a href={record.url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>查看原文</a>}</article>)}{sourceRecordPreview && !sourceRecordPreview.records.length && <div className="fetched-record-empty">该来源没有可读取的条目文件。</div>}</div>{selectedRecord && <div className="fetched-record-detail"><div className="fetched-record-detail-heading"><span>记录详情</span><button type="button" onClick={() => setSelectedRecord(null)}>收起</button></div><div className="fetched-record-detail-grid"><span>记录 ID <b>{selectedRecord.id || "未记录"}</b></span><span>来源 <b>{selectedRecord.source_id || selectedFetchedSource.id}</b></span><span>发布方 <b>{selectedRecord.publisher || "未记录"}</b></span><span>发布时间 <b>{selectedRecord.published || "未记录"}</b></span><span>抓取时间 <b>{selectedRecord.fetched_at || "未记录"}</b></span><span>首次发现 <b>{selectedRecord.first_seen || "未记录"}</b></span></div><p className="fetched-record-detail-summary">{selectedRecord.summary || "无摘要"}</p><details><summary>查看完整落盘字段</summary><pre>{JSON.stringify(selectedRecord, null, 2)}</pre></details>{selectedRecord.url && <a className="fetched-record-detail-link" href={selectedRecord.url} target="_blank" rel="noreferrer">打开原文</a>}</div>}</section>}
       </div>
 
       <div className="collector-mobile-toolbar">
