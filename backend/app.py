@@ -246,6 +246,50 @@ def collector_sources(
     )
 
 
+@app.get("/api/collector/source-records")
+def collector_source_records(
+    collector_id: str = Query(..., min_length=1, max_length=120),
+    source_id: str = Query(..., min_length=1, max_length=160),
+    limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=100000),
+):
+    """Read a bounded preview of records for one globally published source.
+
+    This is deliberately read-only and uses the persistent collector output
+    tree, not the currently selected run. It never triggers collection or
+    snapshot import.
+    """
+    if Path(collector_id).name != collector_id or Path(source_id).name != source_id:
+        raise HTTPException(400, "非法来源标识")
+    output = collector_data_root() / collector_id / "output"
+    record_file = output / "ALL-records.jsonl"
+    if not record_file.is_file():
+        record_file = output / "LATEST-records.jsonl"
+    if not record_file.is_file():
+        return {"available": False, "collector_id": collector_id, "source_id": source_id, "total": 0, "records": []}
+    matches = []
+    try:
+        with record_file.open("r", encoding="utf-8-sig") as stream:
+            for line in stream:
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(record, dict) and str(record.get("source_id", "")) == source_id:
+                    matches.append(record)
+    except OSError as exc:
+        raise HTTPException(500, f"来源记录读取失败：{exc}") from exc
+    return {
+        "available": True,
+        "collector_id": collector_id,
+        "source_id": source_id,
+        "total": len(matches),
+        "offset": offset,
+        "limit": limit,
+        "records": matches[offset:offset + limit],
+    }
+
+
 def _find_collector_run(run_id: str) -> dict | None:
     return next(
         (

@@ -219,6 +219,23 @@ type CollectorSourcesPayload = {
   collectors: CollectorSourceGroup[];
 };
 
+type SourceRecordPreview = {
+  id?: string;
+  title?: string;
+  summary?: string;
+  publisher?: string;
+  published?: string;
+  fetched_at?: string;
+  url?: string;
+  [key: string]: unknown;
+};
+
+type SourceRecordsPayload = {
+  available: boolean;
+  total: number;
+  records: SourceRecordPreview[];
+};
+
 type CollectorJobResponse = {
   request_id: string;
   run_id: string;
@@ -393,6 +410,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const [sourceQuery, setSourceQuery] = useState("");
   const [sourceStateFilter, setSourceStateFilter] = useState<SourceStateFilter>("all");
   const [selectedSourceKey, setSelectedSourceKey] = useState("");
+  const [sourceRecordPreview, setSourceRecordPreview] = useState<SourceRecordsPayload | null>(null);
   const [selectedId, setSelectedId] = useState("iran-escalation-monitor");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
@@ -887,6 +905,19 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     return matchesQuery && matchesState;
   });
   const selectedFetchedSource = allFetchedSourceRows.find((source) => `${source.collectorId}:${source.id}` === selectedSourceKey);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedFetchedSource) {
+      setSourceRecordPreview(null);
+      return () => { cancelled = true; };
+    }
+    const params = new URLSearchParams({ collector_id: selectedFetchedSource.collectorId, source_id: selectedFetchedSource.id, limit: "30" });
+    api<SourceRecordsPayload>(`/collector/source-records?${params.toString()}`)
+      .then((payload) => { if (!cancelled) setSourceRecordPreview(payload); })
+      .catch(() => { if (!cancelled) setSourceRecordPreview(null); });
+    return () => { cancelled = true; };
+  }, [selectedFetchedSource?.collectorId, selectedFetchedSource?.id]);
   const sourcePoolEmptyReason = !collectors.length
     ? "当前没有可读取的采集器运行记录。"
     : poolSourceGroups.length
@@ -1141,7 +1172,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
         {allFetchedSourceRows.length > 0 && <small className="fetched-data-more">当前显示 {Math.min(fetchedSourceRows.length, 80)} / {allFetchedSourceRows.length} 条来源记录；筛选仅作用于浏览。</small>}
       </section>
 
-      {selectedFetchedSource && <section className="fetched-data-detail" aria-label="来源记录详情"><div><span className="collector-kicker"><ListChecks size={13} /> 来源记录详情</span><h3>{selectedFetchedSource.id}</h3><p>{selectedFetchedSource.publisher || "发布方未记录"} · 采集器 {selectedFetchedSource.collectorId}</p></div><div className="fetched-data-detail-grid"><span>状态 <b>{selectedFetchedSource.state || "未记录"}</b></span><span>记录数 <b>{selectedFetchedSource.entries ?? selectedFetchedSource.kept ?? "未记录"}</b></span><span>最近抓取 <b>{selectedFetchedSource.updatedAt ? selectedFetchedSource.updatedAt.replace("T", " ").slice(0, 16) : "未记录"}</b></span><span>连续失败 <b>{selectedFetchedSource.consecutive_failures ?? "未记录"}</b></span></div><p className="fetched-data-detail-error">{selectedFetchedSource.error || "本来源没有记录错误信息。"}</p></section>}
+      {selectedFetchedSource && <section className="fetched-data-detail" aria-label="来源记录详情"><div><span className="collector-kicker"><ListChecks size={13} /> 来源记录详情</span><h3>{selectedFetchedSource.id}</h3><p>{selectedFetchedSource.publisher || "发布方未记录"} · 采集器 {selectedFetchedSource.collectorId}</p></div><div className="fetched-data-detail-grid"><span>状态 <b>{selectedFetchedSource.state || "未记录"}</b></span><span>记录数 <b>{selectedFetchedSource.entries ?? selectedFetchedSource.kept ?? "未记录"}</b></span><span>最近抓取 <b>{selectedFetchedSource.updatedAt ? selectedFetchedSource.updatedAt.replace("T", " ").slice(0, 16) : "未记录"}</b></span><span>连续失败 <b>{selectedFetchedSource.consecutive_failures ?? "未记录"}</b></span></div><p className="fetched-data-detail-error">{selectedFetchedSource.error || "本来源没有记录错误信息。"}</p><div className="fetched-record-preview"><div className="fetched-record-preview-heading"><span>抓取条目预览</span><small>{sourceRecordPreview ? `${Math.min(sourceRecordPreview.records.length, 30)} / ${sourceRecordPreview.total} 条` : "正在读取…"}</small></div>{sourceRecordPreview?.records.map((record, index) => <article key={String(record.id || index)}><strong>{record.title || "无标题记录"}</strong><span>{record.publisher || selectedFetchedSource.publisher || "发布方未记录"} · {record.published || record.fetched_at || "时间未记录"}</span><p>{record.summary || "无摘要"}</p>{record.url && <a href={record.url} target="_blank" rel="noreferrer">查看原文</a>}</article>)}{sourceRecordPreview && !sourceRecordPreview.records.length && <div className="fetched-record-empty">该来源没有可读取的条目文件。</div>}</div></section>}
 
       <div className="collector-mobile-toolbar">
         <button onClick={() => setFiltersOpen(true)}><Filter size={15} /> 筛选</button>
