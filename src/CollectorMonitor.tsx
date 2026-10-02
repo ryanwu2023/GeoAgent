@@ -138,6 +138,7 @@ type CollectorRuntimePayload = {
 type CollectorRunSummary = {
   run_id: string;
   run_kind?: string;
+  run_status?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
   updated_at?: string | null;
@@ -398,6 +399,15 @@ function runKindLabel(value?: string) {
 
 function eventStatusLabel(value?: string | null) {
   return ({ running: "运行中", succeeded: "成功", success: "成功", failed: "失败", accepted: "已通过", pending: "待核对" } as Record<string, string>)[value || ""] || value || "已记录";
+}
+
+function processEventLabel(event: CollectorEvent, currentCollectors: CollectorRecord[]) {
+  if (event.event_type === "collector_log") return "日志";
+  if (event.event_type === "collector_started") {
+    const collector = currentCollectors.find((item) => item.id === event.collector_id);
+    return collector?.status === "running" ? "运行中" : collector ? statusMeta[collector.status].label : "已启动";
+  }
+  return eventStatusLabel(event.status);
 }
 
 export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSnapshotChange, onSnapshotInspect }: CollectorMonitorProps) {
@@ -1194,7 +1204,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             <div className="batch-panel-heading"><span className="collector-kicker"><History size={13} /> 批次列表</span><strong>{historyRuns.length ? `${historyRuns.length} 个批次` : "暂无批次"}</strong></div>
             <div className="batch-list">
               {historyRuns.map((run) => <button key={run.run_id} className={run.run_id === runtimeRunId ? "selected" : ""} onClick={() => void loadHistoricalRun(run.run_id)}>
-                <span><b>{run.run_id}</b><small>{runKindLabel(run.run_kind)}</small></span><em className={run.failed_count ? "bad" : "ok"}>{run.failed_count ? `${run.failed_count} 个失败` : "全部完成"}</em><small>{formatDateTime(run.updated_at)}</small>
+                <span><b>{run.run_id}</b><small>{runKindLabel(run.run_kind)}</small></span><em className={run.run_status === "running" ? "running" : run.failed_count ? "bad" : "ok"}>{run.run_status === "running" ? "运行中" : run.failed_count ? `${run.failed_count} 个失败` : "全部完成"}</em><small>{formatDateTime(run.updated_at)}</small>
               </button>)}
               {!historyRuns.length && <div className="batch-list-empty">正在等待采集批次…</div>}
             </div>
@@ -1211,7 +1221,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             {selected ? <>
               <div className="batch-detail-summary"><span>阶段 <b>{selected.stage}</b></span><span>产物 <b>{selected.outputs}</b></span><span>耗时 <b>{selected.elapsed}</b></span><span>来源 <b>{selected.sourceHealth}</b></span></div>
               <div className="batch-source-detail"><span>错误信息</span><strong className={selected.errorMessage ? "bad" : "ok"}>{selected.errorType || "无错误"}</strong><p>{selected.errorMessage || "本次采集没有记录错误。"}</p></div>
-              <div className="batch-event-list">{ledgerEvents.filter((event) => !event.collector_id || event.collector_id === selected.id).map((event) => <button key={event.id}><span><b>{event.event_type}</b><small>{formatDateTime(event.created_at, true)}</small></span><em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{eventStatusLabel(event.status)}</em><p>{event.message || "已记录"}</p></button>)}{!ledgerEvents.length && <div className="batch-list-empty">暂无事件记录。</div>}</div>
+              <div className="batch-event-list">{ledgerEvents.filter((event) => !event.collector_id || event.collector_id === selected.id).map((event) => <button key={event.id}><span><b>{event.event_type}</b><small>{formatDateTime(event.created_at, true)}</small></span><em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{processEventLabel(event, collectors)}</em><p>{event.message || "已记录"}</p></button>)}{!ledgerEvents.length && <div className="batch-list-empty">暂无事件记录。</div>}</div>
               <pre className="batch-log-tail">{collectorLog?.available ? collectorLog.content || "（日志为空）" : "当前源暂无可读日志尾部"}</pre>
             </> : <div className="batch-list-empty">{runtimeRunStatus === "running" ? "批次正在运行，选择的采集器状态和日志会自动出现在这里。" : "从中间列表选择一个采集源查看详情。"}</div>}
           </div>
@@ -1219,9 +1229,9 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             <div className="batch-panel-heading"><span className="collector-kicker"><Activity size={13} /> 抓取过程</span><strong>{runtimeRunStatus === "running" ? "实时更新中" : `${ledgerEvents.length} 条记录`}</strong></div>
             <div className="batch-process-list">
               {ledgerEvents.slice().reverse().map((event) => <div className="batch-process-item" key={event.id}>
-                <span className={`batch-process-dot ${event.status === "failed" ? "bad" : event.status === "succeeded" || event.event_type === "collector_finished" ? "ok" : "running"}`} />
-                <span className="batch-process-main"><b>{event.collector_id || "批次"}</b><small>{event.event_type} · {formatDateTime(event.created_at, true)}</small><p>{event.message || eventStatusLabel(event.status)}</p></span>
-                <em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{eventStatusLabel(event.status)}</em>
+                <span className={`batch-process-dot ${event.status === "failed" ? "bad" : event.event_type === "collector_log" ? "log" : event.status === "succeeded" || event.event_type === "collector_finished" ? "ok" : "running"}`} />
+                <span className="batch-process-main"><b>{event.collector_id || "批次"}</b><small>{event.event_type} · {formatDateTime(event.created_at, true)}</small><p>{event.message || processEventLabel(event, collectors)}</p></span>
+                <em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{processEventLabel(event, collectors)}</em>
               </div>)}
               {!ledgerEvents.length && <div className="batch-list-empty">等待采集器输出过程日志…</div>}
             </div>
