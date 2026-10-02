@@ -106,6 +106,21 @@ def present_record_summary(record, cache=None, text_limit=600):
         'source_name': source_name(record['source_name'], cache),
     }
 
+def present_map_record(record, cache=None):
+    """Return only the fields used to draw and inspect map clusters."""
+    cache = translation_cache() if cache is None else cache
+    metadata = event_metadata(record)
+    metadata['points'] = [
+        {**point, 'label': chinese_text(point['label'], cache, '相关地区')}
+        for point in metadata['points']
+    ]
+    return {
+        'id': record['id'],
+        'url': record.get('url', ''),
+        'title': normalize_terms(record.get('title_zh') or chinese_text(record['title'], cache)),
+        **metadata,
+    }
+
 def present_answer(answer):
     cache=translation_cache()
     return {**answer,'facts':[{**f,'text':f['text'].replace(' USD',' 美元')} for f in answer['facts']],'citations':[present_record(r,cache) for r in answer['citations']]}

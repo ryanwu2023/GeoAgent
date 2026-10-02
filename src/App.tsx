@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useDeferredValue, useEffect, useRef, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
@@ -16,12 +16,13 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { api, dateText, num } from "./api";
+import { api, apiPut, dateText, num } from "./api";
 import type {
   Answer,
   Asset,
   Brief,
   Evidence,
+  EvidencePage,
   Metric,
   Status,
   Workspace,
@@ -29,6 +30,7 @@ import type {
 import ReviewPanel from "./ReviewPanel";
 import MetricChart from "./MetricChart";
 import MetricGuide from "./MetricGuide";
+import CollectorMonitor from "./CollectorMonitor";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { briefPresentation } from "./briefPresentation";
@@ -78,6 +80,7 @@ export default function App() {
     [metricGroup, setMetricGroup] = useState("全部");
   const [status, setStatus] = useState<Status | null>(null),
     [sid, setSid] = useState(""),
+    [workingSid, setWorkingSid] = useState(""),
     [page, setPage] = useState("usiran"),
     [dimension, setDimension] = useState(""),
     [start, setStart] = useState(""),
@@ -91,8 +94,11 @@ export default function App() {
     [asset, setAsset] = useState<Asset | null>(null),
     [sourcesOpen, setSourcesOpen] = useState(false),
     [search, setSearch] = useState(""),
-    [tab, setTab] = useState("map"),
-    [limit, setLimit] = useState(30);
+    [tab, setTab] = useState("map");
+  const [evidenceRows, setEvidenceRows] = useState<Evidence[]>([]),
+    [evidenceTotal, setEvidenceTotal] = useState(0),
+    [evidenceMore, setEvidenceMore] = useState(false),
+    [evidenceLoading, setEvidenceLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(false),
     [question, setQuestion] = useState(""),
     [answer, setAnswer] = useState<Answer | null>(null),
@@ -106,7 +112,8 @@ export default function App() {
     [diff, setDiff] = useState("");
   const [resetKey, setResetKey] = useState(0);
   const queryVersion = useRef(0),
-    selectionVersion = useRef(0);
+    selectionVersion = useRef(0),
+    evidenceVersion = useRef(0);
   const lastTopic = useRef("usiran");
   if (page !== "briefs") lastTopic.current = page;
   const topic = lastTopic.current;
@@ -137,11 +144,6 @@ export default function App() {
         if (!cancelled) {
           setStatus(s);
           setWork(w);
-          setSelected((current) =>
-            current
-              ? w.records.find((r) => r.id === current.id) || current
-              : null,
-          );
         }
       } catch {}
     }, 60000);
@@ -153,9 +155,30 @@ export default function App() {
   useEffect(() => {
     refreshStatus()
       .then((s) => {
-        if (s.snapshots.length) setSid(s.snapshots[0].id);
+        setWorkingSid(s.working_snapshot_id || "");
+        const preferred = s.working_snapshot_id && s.snapshots.some((item) => item.id === s.working_snapshot_id)
+          ? s.working_snapshot_id
+          : s.snapshots[0]?.id;
+        if (preferred) setSid(preferred);
       })
       .catch((e) => setError(e.message));
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      api<Status>("/status")
+        .then((s) => {
+          if (!cancelled) {
+            setStatus(s);
+            setWorkingSid(s.working_snapshot_id || "");
+          }
+        })
+        .catch(() => {});
+    }, 10000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
   useEffect(() => {
     if (!sid) return;
@@ -171,7 +194,6 @@ export default function App() {
     setError("");
     setSelected(null);
     setAsset(null);
-    setLimit(30);
     if (cached && Date.now() - cached.time < 60000) {
       setWork(cached.data);
       setLoading(false);
@@ -195,6 +217,42 @@ export default function App() {
         if (queryVersion.current === version) setLoading(false);
       });
   }, [sid, topic, dimension, start, end]);
+  const deferredSearch = useDeferredValue(search.trim());
+  async function loadEvidence(offset = 0) {
+    if (!sid) return;
+    const version = ++evidenceVersion.current;
+    setEvidenceLoading(true);
+    try {
+      const result = await api<EvidencePage>(
+        "/evidence?" +
+          new URLSearchParams({
+            snapshot_id: sid,
+            topic,
+            dimension,
+            start,
+            end,
+            q: deferredSearch,
+            offset: String(offset),
+            limit: "30",
+          }),
+      );
+      if (version === evidenceVersion.current) {
+        setEvidenceRows((current) => offset ? [...current, ...result.records] : result.records);
+        setEvidenceTotal(result.total);
+        setEvidenceMore(result.has_more);
+      }
+    } catch (e) {
+      if (version === evidenceVersion.current) setError((e as Error).message);
+    } finally {
+      if (version === evidenceVersion.current) setEvidenceLoading(false);
+    }
+  }
+  useEffect(() => {
+    setEvidenceRows([]);
+    setEvidenceTotal(0);
+    setEvidenceMore(false);
+    if (sid) loadEvidence(0);
+  }, [sid, topic, dimension, start, end, deferredSearch]);
   useEffect(() => {
     selectionVersion.current++;
     setAnswer(null);
@@ -243,13 +301,29 @@ export default function App() {
       }>("/import", {});
       await refreshStatus();
       setSid(r.id);
+      await apiPut("/workspace-selection", { snapshot_id: r.id });
+      setWorkingSid(r.id);
       setNotice(
-        `${r.created ? "已冻结新快照" : "数据未变化，使用已有快照"} · ${r.count} 条归并记录${r.errors.length ? ` · ${r.errors.length} 条解析异常` : ""}`,
+        `${r.created ? "已冻结新快照" : "数据未变化，使用已有快照"} · ${r.count} 条归并记录${r.errors.length ? ` · ${r.errors.length} 条解析异常` : ""} · 本操作只导入已发布采集产物，不会启动采集器`,
       );
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setImporting(false);
+    }
+  }
+  async function selectSnapshot(nextId: string) {
+    const previousId = sid;
+    setSid(nextId);
+    if (!nextId) return;
+    try {
+      await apiPut("/workspace-selection", { snapshot_id: nextId });
+      setWorkingSid(nextId);
+      setNotice(`已将 ${nextId.slice(0, 10)}… 设为工作快照`);
+      window.setTimeout(() => setNotice(""), 4000);
+    } catch (e) {
+      setSid(previousId);
+      setError((e as Error).message);
     }
   }
   async function openEvidence(id: string, metric: Metric | null = null) {
@@ -342,24 +416,6 @@ export default function App() {
     setChatOpen(false);
     setSourcesOpen(false);
   }
-  const visible =
-    work?.records.filter((r) =>
-      (
-        r.title +
-        " " +
-        r.text +
-        " " +
-        (r.original_title || "") +
-        " " +
-        r.source_name +
-        " " +
-        r.signal_label +
-        " " +
-        r.event_category_label
-      )
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-    ) || [];
   const topicInfo = work?.topics.find((t) => t.id === topic);
   const dimensionCount =
     work?.topics.flatMap((t) => t.dimensions).filter((d) => d.count > 0)
@@ -395,22 +451,27 @@ export default function App() {
           ))}
         </nav>
         <div className="header-actions">
-          <select
-            aria-label="数据快照"
-            value={sid}
-            onChange={(e) => setSid(e.target.value)}
-          >
-            {!sid && <option value="">尚未导入</option>}
-            {status?.snapshots.map((s) => (
-              <option key={s.id} value={s.id}>
-                {dateText(s.created_at)} · {s.id.slice(0, 8)}
-              </option>
-            ))}
-          </select>
+          <label className="snapshot-selector">
+            <span>数据快照</span>
+            <select
+              aria-label="数据快照"
+              title="选择不可变数据快照"
+              value={sid}
+              onChange={(e) => void selectSnapshot(e.target.value)}
+            >
+              {!sid && <option value="">尚未导入</option>}
+              {status?.snapshots.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {dateText(s.created_at)} · {s.id.slice(0, 8)}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             disabled={importing}
             onClick={importData}
-            title="导入爬虫数据"
+            title="手动从已发布采集产物导入快照，不会启动采集器"
+            aria-label="手动导入快照（不会启动采集器）"
           >
             <RefreshCw size={15} className={importing ? "spin" : ""} />
             <span>更新快照</span>
@@ -418,6 +479,7 @@ export default function App() {
           <button
             className="primary"
             aria-label="生成双主题简报"
+            title="基于当前选定快照生成双主题简报"
             disabled={!sid || generating}
             onClick={generate}
           >
@@ -443,7 +505,7 @@ export default function App() {
           </button>
         </div>
       )}
-      <div className="prototype-grid">
+      <div className={`prototype-grid ${tab === "pipeline" ? "pipeline-mode" : ""}`}>
         <main className="monitor-panel">
           <div className="monitor-tabs">
             {[
@@ -451,6 +513,7 @@ export default function App() {
               ["evidence", "证据台账"],
               ["scenarios", "情景推演"],
               ["sources", "数据源"],
+              ["pipeline", "采集管线监控"],
               ["chat", "智能问答"],
               ["metrics", "量化指标"],
               ["assets", "资产关联"],
@@ -480,7 +543,7 @@ export default function App() {
               </button>
             ))}
           </div>
-          {page !== "briefs" && (
+          {page !== "briefs" && tab !== "pipeline" && (
             <div className="compact-filters">
               <select
                 aria-label="跟踪维度"
@@ -528,7 +591,7 @@ export default function App() {
               )}
             </div>
           )}
-          {!sid && (
+          {!sid && tab !== "pipeline" && (
             <div className="empty landing">
               <Database size={38} />
               <h2>接入真实爬虫数据</h2>
@@ -549,7 +612,22 @@ export default function App() {
               正在加载快照…
             </div>
           )}
-          {work && page !== "briefs" && (
+          {tab === "pipeline" && (
+            <CollectorMonitor
+              selectedSnapshotId={workingSid}
+              onWorkingSnapshotChange={(nextId) => {
+                setWorkingSid(nextId);
+                setSid(nextId);
+              }}
+              onSnapshotInspect={(snapshotId) => {
+                setSid(snapshotId);
+                setTab("map");
+                setNotice(`已打开快照 ${snapshotId.slice(0, 10)}… 的研究数据范围`);
+                window.setTimeout(() => setNotice(""), 4000);
+              }}
+            />
+          )}
+          {work && page !== "briefs" && tab !== "pipeline" && (
             <div
               className={
                 "center-view " + (tab === "map" ? "map-view" : "scroll-view")
@@ -583,14 +661,18 @@ export default function App() {
                         value={search}
                         onChange={(e) => {
                           setSearch(e.target.value);
-                          setLimit(30);
                         }}
                       />
                     </div>
-                    <small>{visible.length} 条 · 查看新闻详情</small>
+                    <small>
+                      共 {evidenceTotal} 条 · 当前加载 {evidenceRows.length} 条
+                      {work.snapshot.cleaning?.duplicates_merged
+                        ? ` · 已归并 ${work.snapshot.cleaning.duplicates_merged} 条重复记录`
+                        : ""}
+                    </small>
                   </div>
                   <div className="evidence-list">
-                    {visible.slice(0, limit).map((r) => (
+                    {evidenceRows.map((r) => (
                       <button
                         className="evidence-row"
                         key={r.id}
@@ -617,7 +699,7 @@ export default function App() {
                         <ChevronRight size={16} />
                       </button>
                     ))}
-                    {!visible.length && (
+                    {!evidenceRows.length && !evidenceLoading && (
                       <div className="empty">
                         <BookOpen />
                         <h3>该范围尚无可用证据</h3>
@@ -627,12 +709,13 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  {visible.length > limit && (
+                  {evidenceMore && (
                     <button
                       className="load-more"
-                      onClick={() => setLimit(limit + 30)}
+                      disabled={evidenceLoading}
+                      onClick={() => loadEvidence(evidenceRows.length)}
                     >
-                      再显示 30 条
+                      {evidenceLoading ? "正在加载…" : "再加载 30 条"}
                     </button>
                   )}
                 </>
@@ -1206,7 +1289,7 @@ export default function App() {
                     </small>
                   </div>
                 ))}
-                <h3>模型连接</h3>
+                <h3>Agent / 模型连接</h3>
                 <button
                   disabled={checkingModel}
                   onClick={async () => {
@@ -1229,13 +1312,13 @@ export default function App() {
                     }
                   }}
                 >
-                  {checkingModel ? "正在检查…" : "测试模型连接"}
+                  {checkingModel ? "正在检查…" : "测试 Agent 连接"}
                 </button>
                 {modelCheck && <p role="status">{modelCheck}</p>}
                 <p>
                   {status?.model.configured
                     ? `已配置 ${status.model.model}`
-                    : "尚未配置。请在 .env 填写模型地址与密钥；保存后直接测试连接。服务不提供模型列表时再填写模型名称。"}
+                    : "尚未配置。推荐填写 Pi Chat 地址与应用 API Key；也可继续使用兼容 Chat Completions 的模型配置。"}
                 </p>
                 <p className="muted">
                   凭据只由后端读取，页面不接收或保存密钥。
@@ -1516,7 +1599,7 @@ export default function App() {
               </section>
               <section className="insight-section">
                 <h3>最新证据线索</h3>
-                {work?.records.slice(0, 5).map((r) => (
+                {evidenceRows.slice(0, 5).map((r) => (
                   <button
                     key={r.id}
                     className="insight-news"
@@ -1531,7 +1614,7 @@ export default function App() {
                     <span>{r.title}</span>
                   </button>
                 ))}
-                {!work?.records.length && (
+                {!evidenceRows.length && !evidenceLoading && (
                   <p className="muted">当前筛选没有可用记录</p>
                 )}
               </section>

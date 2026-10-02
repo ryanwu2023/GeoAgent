@@ -4,6 +4,8 @@ React / TypeScript + MapLibre GL / deck.gl + FastAPI / SQLite。双主题、十�
 
 [产品设计文档 V6](docs/design-v6.md) · [适配器协议](docs/adapter-contract.md)
 
+[抓取说明与采集器维护手册](docs/抓取说明/README.md)
+
 页面恢复 V5 原型的顶部主题切换、中央地图与功能页签、右侧常驻研判布局。支持全球/主题聚焦、图层开关和点位到证据联动；地图在桌面首屏完整显示。综合研判默认展示资产关联矩阵。
 
 ## 运行
@@ -11,7 +13,7 @@ React / TypeScript + MapLibre GL / deck.gl + FastAPI / SQLite。双主题、十�
 Windows PowerShell，在本目录执行：
 
 ```powershell
-python -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m scripts.bootstrap_env
 npm.cmd ci
 npm.cmd run build
 .\start.ps1
@@ -19,7 +21,32 @@ npm.cmd run build
 
 打开 http://127.0.0.1:8000 。API 文档为 `/docs`。仅绑定本机；此版本没有多用户认证，不部署到公网。
 
-开发：一个终端运行 `python -m uvicorn backend.app:app --reload --host 127.0.0.1 --port 8000`，另一个运行 `npm.cmd run dev`。
+`start.ps1` 是单进程生产式本地服务入口，默认端口为 8000；需要换端口时可执行
+`.\start.ps1 -Port 8011`。脚本会先检查端口和 `/api/status`，不会停止未被它记录的进程。
+
+macOS / Linux：
+
+```bash
+.venv/bin/python -m scripts.bootstrap_env
+npm ci && npm run build
+.venv/bin/python -m scripts.serve
+```
+
+开发联调（当前推荐环境）可由一个跨平台入口同时启动前后端：
+
+```bash
+.venv/bin/python -m scripts.start_local
+```
+
+默认打开 http://127.0.0.1:8010/，Vite 将 `/api` 转发到 http://127.0.0.1:8011。Windows 使用 `.venv\Scripts\python.exe -m scripts.start_local`。可通过 `GEOAGENT_API_PORT`、`GEOAGENT_WEB_PORT` 或命令行参数覆盖端口：
+
+```bash
+.venv/bin/python -m scripts.start_local --api-port 8121 --web-port 8120
+```
+
+只启动 API：`.venv/bin/python -m scripts.start_local --no-frontend`；查看命令但不启动：`.venv/bin/python -m scripts.start_local --dry-run`。按 `Ctrl-C` 会同时停止该入口拉起的两个子进程。
+
+如果只需要单进程页面，继续使用 `.venv/bin/python -m scripts.serve`；它默认监听 8000，也支持 `--port` 或 `GEOAGENT_API_PORT`。不要让 Vite 的 8010 代理指向被 Colima/SSH 占用的 8000。
 
 ## 接入现有数据
 
@@ -33,9 +60,11 @@ npm.cmd run build
 
 地图底图已本地打包，无需外部瓦片或地图密钥。地点标记来自爬虫公开记录，默认只表示文章提及，不证明部署。
 
-## 大模型
+## Pi Chat Agent / 大模型
 
-复制 `.env.example` 为 `.env`，配置 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY` 后重启服务。兼容 `/chat/completions` 接口。请求在用户提问或生成简报时发起，发送的是检索到的原文片段、计算结果和研究规则。
+复制 `.env.example` 为 `.env`。推荐配置 `PICHAT_BASE_URL=http://127.0.0.1:5585` 与 `PICHAT_API_KEY`，后端会调用 pi-chat-server 的 `POST /api/v1/chat`，复用该 Key 绑定的 Agent、工具与治理能力。应用 Key 需要 `chat:invoke` scope，且只由 GeoAgent 后端读取，不会发送到浏览器。
+
+未配置 Pi Chat 时，也可以配置 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`，使用兼容 `/chat/completions` 的模型作为降级。请求只在用户提问、翻译或生成简报时发起，发送的是检索到的原文片段、计算结果和研究规则；Pi Chat 优先于直连模型配置。
 
 未配置模型时，使用真实的本地检索、数值计算及模板简报，并明确标注，不伪装成模型输出。模型输出需要 JSON，引用不存在、出现未经授权的新数值、接口失败或超时都会保留本地结果。引用校验不代表语义已经验证。
 
@@ -52,6 +81,14 @@ python scripts/collect.py --list
 python scripts/collect.py --id xinhua-monitor
 python scripts/collect.py --topic ukraine
 python scripts/collect.py --all
+.venv/bin/python -m scripts.collector_service --once --auto-import --retry-attempts 2
+.venv/bin/python -m scripts.collector_service_config --platform macos --output data/service-config/com.geoagent.collector.plist
+.venv/bin/python -m scripts.collector_service_ctl status --platform macos --dry-run
+# 明确执行安装/卸载前，先用 --dry-run 核对命令
+.venv/bin/python -m scripts.collector_service_ctl install --platform macos --dry-run
+.venv/bin/python -m scripts.collector_service_ctl uninstall --platform macos --dry-run
+# Windows PowerShell：在 Windows 环境执行
+python -m scripts.collector_service_config --platform windows --output data/service-config/GeoAgent-Collector.xml
 ```
 
 完整运行数据保存在 `data/collector-output` 并由 Git 忽略；`examples/demo-data` 是克隆仓库后的有限演示快照。公开发布前运行 `python scripts/audit_repository.py`，检查环境文件、疑似密钥、个人绝对路径和超大文件。本项目尚未选择开源许可证，公开仓库前需由仓库所有者确定。
@@ -63,7 +100,7 @@ python -m pytest -q
 npm.cmd run build
 ```
 
-测试覆盖不可变快照、重复导入、修订、缺失/零值、错误舰位、适配器扩展、同源转载、日期范围、引用约束、模型失败/超时、模型资产结果隔离、简报下载与三轮 API 演练。当前 25 项测试通过；模型测试使用模拟接口，不代表真实模型已经联调。
+测试覆盖不可变快照、重复导入、修订、缺失/零值、错误舰位、适配器扩展、同源转载、日期范围、引用约束、Agent/模型失败与超时、资产结果隔离、简报下载、API 演练、本地启动入口契约及采集服务账本/锁/重试/staging/事件 API/手动运行/自动导入门禁/跨平台后台配置与控制/项目私有虚拟环境/日志尾部/来源状态投影。当前全量 130 项测试通过；Pi Chat 契约测试使用模拟接口，真实联调仍需要有效的应用 API Key。
 
 ## 研究边界
 

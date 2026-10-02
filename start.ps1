@@ -1,11 +1,11 @@
-param([switch]$NoBrowser, [switch]$Build)
+param([switch]$NoBrowser, [switch]$Build, [int]$Port = 8000, [string]$BindHost = '127.0.0.1')
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 $statePath = Join-Path $PSScriptRoot 'data\server-process.json'
 $entryPath = Join-Path $PSScriptRoot 'scripts\serve.py'
-$url = 'http://127.0.0.1:8000/'
+$url = "http://$BindHost`:$Port/"
 try {
-    $listener = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
+    $listener = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
     if ($listener) {
         if (Test-Path -LiteralPath $statePath) {
             $saved = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
@@ -16,9 +16,16 @@ try {
                 exit 0
             }
         }
-        throw 'Port 8000 is occupied by an untracked process. No process was stopped.'
+        throw "Port $Port is occupied by an untracked process. No process was stopped."
     }
-    $python = (Get-Command python -ErrorAction Stop).Source
+    $venvPython = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+    if (-not (Test-Path -LiteralPath $venvPython)) {
+        $bootstrap = Join-Path $PSScriptRoot 'scripts\bootstrap_env.py'
+        $systemPython = (Get-Command python -ErrorAction Stop).Source
+        & $systemPython $bootstrap
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $venvPython)) { throw 'Project .venv creation failed.' }
+    }
+    $python = $venvPython
     & $python -c 'import fastapi, uvicorn, httpx'
     if ($LASTEXITCODE -ne 0) { throw 'Dependencies missing. Run: python -m pip install -r requirements.txt' }
     if (-not (Test-Path -LiteralPath '.env')) { Copy-Item -LiteralPath '.env.example' -Destination '.env' }
@@ -31,7 +38,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }
     }
     New-Item -ItemType Directory -Path (Join-Path $PSScriptRoot 'data') -Force | Out-Null
-    $process = Start-Process -FilePath $python -ArgumentList @('-u', ('"' + $entryPath + '"')) -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $PSScriptRoot 'server.stdout.log') -RedirectStandardError (Join-Path $PSScriptRoot 'server.stderr.log') -PassThru
+    $process = Start-Process -FilePath $python -ArgumentList @('-u', ('"' + $entryPath + '"'), '--host', $BindHost, '--port', "$Port") -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $PSScriptRoot 'server.stdout.log') -RedirectStandardError (Join-Path $PSScriptRoot 'server.stderr.log') -PassThru
     $identity = Get-CimInstance Win32_Process -Filter "ProcessId=$($process.Id)"
     @{processId=$process.Id;createdAt=$identity.CreationDate.ToUniversalTime().ToString('o');entry=$entryPath;url=$url} | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding UTF8
     $ready = $false

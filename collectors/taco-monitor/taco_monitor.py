@@ -1623,7 +1623,23 @@ def selftest(cfg):
     try:
         net.WRITE_FALLBACKS.clear()
         net.INPLACE_WRITES.clear()
-        net.atomic_write_text(locked, "second")
+
+        # Opening a file does not deny rename-over on POSIX systems, while
+        # Windows can reject the same operation with a sharing violation.
+        # Inject that denial here so the recovery path is tested
+        # deterministically on every platform.
+        original_replace = net.os.replace
+
+        def deny_locked_replace(src, dst):
+            if os.path.abspath(dst) == os.path.abspath(locked):
+                raise PermissionError("simulated rename-over denial")
+            return original_replace(src, dst)
+
+        net.os.replace = deny_locked_replace
+        try:
+            net.atomic_write_bytes(locked, "second".encode("utf-8-sig"), retries=0)
+        finally:
+            net.os.replace = original_replace
         ck("rename-over 被拒时改为就地覆盖（保住标准名）",
            len(net.INPLACE_WRITES) == 1 and not net.WRITE_FALLBACKS,
            "inplace=%d fallback=%d" % (len(net.INPLACE_WRITES),

@@ -658,7 +658,11 @@ class Engine:
                     continue   # 非美元语境的里亚尔金额（如面包每块价格）不收
                 if self.fx_excl.search(s):
                     continue   # 海湾里亚尔
-                val = self._num(mt.group(1)) * self.mult[mt.group(2)]
+                # The regex is case-insensitive, so normalize the captured unit
+                # before looking it up. Otherwise "2.3 Million rials" raises
+                # KeyError while the lowercase spelling works.
+                multiplier = self.mult.get((mt.group(2) or "").lower(), 1.0)
+                val = self._num(mt.group(1)) * multiplier
                 unit = "toman" if mt.group(3).lower().startswith("toman") else "rial"
                 rial = val * 10 if unit == "toman" else val
                 if not (1e4 <= rial <= 1e10):
@@ -1338,6 +1342,8 @@ def run_selftest(cfg, eng):
     # --- 数值抽取 fx ---
     ex = eng.extract_metrics("The dollar hit 2.3 million rials on the free market, traders said.")
     ck("fx 2.3M rial", ex and any(m["kind"] == "fx" and abs(m["rial_per_usd"] - 2.3e6) < 1 for m in ex))
+    ex = eng.extract_metrics("The dollar hit 2.3 Million rials on the free market, traders said.")
+    ck("fx 2.3M rial (case-insensitive)", ex and any(m["kind"] == "fx" and abs(m["rial_per_usd"] - 2.3e6) < 1 for m in ex))
     ex = eng.extract_metrics("USD sold at 230,600 toman in Tehran's market.")
     ck("fx 230600 toman→2.306M rial", ex and any(
         m["kind"] == "fx" and m["unit"] == "toman" and abs(m["rial_per_usd"] - 2.306e6) < 1 for m in ex))

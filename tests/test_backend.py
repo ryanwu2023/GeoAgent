@@ -70,6 +70,7 @@ def test_crawler_dedup_preserves_archives_and_partial_failures(tmp_path):
     assert len(s["records"])==1
     assert len(s["records"][0]["adapters"])==2
     assert len(s["errors"])==2
+    assert s["cleaning"]=={"raw_records":4,"duplicates_merged":1,"invalid_records":2,"unique_records":1}
     assert any(x["state"]=="not_connected" for x in s["sources"])
 
 def test_extension_contract_enters_topic_metrics_and_evidence(tmp_path):
@@ -83,19 +84,118 @@ def test_extension_contract_enters_topic_metrics_and_evidence(tmp_path):
     (d/"geo-v6.json").write_text(json.dumps(data),encoding="utf-8")
     with pytest.raises(ValueError):load_bundle(tmp_path)
 
-def test_api_filters_and_snapshot_bound_citations():
+def test_api_filters_and_snapshot_bound_citations(tmp_path, monkeypatch):
     s=stored();client=TestClient(app)
+    monkeypatch.setattr("backend.app.collector_data_root", lambda: tmp_path / "collector-output")
+    collector_summary=client.get('/api/collector/summary')
+    assert collector_summary.status_code==200
+    assert collector_summary.json()['available'] is False
+    collector_runs=client.get('/api/collector/runs')
+    assert collector_runs.status_code==200
+    assert collector_runs.json()['runs']==[]
+    snapshot_projection=client.get('/api/collector/snapshots')
+    assert snapshot_projection.status_code==200
+    assert snapshot_projection.json()['source']=='research-sqlite-snapshot-projection'
+    assert snapshot_projection.json()['snapshots'][0]['id']==s['id']
+    assert snapshot_projection.json()['snapshots'][0]['records']==1
+    assert client.get('/api/workspace-selection').json()['available'] is False
+    selected=client.put('/api/workspace-selection',json={'snapshot_id':s['id']})
+    assert selected.status_code==200 and selected.json()['snapshot_id']==s['id']
+    assert client.get('/api/workspace-selection').json()['snapshot_id']==s['id']
+    assert client.get('/api/status').json()['working_snapshot_id']==s['id']
+    assert client.put('/api/workspace-selection',json={'snapshot_id':'missing'}).status_code==404
+    assert client.get('/api/collector/ledger').json()=={"available":False,"source":"none","runs":[]}
+    assert client.get('/api/collector/sources').json()=={"available":False,"source":"none","collector_id":None,"collectors":[]}
+    assert client.get('/api/collector/runs/missing/events').json()["available"] is False
+    assert client.get('/api/collector/runs/missing').status_code==404
     assert len(client.get("/api/workspace",params={"snapshot_id":s["id"],"topic":"ukraine"}).json()["records"])==0
     assert len(client.get("/api/workspace",params={"snapshot_id":s["id"],"start":"2026-09-18"}).json()["records"])==0
     assert client.get("/api/workspace",params={"snapshot_id":"missing"}).status_code==404
     assert client.get("/api/workspace",params={"snapshot_id":s["id"],"start":"2026-09-20","end":"2026-09-01"}).status_code==422
     assert client.post("/api/import",headers={"Origin":"https://untrusted.test"}).status_code==403
+    page=client.get("/api/evidence",params={"snapshot_id":s["id"],"q":"Iran","limit":1}).json()
+    assert page["total"]==1 and len(page["records"])==1 and page["has_more"] is False
+    assert client.get("/api/evidence",params={"snapshot_id":s["id"],"q":"missing"}).json()["records"]==[]
+    assert "text" not in client.get("/api/workspace",params={"snapshot_id":s["id"]}).json()["records"][0]
     result=client.post("/api/ask",json={"snapshot_id":s["id"],"question":"采购指标变化","topic":"usiran"}).json()
     assert result["mode"]=="本地证据检索"
     assert "10.00%" in result["facts"][0]["text"]
     assert result["snapshot_id"]==s["id"]
     assert all(r["id"] in {x["id"] for x in s["records"]} for r in result["citations"])
     assert "尚未配置" in " ".join(result["gaps"])
+
+
+def test_collector_run_actions_validate_and_queue(monkeypatch):
+    client = TestClient(app)
+    captured = []
+
+    class Job:
+        def public(self):
+            return {"request_id": "req-1", "run_id": "manual-1", "status": "queued"}
+
+    def submit(**kwargs):
+        captured.append(kwargs)
+        return Job()
+
+    monkeypatch.setattr("backend.app.collector_jobs.submit", submit)
+    response = client.post(
+        "/api/collector/runs",
+        json={"ids": ["xinhua-monitor"], "retry_attempts": 2},
+        headers={"Origin": "http://127.0.0.1:8010"},
+    )
+    assert response.status_code == 202
+    assert response.json()["run_id"] == "manual-1"
+    assert captured[0]["ids"] == ["xinhua-monitor"]
+    assert client.post("/api/collector/runs", json={"ids": ["does-not-exist"]}).status_code == 422
+
+
+def test_collector_retry_action_only_queues_failed_items(tmp_path, monkeypatch):
+    client = TestClient(app)
+    run_dir = tmp_path / "data" / "collection-runs" / "run-failed"
+    run_dir.mkdir(parents=True)
+    (run_dir / "results.json").write_text(
+        json.dumps(
+            {
+                "run_kind": "scheduled-service",
+                "status": "partial",
+                "results": [
+                    {"id": "xinhua-monitor", "returncode": "timeout", "started_at": "2026-10-02T09:00:00+00:00"},
+                    {"id": "diplomacy-monitor", "returncode": 0, "started_at": "2026-10-02T09:00:00+00:00"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class Job:
+        def public(self):
+            return {"request_id": "req-2", "run_id": "manual-2", "status": "queued"}
+
+    captured = []
+    monkeypatch.setattr("backend.app.collector_jobs.submit", lambda **kwargs: captured.append(kwargs) or Job())
+    response = client.post("/api/collector/runs/run-failed/retry")
+    assert response.status_code == 202
+    assert captured == [{"ids": ["xinhua-monitor"], "auto_import": True}]
+
+
+def test_collector_log_tail_reads_and_redacts_report_output(tmp_path, monkeypatch):
+    run_dir = tmp_path / "data" / "collection-runs" / "run-logs"
+    run_dir.mkdir(parents=True)
+    (run_dir / "results.json").write_text(
+        json.dumps({"results": [{"id": "demo", "stderr_tail": "token=secret-value\nparse failed"}]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("backend.app.data_dir", lambda: tmp_path / "data")
+    client = TestClient(app)
+
+    response = client.get("/api/collector/runs/run-logs/logs/demo?stream=stderr&tail=200")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["available"] is True
+    assert "secret-value" not in payload["content"]
+    assert "[REDACTED]" in payload["content"]
+    assert client.get("/api/collector/runs/run-logs/logs/demo?stream=bad").status_code == 422
 
 def test_no_evidence_does_not_invent_answer():
     result=asyncio.run(answer(stored(),"火星土壤",topic="ukraine"))

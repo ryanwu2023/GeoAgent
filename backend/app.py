@@ -12,12 +12,16 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from .store import ROOT, snapshots, get_snapshot, save_snapshot, db, data_dir
+from .store import ROOT, snapshots, snapshot_summaries, get_snapshot, save_snapshot, db, data_dir, get_working_snapshot_id, set_working_snapshot_id
 from .adapters import load_bundle
 from .research import filtered_records, metrics, analysis, coverage, answer, create_brief, model_status
 from .catalog import RULE_VERSION
-from .chinese import present_record, present_record_summary, present_answer, translation_cache, source_name, start_translation, translation_status, localize_brief_markdown
-from .paths import collector_read_root
+from .chinese import present_record, present_record_summary, present_map_record, present_answer, translation_cache, source_name, start_translation, translation_status, localize_brief_markdown
+from .paths import collector_read_root, collector_data_root
+from .collector_monitor import load_latest_run, load_runs, load_ledger_events, load_ledger_runs, load_source_status
+from .collector_jobs import CollectorBusyError, collector_jobs
+from .collector_config import apply_config, load_config, save_config
+from scripts.integrate_collectors import load_registry
 
 def load_env():
     file = ROOT / ".env"
@@ -25,7 +29,7 @@ def load_env():
         for line in file.read_text(encoding="utf-8-sig").splitlines():
             if "=" in line and not line.lstrip().startswith("#"):
                 key, value = line.split("=", 1)
-                if not key.strip().startswith('LLM_'):
+                if not key.strip().startswith(('LLM_', 'PICHAT_')):
                     os.environ.setdefault(key.strip(), value.strip().strip('"'))
 
 load_env()
@@ -38,12 +42,32 @@ app = FastAPI(title="地缘政治研究接口", version="0.6.1",lifespan=lifespa
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 Topic = Literal["all", "usiran", "ukraine"]
 
+class CollectorRunRequest(BaseModel):
+    ids: list[str] = Field(default_factory=list, max_length=19)
+    topic: str | None = Field(default=None, max_length=80)
+    timeout: int = Field(default=900, ge=1, le=3600)
+    retry_attempts: int = Field(default=2, ge=1, le=5)
+    retry_backoff_sec: float = Field(default=1.0, ge=0, le=60)
+    auto_import: bool = True
+    allow_partial_import: bool = False
+
+
+class CollectorConfigRequest(BaseModel):
+    interval_sec: int = Field(default=86400, ge=60, le=604800)
+    exclude_ids: list[str] = Field(default_factory=list, max_length=19)
+    allow_partial_import: bool = False
+    apply: bool = False
+
+
+class WorkspaceSelectionRequest(BaseModel):
+    snapshot_id: str = Field(min_length=1, max_length=120)
+
 @app.middleware("http")
 async def protect_local_mutations(request: Request, call_next):
     # Browser POSTs must originate from this local app; API keys never leave the backend.
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         origin = request.headers.get("origin")
-        if origin and origin not in {"http://127.0.0.1:8000", "http://localhost:8000", "http://127.0.0.1:5173", "http://localhost:5173"}:
+        if origin and origin not in {"http://127.0.0.1:8000", "http://localhost:8000", "http://127.0.0.1:8010", "http://localhost:8010", "http://127.0.0.1:8011", "http://localhost:8011", "http://127.0.0.1:5173", "http://localhost:5173"}:
             return PlainTextResponse("不允许来自其他站点的写入请求", status_code=403)
     return await call_next(request)
 
@@ -65,15 +89,211 @@ def validate_range(start, end):
 
 @app.get("/api/status")
 def status():
-    return {"model": model_status(), "translation":translation_status(), "crawler_root": str(collector_read_root()), "rule_version": RULE_VERSION, "snapshots": snapshots()}
+    return {"model": model_status(), "translation":translation_status(), "crawler_root": str(collector_read_root()), "rule_version": RULE_VERSION, "snapshots": snapshots(), "working_snapshot_id": get_working_snapshot_id()}
+
+@app.get("/api/collector/snapshots")
+def collector_snapshots():
+    """Expose snapshot version statistics without returning the full payload."""
+    return {"snapshots": snapshot_summaries(), "source": "research-sqlite-snapshot-projection"}
+
+@app.get("/api/workspace-selection")
+def workspace_selection():
+    snapshot_id = get_working_snapshot_id()
+    return {"snapshot_id": snapshot_id, "available": bool(snapshot_id), "source": "research-sqlite-workspace-state"}
+
+@app.put("/api/workspace-selection")
+def update_workspace_selection(request: WorkspaceSelectionRequest):
+    try:
+        snapshot_id = set_working_snapshot_id(request.snapshot_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"snapshot_id": snapshot_id, "available": True, "source": "research-sqlite-workspace-state"}
+
+@app.get("/api/collector/summary")
+def collector_summary():
+    """Expose the newest persisted collection report without claiming live health."""
+    return load_latest_run(data_dir() / "collection-runs", ROOT / "collectors" / "collectors.json")
+
+
+@app.get("/api/collector/config")
+def collector_config():
+    registry = load_registry(ROOT / "collectors" / "collectors.json")
+    config = load_config()
+    excluded = set(config.get("exclude_ids", []))
+    return {
+        "config": config,
+        "scope": "service_interval",
+        "description": "当前服务按全局间隔运行 enabled 采集器；采集成功后自动导入快照，简报需要单独生成。",
+        "collectors": [
+            {
+                "id": item["id"],
+                "name": item.get("name_zh", item["id"]),
+                "enabled": item.get("enabled", True),
+                "excluded": item["id"] in excluded,
+            }
+            for item in registry
+        ],
+    }
+
+
+@app.put("/api/collector/config")
+def update_collector_config(request: CollectorConfigRequest):
+    registry = load_registry(ROOT / "collectors" / "collectors.json")
+    # Keep disabled registry entries valid in a previously saved exclusion
+    # list; the service itself still only runs enabled collectors.
+    known = {item["id"] for item in registry}
+    try:
+        config = save_config(
+            {
+                "interval_sec": request.interval_sec,
+                "exclude_ids": request.exclude_ids,
+                "auto_import": True,
+                "allow_partial_import": request.allow_partial_import,
+            },
+            known_ids=known,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    applied = {"applied": False, "message": "已保存项目配置；尚未重载后台任务"}
+    if request.apply:
+        applied = apply_config(config)
+    return {"config": config, **applied}
+
+@app.get("/api/collector/runs")
+def collector_runs(limit: int = Query(20, ge=1, le=100)):
+    """List persisted reports; this is history, not a live scheduler heartbeat."""
+    return {
+        "runs": load_runs(data_dir() / "collection-runs", ROOT / "collectors" / "collectors.json", limit),
+        "source": "collection-run-report",
+    }
+
+@app.get("/api/collector/ledger")
+def collector_ledger(limit: int = Query(20, ge=1, le=100)):
+    """Expose scheduler lifecycle rows when the service has created a ledger."""
+    return load_ledger_runs(data_dir() / "collection-runs", limit)
+
+@app.get("/api/collector/sources")
+def collector_sources(
+    collector_id: str | None = Query(None, max_length=120),
+    run_id: str | None = Query(None, max_length=120),
+):
+    """Expose source-level artifacts without probing the network from the API."""
+    collector_ids = None
+    if run_id:
+        run = next(
+            (
+                item
+                for item in load_runs(data_dir() / "collection-runs", ROOT / "collectors" / "collectors.json", 100)
+                if item["run_id"] == run_id
+            ),
+            None,
+        )
+        if run is None:
+            return {
+                "available": False,
+                "source": "run-not-found",
+                "collector_id": collector_id,
+                "run_id": run_id,
+                "scope": "run-collector-published-output",
+                "collectors": [],
+            }
+        collector_ids = {item["id"] for item in run.get("collectors", [])}
+        if collector_id:
+            collector_ids &= {collector_id}
+    return load_source_status(
+        collector_data_root(),
+        collector_id=collector_id,
+        collector_ids=collector_ids,
+        run_id=run_id,
+    )
+
+@app.post("/api/collector/runs", status_code=202)
+def start_collector_run(request: CollectorRunRequest):
+    """Queue a manual run; the collector service still owns execution and locks."""
+    registry = load_registry(ROOT / "collectors" / "collectors.json")
+    known = {item["id"] for item in registry if item.get("enabled", True)}
+    unknown = sorted(set(request.ids) - known)
+    if unknown:
+        raise HTTPException(422, f"采集器不存在或已停用：{', '.join(unknown)}")
+    try:
+        job = collector_jobs.submit(
+            ids=request.ids,
+            topic=request.topic,
+            timeout=request.timeout,
+            retry_attempts=request.retry_attempts,
+            retry_backoff_sec=request.retry_backoff_sec,
+            auto_import=request.auto_import,
+            allow_partial_import=request.allow_partial_import,
+        )
+    except CollectorBusyError as exc:
+        raise HTTPException(409, f"已有采集服务运行中：{str(exc)}") from exc
+    return {**job.public(), "source": "collector-job"}
+
+@app.post("/api/collector/runs/{run_id}/retry", status_code=202)
+def retry_collector_run(run_id: str):
+    """Queue only failed collectors from a persisted report."""
+    run = next((item for item in load_runs(data_dir() / "collection-runs", ROOT / "collectors" / "collectors.json", 100) if item["run_id"] == run_id), None)
+    if run is None:
+        raise HTTPException(404, "采集运行记录不存在")
+    failed_ids = [item["id"] for item in run.get("collectors", []) if item.get("status") == "failed"]
+    if not failed_ids:
+        raise HTTPException(422, "该运行没有可重试的失败采集器")
+    try:
+        job = collector_jobs.submit(ids=failed_ids, auto_import=True)
+    except CollectorBusyError as exc:
+        raise HTTPException(409, f"已有采集服务运行中：{str(exc)}") from exc
+    return {**job.public(), "source": "collector-job", "retry_of": run_id}
+
+@app.get("/api/collector/jobs/{request_id}")
+def collector_job(request_id: str):
+    job = collector_jobs.get(request_id)
+    if job is None:
+        raise HTTPException(404, "采集请求不存在")
+    return {**job.public(), "source": "collector-job"}
+
+@app.get("/api/collector/runs/{run_id}/events")
+def collector_run_events(
+    run_id: str,
+    collector_id: str | None = Query(None, max_length=120),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """Expose read-only run events for the monitor detail panel."""
+    return load_ledger_events(
+        data_dir() / "collection-runs",
+        run_id,
+        collector_id=collector_id,
+        limit=limit,
+    )
+
+@app.get("/api/collector/runs/{run_id}/logs/{collector_id}")
+def collector_run_log(
+    run_id: str,
+    collector_id: str,
+    stream: Literal["stdout", "stderr"] = "stderr",
+    tail: int = Query(2000, ge=1, le=10000),
+):
+    """Return a bounded, redacted output tail for a collector item."""
+    from .collector_logs import read_log_tail
+
+    try:
+        return read_log_tail(data_dir() / "collection-runs", run_id, collector_id, stream=stream, tail=tail)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+@app.get("/api/collector/runs/{run_id}")
+def collector_run(run_id: str):
+    for run in load_runs(data_dir() / "collection-runs", ROOT / "collectors" / "collectors.json", 100):
+        if run["run_id"] == run_id:
+            return run
+    raise HTTPException(404, "采集运行记录不存在")
 
 @app.post("/api/model/check")
 async def check_model():
     if not llm.status()['configured']:
-        return {"ok":False,"message":"尚未配置 LLM_API_KEY，请在项目 .env 填写 URL 和 Key 后重试"}
+        return {"ok":False,"message":"尚未配置 PICHAT_API_KEY 或 LLM_API_KEY，请在项目 .env 填写后重试"}
     try:
         text,model=await llm.complete([{"role":"user","content":"仅回复：连接成功"}])
-        return {"ok":True,"model":model,"message":"模型连接成功，可开始研究对话"}
+        return {"ok":True,"model":model,"message":"Agent / 模型连接成功，可开始研究对话"}
     except Exception as exc:
         return {"ok":False,"message":llm.error_message(exc)}
 
@@ -99,7 +319,36 @@ def workspace(snapshot_id: str, topic: Topic = "all", dimension: str = "", start
     a = analysis(s, topic, dimension, start, end)
     cache=translation_cache()
     reviews=review_index(snapshot_id)
-    return {"snapshot": {"id": s["id"], "created_at": s["created_at"], "stats": s["import_stats"], "errors": s["errors"]}, "topics": coverage(s, start, end), "records": [apply_review(present_record_summary(r,cache), reviews.get(r["id"])) for r in records], "metrics": metrics(s, topic, dimension, start, end), "projects":s.get("projects",[]), "sources": [{**x,'name':source_name(x['name'],cache)} for x in s["sources"]], **a}
+    return {"snapshot": {"id": s["id"], "created_at": s["created_at"], "stats": s["import_stats"], "errors": s["errors"], "cleaning": s.get("cleaning", {})}, "topics": coverage(s, start, end), "records": [apply_review(present_map_record(r,cache), reviews.get(r["id"])) for r in records], "metrics": metrics(s, topic, dimension, start, end), "projects":s.get("projects",[]), "sources": [{**x,'name':source_name(x['name'],cache)} for x in s["sources"]], **a}
+
+@app.get("/api/evidence")
+def evidence_page(snapshot_id: str, topic: Topic = "all", dimension: str = "", q: str = Query("", max_length=300), offset: int = Query(0, ge=0), limit: int = Query(30, ge=1, le=100), start: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$"), end: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")):
+    s = snapshot_or_404(snapshot_id)
+    validate_range(start, end)
+    records = filtered_records(s, topic, dimension, start, end)
+    needle = q.strip().casefold()
+    cache = translation_cache()
+    if needle:
+        def matches(record):
+            values = (
+                record.get("title", ""), record.get("text", ""),
+                record.get("title_zh", ""), record.get("summary_zh", ""),
+                record.get("source_name", ""), record.get("publisher", ""),
+                source_name(record.get("source_name", ""), cache),
+            )
+            return any(needle in str(value).casefold() for value in values)
+        records = [record for record in records if matches(record)]
+    records.sort(key=lambda record: (record.get("published_at") or "", record["id"]), reverse=True)
+    total = len(records)
+    page = records[offset:offset + limit]
+    reviews = review_index(snapshot_id)
+    return {
+        "records": [apply_review(present_record_summary(record, cache), reviews.get(record["id"])) for record in page],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + len(page) < total,
+    }
 
 @app.get("/api/evidence/{rid}")
 def evidence(rid: str, snapshot_id: str):
@@ -237,5 +486,3 @@ def save_review(rid: str,snapshot_id:str,body:ReviewInput):
 
 if (ROOT / "dist").exists():
     app.mount("/", StaticFiles(directory=ROOT / "dist", html=True), name="frontend")
-
-

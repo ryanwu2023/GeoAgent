@@ -9,6 +9,7 @@ def test_endpoint_full_and_base():
     assert llm.endpoint('https://provider.example/v1/')=='https://provider.example/v1/chat/completions'
     assert llm.endpoint('https://provider.example/v1/chat/completions')=='https://provider.example/v1/chat/completions'
     with pytest.raises(ValueError):llm.endpoint('https://key@provider.example/v1')
+    assert llm.pichat_endpoint('http://127.0.0.1:5585')=='http://127.0.0.1:5585/api/v1/chat'
 
 def test_hot_config_and_discovery(tmp_path,monkeypatch):
     monkeypatch.setattr(llm,'ROOT',tmp_path)
@@ -30,7 +31,22 @@ def test_hot_config_and_discovery(tmp_path,monkeypatch):
 
 def test_safe_errors_hide_provider_body():
     response=httpx.Response(401,request=httpx.Request('POST','https://example.org'),text='secret')
-    assert llm.error_message(httpx.HTTPStatusError('secret',request=response.request,response=response))=='模型密钥无效'
+    assert llm.error_message(httpx.HTTPStatusError('secret',request=response.request,response=response))=='Agent 或模型密钥无效'
+
+def test_pichat_agent_is_preferred_and_keeps_key_server_side(tmp_path,monkeypatch):
+    monkeypatch.setattr(llm,'ROOT',tmp_path)
+    (tmp_path/'.env').write_text('PICHAT_BASE_URL=http://127.0.0.1:5585\nPICHAT_API_KEY=pk-'+'a'*48+'\nLLM_API_KEY=fallback\n',encoding='utf-8')
+    def handler(request):
+        assert request.url.path=='/api/v1/chat'
+        assert request.headers['Authorization']=='Bearer pk-'+'a'*48
+        payload=json.loads(request.content)
+        assert payload['stream'] is False and '[SYSTEM]' in payload['message'] and '[USER]' in payload['message']
+        return httpx.Response(200,json={'sessionId':'demo','text':'Agent 回答'})
+    real=httpx.AsyncClient
+    monkeypatch.setattr(llm.httpx,'AsyncClient',lambda **kw:real(transport=httpx.MockTransport(handler),**kw))
+    text,model=asyncio.run(llm.complete([{'role':'system','content':'规则'},{'role':'user','content':'问题'}]))
+    assert (text,model)==('Agent 回答','Pi Chat Agent')
+    assert llm.status()['provider']=='pichat'
 
 def test_language_and_translation_guards():
     assert language('الحرب في المنطقة')=='arabic_unknown'

@@ -3,9 +3,9 @@ import maplibregl from 'maplibre-gl';
 import {MapboxOverlay} from '@deck.gl/mapbox';
 import {ScatterplotLayer,TextLayer,LineLayer} from '@deck.gl/layers';
 import {Focus,Globe2,Layers,X} from 'lucide-react';
-import type {Evidence,Point} from './types';
+import type {MapEvidence,Point} from './types';
 import 'maplibre-gl/dist/maplibre-gl.css';
-type Marker=Point & {record:Evidence};
+type Marker=Point & {record:MapEvidence};
 function placeLabel(items:Marker[]){
   const labels=[...new Set(items.map(p=>p.label==='岩国'?'日本岩国':p.label))];
   return labels.length===1?labels[0]:labels.slice(0,3).join('、')+(labels.length>3?'等地区':'');
@@ -22,7 +22,7 @@ const signals:Record<string,string>={all:'全部动态',escalation:'升级相关
 const majorCountries=new Set(['USA','CAN','BRA','RUS','CHN','IND','AUS','ZAF','EGY','IRN','SAU','TUR','UKR','FRA','DEU','GBR','JPN','MEX','ARG','KAZ']);
 const places=[{label:'霍尔木兹海峡',position:[56.25,26.57]},{label:'曼德海峡',position:[43.33,12.58]},{label:'红海',position:[38,20]},{label:'阿拉伯海',position:[64,15]}];
 const ukrainePlaces=[{label:'黑海',position:[34,43]},{label:'亚速海',position:[36.7,46]}];
-export default function MapView({records,topic,onSelect,resetKey=0}:{records:Evidence[];topic:string;onSelect:(r:Evidence)=>void;resetKey?:number}){
+export default function MapView({records,topic,onSelect,resetKey=0}:{records:MapEvidence[];topic:string;onSelect:(r:MapEvidence)=>void;resetKey?:number}){
   const host=useRef<HTMLDivElement>(null),map=useRef<maplibregl.Map|null>(null),overlay=useRef<MapboxOverlay|null>(null);
   const [legendOpen,setLegendOpen]=useState(()=>window.innerWidth>900);
   const [error,setError]=useState(''),[layers,setLayers]=useState<Record<string,boolean>>(Object.fromEntries(Object.keys(categories).map(k=>[k,true]))),[signal,setSignal]=useState('all');

@@ -7,14 +7,18 @@ import os
 import shutil
 import subprocess
 import sys
+import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.paths import collector_data_root, collector_source_root
+from backend.collector_ledger import service_lock
 from scripts.integrate_collectors import load_registry
 
 
@@ -23,60 +27,204 @@ def serialize_for_console(value) -> str:
     return json.dumps(value, ensure_ascii=True, indent=2)
 
 
-def select_collectors(registry: list[dict], ids: list[str], topic: str | None) -> list[dict]:
+def select_collectors(
+    registry: list[dict],
+    ids: list[str],
+    topic: str | None,
+    exclude_ids: list[str] | None = None,
+) -> list[dict]:
     wanted = set(ids)
+    excluded = set(exclude_ids or [])
     return [
         item
         for item in registry
         if item.get("enabled", True)
+        and item["id"] not in excluded
         and (not wanted or item["id"] in wanted)
         and (not topic or topic in item.get("topics", []))
     ]
 
 
-def _sync_output(collector_id: str, source_root: Path, data_root: Path) -> None:
+def _copy_missing(source: Path, target: Path) -> None:
+    """Merge legacy source output into a staging tree without overwriting it."""
+    target.mkdir(parents=True, exist_ok=True)
+    for item in source.iterdir():
+        destination = target / item.name
+        if item.is_dir():
+            _copy_missing(item, destination)
+        elif not destination.exists():
+            shutil.copy2(item, destination)
+
+
+def _publish_staged_output(stage: Path, live: Path) -> None:
+    """Swap a completed staging directory into the live data root with rollback."""
+    live.parent.mkdir(parents=True, exist_ok=True)
+    backup = live.parent / f".{live.name}.previous-{uuid.uuid4().hex}"
+    had_live = live.exists()
+    if had_live:
+        live.replace(backup)
+    try:
+        stage.replace(live)
+    except Exception:
+        if had_live and backup.exists() and not live.exists():
+            backup.replace(live)
+        raise
+    if backup.exists():
+        shutil.rmtree(backup)
+
+
+def _stage_and_publish(collector_id: str, source_root: Path, data_root: Path, staging_root: Path) -> bool:
     source = source_root / collector_id / "output"
+    stage = staging_root / collector_id / "output"
+    live = data_root / collector_id / "output"
     if source.is_dir():
-        shutil.copytree(source, data_root / collector_id / "output", dirs_exist_ok=True)
+        _copy_missing(source, stage)
+    if not stage.is_dir() or not any(stage.iterdir()):
+        return False
+    _publish_staged_output(stage, live)
+    return True
 
 
-def run_one(item: dict, *, timeout: int, verify_only: bool = False) -> dict:
+def _published_runtime_files(collector_id: str, data_root: Path) -> list[str]:
+    """Return stable relative output paths for the monitoring report."""
+    live = data_root / collector_id / "output"
+    if not live.is_dir():
+        return []
+    return sorted(
+        str(path.relative_to(live))
+        for path in live.rglob("*")
+        if path.is_file()
+    )
+
+
+def _tail(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", "replace")
+    return str(value)[-2000:]
+
+
+def run_one(
+    item: dict,
+    *,
+    timeout: int,
+    verify_only: bool = False,
+    max_attempts: int = 1,
+    backoff_factor: float = 1.0,
+    sleep: Callable[[float], None] = time.sleep,
+    staging_root: Path | None = None,
+) -> dict:
+    """Run one collector while preventing concurrent runs for the same id."""
+    lock_path = collector_data_root() / ".collector-locks" / f"{item['id']}.lock"
+    with service_lock(lock_path):
+        return _run_one_unlocked(
+            item,
+            timeout=timeout,
+            verify_only=verify_only,
+            max_attempts=max_attempts,
+            backoff_factor=backoff_factor,
+            sleep=sleep,
+            staging_root=staging_root,
+        )
+
+
+def _run_one_unlocked(
+    item: dict,
+    *,
+    timeout: int,
+    verify_only: bool = False,
+    max_attempts: int = 1,
+    backoff_factor: float = 1.0,
+    sleep: Callable[[float], None] = time.sleep,
+    staging_root: Path | None = None,
+) -> dict:
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least 1")
     source_root = collector_source_root()
     data_root = collector_data_root()
     collector_dir = source_root / item["id"]
     entrypoint = (collector_dir / item["entrypoint"]).resolve()
     args = item.get("selftest_args", []) if verify_only else []
     if verify_only and not args:
-        return {"id": item["id"], "returncode": "not_provided"}
+        return {"id": item["id"], "returncode": "not_provided", "attempts": 0, "max_attempts": max_attempts}
     if not entrypoint.is_file():
-        return {"id": item["id"], "returncode": "entrypoint_missing", "entrypoint": str(entrypoint)}
-    env = {**os.environ, "PYTHONUTF8": "1", "COLLECTOR_OUTPUT_ROOT": str(data_root / item["id"] / "output")}
-    started = datetime.now(timezone.utc).isoformat()
-    try:
-        completed = subprocess.run(
-            [sys.executable, str(entrypoint), *args],
-            cwd=collector_dir,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            env=env,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        )
-        result = {
-            "id": item["id"],
-            "returncode": completed.returncode,
-            "started_at": started,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
-            "stdout_tail": completed.stdout[-2000:],
-            "stderr_tail": completed.stderr[-2000:],
-        }
-        if completed.returncode == 0 and not verify_only:
-            _sync_output(item["id"], source_root, data_root)
-        return result
-    except subprocess.TimeoutExpired:
-        return {"id": item["id"], "returncode": "timeout", "started_at": started}
+        return {"id": item["id"], "returncode": "entrypoint_missing", "entrypoint": str(entrypoint), "attempts": 0, "max_attempts": max_attempts}
+    staging_root = Path(staging_root) if staging_root is not None else data_root / ".staging" / f"manual-{uuid.uuid4().hex}"
+    collector_stage = staging_root / item["id"]
+    output_stage = collector_stage / "output"
+    history: list[dict] = []
+    first_started: str | None = None
+    last_result: dict = {"id": item["id"], "returncode": "failed"}
+    for attempt in range(1, max_attempts + 1):
+        if output_stage.exists():
+            shutil.rmtree(output_stage)
+        output_stage.mkdir(parents=True, exist_ok=True)
+        env = {**os.environ, "PYTHONUTF8": "1", "COLLECTOR_OUTPUT_ROOT": str(output_stage)}
+        started = datetime.now(timezone.utc).isoformat()
+        first_started = first_started or started
+        try:
+            completed = subprocess.run(
+                [sys.executable, str(entrypoint), *args],
+                cwd=collector_dir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                env=env,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            returncode = completed.returncode
+            attempt_record = {
+                "attempt": attempt,
+                "returncode": returncode,
+                "started_at": started,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "stdout_tail": _tail(completed.stdout),
+                "stderr_tail": _tail(completed.stderr),
+            }
+            last_result = {
+                "id": item["id"],
+                "returncode": returncode,
+                "started_at": first_started,
+                "finished_at": attempt_record["finished_at"],
+                "stdout_tail": attempt_record["stdout_tail"],
+                "stderr_tail": attempt_record["stderr_tail"],
+            }
+            history.append(attempt_record)
+            if returncode == 0:
+                if not verify_only:
+                    last_result["published"] = _stage_and_publish(item["id"], source_root, data_root, staging_root)
+                    if last_result["published"]:
+                        last_result["runtime_files"] = _published_runtime_files(item["id"], data_root)
+                last_result.update({"attempts": attempt, "max_attempts": max_attempts, "attempt_history": history})
+                return last_result
+        except subprocess.TimeoutExpired as exc:
+            finished = datetime.now(timezone.utc).isoformat()
+            attempt_record = {
+                "attempt": attempt,
+                "returncode": "timeout",
+                "started_at": started,
+                "finished_at": finished,
+                "stdout_tail": _tail(exc.stdout),
+                "stderr_tail": _tail(exc.stderr),
+            }
+            last_result = {
+                "id": item["id"],
+                "returncode": "timeout",
+                "started_at": first_started,
+                "finished_at": finished,
+                "stdout_tail": attempt_record["stdout_tail"],
+                "stderr_tail": attempt_record["stderr_tail"],
+            }
+            history.append(attempt_record)
+        if attempt < max_attempts:
+            sleep(max(0.0, backoff_factor) * (2 ** (attempt - 1)))
+    if collector_stage.exists():
+        shutil.rmtree(collector_stage)
+    last_result.update({"attempts": max_attempts, "max_attempts": max_attempts, "attempt_history": history, "published": False})
+    return last_result
 
 
 def run_collectors(
@@ -85,21 +233,48 @@ def run_collectors(
     timeout: int,
     *,
     registry: list[dict] | None = None,
+    exclude_ids: list[str] | None = None,
     verify_only: bool = False,
+    max_attempts: int = 1,
+    backoff_factor: float = 1.0,
+    staging_root: Path | None = None,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> list[dict]:
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least 1")
     registry = registry if registry is not None else load_registry(collector_source_root() / "collectors.json")
-    selected = select_collectors(registry, ids, topic)
-    return [run_one(item, timeout=timeout, verify_only=verify_only) for item in selected]
+    selected = select_collectors(registry, ids, topic, exclude_ids=exclude_ids)
+    staging_root = Path(staging_root) if staging_root is not None else collector_data_root() / ".staging" / f"run-{uuid.uuid4().hex}"
+    staging_root.mkdir(parents=True, exist_ok=True)
+    try:
+        return [
+            run_one(
+                item,
+                timeout=timeout,
+                verify_only=verify_only,
+                max_attempts=max_attempts,
+                backoff_factor=backoff_factor,
+                sleep=sleep,
+                staging_root=staging_root,
+            )
+            for item in selected
+        ]
+    finally:
+        if staging_root.exists():
+            shutil.rmtree(staging_root)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--id", action="append", default=[])
+    parser.add_argument("--exclude-id", action="append", default=[], help="排除指定采集器，可重复")
     parser.add_argument("--topic")
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--verify-only", action="store_true")
     parser.add_argument("--timeout", type=int, default=900)
+    parser.add_argument("--max-attempts", type=int, default=1, help="进程失败/超时时的最大尝试次数")
+    parser.add_argument("--backoff-sec", type=float, default=1.0, help="重试指数退避初始秒数")
     args = parser.parse_args()
     registry = load_registry(collector_source_root() / "collectors.json")
     if args.list:
@@ -108,7 +283,16 @@ def main() -> int:
         return 0
     if not (args.all or args.id or args.topic):
         parser.error("请使用 --all、--id 或 --topic 选择采集器")
-    results = run_collectors(args.id, args.topic, args.timeout, registry=registry, verify_only=args.verify_only)
+    results = run_collectors(
+        args.id,
+        args.topic,
+        args.timeout,
+        registry=registry,
+        exclude_ids=args.exclude_id,
+        verify_only=args.verify_only,
+        max_attempts=args.max_attempts,
+        backoff_factor=args.backoff_sec,
+    )
     report_dir = PROJECT_ROOT / "data" / "collection-runs" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     report_dir.mkdir(parents=True, exist_ok=True)
     (report_dir / "results.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")

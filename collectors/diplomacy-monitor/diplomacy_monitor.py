@@ -460,7 +460,7 @@ class Engine:
         # 锚定：伊朗侧 + 美方侧（斡旋报道通常双提；纯美方事务靠桶词门控）
         alts = ["iran(?:ian)?", "tehran", "farsi", "persian(?:s)?", "irgc", "pasdaran",
                 r"revolutionary\s+guards?", "araghchi", "pezeshkian", "khamenei",
-                "houthi", "ansar\s+allah",
+                "houthi", "ansar\\s+allah",
                 "trump", "rubio", "witkoff", r"white\s+house", "washington",
                 r"state\s+department", "pentagon", r"u\.s\.", r"united\s+states",
                 "american"]

@@ -84,6 +84,7 @@ def load_bundle(root: Path):
     sources = []
     manifests = []
     errors = []
+    cleaning = {"raw_records": 0, "duplicates_merged": 0, "invalid_records": 0}
 
     def read(path, decode=True):
         content = path.read_bytes()
@@ -103,6 +104,7 @@ def load_bundle(root: Path):
     def merge(record, archive):
         record["raw_refs"] = [archive]
         if record["id"] in records:
+            cleaning["duplicates_merged"] += 1
             prev = records[record["id"]]
             prev["adapters"] = sorted(set(prev["adapters"] + record["adapters"]))
             prev["raw_refs"] = sorted(set(prev["raw_refs"] + record["raw_refs"]))
@@ -111,7 +113,9 @@ def load_bundle(root: Path):
                 prev.setdefault('dimension_candidates',{}).setdefault(topic,[])
                 prev['dimension_candidates'][topic]=sorted(set(prev['dimension_candidates'][topic]+values))
             prev["dimensions"].update(record["dimensions"])
-            prev.setdefault('upstream_extractions',[]).extend(record.get('upstream_extractions',[]))
+            extractions = prev.setdefault('upstream_extractions', [])
+            existing = {json.dumps(item, ensure_ascii=False, sort_keys=True) for item in extractions}
+            extractions.extend(item for item in record.get('upstream_extractions', []) if json.dumps(item, ensure_ascii=False, sort_keys=True) not in existing)
             if len(record["text"]) > len(prev["text"]):
                 prev["text"] = record["text"]
             if prev["tier"] == "未分级":
@@ -133,12 +137,14 @@ def load_bundle(root: Path):
         for line_no, line in enumerate(content.splitlines(), 1):
             if not line.strip():
                 continue
+            cleaning["raw_records"] += 1
             try:
                 raw = json.loads(line)
                 record = normalize(raw, monitor)
                 merge(record, archive)
                 monitor_records.append(record)
             except (ValueError, TypeError, AttributeError) as exc:
+                cleaning["invalid_records"] += 1
                 errors.append({"file": str(file.relative_to(root)), "line": line_no, "error": type(exc).__name__})
         statuses = {}
         status_file = file.parent / "_source_status.json"
@@ -254,4 +260,5 @@ def load_bundle(root: Path):
         subset=[r for r in records.values() if project.name in r['adapters']]
         statuses=[s for s in sources if s['monitor']==project.name]
         projects.append({'id':project.name,'records':len(subset),'topic_records':sum(bool(r['topics']) for r in subset),'missing_published':sum(not r['published_at'] for r in subset),'missing_fetched':sum(not r['fetched_at'] for r in subset),'failed_sources':sum('fail' in s['state'] for s in statuses),'sources':len(statuses),'state':'connected' if statuses or subset else 'unsupported','documents':documents})
-    return {"schema_version": "geo.v6/1", "records": sorted(records.values(), key=lambda r: r["id"]), "observations": observations, "sources": sources, "manifest": manifests, "errors": errors,'projects':projects}
+    cleaning["unique_records"] = len(records)
+    return {"schema_version": "geo.v6/1", "records": sorted(records.values(), key=lambda r: r["id"]), "observations": observations, "sources": sources, "manifest": manifests, "errors": errors,'projects':projects,'cleaning':cleaning}

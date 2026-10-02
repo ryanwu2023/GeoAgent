@@ -34,6 +34,7 @@ def db():
     CREATE TABLE IF NOT EXISTS briefs(id TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL REFERENCES snapshots(id), created_at TEXT NOT NULL, mode TEXT NOT NULL, markdown TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS answers(id TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL, query TEXT NOT NULL, created_at TEXT NOT NULL, payload TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS analyses(id TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL, scope TEXT NOT NULL, created_at TEXT NOT NULL, payload TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS workspace_state(key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
     """)
     try:
         yield c
@@ -44,6 +45,56 @@ def db():
 def snapshots():
     with db() as c:
         return [dict(r) for r in c.execute("SELECT id,created_at FROM snapshots ORDER BY created_at DESC")]
+
+def get_working_snapshot_id():
+    """Return the persisted snapshot selected as the workspace context."""
+    with db() as c:
+        row = c.execute(
+            "SELECT value FROM workspace_state WHERE key = ?",
+            ("working_snapshot_id",),
+        ).fetchone()
+    return str(row["value"]) if row else None
+
+def set_working_snapshot_id(snapshot_id: str):
+    """Persist a workspace snapshot only when it exists in the immutable store."""
+    with db() as c:
+        if c.execute("SELECT 1 FROM snapshots WHERE id = ?", (snapshot_id,)).fetchone() is None:
+            raise KeyError("快照不存在")
+        c.execute(
+            """INSERT INTO workspace_state(key,value,updated_at) VALUES (?,?,?)
+               ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at""",
+            ("working_snapshot_id", snapshot_id, now()),
+        )
+    return snapshot_id
+
+def snapshot_summaries():
+    """Return lightweight, read-only statistics for the snapshot picker.
+
+    The UI needs version lineage without downloading every record in each
+    immutable payload.  Keep this projection derived from the stored payload;
+    it is not a second source of truth.
+    """
+    summaries = []
+    with db() as c:
+        rows = c.execute("SELECT id,created_at,payload FROM snapshots ORDER BY created_at DESC").fetchall()
+    for row in rows:
+        try:
+            payload = json.loads(row["payload"])
+        except (TypeError, ValueError):
+            payload = {}
+        cleaning = payload.get("cleaning") if isinstance(payload.get("cleaning"), dict) else {}
+        import_stats = payload.get("import_stats") if isinstance(payload.get("import_stats"), dict) else {}
+        summaries.append({
+            "id": row["id"],
+            "created_at": row["created_at"],
+            "records": len(payload.get("records", [])) if isinstance(payload.get("records"), list) else 0,
+            "observations": len(payload.get("observations", [])) if isinstance(payload.get("observations"), list) else 0,
+            "sources": len(payload.get("sources", [])) if isinstance(payload.get("sources"), list) else 0,
+            "errors": len(payload.get("errors", [])) if isinstance(payload.get("errors"), list) else 0,
+            "cleaning": cleaning,
+            "import_stats": import_stats,
+        })
+    return summaries
 
 @lru_cache(maxsize=2)
 def get_snapshot(sid):
