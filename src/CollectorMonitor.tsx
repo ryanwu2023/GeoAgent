@@ -1034,7 +1034,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
 
       {pipelineView === "run" && <section className="pipeline-run-view" aria-label="当前运行流程">
         <div className="pipeline-view-heading">
-          <div><span className="collector-kicker"><Activity size={14} /> 批次工作台 · {runtimeRunId || "尚未选择批次"}</span><h2>采集批次与日志</h2><p>左侧选择批次，右侧查看本批次事件；点击事件可定位到采集器详情。</p></div>
+          <div><span className="collector-kicker"><Activity size={14} /> 批次工作台 · {runtimeRunId || "尚未选择批次"}</span><h2>采集批次与日志</h2><p>左侧选择批次，中间选择本批次采集源，右侧查看选中来源的状态、事件与日志。</p></div>
           <div className="pipeline-heading-actions"><span className={`pipeline-state-pill ${gateBlocked ? "warning" : gatePassed ? "success" : "pending"}`}>{gateBlocked ? "存在门禁阻断" : gatePassed ? "流程已落盘" : "等待运行"}</span><button onClick={() => openPipelineView("pool")}>查看采集池 <ChevronRight size={14} /></button></div>
         </div>
 
@@ -1048,17 +1048,25 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
               {!historyRuns.length && <div className="batch-list-empty">正在等待采集批次…</div>}
             </div>
           </div>
-          <div className="batch-detail-panel">
-            <div className="batch-panel-heading"><span className="collector-kicker"><ListChecks size={13} /> 批次详情 · {runtimeRunId || "未选择"}</span><strong>{runtimeStatusLabel}</strong></div>
-            <div className="batch-detail-summary"><span>采集器 <b>{collectors.length}</b></span><span>失败 <b className={runFailed ? "bad" : ""}>{runFailed}</b></span><span>导入 <b>{importStatusLabel}</b></span><span>更新时间 <b>{runtimeUpdated ? runtimeUpdated.replace("T", " ").slice(0, 16) : "未记录"}</b></span></div>
-            <div className="batch-event-list">
-              {ledgerEvents.map((event) => <button key={event.id} onClick={() => { if (event.collector_id) selectCollector(event.collector_id); }}><span><b>{event.event_type}</b><small>{event.collector_id || "批次"} · {event.created_at.replace("T", " ").slice(0, 19)}</small></span><em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{eventStatusLabel(event.status)}</em><p>{event.message || "点击查看关联采集器详情和日志"}</p></button>)}
-              {!ledgerEvents.length && <div className="batch-list-empty">该批次尚无账本事件；可点击下方采集器查看日志。</div>}
+          <div className="batch-source-panel">
+            <div className="batch-panel-heading"><span className="collector-kicker"><Server size={13} /> 本批次采集源</span><strong>{collectors.length} 个</strong></div>
+            <div className="batch-source-list">
+              {collectors.map((collector) => { const MetaIcon = statusMeta[collector.status].icon; return <button key={collector.id} className={collector.id === selectedId ? "selected" : ""} onClick={() => selectCollector(collector.id)}><span className="batch-source-status"><MetaIcon size={14} /></span><span><b>{collector.name}</b><small>{collector.id} · {collector.stage}</small></span><em className={statusMeta[collector.status].className}>{statusMeta[collector.status].label}</em><small>{collector.outputs} 个产物 · {collector.finishedAt}</small></button>; })}
+              {!collectors.length && <div className="batch-list-empty">该批次没有采集器记录。</div>}
             </div>
+          </div>
+          <div className="batch-detail-panel">
+            <div className="batch-panel-heading"><span className="collector-kicker"><ListChecks size={13} /> 源详情 · {selected?.name || "未选择"}</span><strong>{selected ? statusMeta[selected.status].label : "—"}</strong></div>
+            {selected ? <>
+              <div className="batch-detail-summary"><span>阶段 <b>{selected.stage}</b></span><span>产物 <b>{selected.outputs}</b></span><span>耗时 <b>{selected.elapsed}</b></span><span>来源 <b>{selected.sourceHealth}</b></span></div>
+              <div className="batch-source-detail"><span>错误信息</span><strong className={selected.errorMessage ? "bad" : "ok"}>{selected.errorType || "无错误"}</strong><p>{selected.errorMessage || "本次采集没有记录错误。"}</p></div>
+              <div className="batch-event-list">{ledgerEvents.filter((event) => !event.collector_id || event.collector_id === selected.id).map((event) => <button key={event.id}><span><b>{event.event_type}</b><small>{event.created_at.replace("T", " ").slice(0, 19)}</small></span><em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{eventStatusLabel(event.status)}</em><p>{event.message || "已记录"}</p></button>)}{!ledgerEvents.length && <div className="batch-list-empty">暂无事件记录。</div>}</div>
+              <pre className="batch-log-tail">{collectorLog?.available ? collectorLog.content || "（日志为空）" : "当前源暂无可读日志尾部"}</pre>
+            </> : <div className="batch-list-empty">从中间列表选择一个采集源查看详情。</div>}
           </div>
         </section>
 
-        <div className="batch-next-actions"><span>本批次后续操作</span><button onClick={() => openPipelineView("pool")}>浏览已抓取数据</button>{gateBlocked && <><button onClick={() => void decideGate("approved")}>批准继续</button><button onClick={() => void decideGate("rejected")}>阻断本批次</button></>}</div>
+        <div className="batch-next-actions"><span>本批次后续操作</span><button title="打开已抓取数据池，不会重新启动采集" onClick={() => openPipelineView("pool")}>浏览已抓取数据</button>{gateBlocked && <><button title="记录门禁批准，允许本批次继续进入后续导入/快照流程" onClick={() => void decideGate("approved")}>批准继续</button><button title="记录门禁阻断，停止本批次进入后续导入/快照流程" onClick={() => void decideGate("rejected")}>阻断本批次</button></>}</div>
       </section>}
 
       {pipelineView === "snapshots" && <section className="pipeline-snapshot-view" aria-label="快照版本谱系">
