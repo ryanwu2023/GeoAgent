@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Archive,
@@ -456,6 +456,10 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const [configError, setConfigError] = useState("");
   const [configPayload, setConfigPayload] = useState<CollectorConfigPayload | null>(null);
   const [configDraft, setConfigDraft] = useState<CollectorConfigDraft>({ intervalMinutes: 1440, excludeIds: ["taco-monitor"], allowPartial: false });
+  const sourceListRef = useRef<HTMLDivElement>(null);
+  const processListRef = useRef<HTMLDivElement>(null);
+  const sourceScrollTop = useRef(0);
+  const processScrollTop = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -749,6 +753,14 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     }, {}),
     [collectors],
   );
+
+  useEffect(() => {
+    if (sourceListRef.current) sourceListRef.current.scrollTop = sourceScrollTop.current;
+  }, [collectors]);
+
+  useEffect(() => {
+    if (processListRef.current) processListRef.current.scrollTop = processScrollTop.current;
+  }, [ledgerEvents]);
 
   function selectCollector(id: string) {
     setSelectedId(id);
@@ -1217,7 +1229,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           </div>
           <div className="batch-source-panel">
             <div className="batch-panel-heading"><span className="collector-kicker"><Server size={13} /> 本批次采集源</span><strong>{collectors.length ? `${collectors.length} 个` : runtimeRunStatus === "running" ? "采集中…" : "0 个"}</strong></div>
-            <div className="batch-source-list">
+            <div className="batch-source-list" ref={sourceListRef} onScroll={(event) => { sourceScrollTop.current = event.currentTarget.scrollTop; }}>
               {collectors.map((collector) => { const MetaIcon = statusMeta[collector.status].icon; return <button key={collector.id} className={collector.id === selectedId ? "selected" : ""} onClick={() => selectCollector(collector.id)}><span className="batch-source-status"><MetaIcon size={14} /></span><span><b>{collector.name}</b><small>{collector.id} · {collector.stage}</small></span><em className={statusMeta[collector.status].className}>{statusMeta[collector.status].label}</em><small>{collector.outputs} 个产物 · {collector.finishedAt}</small></button>; })}
               {!collectors.length && <div className="batch-list-empty">{runtimeRunStatus === "running" ? "采集器正在排队或执行，状态每 3 秒自动刷新…" : "该批次没有采集器记录。"}</div>}
             </div>
@@ -1233,7 +1245,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           </div>
           <section className="batch-process-panel" aria-label="抓取过程">
             <div className="batch-panel-heading"><span className="collector-kicker"><Activity size={13} /> 抓取过程</span><strong>{runtimeRunStatus === "running" ? "实时更新中" : `${ledgerEvents.length} 条记录`}</strong></div>
-            <div className="batch-process-list">
+            <div className="batch-process-list" ref={processListRef} onScroll={(event) => { processScrollTop.current = event.currentTarget.scrollTop; }}>
               {ledgerEvents.slice().reverse().map((event) => <div className="batch-process-item" key={event.id}>
                 <span className={`batch-process-dot ${event.status === "failed" ? "bad" : event.event_type === "collector_log" ? "log" : event.status === "succeeded" || event.event_type === "collector_finished" ? "ok" : "running"}`} />
                 <span className="batch-process-main"><b>{event.collector_id || "批次"}</b><small>{event.event_type} · {formatDateTime(event.created_at, true)}</small><p>{event.message || processEventLabel(event, collectors)}</p></span>
