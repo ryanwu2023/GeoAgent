@@ -828,6 +828,10 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       setNotice("当前没有可生成快照的采集批次。");
       return;
     }
+    if (runtimeRunStatus === "failed") {
+      setNotice("当前批次采集失败，不能生成快照；请先重新执行采集并通过发布门禁。");
+      return;
+    }
     if (runtimeRunStatus === "partial" && reviewStatus("gate") !== "accepted") {
       setNotice("本批次存在失败采集器，请先在当前运行流程批准输出门禁。");
       return;
@@ -931,6 +935,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const runFailed = collectors.filter((item) => item.status === "failed" || item.status === "offline").length;
   const gatePassed = runtimeImportStatus === "succeeded";
   const gateBlocked = !gatePassed && (runtimeImportStatus === "skipped_output_gate" || runtimeImportStatus === "skipped_collection_status" || runFailed > 0);
+  const snapshotActionEnabled = Boolean(runtimeRunId && runtimeImportStatus !== "succeeded" && (runtimeRunStatus === "success" || (runtimeRunStatus === "partial" && reviewStatus("gate") === "accepted")));
   const snapshotNeedsReview = Boolean(pendingSnapshotId && pendingSnapshotId !== workingSnapshotId);
 
   function confirmWorkingSnapshot() {
@@ -1158,7 +1163,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       </section>}
 
       {pipelineView === "pool" && <section className="pipeline-pool-view" aria-label="全局已抓取数据池">
-      <div className="collector-pool-strip"><div><span>全局已抓取数据池</span><strong>{allFetchedSourceRows.length ? `${allFetchedSourceRows.length} 条来源记录` : "暂无可浏览来源记录"}</strong><small>这里浏览所有已落盘来源，不随当前运行批次切换；筛选只影响列表。</small></div><div><span>来源状态</span><strong>{poolSourceSummary.total ? `${poolSourceSummary.healthy} / ${poolSourceSummary.total}` : "未记录"}</strong><small>正常来源 · 全局数据池</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={poolSourceSummary.failed || poolSourceSummary.missing ? "warning" : ""}>{poolSourceSummary.total ? `${poolSourceSummary.failed} / ${poolSourceSummary.empty} / ${poolSourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors}>定位失败采集器</button><button onClick={() => void retryCurrentRun()}>补采当前失败</button><button className="primary" onClick={generateSnapshotFromPool}>生成当前批次快照</button></div></div>
+      <div className="collector-pool-strip"><div><span>全局已抓取数据池</span><strong>{allFetchedSourceRows.length ? `${allFetchedSourceRows.length} 条来源记录` : "暂无可浏览来源记录"}</strong><small>这里浏览所有已落盘来源，不随当前运行批次切换；筛选只影响列表。</small></div><div><span>来源状态</span><strong>{poolSourceSummary.total ? `${poolSourceSummary.healthy} / ${poolSourceSummary.total}` : "未记录"}</strong><small>正常来源 · 全局数据池</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={poolSourceSummary.failed || poolSourceSummary.missing ? "warning" : ""}>{poolSourceSummary.total ? `${poolSourceSummary.failed} / ${poolSourceSummary.empty} / ${poolSourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors}>定位失败采集器</button><button onClick={() => void retryCurrentRun()}>补采当前失败</button><button className="primary" disabled={!snapshotActionEnabled} title={runtimeImportStatus === "succeeded" ? "当前批次已经生成快照" : snapshotActionEnabled ? "使用当前批次已发布产物生成快照；不会把全局列表筛选条件写入快照" : "当前批次未通过采集/发布门禁，暂不能生成快照"} onClick={generateSnapshotFromPool}>{runtimeImportStatus === "succeeded" ? "快照已生成" : "从当前批次生成快照"}</button></div></div>
 
       <section className="fetched-data-browser" aria-label="已抓取数据浏览">
         <div className="fetched-data-heading"><div><span className="collector-kicker"><Database size={13} /> 全局数据池 · 不限批次</span><h2>浏览已抓取来源记录</h2><p>列表来自所有已发布采集产物；第一列是来源稳定标识（用于追溯，不是文件夹名称）。当前运行批次只影响上方“补采”和快照操作。</p></div><div className="fetched-data-filters"><label className="fetched-data-filter"><Search size={14} /><input value={sourceQuery} onChange={(event) => setSourceQuery(event.target.value)} placeholder="搜索来源、发布方或采集器" aria-label="搜索已抓取数据" /></label><select value={sourceStateFilter} onChange={(event) => setSourceStateFilter(event.target.value as SourceStateFilter)} aria-label="来源状态筛选"><option value="all">全部来源状态</option><option value="ok">正常</option><option value="failed">失败 / 空响应</option><option value="disabled">已停用</option><option value="unknown">未记录</option></select></div></div>
