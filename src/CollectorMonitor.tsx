@@ -982,7 +982,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
 
   // 运行页只负责回答“这次抓取跑到哪里、哪里需要处理”。
   // 导入、快照和问答/简报属于后续工作区，分别在采集池和快照视图中展示。
-  const collectionStages = pipelineStages.filter((stage) => ["run", "sources", "gate"].includes(stage.id));
+  const collectionStages = pipelineStages.filter((stage) => stage.id === "run" || stage.id === "sources" || (stage.id === "gate" && gateBlocked));
 
   return (
     <section className="collector-monitor" aria-label="采集管线监控">
