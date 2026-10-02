@@ -371,6 +371,27 @@ function shortId(value: string | null | undefined) {
   return value ? `${value.slice(0, 10)}…` : "—";
 }
 
+function formatDateTime(value: string | null | undefined, seconds = false) {
+  if (!value) return "时间未提供";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(seconds ? { second: "2-digit" } : {}),
+    hour12: false,
+  }).formatToParts(date).reduce<Record<string, string>>((result, part) => {
+    result[part.type] = part.value;
+    return result;
+  }, {});
+  const suffix = seconds ? `:${parts.second}` : "";
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}${suffix}（北京时间 UTC+8）`;
+}
+
 function runKindLabel(value?: string) {
   return value === "scheduled-service" ? "定时任务" : value === "manual" ? "手动执行" : value || "采集批次";
 }
@@ -1141,7 +1162,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
                   : "运行 API 不可用 · 未使用演示数据"}
           </span>
           <span className={`collector-health ${dataSource === "runtime" ? "" : "is-muted"}`}><i /> {serviceHealthLabel}</span>
-          <span className="collector-updated">{runtimeUpdated ? `报告更新于 ${runtimeUpdated.replace("T", " ").slice(0, 16)}` : "报告更新时间未提供"}</span>
+          <span className="collector-updated">{runtimeUpdated ? `报告更新于 ${formatDateTime(runtimeUpdated)}` : "报告更新时间未提供"}</span>
           <button onClick={refreshRuntimeView}><RefreshCw size={14} /> 刷新</button>
           <button onClick={openConfig}><Settings2 size={14} /> 定时任务配置</button>
           <button className="primary" disabled={runtimeRunStatus === "running" || Boolean(runtimeRequestId)} title={runtimeRunStatus === "running" || runtimeRequestId ? "当前已有采集批次运行中，请等待完成后再执行" : "立即启动一批全量采集"} onClick={() => queueRun([], "立即执行全量采集")}><Play size={14} /> {runtimeRunStatus === "running" || runtimeRequestId ? "采集中…" : "立即执行"}</button>
@@ -1154,7 +1175,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           <div><span>当前批次</span><strong>{runtimeRunId ? shortId(runtimeRunId) : "未选择"}</strong><small><i className={dataSource === "runtime" ? "report-dot" : "offline-dot"} /> {dataSource === "runtime" ? runtimeStatusLabel : "等待采集批次"}</small></div>
         <div><span>整体健康</span><strong className={overallHealth === "正常" ? "summary-value healthy" : "summary-value warning"}>{overallHealth}</strong><small>{overallHealthNote}</small></div>
         <div><span>最近快照</span><strong>{runtimeSnapshotId ? `${runtimeSnapshotId.slice(0, 10)}…` : (dataSource === "runtime" ? importStatusLabel : "尚未接入")}</strong><small>{dataSource === "runtime" ? `导入状态 · ${importStatusLabel}` : "没有运行报告可关联"}</small></div>
-          <div><span>最近更新</span><strong>{runtimeUpdated ? runtimeUpdated.replace("T", " ").slice(0, 16) : "待接入"}</strong><small>{collectors.length ? `${collectors.length} 个采集器 · 以当前批次为准` : "等待真实采集数据"}</small></div>
+          <div><span>最近更新</span><strong>{runtimeUpdated ? formatDateTime(runtimeUpdated) : "待接入"}</strong><small>{collectors.length ? `${collectors.length} 个采集器 · 以当前批次为准` : "等待真实采集数据"}</small></div>
       </div>
 
       <nav className="collector-view-switcher" aria-label="管线视图">
@@ -1173,7 +1194,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             <div className="batch-panel-heading"><span className="collector-kicker"><History size={13} /> 批次列表</span><strong>{historyRuns.length ? `${historyRuns.length} 个批次` : "暂无批次"}</strong></div>
             <div className="batch-list">
               {historyRuns.map((run) => <button key={run.run_id} className={run.run_id === runtimeRunId ? "selected" : ""} onClick={() => void loadHistoricalRun(run.run_id)}>
-                <span><b>{run.run_id}</b><small>{runKindLabel(run.run_kind)}</small></span><em className={run.failed_count ? "bad" : "ok"}>{run.failed_count ? `${run.failed_count} 个失败` : "全部完成"}</em><small>{run.updated_at ? run.updated_at.replace("T", " ").slice(0, 16) : "时间未提供"}</small>
+                <span><b>{run.run_id}</b><small>{runKindLabel(run.run_kind)}</small></span><em className={run.failed_count ? "bad" : "ok"}>{run.failed_count ? `${run.failed_count} 个失败` : "全部完成"}</em><small>{formatDateTime(run.updated_at)}</small>
               </button>)}
               {!historyRuns.length && <div className="batch-list-empty">正在等待采集批次…</div>}
             </div>
@@ -1190,7 +1211,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             {selected ? <>
               <div className="batch-detail-summary"><span>阶段 <b>{selected.stage}</b></span><span>产物 <b>{selected.outputs}</b></span><span>耗时 <b>{selected.elapsed}</b></span><span>来源 <b>{selected.sourceHealth}</b></span></div>
               <div className="batch-source-detail"><span>错误信息</span><strong className={selected.errorMessage ? "bad" : "ok"}>{selected.errorType || "无错误"}</strong><p>{selected.errorMessage || "本次采集没有记录错误。"}</p></div>
-              <div className="batch-event-list">{ledgerEvents.filter((event) => !event.collector_id || event.collector_id === selected.id).map((event) => <button key={event.id}><span><b>{event.event_type}</b><small>{event.created_at.replace("T", " ").slice(0, 19)}</small></span><em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{eventStatusLabel(event.status)}</em><p>{event.message || "已记录"}</p></button>)}{!ledgerEvents.length && <div className="batch-list-empty">暂无事件记录。</div>}</div>
+              <div className="batch-event-list">{ledgerEvents.filter((event) => !event.collector_id || event.collector_id === selected.id).map((event) => <button key={event.id}><span><b>{event.event_type}</b><small>{formatDateTime(event.created_at, true)}</small></span><em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{eventStatusLabel(event.status)}</em><p>{event.message || "已记录"}</p></button>)}{!ledgerEvents.length && <div className="batch-list-empty">暂无事件记录。</div>}</div>
               <pre className="batch-log-tail">{collectorLog?.available ? collectorLog.content || "（日志为空）" : "当前源暂无可读日志尾部"}</pre>
             </> : <div className="batch-list-empty">{runtimeRunStatus === "running" ? "批次正在运行，选择的采集器状态和日志会自动出现在这里。" : "从中间列表选择一个采集源查看详情。"}</div>}
           </div>
@@ -1199,7 +1220,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             <div className="batch-process-list">
               {ledgerEvents.slice().reverse().map((event) => <div className="batch-process-item" key={event.id}>
                 <span className={`batch-process-dot ${event.status === "failed" ? "bad" : event.status === "succeeded" || event.event_type === "collector_finished" ? "ok" : "running"}`} />
-                <span className="batch-process-main"><b>{event.collector_id || "批次"}</b><small>{event.event_type} · {event.created_at.replace("T", " ").slice(0, 19)}</small><p>{event.message || eventStatusLabel(event.status)}</p></span>
+                <span className="batch-process-main"><b>{event.collector_id || "批次"}</b><small>{event.event_type} · {formatDateTime(event.created_at, true)}</small><p>{event.message || eventStatusLabel(event.status)}</p></span>
                 <em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{eventStatusLabel(event.status)}</em>
               </div>)}
               {!ledgerEvents.length && <div className="batch-list-empty">等待采集器输出过程日志…</div>}
@@ -1217,7 +1238,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             const isWorking = snapshot.id === workingSnapshotId;
             return <article key={snapshot.id} className={`snapshot-lineage-item ${isPending ? "pending" : ""} ${isWorking ? "working" : ""}`}>
               <div className="snapshot-lineage-marker"><span>{index + 1}</span></div>
-              <div className="snapshot-lineage-content"><div className="snapshot-lineage-heading"><div><strong>{shortId(snapshot.id)}</strong><small>{snapshot.created_at.replace("T", " ").slice(0, 16)}</small></div><div className="snapshot-badges">{isWorking && <em className="working">当前工作</em>}{isPending && <em className="pending">待确认</em>}</div></div>
+              <div className="snapshot-lineage-content"><div className="snapshot-lineage-heading"><div><strong>{shortId(snapshot.id)}</strong><small>{formatDateTime(snapshot.created_at)}</small></div><div className="snapshot-badges">{isWorking && <em className="working">当前工作</em>}{isPending && <em className="pending">待确认</em>}</div></div>
                 <div className="snapshot-stat-grid"><div><span>记录</span><b>{metric(snapshot.records)}</b></div><div><span>指标</span><b>{metric(snapshot.observations)}</b></div><div><span>来源</span><b>{metric(snapshot.sources)}</b></div><div><span>错误</span><b>{metric(snapshot.errors, "0")}</b></div><div><span>新记录</span><b>{metric(snapshot.import_stats?.new)}</b></div><div><span>修订</span><b>{metric(snapshot.import_stats?.revised)}</b></div></div>
                 <div className="snapshot-cleaning-note">清洗：原始 {metric(snapshot.cleaning?.raw_records)} · 合并重复 {metric(snapshot.cleaning?.duplicates_merged)} · 无效 {metric(snapshot.cleaning?.invalid_records, "0")}</div>
                 <div className="pipeline-action-row"><button className={isWorking ? "primary" : ""} onClick={() => void chooseWorkingSnapshot(snapshot.id)}><FileCheck2 size={14} /> {isWorking ? "当前工作快照" : "设为工作快照"}</button><button onClick={() => onSnapshotInspect?.(snapshot.id)}>查看 / 调整范围</button></div>
@@ -1280,7 +1301,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             <div><span className="collector-kicker"><Clock3 size={13} /> {dataSource === "runtime" ? "采集器诊断" : "等待真实数据"}</span><h2>{dataSource === "runtime" ? "采集器运行状态" : "暂无采集器状态"} <small>{runtimeRunId || "—"}</small></h2></div>
             <div className="collector-timeline-meta"><span><i className="legend-dot running" /> 运行中</span><span><i className="legend-dot success" /> 成功</span><span><i className="legend-dot partial" /> 需关注</span><span><i className="legend-dot failed" /> 失败</span></div>
           </div>
-          <div className="collector-timeline-caption"><span>{filtered.length} / {collectors.length} 个来源采集器</span><span>{runtimeUpdated ? `最近抓取 ${runtimeUpdated.replace("T", " ").slice(0, 16)}` : "等待抓取时间"}</span></div>
+          <div className="collector-timeline-caption"><span>{filtered.length} / {collectors.length} 个来源采集器</span><span>{runtimeUpdated ? `最近抓取 ${formatDateTime(runtimeUpdated)}` : "等待抓取时间"}</span></div>
           <div className="collector-rows">
             {filtered.map((collector) => {
               const meta = statusMeta[collector.status];
