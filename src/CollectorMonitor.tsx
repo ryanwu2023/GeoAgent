@@ -469,6 +469,34 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     };
   }, [runtimeRequestId, summaryRefreshKey]);
 
+  // A newly submitted run does not have a completed report yet. Poll its
+  // runtime projection so the batch list, source list, and inspector fill in
+  // as collectors start and finish instead of remaining at zero until the
+  // final report is written.
+  useEffect(() => {
+    if (!runtimeRunId || runtimeRunStatus !== "running") return;
+    let cancelled = false;
+    const loadActiveRun = () => api<CollectorRuntimePayload>(`/collector/runs/${encodeURIComponent(runtimeRunId)}`)
+      .then((payload) => {
+        if (cancelled || !payload.available) return;
+        const mapped = (payload.collectors || []).map(mapRuntimeCollector);
+        setCollectors(mapped);
+        setSelectedId((current) => mapped.some((item) => item.id === current) ? current : mapped[0]?.id || "");
+        setRuntimeUpdated(payload.updated_at || "");
+        setRuntimeRunStatus(payload.run_status || "running");
+        setRuntimeImportStatus(payload.import_status || "pending");
+        setRuntimeSnapshotId(payload.snapshot_id || "");
+        setRuntimeImportResult(payload.import_result || null);
+      })
+      .catch(() => {});
+    loadActiveRun();
+    const timer = window.setInterval(loadActiveRun, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [runtimeRunId, runtimeRunStatus]);
+
   useEffect(() => {
     let cancelled = false;
     if (!runtimeRunId) {
@@ -477,7 +505,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       return () => { cancelled = true; };
     }
     const query = "?limit=100";
-    api<CollectorEventsPayload>(`/collector/runs/${encodeURIComponent(runtimeRunId)}/events${query}`)
+    const loadEvents = () => api<CollectorEventsPayload>(`/collector/runs/${encodeURIComponent(runtimeRunId)}/events${query}`)
       .then((payload) => {
         if (cancelled) return;
         setLedgerEvents(payload.events || []);
@@ -489,8 +517,13 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           setLedgerEventsAvailable(false);
         }
       });
-    return () => { cancelled = true; };
-  }, [runtimeRunId, selectedId]);
+    loadEvents();
+    const timer = runtimeRunStatus === "running" ? window.setInterval(loadEvents, 3000) : undefined;
+    return () => {
+      cancelled = true;
+      if (timer) window.clearInterval(timer);
+    };
+  }, [runtimeRunId, runtimeRunStatus, selectedId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -531,15 +564,20 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       setCollectorLog(null);
       return () => { cancelled = true; };
     }
-    api<CollectorLogPayload>(`/collector/runs/${encodeURIComponent(runtimeRunId)}/logs/${encodeURIComponent(selectedId)}?stream=${logStream}&tail=4000`)
+    const loadLog = () => api<CollectorLogPayload>(`/collector/runs/${encodeURIComponent(runtimeRunId)}/logs/${encodeURIComponent(selectedId)}?stream=${logStream}&tail=4000`)
       .then((payload) => {
         if (!cancelled) setCollectorLog(payload);
       })
       .catch(() => {
         if (!cancelled) setCollectorLog(null);
       });
-    return () => { cancelled = true; };
-  }, [runtimeRunId, selectedId, logStream]);
+    loadLog();
+    const timer = runtimeRunStatus === "running" ? window.setInterval(loadLog, 3000) : undefined;
+    return () => {
+      cancelled = true;
+      if (timer) window.clearInterval(timer);
+    };
+  }, [runtimeRunId, runtimeRunStatus, selectedId, logStream]);
 
   useEffect(() => {
     let cancelled = false;
@@ -547,17 +585,27 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       setCollectorSources(null);
       return () => { cancelled = true; };
     }
-    const params = new URLSearchParams({ collector_id: selectedId });
-    if (runtimeRunId) params.set("run_id", runtimeRunId);
-    api<CollectorSourcesPayload>(`/collector/sources?${params.toString()}`)
+    const loadSources = () => {
+      const params = new URLSearchParams({ collector_id: selectedId });
+      if (runtimeRunId) params.set("run_id", runtimeRunId);
+      return api<CollectorSourcesPayload>(`/collector/sources?${params.toString()}`);
+    };
+    const applySources = (payload: CollectorSourcesPayload) => {
+      if (!cancelled) setCollectorSources(payload.available ? payload.collectors[0] || null : null);
+    };
+    loadSources()
       .then((payload) => {
-        if (!cancelled) setCollectorSources(payload.available ? payload.collectors[0] || null : null);
+        applySources(payload);
       })
       .catch(() => {
         if (!cancelled) setCollectorSources(null);
       });
-    return () => { cancelled = true; };
-  }, [selectedId, runtimeRunId]);
+    const timer = runtimeRunStatus === "running" ? window.setInterval(() => { void loadSources().then(applySources); }, 3000) : undefined;
+    return () => {
+      cancelled = true;
+      if (timer) window.clearInterval(timer);
+    };
+  }, [selectedId, runtimeRunId, runtimeRunStatus]);
 
   useEffect(() => {
     if (!runtimeRequestId) return;
@@ -1091,7 +1139,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           <span className="collector-updated">{runtimeUpdated ? `报告更新于 ${runtimeUpdated.replace("T", " ").slice(0, 16)}` : "报告更新时间未提供"}</span>
           <button onClick={refreshRuntimeView}><RefreshCw size={14} /> 刷新</button>
           <button onClick={openConfig}><Settings2 size={14} /> 定时任务配置</button>
-          <button className="primary" onClick={() => queueRun([], "立即执行全量采集")}><Play size={14} /> 立即执行</button>
+          <button className="primary" disabled={runtimeRunStatus === "running" || Boolean(runtimeRequestId)} title={runtimeRunStatus === "running" || runtimeRequestId ? "当前已有采集批次运行中，请等待完成后再执行" : "立即启动一批全量采集"} onClick={() => queueRun([], "立即执行全量采集")}><Play size={14} /> {runtimeRunStatus === "running" || runtimeRequestId ? "采集中…" : "立即执行"}</button>
         </div>
       </div>
 
