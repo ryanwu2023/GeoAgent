@@ -403,6 +403,9 @@ function eventStatusLabel(value?: string | null) {
 
 function processEventLabel(event: CollectorEvent, currentCollectors: CollectorRecord[]) {
   if (event.event_type === "collector_log") return "日志";
+  if (event.event_type === "run_started") return "已开始";
+  if (event.event_type === "run_finished") return event.status === "failed" ? "失败" : "已完成";
+  if (event.event_type === "run_abandoned") return "已放弃";
   if (event.event_type === "collector_started") {
     const collector = currentCollectors.find((item) => item.id === event.collector_id);
     return collector?.status === "running" ? "运行中" : collector ? statusMeta[collector.status].label : "已启动";
