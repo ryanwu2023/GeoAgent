@@ -931,13 +931,13 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     },
     {
       id: "gate",
-      label: "发布门禁",
+      label: "输出检查",
       icon: ShieldCheck,
       status: gatePassed ? "success" : gateBlocked ? "blocked" : "pending",
-      summary: gatePassed ? "已通过" : gateBlocked ? importStatusLabel : "等待判定",
-      metrics: [["进程状态", runtimeStatusLabel], ["产物发布", gatePassed ? "通过" : "待核对"], ["阻断原因", importStatusLabel]],
-      check: "核对是否允许部分成功进入导入",
-      action: { label: "查看门禁决策", handler: () => openPipelineView("run") },
+      summary: gatePassed ? "允许进入数据池" : gateBlocked ? "未允许进入数据池" : "等待检查",
+      metrics: [["采集状态", runtimeStatusLabel], ["进入数据池", gatePassed ? "允许" : "暂停"], ["原因", importStatusLabel]],
+      check: "确认失败或不完整数据是否可以继续",
+      action: { label: "查看输出检查", handler: () => openPipelineView("run") },
     },
     {
       id: "import",
@@ -1047,9 +1047,9 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
 
         <div className="pipeline-audit-grid">
           <section className="pipeline-audit-panel">
-            <div className="pipeline-panel-heading"><div><span className="collector-kicker"><ListChecks size={13} /> 抓取核对</span><h3>本批次需要处理什么</h3></div><span className="pipeline-panel-note">不会在这里修改快照</span></div>
-            <p className="pipeline-panel-note">只针对来源失败、空响应和输出门禁做人工判断；已抓取记录在数据池查看，快照从页面顶部统一浏览。</p>
-            <div className="pipeline-action-row"><button onClick={showFailedCollectors}>查看失败来源</button><button onClick={openSourceAudit}>查看来源状态</button>{gateBlocked && <><button onClick={() => void decideGate("approved")}>批准输出</button><button onClick={() => void decideGate("rejected")}>阻断输出</button></>}</div>
+            <div className="pipeline-panel-heading"><div><span className="collector-kicker"><ListChecks size={13} /> 输出检查</span><h3>本批次需要处理什么</h3></div><span className="pipeline-panel-note">防止问题数据直接形成快照</span></div>
+            <p className="pipeline-panel-note">先查看失败来源和空响应，再决定是否允许本批次继续进入数据池。这个操作不会修改已经存在的快照。</p>
+            <div className="pipeline-action-row"><button onClick={showFailedCollectors}>查看失败来源</button><button onClick={openSourceAudit}>查看来源状态</button>{gateBlocked && <><button onClick={() => void decideGate("approved")}>批准继续</button><button onClick={() => void decideGate("rejected")}>阻断本批次</button></>}</div>
           </section>
           <section className="pipeline-pending-snapshot confirmed">
             <div className="pipeline-panel-heading"><div><span className="collector-kicker"><Archive size={13} /> 后续工作区</span><h3>抓取完成后</h3></div><span className="pipeline-panel-note">按需继续</span></div>
