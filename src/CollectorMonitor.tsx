@@ -1051,32 +1051,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           </div>
         </section>
 
-        <div className="pipeline-stage-track" role="list" aria-label="抓取阶段">
-          {collectionStages.map((stage, index) => {
-            const StageIcon = stage.icon;
-            const activate = stage.action?.handler;
-            return <article key={stage.id} className={`pipeline-stage-card state-${stage.status} ${activate ? "is-actionable" : ""}`} role={activate ? "button" : "listitem"} tabIndex={activate ? 0 : undefined} onClick={activate} onKeyDown={activate ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } : undefined}>
-              <div className="pipeline-stage-top"><span className="pipeline-stage-number">{index + 1}</span><span className="pipeline-stage-icon"><StageIcon size={16} /></span><span className="pipeline-stage-status">{stage.status === "success" ? "已完成" : stage.status === "warning" ? "需核对" : stage.status === "blocked" ? "已阻断" : stage.status === "running" ? "进行中" : "待开始"}</span></div>
-              <h3>{stage.label}</h3><strong>{stage.summary}</strong>
-              <div className="pipeline-stage-metrics">{stage.metrics.map(([label, value]) => <div key={label}><span>{label}</span><b>{value}</b></div>)}</div>
-              <p><span>人工核对</span>{stage.check}</p>
-              {stage.action && <button className="pipeline-stage-action" onClick={(event) => { event.stopPropagation(); stage.action?.handler(); }}>{stage.action.label}<ChevronRight size={13} /></button>}
-            </article>;
-          })}
-        </div>
-
-        <div className="pipeline-audit-grid">
-          <section className="pipeline-audit-panel">
-            <div className="pipeline-panel-heading"><div><span className="collector-kicker"><ListChecks size={13} /> 输出检查</span><h3>本批次需要处理什么</h3></div><span className="pipeline-panel-note">防止问题数据直接形成快照</span></div>
-            <p className="pipeline-panel-note">先查看失败来源和空响应，再决定是否允许本批次继续进入数据池。这个操作不会修改已经存在的快照。</p>
-            <div className="pipeline-action-row"><button onClick={showFailedCollectors}>查看失败来源</button><button onClick={openSourceAudit}>查看来源状态</button>{gateBlocked && <><button onClick={() => void decideGate("approved")}>批准继续</button><button onClick={() => void decideGate("rejected")}>阻断本批次</button></>}</div>
-          </section>
-          <section className="pipeline-pending-snapshot confirmed">
-            <div className="pipeline-panel-heading"><div><span className="collector-kicker"><Archive size={13} /> 后续工作区</span><h3>抓取完成后</h3></div><span className="pipeline-panel-note">按需继续</span></div>
-            <p>采集结果先进入数据池；在“浏览已抓取数据”中按来源、主题、时间和质量条件筛选。快照统一从页面顶部“数据快照”入口查看和切换。</p>
-            <div className="pipeline-action-row"><button onClick={() => openPipelineView("pool")}>浏览数据池</button></div>
-          </section>
-        </div>
+        <div className="batch-next-actions"><span>本批次后续操作</span><button onClick={() => openPipelineView("pool")}>浏览已抓取数据</button>{gateBlocked && <><button onClick={() => void decideGate("approved")}>批准继续</button><button onClick={() => void decideGate("rejected")}>阻断本批次</button></>}</div>
       </section>}
 
       {pipelineView === "snapshots" && <section className="pipeline-snapshot-view" aria-label="快照版本谱系">
