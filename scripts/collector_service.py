@@ -142,6 +142,21 @@ def execute_once(
         ledger.event(run_id=report_dir.name, event_type="run_started", status="running", payload=state)
         live_results: dict[str, dict] = {}
 
+        def on_output(collector_id: str, stream: str, line: str) -> None:
+            """Persist a bounded event and an append-only per-run log line."""
+            log_path = report_dir / str(collector_id) / f"{stream}.log"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write(line + "\n")
+            ledger.event(
+                run_id=report_dir.name,
+                event_type="collector_log",
+                collector_id=collector_id,
+                status="running",
+                message=line,
+                payload={"stream": stream, "line": line},
+            )
+
         def on_progress(item: dict) -> None:
             """Persist per-collector progress while the batch is still running."""
             collector_id = str(item.get("id", "unknown"))
@@ -187,6 +202,7 @@ def execute_once(
                     backoff_factor=retry_backoff_sec,
                     staging_root=collector_data_root() / ".staging" / report_dir.name,
                     progress=on_progress,
+                    output_callback=on_output,
                 )
             else:
                 results = runner(ids or [], topic, timeout, registry=selected_registry)

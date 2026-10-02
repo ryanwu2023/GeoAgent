@@ -1194,6 +1194,17 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
               <pre className="batch-log-tail">{collectorLog?.available ? collectorLog.content || "（日志为空）" : "当前源暂无可读日志尾部"}</pre>
             </> : <div className="batch-list-empty">{runtimeRunStatus === "running" ? "批次正在运行，选择的采集器状态和日志会自动出现在这里。" : "从中间列表选择一个采集源查看详情。"}</div>}
           </div>
+          <section className="batch-process-panel" aria-label="抓取过程">
+            <div className="batch-panel-heading"><span className="collector-kicker"><Activity size={13} /> 抓取过程</span><strong>{runtimeRunStatus === "running" ? "实时更新中" : `${ledgerEvents.length} 条记录`}</strong></div>
+            <div className="batch-process-list">
+              {ledgerEvents.slice().reverse().map((event) => <div className="batch-process-item" key={event.id}>
+                <span className={`batch-process-dot ${event.status === "failed" ? "bad" : event.status === "succeeded" || event.event_type === "collector_finished" ? "ok" : "running"}`} />
+                <span className="batch-process-main"><b>{event.collector_id || "批次"}</b><small>{event.event_type} · {event.created_at.replace("T", " ").slice(0, 19)}</small><p>{event.message || eventStatusLabel(event.status)}</p></span>
+                <em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{eventStatusLabel(event.status)}</em>
+              </div>)}
+              {!ledgerEvents.length && <div className="batch-list-empty">等待采集器输出过程日志…</div>}
+            </div>
+          </section>
         </section>
 
       </section>}

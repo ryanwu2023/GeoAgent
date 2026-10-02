@@ -9,6 +9,8 @@ import subprocess
 import sys
 import time
 import uuid
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -105,6 +107,54 @@ def _tail(value: str | bytes | None) -> str:
     return str(value)[-2000:]
 
 
+def _execute_process(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int,
+                     output_callback: Callable[[str, str], None] | None = None):
+    """Run a collector, optionally forwarding stdout/stderr lines as they arrive."""
+    if output_callback is None:
+        return subprocess.run(
+            command, cwd=cwd, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=timeout, env=env,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+    process = subprocess.Popen(
+        command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding="utf-8", errors="replace", bufsize=1, env=env,
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+    )
+    streams: dict[str, list[str]] = {"stdout": [], "stderr": []}
+
+    def consume(name: str, pipe) -> None:
+        for line in iter(pipe.readline, ""):
+            streams[name].append(line)
+            output_callback(name, line.rstrip("\\r\\n"))
+        pipe.close()
+
+    readers = [threading.Thread(target=consume, args=(name, pipe), daemon=True)
+               for name, pipe in (("stdout", process.stdout), ("stderr", process.stderr))]
+    for reader in readers:
+        reader.start()
+    try:
+        returncode = process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+        for reader in readers:
+            reader.join(timeout=1)
+        raise subprocess.TimeoutExpired(
+            command, timeout, output="".join(streams["stdout"]), stderr="".join(streams["stderr"])
+        )
+    for reader in readers:
+        reader.join(timeout=1)
+
+    class Completed:
+        pass
+    completed = Completed()
+    completed.returncode = returncode
+    completed.stdout = "".join(streams["stdout"])
+    completed.stderr = "".join(streams["stderr"])
+    return completed
+
+
 def run_one(
     item: dict,
     *,
@@ -114,6 +164,7 @@ def run_one(
     backoff_factor: float = 1.0,
     sleep: Callable[[float], None] = time.sleep,
     staging_root: Path | None = None,
+    output_callback: Callable[[str, str], None] | None = None,
 ) -> dict:
     """Run one collector while preventing concurrent runs for the same id."""
     lock_path = collector_data_root() / ".collector-locks" / f"{item['id']}.lock"
@@ -126,6 +177,7 @@ def run_one(
             backoff_factor=backoff_factor,
             sleep=sleep,
             staging_root=staging_root,
+            output_callback=output_callback,
         )
 
 
@@ -138,6 +190,7 @@ def _run_one_unlocked(
     backoff_factor: float = 1.0,
     sleep: Callable[[float], None] = time.sleep,
     staging_root: Path | None = None,
+    output_callback: Callable[[str, str], None] | None = None,
 ) -> dict:
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
@@ -164,16 +217,9 @@ def _run_one_unlocked(
         started = datetime.now(timezone.utc).isoformat()
         first_started = first_started or started
         try:
-            completed = subprocess.run(
-                [sys.executable, str(entrypoint), *args],
-                cwd=collector_dir,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-                env=env,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            completed = _execute_process(
+                [sys.executable, str(entrypoint), *args], cwd=collector_dir,
+                env=env, timeout=timeout, output_callback=output_callback,
             )
             returncode = completed.returncode
             attempt_record = {
@@ -240,6 +286,7 @@ def run_collectors(
     staging_root: Path | None = None,
     sleep: Callable[[float], None] = time.sleep,
     progress: Callable[[dict], None] | None = None,
+    output_callback: Callable[[str, str, str], None] | None = None,
 ) -> list[dict]:
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
@@ -248,22 +295,21 @@ def run_collectors(
     staging_root = Path(staging_root) if staging_root is not None else collector_data_root() / ".staging" / f"run-{uuid.uuid4().hex}"
     staging_root.mkdir(parents=True, exist_ok=True)
     try:
-        results = []
-        for item in selected:
+        def execute(item: dict) -> dict:
             if progress:
                 progress({"id": item["id"], "status": "running", "started_at": datetime.now(timezone.utc).isoformat()})
             result = run_one(
-                item,
-                timeout=timeout,
-                verify_only=verify_only,
-                max_attempts=max_attempts,
-                backoff_factor=backoff_factor,
-                sleep=sleep,
-                staging_root=staging_root,
+                item, timeout=timeout, verify_only=verify_only, max_attempts=max_attempts,
+                backoff_factor=backoff_factor, sleep=sleep, staging_root=staging_root,
+                output_callback=(lambda stream, line: output_callback(item["id"], stream, line)) if output_callback else None,
             )
-            results.append(result)
             if progress:
                 progress({**result, "status": "finished"})
+            return result
+
+        max_workers = min(4, max(1, len(selected)))
+        with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="collector") as pool:
+            results = list(pool.map(execute, selected))
         return results
     finally:
         if staging_root.exists():

@@ -56,7 +56,22 @@ def read_log_tail(
         raise ValueError("stream must be stdout or stderr")
     if tail < 1:
         raise ValueError("tail must be positive")
-    report_path = Path(runs_root) / run_id / "results.json"
+    run_dir = Path(runs_root) / run_id
+    live_log = run_dir / collector_id / f"{stream}.log"
+    if live_log.is_file():
+        try:
+            content = live_log.read_text(encoding="utf-8")
+        except OSError:
+            content = ""
+        return {
+            "available": True,
+            "source": "live-log",
+            "run_id": run_id,
+            "collector_id": collector_id,
+            "stream": stream,
+            "content": redact(content[-tail:]),
+        }
+    report_path = run_dir / "results.json"
     item = _report_item(report_path, collector_id) if report_path.is_file() else None
     source = "results-tail"
     if item is None:

@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -41,6 +43,32 @@ def test_runner_reports_collector_progress(monkeypatch):
     assert results == [{"id": "first", "returncode": 0}]
     assert [item["status"] for item in progress] == ["running", "finished"]
     assert [item["id"] for item in progress] == ["first", "first"]
+
+
+def test_runner_executes_selected_collectors_concurrently(monkeypatch):
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def fake_run_one(item, **kwargs):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.08)
+        with lock:
+            active -= 1
+        return {"id": item["id"], "returncode": 0}
+
+    monkeypatch.setattr("scripts.collect.run_one", fake_run_one)
+    started = time.monotonic()
+    results = run_collectors(
+        ["first", "second"], topic=None, timeout=10, registry=_registry()
+    )
+
+    assert [item["id"] for item in results] == ["first", "second"]
+    assert peak == 2
+    assert time.monotonic() - started < 0.15
 
 
 def test_topic_filter_only_selects_matching_collectors():
