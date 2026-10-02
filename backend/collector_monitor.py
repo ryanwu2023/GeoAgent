@@ -176,10 +176,21 @@ def load_runs(runs_root: Path, registry_path: Path, limit: int = 20) -> list[dic
 
         reports.sort(key=sort_key, reverse=True)
     labels = _registry_labels(registry_path)
+    ledger = _ledger(runs_root)
     runs: list[dict[str, Any]] = []
     for report in reports[: max(0, limit)]:
         parsed = _load_report(report, labels)
         if parsed is not None:
+            # The compatibility state.json can remain `running` when the
+            # service is interrupted after collectors have finished. The
+            # ledger is the authoritative lifecycle record in that case.
+            ledger_run = ledger.run(parsed["run_id"]) if ledger is not None else None
+            if ledger_run is not None and ledger_run.get("status") != parsed.get("run_status"):
+                parsed["run_status"] = ledger_run.get("status")
+                parsed["finished_at"] = ledger_run.get("finished_at") or parsed.get("finished_at")
+                parsed["updated_at"] = parsed.get("finished_at") or parsed.get("updated_at")
+                parsed["import_status"] = ledger_run.get("import_status") or parsed.get("import_status")
+                parsed["snapshot_id"] = ledger_run.get("snapshot_id") or parsed.get("snapshot_id")
             runs.append(parsed)
     return runs
 

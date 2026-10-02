@@ -88,6 +88,41 @@ def test_load_runs_exposes_running_state_before_results_json(tmp_path):
     assert result["collectors"] == []
 
 
+def test_load_runs_uses_ledger_terminal_status_when_state_file_is_stale(tmp_path):
+    root = tmp_path / "collection-runs"
+    runs = root / "interrupted"
+    runs.mkdir(parents=True)
+    registry = tmp_path / "collectors.json"
+    registry.write_text(json.dumps({"collectors": []}), encoding="utf-8")
+    (runs / "state.json").write_text(
+        json.dumps({
+            "run_id": "interrupted",
+            "run_kind": "scheduled-service",
+            "status": "running",
+            "started_at": "2026-10-02T09:00:00+00:00",
+            "finished_at": None,
+            "import_status": "pending",
+        }),
+        encoding="utf-8",
+    )
+    ledger = CollectorLedger(root / "ledger.sqlite3")
+    ledger.run_started(
+        run_id="interrupted",
+        run_kind="scheduled-service",
+        started_at="2026-10-02T09:00:00+00:00",
+        topic=None,
+        timeout_sec=30,
+    )
+    ledger.recover_unfinished(finished_at="2026-10-02T09:05:00+00:00")
+
+    result = load_latest_run(root, registry)
+
+    assert result["run_status"] == "abandoned"
+    assert result["finished_at"] == "2026-10-02T09:05:00+00:00"
+    assert result["updated_at"] == "2026-10-02T09:05:00+00:00"
+    assert result["import_status"] == "not_attempted_interrupted"
+
+
 def test_load_runs_sorts_by_batch_start_time_not_live_file_mtime(tmp_path):
     root = tmp_path / "collection-runs"
     newer = root / "newer"

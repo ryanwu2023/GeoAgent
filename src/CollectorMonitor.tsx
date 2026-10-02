@@ -397,6 +397,14 @@ function runKindLabel(value?: string) {
   return value === "scheduled-service" ? "定时任务" : value === "manual" ? "手动执行" : value || "采集批次";
 }
 
+function runStatusLabel(value?: string | null, failedCount = 0) {
+  if (value === "running") return "运行中";
+  if (value === "abandoned") return "已中断";
+  if (value === "failed" || failedCount) return failedCount ? `${failedCount} 个失败` : "失败";
+  if (value === "partial") return "部分完成";
+  return "全部完成";
+}
+
 function eventStatusLabel(value?: string | null) {
   return ({ running: "运行中", succeeded: "成功", success: "成功", failed: "失败", accepted: "已通过", pending: "待核对" } as Record<string, string>)[value || ""] || value || "已记录";
 }
@@ -747,7 +755,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const runtimeFailedCount = collectors.filter((collector) => collector.status === "failed").length;
   const overallHealth = dataSource === "runtime" ? (runtimeFailedCount ? "需关注" : "正常") : dataSource === "demo" ? "演示" : "不可用";
   const overallHealthNote = dataSource === "runtime" ? `${runtimeFailedCount} 个失败 · 以最近报告为准` : dataSource === "demo" ? "显式演示模式" : "未读取到持久化运行报告";
-  const runtimeStatusLabel = ({ success: "已完成", partial: "部分完成", failed: "失败", running: "运行中" } as Record<string, string>)[runtimeRunStatus] || "报告已落盘";
+  const runtimeStatusLabel = runStatusLabel(runtimeRunStatus);
   const importStatusLabel = ({ succeeded: "已导入", failed: "导入失败", skipped_collection_status: "因采集状态跳过", skipped_output_gate: "输出门禁跳过", skipped_no_results: "无产物跳过", pending: "等待导入", not_requested: "未请求" } as Record<string, string>)[runtimeImportStatus] || "待确认";
   const runtimeTriggerLabel = dataSource === "runtime" ? "运行报告" : dataSource === "demo" ? "显式演示" : "不可用";
   const serviceHealthLabel = dataSource === "runtime" ? "报告可读" : dataSource === "demo" ? "演示模式" : apiState === "empty" ? "服务在线 · 无报告" : "API 不可用";
@@ -1107,7 +1115,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       id: "run",
       label: "运行批次",
       icon: Play,
-      status: runtimeRunStatus === "running" ? "running" : runFailed ? "warning" : "success",
+      status: runtimeRunStatus === "running" ? "running" : (runtimeRunStatus === "abandoned" || runtimeRunStatus === "failed" || runFailed ? "warning" : "success"),
       summary: runtimeRunId || "等待运行批次",
       metrics: [["采集器", `${runCompleted}/${collectors.length}`], ["失败", metric(runFailed, "0")], ["触发", runtimeTriggerLabel]],
       check: "核对批次范围、排除项和运行时间",
@@ -1239,7 +1247,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             <div className="batch-panel-heading"><span className="collector-kicker"><History size={13} /> 批次列表</span><strong>{historyRuns.length ? `${historyRuns.length} 个批次` : "暂无批次"}</strong></div>
             <div className="batch-list">
               {historyRuns.map((run) => <button key={run.run_id} className={run.run_id === selectedRunId ? "selected" : ""} onClick={() => void loadHistoricalRun(run.run_id)}>
-                <span><b>{run.run_id}</b><small>{runKindLabel(run.run_kind)}</small></span><em className={run.run_status === "running" ? "running" : run.failed_count ? "bad" : "ok"}>{run.run_status === "running" ? "运行中" : run.failed_count ? `${run.failed_count} 个失败` : "全部完成"}</em><small>{formatDateTime(run.updated_at)}</small>
+                <span><b>{run.run_id}</b><small>{runKindLabel(run.run_kind)}</small></span><em className={run.run_status === "running" ? "running" : (run.run_status === "abandoned" || run.run_status === "failed" || run.failed_count ? "bad" : "ok")}>{runStatusLabel(run.run_status, run.failed_count)}</em><small>{formatDateTime(run.updated_at)}</small>
               </button>)}
               {!historyRuns.length && <div className="batch-list-empty">正在等待采集批次…</div>}
             </div>
