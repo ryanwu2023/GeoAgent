@@ -294,6 +294,7 @@ type CollectorConfigDraft = {
 };
 
 type PipelineView = "run" | "pool" | "snapshots";
+type SourceStateFilter = "all" | "ok" | "failed" | "disabled" | "unknown";
 type PipelineStage = {
   id: string;
   label: string;
@@ -388,6 +389,8 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const [statusFilter, setStatusFilter] = useState<CollectorStatus | "all">("all");
   const [groupFilter, setGroupFilter] = useState<CollectorGroup | "全部分组">("全部分组");
   const [query, setQuery] = useState("");
+  const [sourceQuery, setSourceQuery] = useState("");
+  const [sourceStateFilter, setSourceStateFilter] = useState<SourceStateFilter>("all");
   const [selectedId, setSelectedId] = useState("iran-escalation-monitor");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
@@ -845,13 +848,17 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     empty: total.empty + Math.max(0, (item.summary?.total || 0) - (item.summary?.healthy || 0) - (item.summary?.failed || 0) - (item.summary?.stale || 0) - (item.summary?.disabled || 0)),
     missing: total.missing + (item.artifact_status === "missing" ? 1 : 0),
   }), { total: 0, healthy: 0, failed: 0, empty: 0, missing: 0 });
-  const fetchedSourceRows = sourceGroups.flatMap((group) => group.sources.map((source) => ({
+  const allFetchedSourceRows = sourceGroups.flatMap((group) => group.sources.map((source) => ({
     ...source,
     collectorId: group.collector_id,
     updatedAt: group.updated_at,
-  }))).filter((source) => {
-    const needle = query.trim().toLowerCase();
-    return !needle || [source.id, source.publisher, source.collectorId].some((value) => String(value || "").toLowerCase().includes(needle));
+  })));
+  const fetchedSourceRows = allFetchedSourceRows.filter((source) => {
+    const needle = sourceQuery.trim().toLowerCase();
+    const matchesQuery = !needle || [source.id, source.publisher, source.collectorId].some((value) => String(value || "").toLowerCase().includes(needle));
+    const normalizedState = source.state === "ok" ? "ok" : source.state === "disabled" ? "disabled" : source.state ? "failed" : "unknown";
+    const matchesState = sourceStateFilter === "all" || normalizedState === sourceStateFilter;
+    return matchesQuery && matchesState;
   });
   const importCleaning = runtimeImportResult?.cleaning || (!runtimeRunId ? latestSnapshot?.cleaning : undefined) || {};
   const importRecords = runtimeImportResult?.records ?? (!runtimeRunId ? latestSnapshot?.records : undefined);
@@ -1088,18 +1095,18 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       </section>}
 
       {pipelineView === "pool" && <>
-      <div className="collector-pool-strip"><div><span>已抓取记录</span><strong>{collectors.length ? `${collectors.length} 个来源采集器` : "暂无真实采集数据"}</strong><small>浏览已经落盘的采集结果；快照由筛选后的数据归档生成。</small></div><div><span>来源状态</span><strong>{sourceSummary.total ? `${sourceSummary.healthy} / ${sourceSummary.total}` : "未记录"}</strong><small>成功来源 · 当前 run 范围</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={sourceSummary.failed || sourceSummary.missing ? "warning" : ""}>{sourceSummary.total ? `${sourceSummary.failed} / ${sourceSummary.empty} / ${sourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供批次产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors}>失败来源</button><button onClick={() => void retryCurrentRun()}>补采失败</button><button className="primary" onClick={generateSnapshotFromPool}>按筛选归档快照</button></div></div>
+      <div className="collector-pool-strip"><div><span>已抓取数据池</span><strong>{allFetchedSourceRows.length ? `${allFetchedSourceRows.length} 条来源记录` : "暂无真实来源记录"}</strong><small>浏览当前批次已落盘的来源产物；这里的筛选只影响浏览，不会修改原始数据。</small></div><div><span>来源状态</span><strong>{sourceSummary.total ? `${sourceSummary.healthy} / ${sourceSummary.total}` : "未记录"}</strong><small>正常来源 · 当前运行批次</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={sourceSummary.failed || sourceSummary.missing ? "warning" : ""}>{sourceSummary.total ? `${sourceSummary.failed} / ${sourceSummary.empty} / ${sourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供批次产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors}>定位失败采集器</button><button onClick={() => void retryCurrentRun()}>补采失败</button><button className="primary" onClick={generateSnapshotFromPool}>生成当前批次快照</button></div></div>
 
       <section className="fetched-data-browser" aria-label="已抓取数据浏览">
-        <div className="fetched-data-heading"><div><span className="collector-kicker"><Database size={13} /> 数据池</span><h2>来源与已抓取记录</h2><p>来源状态、抓取时间和记录数量来自当前运行批次产物；没有记录的字段明确显示为未记录。</p></div><div className="fetched-data-filter"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索来源、发布方或采集器" aria-label="搜索已抓取数据" /></div></div>
+        <div className="fetched-data-heading"><div><span className="collector-kicker"><Database size={13} /> 数据池 · 当前批次 {runtimeRunId ? shortId(runtimeRunId) : "未选择"}</span><h2>浏览已抓取来源记录</h2><p>筛选只改变列表视图；生成快照仍使用当前批次已发布的采集产物。</p></div><div className="fetched-data-filters"><label className="fetched-data-filter"><Search size={14} /><input value={sourceQuery} onChange={(event) => setSourceQuery(event.target.value)} placeholder="搜索来源、发布方或采集器" aria-label="搜索已抓取数据" /></label><select value={sourceStateFilter} onChange={(event) => setSourceStateFilter(event.target.value as SourceStateFilter)} aria-label="来源状态筛选"><option value="all">全部来源状态</option><option value="ok">正常</option><option value="failed">失败 / 空响应</option><option value="disabled">已停用</option><option value="unknown">未记录</option></select></div></div>
         <div className="fetched-data-table" role="table" aria-label="已抓取来源列表">
           <div className="fetched-data-row heading" role="row"><span>来源 / 发布方</span><span>采集器</span><span>抓取数量</span><span>最近抓取</span><span>状态</span></div>
           {fetchedSourceRows.slice(0, 80).map((source) => <button key={`${source.collectorId}:${source.id}`} className="fetched-data-row" role="row" onClick={() => { setSelectedId(source.collectorId); setInspectorOpen(true); setInspectorTab("detail"); }}>
             <span><b>{source.id}</b><small>{source.publisher || "发布方未记录"}</small></span><span>{source.collectorId}</span><span>{source.entries ?? source.kept ?? "未记录"}</span><span>{source.updatedAt ? source.updatedAt.replace("T", " ").slice(0, 16) : "未记录"}</span><em className={source.state === "ok" ? "ok" : source.state === "disabled" ? "disabled" : "bad"}>{source.state || "未知"}</em>
           </button>)}
-          {!fetchedSourceRows.length && <div className="fetched-data-empty"><Database size={20} /><strong>当前批次没有可浏览的来源记录</strong><span>可查看失败来源、切换历史运行，或重新执行采集。</span></div>}
+          {!fetchedSourceRows.length && <div className="fetched-data-empty"><Database size={20} /><strong>{allFetchedSourceRows.length ? "没有符合当前筛选条件的来源记录" : "当前批次没有可浏览的来源记录"}</strong><span>{allFetchedSourceRows.length ? "调整搜索词或来源状态筛选。" : "可切换历史运行，或重新执行采集。"}</span></div>}
         </div>
-        {fetchedSourceRows.length > 80 && <small className="fetched-data-more">当前显示前 80 个来源，共 {fetchedSourceRows.length} 个；可使用搜索缩小范围。</small>}
+        {allFetchedSourceRows.length > 0 && <small className="fetched-data-more">当前显示 {Math.min(fetchedSourceRows.length, 80)} / {allFetchedSourceRows.length} 条来源记录；筛选仅作用于浏览。</small>}
       </section>
 
       <div className="collector-mobile-toolbar">
@@ -1132,7 +1139,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
 
         <section className="collector-timeline" aria-label="采集器执行时间线">
           <div className="collector-timeline-heading">
-            <div><span className="collector-kicker"><Clock3 size={13} /> {dataSource === "runtime" ? "最近采集" : "等待真实数据"}</span><h2>{dataSource === "runtime" ? "已抓取记录与来源" : "暂无已抓取数据"} <small>{runtimeRunId || "—"}</small></h2></div>
+            <div><span className="collector-kicker"><Clock3 size={13} /> {dataSource === "runtime" ? "采集器诊断" : "等待真实数据"}</span><h2>{dataSource === "runtime" ? "采集器运行状态" : "暂无采集器状态"} <small>{runtimeRunId || "—"}</small></h2></div>
             <div className="collector-timeline-meta"><span><i className="legend-dot running" /> 运行中</span><span><i className="legend-dot success" /> 成功</span><span><i className="legend-dot partial" /> 需关注</span><span><i className="legend-dot failed" /> 失败</span></div>
           </div>
           <div className="collector-timeline-caption"><span>{filtered.length} / {collectors.length} 个来源采集器</span><span>{runtimeUpdated ? `最近抓取 ${runtimeUpdated.replace("T", " ").slice(0, 16)}` : "等待抓取时间"}</span></div>
