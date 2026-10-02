@@ -848,6 +848,14 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     setInspectorOpen(false);
   }
 
+  function openRunAudit() {
+    setPipelineView("pool");
+    setInspectorOpen(true);
+    setInspectorTab("detail");
+    setNotice("已打开当前运行批次详情；可查看事件、日志、来源状态和失败原因。");
+    window.setTimeout(() => setNotice(""), 4500);
+  }
+
   function showFailedCollectors() {
     setPipelineView("pool");
     setStatusFilter("failed");
@@ -879,6 +887,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       summary: runtimeRunId || "等待运行批次",
       metrics: [["采集器", `${runCompleted}/${collectors.length}`], ["失败", metric(runFailed, "0")], ["触发", runtimeTriggerLabel]],
       check: "核对批次范围、排除项和运行时间",
+      action: { label: "查看运行详情", handler: openRunAudit },
     },
     {
       id: "sources",
@@ -898,6 +907,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       summary: importCleaning.raw_records ? `${metric(importCleaning.raw_records)} 条进入统一导入` : "本次候选分层未记录",
       metrics: [["原始候选", metric(importCleaning.raw_records)], ["主题/桶通过", "未记录"], ["采集器内去重", "未记录"]],
       check: "核对窗口过滤、主题命中和拒绝候选审计",
+      action: { label: "查看过滤审计", handler: () => void openPipelineDetail("candidate") },
     },
     {
       id: "gate",
@@ -907,6 +917,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       summary: gatePassed ? "已通过" : gateBlocked ? importStatusLabel : "等待判定",
       metrics: [["进程状态", runtimeStatusLabel], ["产物发布", gatePassed ? "通过" : "待核对"], ["阻断原因", importStatusLabel]],
       check: "核对是否允许部分成功进入导入",
+      action: { label: "查看门禁决策", handler: () => openPipelineView("run") },
     },
     {
       id: "import",
@@ -916,6 +927,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       summary: importRecords ? `${metric(importRecords)} 条标准化记录` : "等待导入统计",
       metrics: [["原始记录", metric(importCleaning.raw_records)], ["标准化记录", metric(importRecords)], ["全局重复", metric(importCleaning.duplicates_merged)]],
       check: "核对重复合并、无效记录和指标数量",
+      action: { label: "查看导入明细", handler: () => void openPipelineDetail("import") },
     },
     {
       id: "snapshot",
@@ -999,12 +1011,13 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
         <div className="pipeline-stage-track" role="list" aria-label="加工阶段">
           {pipelineStages.map((stage, index) => {
             const StageIcon = stage.icon;
-            return <article key={stage.id} className={`pipeline-stage-card state-${stage.status}`} role="listitem">
+            const activate = stage.action?.handler;
+            return <article key={stage.id} className={`pipeline-stage-card state-${stage.status} ${activate ? "is-actionable" : ""}`} role={activate ? "button" : "listitem"} tabIndex={activate ? 0 : undefined} onClick={activate} onKeyDown={activate ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } } : undefined}>
               <div className="pipeline-stage-top"><span className="pipeline-stage-number">{index + 1}</span><span className="pipeline-stage-icon"><StageIcon size={16} /></span><span className="pipeline-stage-status">{stage.status === "success" ? "已完成" : stage.status === "warning" ? "需核对" : stage.status === "blocked" ? "已阻断" : stage.status === "running" ? "进行中" : "待开始"}</span></div>
               <h3>{stage.label}</h3><strong>{stage.summary}</strong>
               <div className="pipeline-stage-metrics">{stage.metrics.map(([label, value]) => <div key={label}><span>{label}</span><b>{value}</b></div>)}</div>
               <p><span>人工核对</span>{stage.check}</p>
-              {stage.action && <button className="pipeline-stage-action" onClick={stage.action.handler}>{stage.action.label}<ChevronRight size={13} /></button>}
+              {stage.action && <button className="pipeline-stage-action" onClick={(event) => { event.stopPropagation(); stage.action?.handler(); }}>{stage.action.label}<ChevronRight size={13} /></button>}
             </article>;
           })}
         </div>
