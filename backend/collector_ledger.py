@@ -386,10 +386,15 @@ class CollectorLedger:
                 """
                 SELECT id, run_id, collector_id, event_type, status, message,
                        payload_json, created_at
-                FROM collector_events
-                WHERE run_id = ?
+                FROM (
+                    SELECT id, run_id, collector_id, event_type, status, message,
+                           payload_json, created_at
+                    FROM collector_events
+                    WHERE run_id = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                )
                 ORDER BY id ASC
-                LIMIT ?
                 """,
                 (run_id, max(0, limit)),
             ).fetchall()

@@ -171,6 +171,23 @@ def test_ledger_projection_exposes_runs_and_filtered_events(tmp_path):
     assert events["events"][1]["collector_id"] == "demo"
 
 
+def test_ledger_events_limit_returns_latest_events_in_chronological_order(tmp_path):
+    ledger = CollectorLedger(tmp_path / "collection-runs" / "ledger.sqlite3")
+    ledger.run_started(
+        run_id="run-1",
+        run_kind="scheduled-service",
+        started_at="2026-10-02T09:00:00+00:00",
+        topic=None,
+        timeout_sec=30,
+    )
+    for index in range(5):
+        ledger.event(run_id="run-1", event_type=f"event-{index}", status="running")
+
+    events = load_ledger_events(tmp_path / "collection-runs", "run-1", limit=2)
+
+    assert [item["event_type"] for item in events["events"]] == ["event-3", "event-4"]
+
+
 def test_source_status_projection_merges_native_status_fetch_stats_and_health(tmp_path):
     output = tmp_path / "collector-output" / "demo" / "output"
     output.mkdir(parents=True)
