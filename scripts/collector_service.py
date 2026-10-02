@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +33,39 @@ def run_id(now: datetime | None = None) -> str:
 
 def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _archive_source_artifacts(report_dir: Path, results: list[dict], data_root: Path) -> None:
+    """Copy source-health evidence into the immutable run directory.
+
+    The published tree is intentionally still the serving location, but a run
+    must retain the exact source-status files that were visible when it
+    finished.  A missing artifact is recorded explicitly instead of silently
+    falling back to a later or older run.
+    """
+    source_files = ("_source_status.json", "_fetch_stats.json", "_source_health.json")
+    for item in results:
+        collector_id = str(item.get("id", "unknown"))
+        live_output = data_root / collector_id / "output"
+        artifact_dir = report_dir / collector_id / "source-status"
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        copied: list[str] = []
+        for filename in source_files:
+            source = live_output / filename
+            if source.is_file():
+                shutil.copy2(source, artifact_dir / filename)
+                copied.append(filename)
+        _write_json(
+            artifact_dir / "_source_artifact.json",
+            {
+                "run_id": report_dir.name,
+                "collector_id": collector_id,
+                "captured_at": utc_now().isoformat(),
+                "published_this_run": item.get("published") is True,
+                "status": "available" if copied else "missing",
+                "files": copied,
+            },
+        )
 
 
 def _result_status(item: dict) -> str:
@@ -135,6 +169,7 @@ def execute_once(
                     message=_result_message(item),
                     payload=item,
                 )
+            _archive_source_artifacts(report_dir, results, collector_data_root())
             import_status = "not_requested"
             snapshot_id = None
             import_error_type = None

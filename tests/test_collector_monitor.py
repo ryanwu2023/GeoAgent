@@ -153,10 +153,19 @@ def test_source_status_projection_merges_native_status_fetch_stats_and_health(tm
     assert blocked["state"] == "failed"
     assert blocked["consecutive_failures"] == 2
 
+    run_output = tmp_path / "collection-runs" / "run-1" / "demo" / "source-status"
+    run_output.mkdir(parents=True)
+    for filename in ("_source_status.json", "_fetch_stats.json", "_source_health.json"):
+        (run_output / filename).write_text((output / filename).read_text(encoding="utf-8"), encoding="utf-8")
+    (run_output / "_source_artifact.json").write_text(
+        json.dumps({"run_id": "run-1", "status": "available", "published_this_run": True, "files": ["_source_status.json", "_fetch_stats.json", "_source_health.json"]}),
+        encoding="utf-8",
+    )
     scoped = load_source_status(tmp_path / "collector-output", collector_ids={"demo"}, run_id="run-1")
     assert scoped["run_id"] == "run-1"
-    assert scoped["scope"] == "run-collector-published-output"
+    assert scoped["scope"] == "run-collector-source-artifact"
     assert [item["collector_id"] for item in scoped["collectors"]] == ["demo"]
+    assert scoped["collectors"][0]["artifact_run_id"] == "run-1"
 
 
 def test_source_status_is_unavailable_without_published_status_artifacts(tmp_path):

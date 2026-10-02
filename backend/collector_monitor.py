@@ -263,10 +263,11 @@ def _source_summary(sources: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def _project_source_status(output: Path) -> dict[str, Any] | None:
+    artifact_payload = _read_json(output / "_source_artifact.json") or {}
     status_payload = _read_json(output / "_source_status.json")
     fetch_payload = _read_json(output / "_fetch_stats.json")
     health_payload = _read_json(output / "_source_health.json") or {}
-    if status_payload is None and fetch_payload is None and not health_payload:
+    if status_payload is None and fetch_payload is None and not health_payload and not artifact_payload:
         return None
 
     source_map: dict[str, dict[str, Any]] = {}
@@ -304,6 +305,10 @@ def _project_source_status(output: Path) -> dict[str, Any] | None:
     updated_at = (status_payload or {}).get("run_at") or (fetch_payload or {}).get("run")
     return {
         "updated_at": updated_at,
+        "artifact_run_id": artifact_payload.get("run_id"),
+        "artifact_status": artifact_payload.get("status", "available"),
+        "published_this_run": artifact_payload.get("published_this_run"),
+        "artifact_files": artifact_payload.get("files", []),
         "proxy": (status_payload or {}).get("proxy"),
         "source_status_file": status_payload is not None,
         "fetch_stats_file": fetch_payload is not None,
@@ -322,11 +327,25 @@ def load_source_status(
 ) -> dict[str, Any]:
     """Project source health, optionally narrowed to collectors in one run.
 
-    Published source artifacts are the latest safe output available for each
-    collector.  When a run id is supplied, do not mix unrelated collectors from
-    the rest of the published tree into that run's view.
+    Without a run id this is the latest published output.  With a run id it
+    reads only the immutable source-artifact archive captured for that run;
+    missing archives stay unavailable instead of being replaced by newer data.
     """
-    if collector_id:
+    run_artifact_root = data_root.parent / "collection-runs" / run_id if run_id else None
+    if run_id:
+        # A historical run must use its immutable run directory.  Falling
+        # back to the current published tree would make old reports appear to
+        # have the latest source health.
+        artifact_base = run_artifact_root if run_artifact_root and run_artifact_root.is_dir() else None
+        if artifact_base is None:
+            outputs = []
+        elif collector_id:
+            outputs = [artifact_base / collector_id / "source-status"]
+        elif collector_ids is not None:
+            outputs = [artifact_base / item / "source-status" for item in sorted(collector_ids)]
+        else:
+            outputs = sorted(path / "source-status" for path in artifact_base.iterdir() if path.is_dir())
+    elif collector_id:
         outputs = [data_root / collector_id / "output"]
     elif collector_ids is not None:
         outputs = [data_root / item / "output" for item in sorted(collector_ids)]
@@ -345,11 +364,11 @@ def load_source_status(
             collectors.append({"collector_id": output.parent.name, **projected})
     result = {
         "available": bool(collectors),
-        "source": "collector-output-source-status" if collectors else "none",
+        "source": "collector-run-source-status" if run_id and collectors else "collector-output-source-status" if collectors else "none",
         "collector_id": collector_id,
         "collectors": collectors,
     }
     if run_id is not None:
         result["run_id"] = run_id
-        result["scope"] = "run-collector-published-output"
+        result["scope"] = "run-collector-source-artifact"
     return result

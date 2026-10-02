@@ -21,6 +21,8 @@ from .paths import collector_read_root, collector_data_root
 from .collector_monitor import load_latest_run, load_runs, load_ledger_events, load_ledger_runs, load_source_status
 from .collector_jobs import CollectorBusyError, collector_jobs
 from .collector_config import apply_config, load_config, save_config
+from .collector_import import import_collector_output
+from .collector_ledger import CollectorLedger
 from scripts.integrate_collectors import load_registry
 
 def load_env():
@@ -49,7 +51,7 @@ class CollectorRunRequest(BaseModel):
     retry_attempts: int = Field(default=2, ge=1, le=5)
     retry_backoff_sec: float = Field(default=1.0, ge=0, le=60)
     auto_import: bool = True
-    allow_partial_import: bool = False
+    allow_partial_import: bool | None = None
 
 
 class CollectorConfigRequest(BaseModel):
@@ -61,6 +63,32 @@ class CollectorConfigRequest(BaseModel):
 
 class WorkspaceSelectionRequest(BaseModel):
     snapshot_id: str = Field(min_length=1, max_length=120)
+
+
+class CollectorReviewRequest(BaseModel):
+    status: Literal["pending", "accepted", "rejected"]
+    reviewer: str = Field(default="本地用户", min_length=1, max_length=80)
+    reason: str = Field(default="", max_length=1500)
+    evidence: dict | list | None = None
+
+
+class CollectorGateRequest(BaseModel):
+    decision: Literal["approved", "rejected"]
+    reviewer: str = Field(default="本地用户", min_length=1, max_length=80)
+    reason: str = Field(default="", max_length=1500)
+
+
+class CollectorImportRetryRequest(BaseModel):
+    allow_partial_import: bool = False
+
+
+REVIEW_ITEMS = (
+    ("sources", "来源健康"),
+    ("candidates", "候选加工"),
+    ("gate", "发布门禁"),
+    ("import", "清洗与统一导入"),
+    ("snapshot", "快照范围"),
+)
 
 @app.middleware("http")
 async def protect_local_mutations(request: Request, call_next):
@@ -76,6 +104,16 @@ def snapshot_or_404(sid):
         return get_snapshot(sid)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+def working_snapshot_or_409(sid):
+    """Require downstream analysis to use the explicitly confirmed snapshot."""
+    selected = get_working_snapshot_id()
+    if not selected:
+        raise HTTPException(409, "尚未确认工作快照，请先在快照版本谱系中设为工作快照")
+    if selected != sid:
+        raise HTTPException(409, "请求快照不是当前工作快照，请先确认或切换工作快照")
+    return snapshot_or_404(sid)
 
 def validate_range(start, end):
     try:
@@ -194,7 +232,7 @@ def collector_sources(
                 "source": "run-not-found",
                 "collector_id": collector_id,
                 "run_id": run_id,
-                "scope": "run-collector-published-output",
+                "scope": "run-collector-source-artifact",
                 "collectors": [],
             }
         collector_ids = {item["id"] for item in run.get("collectors", [])}
@@ -207,6 +245,170 @@ def collector_sources(
         run_id=run_id,
     )
 
+
+def _find_collector_run(run_id: str) -> dict | None:
+    return next(
+        (
+            item
+            for item in load_runs(data_dir() / "collection-runs", ROOT / "collectors" / "collectors.json", 100)
+            if item["run_id"] == run_id
+        ),
+        None,
+    )
+
+
+def _collector_ledger() -> CollectorLedger:
+    return CollectorLedger(data_dir() / "collection-runs" / "ledger.sqlite3")
+
+
+def _review_projection(run_id: str) -> dict:
+    ledger_path = data_dir() / "collection-runs" / "ledger.sqlite3"
+    saved = {}
+    if ledger_path.is_file():
+        saved = {item["item_id"]: item for item in CollectorLedger(ledger_path).reviews(run_id)}
+    items = []
+    for item_id, label in REVIEW_ITEMS:
+        items.append({"item_id": item_id, "label": label, **saved.get(item_id, {"status": "pending", "reviewer": None, "reason": "", "updated_at": None})})
+    return {"available": ledger_path.is_file(), "source": "collector-ledger-review", "run_id": run_id, "items": items}
+
+
+@app.get("/api/collector/runs/{run_id}/review")
+def collector_run_review(run_id: str):
+    if _find_collector_run(run_id) is None:
+        raise HTTPException(404, "采集运行记录不存在")
+    return _review_projection(run_id)
+
+
+@app.put("/api/collector/runs/{run_id}/review/{item_id}")
+def update_collector_review(run_id: str, item_id: str, request: CollectorReviewRequest):
+    if _find_collector_run(run_id) is None:
+        raise HTTPException(404, "采集运行记录不存在")
+    if item_id not in {item[0] for item in REVIEW_ITEMS}:
+        raise HTTPException(404, "核对项不存在")
+    ledger = _collector_ledger()
+    run = ledger.run(run_id)
+    if run is None:
+        projected = _find_collector_run(run_id)
+        ledger.ensure_run(run_id=run_id, started_at=projected.get("started_at") if projected else None)
+    try:
+        review = ledger.upsert_review(
+            run_id=run_id,
+            item_id=item_id,
+            status=request.status,
+            reviewer=request.reviewer.strip(),
+            reason=request.reason.strip(),
+            evidence=request.evidence,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    ledger.event(run_id=run_id, event_type="review_updated", status=request.status, message=f"人工核对：{item_id}", payload=review)
+    return {"available": True, "source": "collector-ledger-review", "run_id": run_id, "review": review}
+
+
+@app.post("/api/collector/runs/{run_id}/gate")
+def decide_collector_gate(run_id: str, request: CollectorGateRequest):
+    projected = _find_collector_run(run_id)
+    if projected is None:
+        raise HTTPException(404, "采集运行记录不存在")
+    ledger = _collector_ledger()
+    if ledger.run(run_id) is None:
+        ledger.ensure_run(run_id=run_id, started_at=projected.get("started_at"))
+    ledger.update_gate(run_id=run_id, decision=request.decision, reviewer=request.reviewer.strip(), reason=request.reason.strip())
+    status = "accepted" if request.decision == "approved" else "rejected"
+    review = ledger.upsert_review(run_id=run_id, item_id="gate", status=status, reviewer=request.reviewer.strip(), reason=request.reason.strip())
+    ledger.event(run_id=run_id, event_type="gate_decision", status=request.decision, message=request.reason.strip() or "人工发布门禁决策", payload={"review": review})
+    return {"available": True, "source": "collector-ledger-review", "run_id": run_id, "decision": request.decision, "review": review}
+
+
+def _load_report_payload(projected: dict) -> tuple[Path, dict]:
+    report_path = Path(projected["report_path"])
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(422, f"运行报告无法读取：{type(exc).__name__}") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(422, "运行报告格式无效")
+    return report_path, payload
+
+
+@app.get("/api/collector/runs/{run_id}/candidate-audit")
+def collector_candidate_audit(run_id: str):
+    projected = _find_collector_run(run_id)
+    if projected is None:
+        raise HTTPException(404, "采集运行记录不存在")
+    _, payload = _load_report_payload(projected)
+    candidate_metrics = payload.get("candidate_metrics") if isinstance(payload.get("candidate_metrics"), dict) else None
+    cleaning = (payload.get("import_result") or {}).get("cleaning") if isinstance(payload.get("import_result"), dict) else None
+    return {
+        "available": bool(candidate_metrics or cleaning),
+        "source": "collector-run-report",
+        "run_id": run_id,
+        "metrics": candidate_metrics or cleaning or {},
+        "reason": None if candidate_metrics or cleaning else "本批次运行报告没有持久化候选分层或导入清洗统计",
+    }
+
+
+@app.get("/api/collector/runs/{run_id}/import-detail")
+def collector_import_detail(run_id: str):
+    projected = _find_collector_run(run_id)
+    if projected is None:
+        raise HTTPException(404, "采集运行记录不存在")
+    return {
+        "available": True,
+        "source": "collector-run-report",
+        "run_id": run_id,
+        "run_status": projected.get("run_status"),
+        "import_status": projected.get("import_status"),
+        "snapshot_id": projected.get("snapshot_id"),
+        "import_result": projected.get("import_result"),
+        "import_error": projected.get("import_error"),
+    }
+
+
+@app.post("/api/collector/runs/{run_id}/import-retry")
+def retry_collector_import(run_id: str, request: CollectorImportRetryRequest):
+    projected = _find_collector_run(run_id)
+    if projected is None:
+        raise HTTPException(404, "采集运行记录不存在")
+    if projected.get("import_status") == "succeeded":
+        return {"available": True, "source": "collector-import", "run_id": run_id, "import_status": "succeeded", "snapshot_id": projected.get("snapshot_id"), "reused": True}
+    run_status = projected.get("run_status")
+    if run_status not in {"success", "partial"}:
+        raise HTTPException(409, f"当前运行状态不允许仅重试导入：{run_status or '未知'}")
+    ledger = _collector_ledger()
+    ledger_run = ledger.run(run_id)
+    if run_status == "partial":
+        if not request.allow_partial_import:
+            raise HTTPException(409, "本批次部分成功，需勾选允许部分成功并先批准发布门禁")
+        if not ledger_run or ledger_run.get("gate_decision") != "approved":
+            raise HTTPException(409, "部分成功导入需要先在发布门禁中记录批准")
+    report_path, payload = _load_report_payload(projected)
+    try:
+        result = import_collector_output()
+    except Exception as exc:
+        message = f"{type(exc).__name__}: {str(exc)[:1000]}"
+        payload.update({"import_status": "failed", "import_error_type": type(exc).__name__, "import_error_message": message})
+        report_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        state_path = report_path.parent / "state.json"
+        if state_path.exists():
+            state_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        if ledger.run(run_id) is None:
+            ledger.ensure_run(run_id=run_id, started_at=projected.get("started_at"))
+        ledger.update_import(run_id=run_id, import_status="failed", import_error_type=type(exc).__name__, import_error_message=message)
+        ledger.event(run_id=run_id, event_type="import_failed", status="failed", message=message, payload={"error_type": type(exc).__name__})
+        raise HTTPException(422, f"仅重试导入失败：{message}") from exc
+    payload.update({"import_status": "succeeded", "snapshot_id": result.get("snapshot_id"), "import_result": result, "import_error_type": None, "import_error_message": None})
+    report_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    state_path = report_path.parent / "state.json"
+    if state_path.exists():
+        state_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    ledger = _collector_ledger()
+    if ledger.run(run_id) is None:
+        ledger.ensure_run(run_id=run_id, started_at=projected.get("started_at"))
+    ledger.update_import(run_id=run_id, import_status="succeeded", snapshot_id=result.get("snapshot_id"))
+    ledger.event(run_id=run_id, event_type="import_retry_finished", status="succeeded", payload=result)
+    return {"available": True, "source": "collector-import", "run_id": run_id, "import_status": "succeeded", **result}
+
 @app.post("/api/collector/runs", status_code=202)
 def start_collector_run(request: CollectorRunRequest):
     """Queue a manual run; the collector service still owns execution and locks."""
@@ -215,6 +417,7 @@ def start_collector_run(request: CollectorRunRequest):
     unknown = sorted(set(request.ids) - known)
     if unknown:
         raise HTTPException(422, f"采集器不存在或已停用：{', '.join(unknown)}")
+    configured_allow_partial = bool(load_config().get("allow_partial_import", False))
     try:
         job = collector_jobs.submit(
             ids=request.ids,
@@ -223,7 +426,7 @@ def start_collector_run(request: CollectorRunRequest):
             retry_attempts=request.retry_attempts,
             retry_backoff_sec=request.retry_backoff_sec,
             auto_import=request.auto_import,
-            allow_partial_import=request.allow_partial_import,
+            allow_partial_import=configured_allow_partial if request.allow_partial_import is None else request.allow_partial_import,
         )
     except CollectorBusyError as exc:
         raise HTTPException(409, f"已有采集服务运行中：{str(exc)}") from exc
@@ -239,7 +442,7 @@ def retry_collector_run(run_id: str):
     if not failed_ids:
         raise HTTPException(422, "该运行没有可重试的失败采集器")
     try:
-        job = collector_jobs.submit(ids=failed_ids, auto_import=True)
+        job = collector_jobs.submit(ids=failed_ids, auto_import=True, allow_partial_import=bool(load_config().get("allow_partial_import", False)))
     except CollectorBusyError as exc:
         raise HTTPException(409, f"已有采集服务运行中：{str(exc)}") from exc
     return {**job.public(), "source": "collector-job", "retry_of": run_id}
@@ -407,7 +610,8 @@ class Ask(BaseModel):
 @app.post("/api/ask")
 async def ask(body: Ask):
     validate_range(body.start, body.end)
-    return present_answer(await answer(snapshot_or_404(body.snapshot_id), body.question, body.topic, body.dimension, body.start, body.end, body.use_model,body.previous_answer_id))
+    snapshot = working_snapshot_or_409(body.snapshot_id)
+    return present_answer(await answer(snapshot, body.question, body.topic, body.dimension, body.start, body.end, body.use_model,body.previous_answer_id))
 
 @app.get("/api/answers")
 def answers(snapshot_id: str):
@@ -422,7 +626,7 @@ class BriefRequest(BaseModel):
 
 @app.post("/api/briefs")
 async def new_brief(body: BriefRequest):
-    return await create_brief(snapshot_or_404(body.snapshot_id), body.use_model)
+    return await create_brief(working_snapshot_or_409(body.snapshot_id), body.use_model)
 
 @app.get("/api/briefs")
 def briefs(snapshot_id: str = ""):

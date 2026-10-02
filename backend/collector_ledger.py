@@ -35,7 +35,11 @@ CREATE TABLE IF NOT EXISTS collector_runs (
     import_status TEXT,
     snapshot_id TEXT,
     import_error_type TEXT,
-    import_error_message TEXT
+    import_error_message TEXT,
+    gate_decision TEXT,
+    gate_reviewer TEXT,
+    gate_reason TEXT,
+    gate_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS collector_events (
@@ -52,6 +56,21 @@ CREATE TABLE IF NOT EXISTS collector_events (
 
 CREATE INDEX IF NOT EXISTS idx_collector_events_run_created
     ON collector_events(run_id, created_at, id);
+
+CREATE TABLE IF NOT EXISTS collector_reviews (
+    run_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    reviewer TEXT,
+    reason TEXT,
+    evidence_json TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (run_id, item_id),
+    FOREIGN KEY (run_id) REFERENCES collector_runs(run_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_collector_reviews_run_updated
+    ON collector_reviews(run_id, updated_at);
 """
 
 
@@ -85,6 +104,10 @@ class CollectorLedger:
                 ("snapshot_id", "TEXT"),
                 ("import_error_type", "TEXT"),
                 ("import_error_message", "TEXT"),
+                ("gate_decision", "TEXT"),
+                ("gate_reviewer", "TEXT"),
+                ("gate_reason", "TEXT"),
+                ("gate_at", "TEXT"),
             ):
                 if name not in existing:
                     connection.execute(f"ALTER TABLE collector_runs ADD COLUMN {name} {definition}")
@@ -178,6 +201,128 @@ class CollectorLedger:
                     run_id,
                 ),
             )
+
+    def update_import(
+        self,
+        *,
+        run_id: str,
+        import_status: str,
+        snapshot_id: str | None = None,
+        import_error_type: str | None = None,
+        import_error_message: str | None = None,
+    ) -> None:
+        """Update import outcome without changing the collection outcome."""
+        with _connect(self.path) as connection:
+            connection.execute(
+                """
+                UPDATE collector_runs
+                SET import_status = ?, snapshot_id = ?,
+                    import_error_type = ?, import_error_message = ?
+                WHERE run_id = ?
+                """,
+                (
+                    import_status,
+                    snapshot_id,
+                    import_error_type,
+                    import_error_message[:2000] if isinstance(import_error_message, str) else import_error_message,
+                    run_id,
+                ),
+            )
+
+    def update_gate(
+        self,
+        *,
+        run_id: str,
+        decision: str,
+        reviewer: str,
+        reason: str | None = None,
+        decided_at: str | None = None,
+    ) -> None:
+        if decision not in {"approved", "rejected"}:
+            raise ValueError("gate decision must be approved or rejected")
+        with _connect(self.path) as connection:
+            connection.execute(
+                """
+                UPDATE collector_runs
+                SET gate_decision = ?, gate_reviewer = ?, gate_reason = ?, gate_at = ?
+                WHERE run_id = ?
+                """,
+                (decision, reviewer, reason, decided_at or utc_timestamp(), run_id),
+            )
+
+    def ensure_run(
+        self,
+        *,
+        run_id: str,
+        run_kind: str = "historical-report",
+        started_at: str | None = None,
+    ) -> None:
+        """Create a minimal parent row so old reports can receive reviews."""
+        with _connect(self.path) as connection:
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO collector_runs
+                    (run_id, run_kind, status, started_at)
+                VALUES (?, ?, 'historical', ?)
+                """,
+                (run_id, run_kind, started_at or utc_timestamp()),
+            )
+
+    def reviews(self, run_id: str) -> list[dict]:
+        with _connect(self.path) as connection:
+            rows = connection.execute(
+                """
+                SELECT run_id, item_id, status, reviewer, reason,
+                       evidence_json, updated_at
+                FROM collector_reviews
+                WHERE run_id = ?
+                ORDER BY item_id
+                """,
+                (run_id,),
+            ).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            if item.get("evidence_json"):
+                try:
+                    item["evidence"] = json.loads(item["evidence_json"])
+                except json.JSONDecodeError:
+                    item["evidence"] = None
+            item.pop("evidence_json", None)
+            result.append(item)
+        return result
+
+    def upsert_review(
+        self,
+        *,
+        run_id: str,
+        item_id: str,
+        status: str,
+        reviewer: str | None = None,
+        reason: str | None = None,
+        evidence: dict | list | None = None,
+        updated_at: str | None = None,
+    ) -> dict:
+        if status not in {"pending", "accepted", "rejected"}:
+            raise ValueError("review status must be pending, accepted, or rejected")
+        timestamp = updated_at or utc_timestamp()
+        evidence_json = json.dumps(evidence, ensure_ascii=False) if evidence is not None else None
+        with _connect(self.path) as connection:
+            connection.execute(
+                """
+                INSERT INTO collector_reviews
+                    (run_id, item_id, status, reviewer, reason, evidence_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id, item_id) DO UPDATE SET
+                    status = excluded.status,
+                    reviewer = excluded.reviewer,
+                    reason = excluded.reason,
+                    evidence_json = excluded.evidence_json,
+                    updated_at = excluded.updated_at
+                """,
+                (run_id, item_id, status, reviewer, reason, evidence_json, timestamp),
+            )
+        return next(item for item in self.reviews(run_id) if item["item_id"] == item_id)
 
     def recover_unfinished(self, *, finished_at: str, exclude_run_id: str | None = None) -> list[str]:
         """Mark runs left running by a killed service as explicitly abandoned."""

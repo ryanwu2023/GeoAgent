@@ -204,6 +204,10 @@ type CollectorSource = {
 type CollectorSourceGroup = {
   collector_id: string;
   updated_at?: string | null;
+  artifact_run_id?: string | null;
+  artifact_status?: "available" | "missing" | string;
+  published_this_run?: boolean | null;
+  artifact_files?: string[];
   summary: { total: number; healthy: number; stale: number; failed: number; disabled: number; entries: number; kept: number };
   sources: CollectorSource[];
 };
@@ -222,6 +226,46 @@ type CollectorJobResponse = {
   error?: string | null;
   import_status?: string | null;
   snapshot_id?: string | null;
+  import_error?: string | null;
+};
+
+type CollectorImportRetryResponse = CollectorJobResponse & {
+  available: boolean;
+  source: string;
+  reused?: boolean;
+  records?: number;
+  observations?: number;
+  errors?: number;
+  cleaning?: {
+    raw_records?: number;
+    unique_records?: number;
+    duplicates_merged?: number;
+    invalid_records?: number;
+  };
+};
+
+type ReviewStatus = "pending" | "accepted" | "rejected";
+type CollectorReviewItem = {
+  item_id: string;
+  label: string;
+  status: ReviewStatus;
+  reviewer?: string | null;
+  reason?: string | null;
+  updated_at?: string | null;
+};
+
+type PipelineAuditDetail = {
+  kind: "candidate" | "import";
+  label: string;
+  available: boolean;
+  source: string;
+  run_id: string;
+  reason?: string | null;
+  metrics?: Record<string, unknown>;
+  run_status?: string | null;
+  import_status?: string | null;
+  snapshot_id?: string | null;
+  import_result?: CollectorRuntimePayload["import_result"];
   import_error?: string | null;
 };
 
@@ -328,6 +372,8 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [ledgerEvents, setLedgerEvents] = useState<CollectorEvent[]>([]);
   const [ledgerEventsAvailable, setLedgerEventsAvailable] = useState(false);
+  const [reviewItems, setReviewItems] = useState<CollectorReviewItem[]>([]);
+  const [pipelineDetail, setPipelineDetail] = useState<PipelineAuditDetail | null>(null);
   const [logStream, setLogStream] = useState<"stdout" | "stderr">("stderr");
   const [collectorLog, setCollectorLog] = useState<CollectorLogPayload | null>(null);
   const [collectorSources, setCollectorSources] = useState<CollectorSourceGroup | null>(null);
@@ -414,6 +460,22 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       });
     return () => { cancelled = true; };
   }, [runtimeRunId, selectedId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!runtimeRunId) {
+      setReviewItems([]);
+      return () => { cancelled = true; };
+    }
+    api<{ items: CollectorReviewItem[] }>(`/collector/runs/${encodeURIComponent(runtimeRunId)}/review`)
+      .then((payload) => {
+        if (!cancelled) setReviewItems(payload.items || []);
+      })
+      .catch(() => {
+        if (!cancelled) setReviewItems([]);
+      });
+    return () => { cancelled = true; };
+  }, [runtimeRunId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -561,11 +623,6 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     setInspectorTab("detail");
   }
 
-  function action(label: string) {
-    setNotice(`${label}目前没有接入可执行接口；页面不会伪造成功结果。`);
-    window.setTimeout(() => setNotice(""), 4200);
-  }
-
   function refreshRuntimeView() {
     setNotice("正在刷新运行报告和采集器状态…");
     setSummaryRefreshKey((value) => value + 1);
@@ -646,6 +703,78 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     }
   }
 
+  function reviewStatus(itemId: string): ReviewStatus {
+    return reviewItems.find((item) => item.item_id === itemId)?.status || "pending";
+  }
+
+  async function updateReview(itemId: string, status: ReviewStatus) {
+    if (!runtimeRunId) {
+      setNotice("当前没有可记录核对结果的运行批次。");
+      return;
+    }
+    const previous = reviewItems;
+    setReviewItems((items) => items.map((item) => item.item_id === itemId ? { ...item, status } : item));
+    try {
+      const payload = await apiPut<{ review: CollectorReviewItem }>(`/collector/runs/${encodeURIComponent(runtimeRunId)}/review/${encodeURIComponent(itemId)}`, {
+        status,
+        reviewer: "本地用户",
+        reason: status === "accepted" ? "人工核对通过" : status === "rejected" ? "人工核对未通过" : "等待核对",
+      });
+      setReviewItems((items) => items.map((item) => item.item_id === itemId ? payload.review : item));
+      setNotice(`${itemId} 已记录为 ${status === "accepted" ? "已通过" : status === "rejected" ? "需处理" : "待核对"}`);
+      window.setTimeout(() => setNotice(""), 3000);
+    } catch (error) {
+      setReviewItems(previous);
+      setNotice(`核对结果保存失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  }
+
+  async function openPipelineDetail(kind: "candidate" | "import") {
+    if (!runtimeRunId) {
+      setNotice("当前没有可查看的运行批次。");
+      return;
+    }
+    try {
+      const path = kind === "candidate" ? "candidate-audit" : "import-detail";
+      const payload = await api<Omit<PipelineAuditDetail, "kind" | "label">>(`/collector/runs/${encodeURIComponent(runtimeRunId)}/${path}`);
+      setPipelineDetail({ ...payload, kind, label: kind === "candidate" ? "候选加工审计" : "统一导入明细" });
+    } catch (error) {
+      setNotice(`明细读取失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  }
+
+  async function decideGate(decision: "approved" | "rejected") {
+    if (!runtimeRunId) return;
+    try {
+      await api(`/collector/runs/${encodeURIComponent(runtimeRunId)}/gate`, {
+        decision,
+        reviewer: "本地用户",
+        reason: decision === "approved" ? "允许本批次进入导入" : "阻止本批次进入导入",
+      });
+      const status: ReviewStatus = decision === "approved" ? "accepted" : "rejected";
+      setReviewItems((items) => items.map((item) => item.item_id === "gate" ? { ...item, status } : item));
+      setNotice(decision === "approved" ? "发布门禁已批准；可以继续重试导入。" : "发布门禁已拒绝；当前工作快照不会改变。");
+      window.setTimeout(() => setNotice(""), 4500);
+    } catch (error) {
+      setNotice(`门禁决策保存失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  }
+
+  async function retryImport(allowPartialImport = false) {
+    if (!runtimeRunId) return;
+    setNotice("正在仅重试导入，不重新执行采集器…");
+    try {
+      const payload = await api<CollectorImportRetryResponse>(`/collector/runs/${encodeURIComponent(runtimeRunId)}/import-retry`, { allow_partial_import: allowPartialImport });
+      setRuntimeImportStatus(payload.import_status || "succeeded");
+      setRuntimeSnapshotId(payload.snapshot_id || "");
+      setSummaryRefreshKey((value) => value + 1);
+      setNotice(`导入已完成${payload.snapshot_id ? `，快照 ${shortId(payload.snapshot_id)}` : ""}。`);
+      window.setTimeout(() => setNotice(""), 5000);
+    } catch (error) {
+      setNotice(`仅重试导入失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  }
+
   async function openConfig() {
     setConfigOpen(true);
     setConfigLoading(true);
@@ -694,7 +823,8 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     healthy: total.healthy + (item.summary?.healthy || 0),
     failed: total.failed + (item.summary?.failed || 0),
     empty: total.empty + Math.max(0, (item.summary?.total || 0) - (item.summary?.healthy || 0) - (item.summary?.failed || 0) - (item.summary?.stale || 0) - (item.summary?.disabled || 0)),
-  }), { total: 0, healthy: 0, failed: 0, empty: 0 });
+    missing: total.missing + (item.artifact_status === "missing" ? 1 : 0),
+  }), { total: 0, healthy: 0, failed: 0, empty: 0, missing: 0 });
   const importCleaning = runtimeImportResult?.cleaning || (!runtimeRunId ? latestSnapshot?.cleaning : undefined) || {};
   const importRecords = runtimeImportResult?.records ?? (!runtimeRunId ? latestSnapshot?.records : undefined);
   const importObservations = runtimeImportResult?.observations ?? (!runtimeRunId ? latestSnapshot?.observations : undefined);
@@ -702,7 +832,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const runCompleted = collectors.filter((item) => item.status === "success" || item.status === "partial" || item.status === "stale").length;
   const runFailed = collectors.filter((item) => item.status === "failed" || item.status === "offline").length;
   const gatePassed = runtimeImportStatus === "succeeded";
-  const gateBlocked = runtimeImportStatus === "skipped_output_gate" || runtimeImportStatus === "skipped_collection_status" || runFailed > 0;
+  const gateBlocked = !gatePassed && (runtimeImportStatus === "skipped_output_gate" || runtimeImportStatus === "skipped_collection_status" || runFailed > 0);
   const snapshotNeedsReview = Boolean(pendingSnapshotId && pendingSnapshotId !== workingSnapshotId);
 
   function confirmWorkingSnapshot() {
@@ -725,16 +855,18 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   }
 
   function openSourceAudit() {
+    const failedCollector = collectors.find((item) => ["failed", "partial", "stale", "offline"].includes(item.status));
     const issueCollector = sourceGroups.find((item) =>
       item.summary.failed > 0 || item.summary.stale > 0 || item.summary.disabled > 0 ||
       item.summary.healthy < item.summary.total,
     );
+    const targetId = failedCollector?.id || issueCollector?.collector_id;
     setPipelineView("pool");
     setStatusFilter("all");
-    if (issueCollector) setSelectedId(issueCollector.collector_id);
+    if (targetId) setSelectedId(targetId);
     setInspectorOpen(true);
     setInspectorTab("detail");
-    setNotice(issueCollector ? `已进入 ${issueCollector.collector_id} 的来源核对；右侧查看失败、过期和空响应明细。` : "已进入采集池与来源视图；选择采集器后可查看来源明细。");
+    setNotice(targetId ? `已进入 ${targetId} 的来源核对；右侧查看失败、过期、空响应或缺失产物。` : "已进入采集池与来源视图；选择采集器后可查看来源明细。");
     window.setTimeout(() => setNotice(""), 5000);
   }
 
@@ -881,12 +1013,12 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           <section className="pipeline-audit-panel">
             <div className="pipeline-panel-heading"><div><span className="collector-kicker"><ListChecks size={13} /> 人工核对清单</span><h3>本次批次需要确认什么</h3></div><span className="pipeline-panel-note">不通过不会改变工作快照</span></div>
             <div className="pipeline-check-list">
-              <label><input type="checkbox" /><span><b>来源健康</b><small>确认失败来源、空响应和连续失败是否可接受。</small></span><em>{sourceSummary.failed ? `${sourceSummary.failed} 个失败` : "待核对"}</em></label>
-              <label><input type="checkbox" /><span><b>候选加工</b><small>查看过滤审计，确认主题和信号桶没有误杀核心候选。</small></span><em>未记录分层</em></label>
-              <label><input type="checkbox" /><span><b>发布门禁</b><small>确认是否允许部分成功数据进入导入和快照。</small></span><em>{gateBlocked ? "已阻断" : "待确认"}</em></label>
-              <label><input type="checkbox" /><span><b>清洗统计</b><small>核对全局重复合并、无效记录和指标数量。</small></span><em>{metric(importCleaning.duplicates_merged, "未记录")} 重复</em></label>
+              <label><input type="checkbox" checked={reviewStatus("sources") === "accepted"} onChange={(event) => void updateReview("sources", event.target.checked ? "accepted" : "pending")} /><span><b>来源健康</b><small>确认失败来源、空响应和连续失败是否可接受。</small></span><select aria-label="来源健康核对状态" value={reviewStatus("sources")} onChange={(event) => void updateReview("sources", event.target.value as ReviewStatus)}><option value="pending">待核对</option><option value="accepted">已通过</option><option value="rejected">需处理</option></select></label>
+              <label><input type="checkbox" checked={reviewStatus("candidates") === "accepted"} onChange={(event) => void updateReview("candidates", event.target.checked ? "accepted" : "pending")} /><span><b>候选加工</b><small>查看过滤审计，确认主题和信号桶没有误杀核心候选。</small></span><select aria-label="候选加工核对状态" value={reviewStatus("candidates")} onChange={(event) => void updateReview("candidates", event.target.value as ReviewStatus)}><option value="pending">待核对</option><option value="accepted">已通过</option><option value="rejected">需处理</option></select></label>
+              <label><input type="checkbox" checked={reviewStatus("gate") === "accepted"} onChange={(event) => void updateReview("gate", event.target.checked ? "accepted" : "pending")} /><span><b>发布门禁</b><small>确认是否允许部分成功数据进入导入和快照。</small></span><select aria-label="发布门禁核对状态" value={reviewStatus("gate")} onChange={(event) => void updateReview("gate", event.target.value as ReviewStatus)}><option value="pending">待核对</option><option value="accepted">已通过</option><option value="rejected">需处理</option></select></label>
+              <label><input type="checkbox" checked={reviewStatus("import") === "accepted"} onChange={(event) => void updateReview("import", event.target.checked ? "accepted" : "pending")} /><span><b>清洗统计</b><small>核对全局重复合并、无效记录和指标数量。</small></span><select aria-label="清洗统计核对状态" value={reviewStatus("import")} onChange={(event) => void updateReview("import", event.target.value as ReviewStatus)}><option value="pending">待核对</option><option value="accepted">已通过</option><option value="rejected">需处理</option></select></label>
             </div>
-            <div className="pipeline-action-row"><button onClick={showFailedCollectors}>查看失败来源</button><button onClick={() => action("候选过滤审计")}>查看过滤审计</button><button onClick={() => action("统一导入明细")}>查看导入明细</button></div>
+            <div className="pipeline-action-row"><button onClick={showFailedCollectors}>查看失败来源</button><button onClick={() => void openPipelineDetail("candidate")}>查看过滤审计</button><button onClick={() => void openPipelineDetail("import")}>查看导入明细</button>{gateBlocked && <><button onClick={() => void decideGate("approved")}>批准门禁</button><button onClick={() => void decideGate("rejected")}>拒绝门禁</button></>}</div>
           </section>
 
           <section className={`pipeline-pending-snapshot ${snapshotNeedsReview ? "needs-review" : "confirmed"}`}>
@@ -915,11 +1047,11 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             </article>;
           }) : <div className="pipeline-empty-state"><Database size={22} /><strong>暂无快照版本</strong><span>采集通过导入门禁后，版本会出现在这里。</span></div>}
         </div>
-        <div className="pipeline-audit-panel snapshot-review-panel"><div className="pipeline-panel-heading"><div><span className="collector-kicker"><ShieldCheck size={13} /> 人工选择工作版本</span><h3>确认前建议核对</h3></div><span className="pipeline-panel-note">选择会持久化到 SQLite 工作区状态</span></div><div className="pipeline-check-list compact"><label><input type="checkbox" /><span><b>来源覆盖可以接受</b><small>确认关键来源没有大面积失败或过期。</small></span></label><label><input type="checkbox" /><span><b>清洗统计可解释</b><small>确认重复合并和无效记录数量符合预期。</small></span></label><label><input type="checkbox" /><span><b>数据范围适合研究</b><small>确认当前快照可用于问答、指标和简报。</small></span></label></div><div className="pipeline-action-row"><button className="primary" onClick={confirmWorkingSnapshot} disabled={!pendingSnapshotId || !snapshotNeedsReview}>确认当前待选版本</button><button onClick={() => openPipelineView("pool")}>查看采集池</button></div></div>
+        <div className="pipeline-audit-panel snapshot-review-panel"><div className="pipeline-panel-heading"><div><span className="collector-kicker"><ShieldCheck size={13} /> 人工选择工作版本</span><h3>确认前建议核对</h3></div><span className="pipeline-panel-note">选择会持久化到 SQLite 工作区状态</span></div><div className="pipeline-check-list compact"><label><input type="checkbox" checked={reviewStatus("snapshot") === "accepted"} onChange={(event) => void updateReview("snapshot", event.target.checked ? "accepted" : "pending")} /><span><b>来源覆盖可以接受</b><small>确认关键来源没有大面积失败或过期。</small></span><em>{reviewStatus("snapshot") === "accepted" ? "已通过" : "待核对"}</em></label><label><input type="checkbox" checked={reviewStatus("import") === "accepted"} onChange={(event) => void updateReview("import", event.target.checked ? "accepted" : "pending")} /><span><b>清洗统计可解释</b><small>确认重复合并和无效记录数量符合预期。</small></span><em>{reviewStatus("import") === "accepted" ? "已通过" : "待核对"}</em></label><label><input type="checkbox" checked={reviewStatus("candidates") === "accepted"} onChange={(event) => void updateReview("candidates", event.target.checked ? "accepted" : "pending")} /><span><b>数据范围适合研究</b><small>确认当前快照可用于问答、指标和简报。</small></span><em>{reviewStatus("candidates") === "accepted" ? "已通过" : "待核对"}</em></label></div><div className="pipeline-action-row"><button className="primary" onClick={confirmWorkingSnapshot} disabled={!pendingSnapshotId || !snapshotNeedsReview}>确认当前待选版本</button><button onClick={() => openPipelineView("pool")}>查看采集池</button></div></div>
       </section>}
 
       {pipelineView === "pool" && <>
-      <div className="collector-pool-strip"><div><span>采集池</span><strong>{collectors.length ? `${collectors.length} 个采集器` : "暂无真实采集器"}</strong><small>当前页面展示最近持久化运行报告，不代表实时心跳。</small></div><div><span>来源状态</span><strong>{sourceSummary.total ? `${sourceSummary.healthy} / ${sourceSummary.total}` : "未记录"}</strong><small>成功来源 · 当前 run 范围</small></div><div><span>失败 / 空响应</span><strong className={sourceSummary.failed ? "warning" : ""}>{sourceSummary.total ? `${sourceSummary.failed} / ${sourceSummary.empty}` : "未记录"}</strong><small>需要人工核对</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors}>失败来源</button><button onClick={() => void retryCurrentRun()}>补采失败</button><button onClick={() => openPipelineView("snapshots")}>版本谱系</button></div></div>
+      <div className="collector-pool-strip"><div><span>采集池</span><strong>{collectors.length ? `${collectors.length} 个采集器` : "暂无真实采集器"}</strong><small>当前页面展示最近持久化运行报告，不代表实时心跳。</small></div><div><span>来源状态</span><strong>{sourceSummary.total ? `${sourceSummary.healthy} / ${sourceSummary.total}` : "未记录"}</strong><small>成功来源 · 当前 run 范围</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={sourceSummary.failed || sourceSummary.missing ? "warning" : ""}>{sourceSummary.total ? `${sourceSummary.failed} / ${sourceSummary.empty} / ${sourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供批次产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors}>失败来源</button><button onClick={() => void retryCurrentRun()}>补采失败</button><button onClick={() => openPipelineView("snapshots")}>版本谱系</button></div></div>
 
       <div className="collector-mobile-toolbar">
         <button onClick={() => setFiltersOpen(true)}><Filter size={15} /> 筛选</button>
@@ -994,6 +1126,18 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
         </aside>}
       </div>
       </>}
+
+      {pipelineDetail && <div className="pipeline-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPipelineDetail(null); }}>
+        <section className="pipeline-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="pipeline-detail-title">
+          <div className="collector-config-heading"><div><span className="collector-kicker"><ListChecks size={14} /> 运行批次 · {shortId(pipelineDetail.run_id)}</span><h2 id="pipeline-detail-title">{pipelineDetail.label}</h2></div><button aria-label="关闭明细" onClick={() => setPipelineDetail(null)}><X size={17} /></button></div>
+          {!pipelineDetail.available && <div className="pipeline-detail-empty"><AlertTriangle size={18} /><strong>本批次没有可核对明细</strong><p>{pipelineDetail.reason || "运行报告没有持久化该阶段的统计。"}</p></div>}
+          {pipelineDetail.available && <>
+            <div className="pipeline-detail-meta"><span>来源：{pipelineDetail.source}</span><span>状态：{pipelineDetail.run_status || runtimeRunStatus || "未记录"}</span><span>导入：{pipelineDetail.import_status || runtimeImportStatus || "未记录"}</span></div>
+            {pipelineDetail.metrics && <div className="pipeline-detail-metrics">{Object.entries(pipelineDetail.metrics).map(([key, value]) => <div key={key}><span>{key}</span><b>{typeof value === "object" ? JSON.stringify(value) : String(value ?? "未记录")}</b></div>)}</div>}
+            {pipelineDetail.kind === "import" && <div className="pipeline-detail-import"><p>{pipelineDetail.import_error || (pipelineDetail.snapshot_id ? `已关联快照 ${shortId(pipelineDetail.snapshot_id)}` : "本批次尚未生成快照。")}</p><div className="pipeline-action-row"><button onClick={() => void retryImport(false)} disabled={pipelineDetail.import_status === "succeeded" || runtimeRunStatus === "partial"}>{pipelineDetail.import_status === "succeeded" ? "导入已完成" : "仅重试导入"}</button>{runtimeRunStatus === "partial" && <button className="primary" onClick={() => void retryImport(true)} disabled={reviewStatus("gate") !== "accepted"}>批准后导入部分成功数据</button>}</div></div>}
+          </>}
+        </section>
+      </div>}
 
       {configOpen && <div className="collector-config-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !configSaving) setConfigOpen(false); }}>
         <section className="collector-config-dialog" role="dialog" aria-modal="true" aria-labelledby="collector-config-title">

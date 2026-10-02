@@ -6,7 +6,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from backend.adapters import load_bundle, normalize, safe_url, classify
-from backend.store import save_snapshot, get_snapshot, snapshots, db
+from backend.store import save_snapshot, get_snapshot, snapshots, db, set_working_snapshot_id
 from backend.research import metric_view, answer, analysis, create_brief, retrieve, candidates
 from backend.app import app
 
@@ -149,6 +149,21 @@ def test_collector_run_actions_validate_and_queue(monkeypatch):
     assert client.post("/api/collector/runs", json={"ids": ["does-not-exist"]}).status_code == 422
 
 
+def test_manual_run_inherits_partial_import_policy_from_project_config(monkeypatch):
+    client = TestClient(app)
+    captured = []
+
+    class Job:
+        def public(self):
+            return {"request_id": "req-config", "run_id": "manual-config", "status": "queued"}
+
+    monkeypatch.setattr("backend.app.load_config", lambda: {"allow_partial_import": True})
+    monkeypatch.setattr("backend.app.collector_jobs.submit", lambda **kwargs: captured.append(kwargs) or Job())
+    response = client.post("/api/collector/runs", json={"ids": ["xinhua-monitor"]})
+    assert response.status_code == 202
+    assert captured[0]["allow_partial_import"] is True
+
+
 def test_collector_retry_action_only_queues_failed_items(tmp_path, monkeypatch):
     client = TestClient(app)
     run_dir = tmp_path / "data" / "collection-runs" / "run-failed"
@@ -175,7 +190,44 @@ def test_collector_retry_action_only_queues_failed_items(tmp_path, monkeypatch):
     monkeypatch.setattr("backend.app.collector_jobs.submit", lambda **kwargs: captured.append(kwargs) or Job())
     response = client.post("/api/collector/runs/run-failed/retry")
     assert response.status_code == 202
-    assert captured == [{"ids": ["xinhua-monitor"], "auto_import": True}]
+    assert captured == [{"ids": ["xinhua-monitor"], "auto_import": True, "allow_partial_import": False}]
+
+
+def test_collector_review_gate_and_partial_import_require_explicit_approval(tmp_path, monkeypatch):
+    client = TestClient(app)
+    run_dir = tmp_path / "data" / "collection-runs" / "run-review"
+    run_dir.mkdir(parents=True)
+    report = {
+        "run_id": "run-review",
+        "run_kind": "manual",
+        "status": "partial",
+        "started_at": "2026-10-02T09:00:00+00:00",
+        "finished_at": "2026-10-02T09:01:00+00:00",
+        "import_status": "skipped_output_gate",
+        "results": [{"id": "demo", "returncode": "timeout"}],
+    }
+    (run_dir / "results.json").write_text(json.dumps(report), encoding="utf-8")
+
+    review = client.get("/api/collector/runs/run-review/review")
+    assert review.status_code == 200
+    assert {item["item_id"] for item in review.json()["items"]} == {"sources", "candidates", "gate", "import", "snapshot"}
+    assert client.post("/api/collector/runs/run-review/import-retry", json={"allow_partial_import": True}).status_code == 409
+
+    approved = client.post("/api/collector/runs/run-review/gate", json={"decision": "approved", "reviewer": "tester"})
+    assert approved.status_code == 200
+    assert approved.json()["review"]["status"] == "accepted"
+    monkeypatch.setattr("backend.app.import_collector_output", lambda: {"snapshot_id": "snapshot-1", "created": True, "records": 2, "observations": 1, "errors": 0})
+    imported = client.post("/api/collector/runs/run-review/import-retry", json={"allow_partial_import": True})
+    assert imported.status_code == 200
+    assert imported.json()["snapshot_id"] == "snapshot-1"
+    assert client.get("/api/collector/runs/run-review/review").json()["items"][2]["status"] == "accepted"
+
+
+def test_analysis_endpoints_require_confirmed_working_snapshot():
+    client = TestClient(app)
+    sid, _ = save_snapshot(bundle())
+    assert client.post("/api/ask", json={"snapshot_id": sid, "question": "采购指标变化"}).status_code == 409
+    assert client.post("/api/briefs", json={"snapshot_id": sid}).status_code == 409
 
 
 def test_collector_log_tail_reads_and_redacts_report_output(tmp_path, monkeypatch):
@@ -241,7 +293,7 @@ def test_model_new_numbers_rejected(monkeypatch):
     assert "模型失败" in asyncio.run(answer(s,"Iran supply"))["mode"]
 
 def test_three_rehearsals_brief_download_and_comparison():
-    client=TestClient(app);s=stored();ids=[]
+    client=TestClient(app);s=stored();set_working_snapshot_id(s["id"]);ids=[]
     for _ in range(3):
         for topic in ["usiran","ukraine"]:
             w=client.get("/api/workspace",params={"snapshot_id":s["id"],"topic":topic})

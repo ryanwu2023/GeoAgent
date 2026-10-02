@@ -260,9 +260,9 @@ export default function App() {
     setHistory([]);
     setBrief((prev) => (prev?.snapshot_id === sid ? prev : null));
     setDiff("");
-    if (sid) {
+    if (workingSid) {
       const v = selectionVersion.current;
-      api<Answer[]>("/answers?snapshot_id=" + sid)
+      api<Answer[]>("/answers?snapshot_id=" + workingSid)
         .then((h) => {
           if (v === selectionVersion.current)
             setHistory(
@@ -278,7 +278,7 @@ export default function App() {
         .then(setBriefs)
         .catch(() => {});
     }
-  }, [sid, topic, dimension]);
+  }, [workingSid, topic, dimension]);
   useEffect(() => {
     const close = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -341,7 +341,7 @@ export default function App() {
     }
   }
   async function ask(q = question) {
-    if (!q.trim() || !sid) return;
+    if (!q.trim() || !workingSid) return;
     const previous_answer_id = answer?.id || "";
     const version = selectionVersion.current;
     setAsking(true);
@@ -352,7 +352,7 @@ export default function App() {
     setTab("chat");
     try {
       const a = await api<Answer>("/ask", {
-        snapshot_id: sid,
+        snapshot_id: workingSid,
         question: q,
         topic,
         dimension,
@@ -366,7 +366,7 @@ export default function App() {
         api<Workspace>(
           "/workspace?" +
             new URLSearchParams({
-              snapshot_id: sid,
+              snapshot_id: workingSid,
               topic,
               dimension,
               start,
@@ -383,12 +383,12 @@ export default function App() {
     }
   }
   async function generate() {
-    if (!sid) return;
+    if (!workingSid) return;
     setGenerating(true);
     setError("");
     const version = selectionVersion.current;
     try {
-      const b = await api<Brief>("/briefs", { snapshot_id: sid });
+      const b = await api<Brief>("/briefs", { snapshot_id: workingSid });
       setBriefs((bs) => [b, ...bs]);
       if (version === selectionVersion.current) {
         setPage("briefs");
@@ -480,7 +480,7 @@ export default function App() {
             className="primary"
             aria-label="生成双主题简报"
             title="基于当前选定快照生成双主题简报"
-            disabled={!sid || generating}
+            disabled={!workingSid || generating}
             onClick={generate}
           >
             <FileText size={15} />
@@ -1335,7 +1335,7 @@ export default function App() {
                     研究助手
                   </h2>
                   <small>
-                    {names[topic]} · 快照 {sid.slice(0, 8) || "未选择"}
+                    {names[topic]} · 工作快照 {workingSid.slice(0, 8) || "未确认"}
                   </small>
                 </div>
                 <button
@@ -1359,7 +1359,7 @@ export default function App() {
                     "还缺什么数据？",
                   ].map((q) => (
                     <button
-                      disabled={asking || !sid}
+                      disabled={asking || !workingSid}
                       key={q}
                       onClick={() => {
                         setQuestion(q);
@@ -1481,7 +1481,7 @@ export default function App() {
                 />
                 <button
                   className="primary"
-                  disabled={asking || !sid || !question.trim()}
+                  disabled={asking || !workingSid || !question.trim()}
                   aria-label="发送问题"
                 >
                   <Send size={17} />
@@ -1547,7 +1547,7 @@ export default function App() {
                   </div>
                 </div>
                 <small>
-                  快照 {sid.slice(0, 8) || "尚未导入"} ·{" "}
+                  工作快照 {workingSid.slice(0, 8) || "尚未确认"} ·{" "}
                   {dateText(work?.snapshot.created_at)}
                 </small>
               </div>
