@@ -445,7 +445,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       setLedgerEventsAvailable(false);
       return () => { cancelled = true; };
     }
-    const query = selectedId ? `?collector_id=${encodeURIComponent(selectedId)}&limit=50` : "?limit=50";
+    const query = "?limit=100";
     api<CollectorEventsPayload>(`/collector/runs/${encodeURIComponent(runtimeRunId)}/events${query}`)
       .then((payload) => {
         if (cancelled) return;
@@ -1006,7 +1006,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           <span className="collector-updated">{runtimeUpdated ? `报告更新于 ${runtimeUpdated.replace("T", " ").slice(0, 16)}` : "报告更新时间未提供"}</span>
           <button onClick={refreshRuntimeView}><RefreshCw size={14} /> 刷新</button>
           <button onClick={() => { setInspectorOpen(true); setInspectorTab("history"); }}><Clock3 size={14} /> 历史运行{historyRuns.length ? ` (${historyRuns.length})` : ""}</button>
-          <button onClick={openConfig}><Settings2 size={14} /> 调度配置</button>
+          <button onClick={openConfig}><Settings2 size={14} /> 定时任务配置</button>
           <button className="primary" onClick={() => queueRun([], "立即执行全量采集")}><Play size={14} /> 立即执行</button>
         </div>
       </div>
@@ -1030,6 +1030,26 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           <div><span className="collector-kicker"><Activity size={14} /> 当前批次 · {runtimeRunId || "尚未连接运行批次"}</span><h2>抓取进度</h2><p>这里只显示本次采集的执行进度、来源健康和输出门禁；导入、快照与分析请在对应视图继续。</p></div>
           <div className="pipeline-heading-actions"><span className={`pipeline-state-pill ${gateBlocked ? "warning" : gatePassed ? "success" : "pending"}`}>{gateBlocked ? "存在门禁阻断" : gatePassed ? "流程已落盘" : "等待运行"}</span><button onClick={() => openPipelineView("pool")}>查看采集池 <ChevronRight size={14} /></button></div>
         </div>
+
+        <section className="batch-log-workspace" aria-label="运行批次与日志">
+          <div className="batch-list-panel">
+            <div className="batch-panel-heading"><span className="collector-kicker"><History size={13} /> 批次列表</span><strong>{historyRuns.length ? `${historyRuns.length} 个批次` : "暂无批次"}</strong></div>
+            <div className="batch-list">
+              {historyRuns.map((run) => <button key={run.run_id} className={run.run_id === runtimeRunId ? "selected" : ""} onClick={() => void loadHistoricalRun(run.run_id)}>
+                <span><b>{run.run_id}</b><small>{run.run_kind || "collector-run"}</small></span><em className={run.failed_count ? "bad" : "ok"}>{run.failed_count ? `${run.failed_count} 个失败` : "全部完成"}</em><small>{run.updated_at ? run.updated_at.replace("T", " ").slice(0, 16) : "时间未提供"}</small>
+              </button>)}
+              {!historyRuns.length && <div className="batch-list-empty">正在等待采集批次…</div>}
+            </div>
+          </div>
+          <div className="batch-detail-panel">
+            <div className="batch-panel-heading"><span className="collector-kicker"><ListChecks size={13} /> 批次详情 · {runtimeRunId || "未选择"}</span><strong>{runtimeStatusLabel}</strong></div>
+            <div className="batch-detail-summary"><span>采集器 <b>{collectors.length}</b></span><span>失败 <b className={runFailed ? "bad" : ""}>{runFailed}</b></span><span>导入 <b>{importStatusLabel}</b></span><span>更新时间 <b>{runtimeUpdated ? runtimeUpdated.replace("T", " ").slice(0, 16) : "未记录"}</b></span></div>
+            <div className="batch-event-list">
+              {ledgerEvents.map((event) => <button key={event.id} onClick={() => { if (event.collector_id) selectCollector(event.collector_id); }}><span><b>{event.event_type}</b><small>{event.collector_id || "批次"} · {event.created_at.replace("T", " ").slice(0, 19)}</small></span><em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{event.status || "已记录"}</em><p>{event.message || "点击查看关联采集器详情和日志"}</p></button>)}
+              {!ledgerEvents.length && <div className="batch-list-empty">该批次尚无账本事件；可点击下方采集器查看日志。</div>}
+            </div>
+          </div>
+        </section>
 
         <div className="pipeline-stage-track" role="list" aria-label="抓取阶段">
           {collectionStages.map((stage, index) => {
