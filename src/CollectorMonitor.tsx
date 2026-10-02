@@ -351,6 +351,14 @@ function shortId(value: string | null | undefined) {
   return value ? `${value.slice(0, 10)}…` : "—";
 }
 
+function runKindLabel(value?: string) {
+  return value === "scheduled-service" ? "定时任务" : value === "manual" ? "手动执行" : value || "采集批次";
+}
+
+function eventStatusLabel(value?: string | null) {
+  return ({ running: "运行中", succeeded: "成功", success: "成功", failed: "失败", accepted: "已通过", pending: "待核对" } as Record<string, string>)[value || ""] || value || "已记录";
+}
+
 export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSnapshotChange, onSnapshotInspect }: CollectorMonitorProps) {
   const [collectors, setCollectors] = useState<CollectorRecord[]>(demoMode ? demoCollectors : []);
   const [dataSource, setDataSource] = useState<"demo" | "runtime" | "unavailable">(demoMode ? "demo" : "unavailable");
@@ -990,7 +998,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
         <div className="collector-command-title">
           <span className="collector-kicker"><Activity size={14} /> 运行监控</span>
           <h1>采集管线监控</h1>
-          <p>查看当前执行、历史结果和失败原因；原始数据发布前必须通过输出门禁。</p>
+          <p>以采集批次为主线：选择批次、查看日志，再进入采集数据或配置定时任务。</p>
         </div>
         <div className="collector-command-actions">
           <span className="collector-demo-badge">
@@ -1005,7 +1013,6 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           <span className={`collector-health ${dataSource === "runtime" ? "" : "is-muted"}`}><i /> {serviceHealthLabel}</span>
           <span className="collector-updated">{runtimeUpdated ? `报告更新于 ${runtimeUpdated.replace("T", " ").slice(0, 16)}` : "报告更新时间未提供"}</span>
           <button onClick={refreshRuntimeView}><RefreshCw size={14} /> 刷新</button>
-          <button onClick={() => { setInspectorOpen(true); setInspectorTab("history"); }}><Clock3 size={14} /> 历史运行{historyRuns.length ? ` (${historyRuns.length})` : ""}</button>
           <button onClick={openConfig}><Settings2 size={14} /> 定时任务配置</button>
           <button className="primary" onClick={() => queueRun([], "立即执行全量采集")}><Play size={14} /> 立即执行</button>
         </div>
@@ -1014,10 +1021,10 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       {notice && <div className="collector-notice" role="status">{notice}<button aria-label="关闭提示" onClick={() => setNotice("")}><X size={14} /></button></div>}
 
       <div className="collector-summary-strip">
-        <div><span>{dataSource === "runtime" ? "最近一次报告" : "运行报告"}</span><strong>{dataSource === "runtime" ? "采集报告" : "暂无真实报告"}</strong><small><i className={dataSource === "runtime" ? "report-dot" : "offline-dot"} /> {dataSource === "runtime" ? runtimeStatusLabel : "未接入持久化运行数据"}</small></div>
+          <div><span>当前批次</span><strong>{runtimeRunId ? shortId(runtimeRunId) : "未选择"}</strong><small><i className={dataSource === "runtime" ? "report-dot" : "offline-dot"} /> {dataSource === "runtime" ? runtimeStatusLabel : "等待采集批次"}</small></div>
         <div><span>整体健康</span><strong className={overallHealth === "正常" ? "summary-value healthy" : "summary-value warning"}>{overallHealth}</strong><small>{overallHealthNote}</small></div>
         <div><span>最近快照</span><strong>{runtimeSnapshotId ? `${runtimeSnapshotId.slice(0, 10)}…` : (dataSource === "runtime" ? importStatusLabel : "尚未接入")}</strong><small>{dataSource === "runtime" ? `导入状态 · ${importStatusLabel}` : "没有运行报告可关联"}</small></div>
-        <div><span>最近更新</span><strong>{runtimeUpdated ? runtimeUpdated.replace("T", " ").slice(0, 16) : "待接入"}</strong><small>{collectors.length ? `${collectors.length} 个采集器 · 以运行报告为准` : "等待真实运行报告"}</small></div>
+          <div><span>最近更新</span><strong>{runtimeUpdated ? runtimeUpdated.replace("T", " ").slice(0, 16) : "待接入"}</strong><small>{collectors.length ? `${collectors.length} 个采集器 · 以当前批次为准` : "等待真实采集数据"}</small></div>
       </div>
 
       <nav className="collector-view-switcher" aria-label="管线视图">
@@ -1027,7 +1034,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
 
       {pipelineView === "run" && <section className="pipeline-run-view" aria-label="当前运行流程">
         <div className="pipeline-view-heading">
-          <div><span className="collector-kicker"><Activity size={14} /> 当前批次 · {runtimeRunId || "尚未连接运行批次"}</span><h2>抓取进度</h2><p>这里只显示本次采集的执行进度、来源健康和输出门禁；导入、快照与分析请在对应视图继续。</p></div>
+          <div><span className="collector-kicker"><Activity size={14} /> 批次工作台 · {runtimeRunId || "尚未选择批次"}</span><h2>采集批次与日志</h2><p>左侧选择批次，右侧查看本批次事件；点击事件可定位到采集器详情。</p></div>
           <div className="pipeline-heading-actions"><span className={`pipeline-state-pill ${gateBlocked ? "warning" : gatePassed ? "success" : "pending"}`}>{gateBlocked ? "存在门禁阻断" : gatePassed ? "流程已落盘" : "等待运行"}</span><button onClick={() => openPipelineView("pool")}>查看采集池 <ChevronRight size={14} /></button></div>
         </div>
 
@@ -1036,7 +1043,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             <div className="batch-panel-heading"><span className="collector-kicker"><History size={13} /> 批次列表</span><strong>{historyRuns.length ? `${historyRuns.length} 个批次` : "暂无批次"}</strong></div>
             <div className="batch-list">
               {historyRuns.map((run) => <button key={run.run_id} className={run.run_id === runtimeRunId ? "selected" : ""} onClick={() => void loadHistoricalRun(run.run_id)}>
-                <span><b>{run.run_id}</b><small>{run.run_kind || "collector-run"}</small></span><em className={run.failed_count ? "bad" : "ok"}>{run.failed_count ? `${run.failed_count} 个失败` : "全部完成"}</em><small>{run.updated_at ? run.updated_at.replace("T", " ").slice(0, 16) : "时间未提供"}</small>
+                <span><b>{run.run_id}</b><small>{runKindLabel(run.run_kind)}</small></span><em className={run.failed_count ? "bad" : "ok"}>{run.failed_count ? `${run.failed_count} 个失败` : "全部完成"}</em><small>{run.updated_at ? run.updated_at.replace("T", " ").slice(0, 16) : "时间未提供"}</small>
               </button>)}
               {!historyRuns.length && <div className="batch-list-empty">正在等待采集批次…</div>}
             </div>
@@ -1045,7 +1052,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             <div className="batch-panel-heading"><span className="collector-kicker"><ListChecks size={13} /> 批次详情 · {runtimeRunId || "未选择"}</span><strong>{runtimeStatusLabel}</strong></div>
             <div className="batch-detail-summary"><span>采集器 <b>{collectors.length}</b></span><span>失败 <b className={runFailed ? "bad" : ""}>{runFailed}</b></span><span>导入 <b>{importStatusLabel}</b></span><span>更新时间 <b>{runtimeUpdated ? runtimeUpdated.replace("T", " ").slice(0, 16) : "未记录"}</b></span></div>
             <div className="batch-event-list">
-              {ledgerEvents.map((event) => <button key={event.id} onClick={() => { if (event.collector_id) selectCollector(event.collector_id); }}><span><b>{event.event_type}</b><small>{event.collector_id || "批次"} · {event.created_at.replace("T", " ").slice(0, 19)}</small></span><em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{event.status || "已记录"}</em><p>{event.message || "点击查看关联采集器详情和日志"}</p></button>)}
+              {ledgerEvents.map((event) => <button key={event.id} onClick={() => { if (event.collector_id) selectCollector(event.collector_id); }}><span><b>{event.event_type}</b><small>{event.collector_id || "批次"} · {event.created_at.replace("T", " ").slice(0, 19)}</small></span><em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{eventStatusLabel(event.status)}</em><p>{event.message || "点击查看关联采集器详情和日志"}</p></button>)}
               {!ledgerEvents.length && <div className="batch-list-empty">该批次尚无账本事件；可点击下方采集器查看日志。</div>}
             </div>
           </div>
