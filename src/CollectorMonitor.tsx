@@ -960,9 +960,11 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   }
 
   function showFailedCollectors() {
-    setPipelineView("pool");
+    setPipelineView("run");
     setStatusFilter("failed");
-    setInspectorOpen(false);
+    setInspectorOpen(true);
+    setNotice("已切回当前运行流程，并筛选失败采集器。全局数据池本身不承载当前批次日志。");
+    window.setTimeout(() => setNotice(""), 4500);
   }
 
   function openSourceAudit() {
@@ -1163,7 +1165,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       </section>}
 
       {pipelineView === "pool" && <section className="pipeline-pool-view" aria-label="全局已抓取数据池">
-      <div className="collector-pool-strip"><div><span>全局已抓取数据池</span><strong>{allFetchedSourceRows.length ? `${allFetchedSourceRows.length} 条来源记录` : "暂无可浏览来源记录"}</strong><small>这里浏览所有已落盘来源，不随当前运行批次切换；筛选只影响列表。</small></div><div><span>来源状态</span><strong>{poolSourceSummary.total ? `${poolSourceSummary.healthy} / ${poolSourceSummary.total}` : "未记录"}</strong><small>正常来源 · 全局数据池</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={poolSourceSummary.failed || poolSourceSummary.missing ? "warning" : ""}>{poolSourceSummary.total ? `${poolSourceSummary.failed} / ${poolSourceSummary.empty} / ${poolSourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors}>定位失败采集器</button><button onClick={() => void retryCurrentRun()}>补采当前失败</button><button className="primary" disabled={!snapshotActionEnabled} title={runtimeImportStatus === "succeeded" ? "当前批次已经生成快照" : snapshotActionEnabled ? "使用当前批次已发布产物生成快照；不会把全局列表筛选条件写入快照" : "当前批次未通过采集/发布门禁，暂不能生成快照"} onClick={generateSnapshotFromPool}>{runtimeImportStatus === "succeeded" ? "快照已生成" : "从当前批次生成快照"}</button></div></div>
+      <div className="collector-pool-strip"><div><span>全局已抓取数据池</span><strong>{allFetchedSourceRows.length ? `${allFetchedSourceRows.length} 条来源记录` : "暂无可浏览来源记录"}</strong><small>这里浏览所有已落盘来源，不随当前运行批次切换；筛选只影响列表。</small></div><div><span>来源状态</span><strong>{poolSourceSummary.total ? `${poolSourceSummary.healthy} / ${poolSourceSummary.total}` : "未记录"}</strong><small>正常来源 · 全局数据池</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={poolSourceSummary.failed || poolSourceSummary.missing ? "warning" : ""}>{poolSourceSummary.total ? `${poolSourceSummary.failed} / ${poolSourceSummary.empty} / ${poolSourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors} title="返回当前运行流程并筛选失败采集器">查看失败来源</button><button disabled={!runtimeRunId || runtimeRunStatus === "running"} onClick={() => void retryCurrentRun()} title={runtimeRunId ? "重新提交当前批次中的失败采集器" : "当前没有可重试的批次"}>重试当前批次</button><button className="primary" disabled={!snapshotActionEnabled} title={runtimeImportStatus === "succeeded" ? "当前批次已经生成快照" : snapshotActionEnabled ? "使用当前批次已发布产物生成快照；不会把全局列表筛选条件写入快照" : "当前批次未通过采集/发布门禁，暂不能生成快照"} onClick={generateSnapshotFromPool}>{runtimeImportStatus === "succeeded" ? "快照已生成" : "从当前批次生成快照"}</button></div></div>
 
       <div className="fetched-data-layout">
       <section className="fetched-data-browser" aria-label="已抓取数据浏览">
