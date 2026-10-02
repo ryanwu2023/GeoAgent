@@ -1035,7 +1035,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       {pipelineView === "run" && <section className="pipeline-run-view" aria-label="当前运行流程">
         <div className="pipeline-view-heading">
           <div><span className="collector-kicker"><Activity size={14} /> 批次工作台 · {runtimeRunId || "尚未选择批次"}</span><h2>采集批次与日志</h2><p>左侧选择批次，中间选择本批次采集源，右侧查看选中来源的状态、事件与日志。</p></div>
-          <div className="pipeline-heading-actions"><span className={`pipeline-state-pill ${gateBlocked ? "warning" : gatePassed ? "success" : "pending"}`}>{gateBlocked ? "存在门禁阻断" : gatePassed ? "流程已落盘" : "等待运行"}</span><button onClick={() => openPipelineView("pool")}>查看采集池 <ChevronRight size={14} /></button></div>
+          <div className="pipeline-heading-actions"><span className={`pipeline-state-pill ${gateBlocked ? "warning" : gatePassed ? "success" : "pending"}`}>{gateBlocked ? "存在门禁阻断" : gatePassed ? "流程已落盘" : "等待运行"}</span><button className="batch-command" title="打开已抓取数据池，不会重新启动采集" onClick={() => openPipelineView("pool")}>浏览已抓取数据 <ChevronRight size={14} /></button>{gateBlocked && <><button className="batch-command approve" title="记录门禁批准，允许本批次继续进入后续导入/快照流程" onClick={() => void decideGate("approved")}>批准继续</button><button className="batch-command reject" title="记录门禁阻断，停止本批次进入后续导入/快照流程" onClick={() => void decideGate("rejected")}>阻断本批次</button></>}</div>
         </div>
 
         <section className="batch-log-workspace" aria-label="运行批次与日志">
@@ -1066,7 +1066,6 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           </div>
         </section>
 
-        <div className="batch-next-actions"><span>本批次后续操作</span><button title="打开已抓取数据池，不会重新启动采集" onClick={() => openPipelineView("pool")}>浏览已抓取数据</button>{gateBlocked && <><button title="记录门禁批准，允许本批次继续进入后续导入/快照流程" onClick={() => void decideGate("approved")}>批准继续</button><button title="记录门禁阻断，停止本批次进入后续导入/快照流程" onClick={() => void decideGate("rejected")}>阻断本批次</button></>}</div>
       </section>}
 
       {pipelineView === "snapshots" && <section className="pipeline-snapshot-view" aria-label="快照版本谱系">
