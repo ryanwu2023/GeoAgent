@@ -159,14 +159,22 @@ def load_runs(runs_root: Path, registry_path: Path, limit: int = 20) -> list[dic
             for path in runs_root.glob("*/state.json")
             if path.is_file()
         )
-        reports = sorted(
-            (
-                directory / ("results.json" if (directory / "results.json").is_file() else "state.json")
-                for directory in report_dirs
-            ),
-            key=lambda path: path.stat().st_mtime,
-            reverse=True,
+        reports = list(
+            directory / ("results.json" if (directory / "results.json").is_file() else "state.json")
+            for directory in report_dirs
         )
+
+        def sort_key(path: Path) -> tuple[str, float]:
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                started_at = payload.get("started_at") if isinstance(payload, dict) else None
+            except (OSError, ValueError):
+                started_at = None
+            # Sort by batch start time. File mtime changes on every live
+            # progress write and must not move an older batch above a newer one.
+            return (started_at if isinstance(started_at, str) else "", path.stat().st_mtime)
+
+        reports.sort(key=sort_key, reverse=True)
     labels = _registry_labels(registry_path)
     runs: list[dict[str, Any]] = []
     for report in reports[: max(0, limit)]:

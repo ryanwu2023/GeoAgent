@@ -1,4 +1,5 @@
 import json
+import os
 
 from backend.collector_ledger import CollectorLedger
 from backend.collector_monitor import load_latest_run, load_ledger_events, load_ledger_runs, load_source_status
@@ -85,6 +86,31 @@ def test_load_runs_exposes_running_state_before_results_json(tmp_path):
     assert result["run_status"] == "running"
     assert result["updated_at"] == "2026-10-02T09:00:00+00:00"
     assert result["collectors"] == []
+
+
+def test_load_runs_sorts_by_batch_start_time_not_live_file_mtime(tmp_path):
+    root = tmp_path / "collection-runs"
+    newer = root / "newer"
+    older = root / "older"
+    newer.mkdir(parents=True)
+    older.mkdir(parents=True)
+    registry = tmp_path / "collectors.json"
+    registry.write_text(json.dumps({"collectors": []}), encoding="utf-8")
+    for directory, started_at in (
+        (newer, "2026-10-03T01:00:00+00:00"),
+        (older, "2026-10-03T00:00:00+00:00"),
+    ):
+        (directory / "state.json").write_text(
+            json.dumps({"run_id": directory.name, "status": "running", "started_at": started_at, "results": []}),
+            encoding="utf-8",
+        )
+    # Simulate live progress writes making the older batch's file newest.
+    os.utime(older / "state.json", (2_000_000_000, 2_000_000_000))
+    os.utime(newer / "state.json", (1_000_000_000, 1_000_000_000))
+
+    result = load_latest_run(root, registry)
+
+    assert result["run_id"] == "newer"
 
 
 def test_ledger_projection_exposes_runs_and_filtered_events(tmp_path):
