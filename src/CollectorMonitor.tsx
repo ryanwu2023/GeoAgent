@@ -1015,7 +1015,6 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       <nav className="collector-view-switcher" aria-label="管线视图">
         <button className={pipelineView === "run" ? "selected" : ""} onClick={() => openPipelineView("run")}><Activity size={14} /> 当前运行流程</button>
         <button className={pipelineView === "pool" ? "selected" : ""} onClick={() => openPipelineView("pool")}><Server size={14} /> 浏览已抓取数据</button>
-        <button className={pipelineView === "snapshots" ? "selected" : ""} onClick={() => openPipelineView("snapshots")}><History size={14} /> 快照版本{snapshotSummaries.length ? ` (${snapshotSummaries.length})` : ""}</button>
       </nav>
 
       {pipelineView === "run" && <section className="pipeline-run-view" aria-label="当前运行流程">
@@ -1041,13 +1040,13 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
         <div className="pipeline-audit-grid">
           <section className="pipeline-audit-panel">
             <div className="pipeline-panel-heading"><div><span className="collector-kicker"><ListChecks size={13} /> 抓取核对</span><h3>本批次需要处理什么</h3></div><span className="pipeline-panel-note">不会在这里修改快照</span></div>
-            <p className="pipeline-panel-note">只针对来源失败、空响应和输出门禁做人工判断；清洗明细、快照版本和分析入口分别在其他视图。</p>
+            <p className="pipeline-panel-note">只针对来源失败、空响应和输出门禁做人工判断；已抓取记录在数据池查看，快照从页面顶部统一浏览。</p>
             <div className="pipeline-action-row"><button onClick={showFailedCollectors}>查看失败来源</button><button onClick={openSourceAudit}>查看来源状态</button>{gateBlocked && <><button onClick={() => void decideGate("approved")}>批准输出</button><button onClick={() => void decideGate("rejected")}>阻断输出</button></>}</div>
           </section>
           <section className="pipeline-pending-snapshot confirmed">
             <div className="pipeline-panel-heading"><div><span className="collector-kicker"><Archive size={13} /> 后续工作区</span><h3>抓取完成后</h3></div><span className="pipeline-panel-note">按需继续</span></div>
-            <p>采集结果先进入数据池；在“浏览已抓取数据”中按来源、主题、时间和质量条件筛选，再归档为不可变快照。</p>
-            <div className="pipeline-action-row"><button onClick={() => openPipelineView("pool")}>浏览数据池</button><button onClick={() => openPipelineView("snapshots")}><History size={14} /> 查看快照列表</button></div>
+            <p>采集结果先进入数据池；在“浏览已抓取数据”中按来源、主题、时间和质量条件筛选。快照统一从页面顶部“数据快照”入口查看和切换。</p>
+            <div className="pipeline-action-row"><button onClick={() => openPipelineView("pool")}>浏览数据池</button></div>
           </section>
         </div>
       </section>}
@@ -1072,7 +1071,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       </section>}
 
       {pipelineView === "pool" && <>
-      <div className="collector-pool-strip"><div><span>浏览已抓取数据</span><strong>{collectors.length ? `${collectors.length} 个来源采集器` : "暂无真实采集数据"}</strong><small>这里浏览采集结果池；采集报告只说明抓取状态，快照由筛选后的数据生成。</small></div><div><span>来源状态</span><strong>{sourceSummary.total ? `${sourceSummary.healthy} / ${sourceSummary.total}` : "未记录"}</strong><small>成功来源 · 当前 run 范围</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={sourceSummary.failed || sourceSummary.missing ? "warning" : ""}>{sourceSummary.total ? `${sourceSummary.failed} / ${sourceSummary.empty} / ${sourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供批次产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors}>失败来源</button><button onClick={() => void retryCurrentRun()}>补采失败</button><button className="primary" onClick={generateSnapshotFromPool}>按筛选生成快照</button><button onClick={() => openPipelineView("snapshots")}>快照版本</button></div></div>
+      <div className="collector-pool-strip"><div><span>已抓取记录</span><strong>{collectors.length ? `${collectors.length} 个来源采集器` : "暂无真实采集数据"}</strong><small>浏览已经落盘的采集结果；快照由筛选后的数据归档生成。</small></div><div><span>来源状态</span><strong>{sourceSummary.total ? `${sourceSummary.healthy} / ${sourceSummary.total}` : "未记录"}</strong><small>成功来源 · 当前 run 范围</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={sourceSummary.failed || sourceSummary.missing ? "warning" : ""}>{sourceSummary.total ? `${sourceSummary.failed} / ${sourceSummary.empty} / ${sourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供批次产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors}>失败来源</button><button onClick={() => void retryCurrentRun()}>补采失败</button><button className="primary" onClick={generateSnapshotFromPool}>按筛选归档快照</button></div></div>
 
       <div className="collector-mobile-toolbar">
         <button onClick={() => setFiltersOpen(true)}><Filter size={15} /> 筛选</button>
@@ -1086,7 +1085,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             <div><span className="collector-kicker"><Filter size={13} /> 定位</span><h2>采集器筛选</h2></div>
             <button className="collector-mobile-close" aria-label="关闭筛选" onClick={() => setFiltersOpen(false)}><X size={17} /></button>
           </div>
-          <label className="collector-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索采集器" aria-label="搜索采集器" /></label>
+          <label className="collector-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索来源、主题或采集器" aria-label="搜索来源、主题或采集器" /></label>
           <div className="collector-filter-group">
             <span>运行状态</span>
             {statusOrder.map((status) => {
@@ -1104,10 +1103,10 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
 
         <section className="collector-timeline" aria-label="采集器执行时间线">
           <div className="collector-timeline-heading">
-            <div><span className="collector-kicker"><Clock3 size={13} /> {dataSource === "runtime" ? "最近报告" : "等待真实报告"}</span><h2>{dataSource === "runtime" ? "采集运行报告" : "暂无采集运行报告"} <small>{runtimeRunId || "—"}</small></h2></div>
+            <div><span className="collector-kicker"><Clock3 size={13} /> {dataSource === "runtime" ? "最近采集" : "等待真实数据"}</span><h2>{dataSource === "runtime" ? "已抓取记录与来源" : "暂无已抓取数据"} <small>{runtimeRunId || "—"}</small></h2></div>
             <div className="collector-timeline-meta"><span><i className="legend-dot running" /> 运行中</span><span><i className="legend-dot success" /> 成功</span><span><i className="legend-dot partial" /> 需关注</span><span><i className="legend-dot failed" /> 失败</span></div>
           </div>
-          <div className="collector-timeline-caption"><span>{filtered.length} / {collectors.length} 个采集器</span><span>{runtimeUpdated ? `报告更新时间 ${runtimeUpdated.replace("T", " ").slice(0, 16)}` : "等待报告更新时间"}</span></div>
+          <div className="collector-timeline-caption"><span>{filtered.length} / {collectors.length} 个来源采集器</span><span>{runtimeUpdated ? `最近抓取 ${runtimeUpdated.replace("T", " ").slice(0, 16)}` : "等待抓取时间"}</span></div>
           <div className="collector-rows">
             {filtered.map((collector) => {
               const meta = statusMeta[collector.status];
