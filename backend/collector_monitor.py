@@ -76,7 +76,7 @@ def _elapsed_label(item: dict[str, Any]) -> str:
 def _project_item(item: dict[str, Any], labels: dict[str, str]) -> dict[str, Any]:
     collector_id = str(item.get("id", "unknown"))
     returncode = item.get("returncode")
-    status, stage = STATUS_MAP.get(returncode, ("failed", "采集进程失败"))
+    status, stage = ("running", "采集中") if item.get("status") == "running" else STATUS_MAP.get(returncode, ("failed", "采集进程失败"))
     error_type = None
     if returncode == "timeout":
         error_type = "TIMEOUT"

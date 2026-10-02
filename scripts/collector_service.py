@@ -140,6 +140,38 @@ def execute_once(
             timeout_sec=timeout,
         )
         ledger.event(run_id=report_dir.name, event_type="run_started", status="running", payload=state)
+        live_results: dict[str, dict] = {}
+
+        def on_progress(item: dict) -> None:
+            """Persist per-collector progress while the batch is still running."""
+            collector_id = str(item.get("id", "unknown"))
+            live_results[collector_id] = item
+            if item.get("status") == "running":
+                ledger.event(
+                    run_id=report_dir.name,
+                    event_type="collector_started",
+                    collector_id=collector_id,
+                    status="running",
+                    payload=item,
+                )
+            else:
+                ledger.event(
+                    run_id=report_dir.name,
+                    event_type="collector_finished",
+                    collector_id=collector_id,
+                    status=_result_status(item),
+                    message=_result_message(item),
+                    payload=item,
+                )
+            partial = {
+                **state,
+                "status": "running",
+                "results": list(live_results.values()),
+                "expected": len(live_results),
+                "completed": sum(1 for value in live_results.values() if value.get("status") != "running"),
+                "failed": sum(1 for value in live_results.values() if value.get("status") != "running" and _result_status(value) == "failed"),
+            }
+            _write_json(state_path, partial)
         try:
             selected_registry = registry
             if selected_registry is None:
@@ -154,21 +186,23 @@ def execute_once(
                     max_attempts=retry_attempts,
                     backoff_factor=retry_backoff_sec,
                     staging_root=collector_data_root() / ".staging" / report_dir.name,
+                    progress=on_progress,
                 )
             else:
                 results = runner(ids or [], topic, timeout, registry=selected_registry)
             finished = utc_now()
             failed = [item for item in results if _result_status(item) == "failed"]
             status = "failed" if results and len(failed) == len(results) else "partial" if failed else "success"
-            for item in results:
-                ledger.event(
-                    run_id=report_dir.name,
-                    event_type="collector_finished",
-                    collector_id=str(item.get("id", "unknown")),
-                    status=_result_status(item),
-                    message=_result_message(item),
-                    payload=item,
-                )
+            if runner is not run_collectors:
+                for item in results:
+                    ledger.event(
+                        run_id=report_dir.name,
+                        event_type="collector_finished",
+                        collector_id=str(item.get("id", "unknown")),
+                        status=_result_status(item),
+                        message=_result_message(item),
+                        payload=item,
+                    )
             _archive_source_artifacts(report_dir, results, collector_data_root())
             import_status = "not_requested"
             snapshot_id = None

@@ -27,6 +27,22 @@ def test_runner_continues_after_failure(monkeypatch):
     assert [item["returncode"] for item in results] == [1, 0]
 
 
+def test_runner_reports_collector_progress(monkeypatch):
+    progress = []
+
+    def fake_run_one(item, **kwargs):
+        return {"id": item["id"], "returncode": 0}
+
+    monkeypatch.setattr("scripts.collect.run_one", fake_run_one)
+    results = run_collectors(
+        ["first"], topic=None, timeout=10, registry=_registry(), progress=progress.append
+    )
+
+    assert results == [{"id": "first", "returncode": 0}]
+    assert [item["status"] for item in progress] == ["running", "finished"]
+    assert [item["id"] for item in progress] == ["first", "first"]
+
+
 def test_topic_filter_only_selects_matching_collectors():
     selected = select_collectors(_registry(), ids=[], topic="ru_ua")
     assert [item["id"] for item in selected] == ["second"]

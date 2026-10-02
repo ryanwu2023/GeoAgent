@@ -239,6 +239,7 @@ def run_collectors(
     backoff_factor: float = 1.0,
     staging_root: Path | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    progress: Callable[[dict], None] | None = None,
 ) -> list[dict]:
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
@@ -247,8 +248,11 @@ def run_collectors(
     staging_root = Path(staging_root) if staging_root is not None else collector_data_root() / ".staging" / f"run-{uuid.uuid4().hex}"
     staging_root.mkdir(parents=True, exist_ok=True)
     try:
-        return [
-            run_one(
+        results = []
+        for item in selected:
+            if progress:
+                progress({"id": item["id"], "status": "running", "started_at": datetime.now(timezone.utc).isoformat()})
+            result = run_one(
                 item,
                 timeout=timeout,
                 verify_only=verify_only,
@@ -257,8 +261,10 @@ def run_collectors(
                 sleep=sleep,
                 staging_root=staging_root,
             )
-            for item in selected
-        ]
+            results.append(result)
+            if progress:
+                progress({**result, "status": "finished"})
+        return results
     finally:
         if staging_root.exists():
             shutil.rmtree(staging_root)
