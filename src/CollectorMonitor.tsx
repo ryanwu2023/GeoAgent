@@ -417,6 +417,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const [apiState, setApiState] = useState<"unknown" | "empty" | "unavailable">("unknown");
   const [summaryRefreshKey, setSummaryRefreshKey] = useState(0);
   const [runtimeRunId, setRuntimeRunId] = useState("");
+  const [selectedRunId, setSelectedRunId] = useState("");
   const [runtimeRequestId, setRuntimeRequestId] = useState("");
   const [runtimeUpdated, setRuntimeUpdated] = useState("");
   const [runtimeRunStatus, setRuntimeRunStatus] = useState("");
@@ -477,8 +478,9 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
         // While a manual job is active, its request id is the source of truth.
         // Do not let the last completed report overwrite the active run in the
         // monitor before that run has written results.json.
-        if (!runtimeRequestId) {
+        if (!runtimeRequestId && !selectedRunId) {
           setRuntimeRunId(payload.run_id || "");
+          setSelectedRunId(payload.run_id || "");
           setRuntimeUpdated(payload.updated_at || "");
           setRuntimeRunStatus(payload.run_status || "");
           setRuntimeImportStatus(payload.import_status || "");
@@ -501,7 +503,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [runtimeRequestId, summaryRefreshKey]);
+  }, [runtimeRequestId, selectedRunId, summaryRefreshKey]);
 
   // A newly submitted run does not have a completed report yet. Poll its
   // runtime projection so the batch list, source list, and inspector fill in
@@ -649,6 +651,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       .then((payload) => {
         if (cancelled) return;
         setRuntimeRunId(payload.run_id);
+        setSelectedRunId(payload.run_id);
         setRuntimeRunStatus(payload.status);
         setRuntimeImportStatus(payload.import_status || "pending");
         setRuntimeSnapshotId(payload.snapshot_id || "");
@@ -770,6 +773,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       setApiState(payload.available && mapped.length ? "unknown" : "empty");
       setRuntimeRequestId("");
       setRuntimeRunId(payload.run_id || runId);
+      setSelectedRunId(payload.run_id || runId);
       setRuntimeUpdated(payload.updated_at || "");
       setRuntimeRunStatus(payload.run_status || "");
       setRuntimeImportStatus(payload.import_status || "");
@@ -801,6 +805,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     try {
       const response = await api<CollectorJobResponse>("/collector/runs", { ids, retry_attempts: 2, retry_backoff_sec: 1, auto_import: true });
       setRuntimeRunId(response.run_id);
+      setSelectedRunId(response.run_id);
       setRuntimeRequestId(response.request_id);
       setRuntimeRunStatus("running");
       setRuntimeImportStatus(response.import_status || "pending");
@@ -822,6 +827,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     try {
       const response = await api<CollectorJobResponse>(`/collector/runs/${encodeURIComponent(runtimeRunId)}/retry`, {});
       setRuntimeRunId(response.run_id);
+      setSelectedRunId(response.run_id);
       setRuntimeRequestId(response.request_id);
       setRuntimeRunStatus("running");
       setRuntimeImportStatus(response.import_status || "pending");
@@ -1203,7 +1209,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           <div className="batch-list-panel">
             <div className="batch-panel-heading"><span className="collector-kicker"><History size={13} /> 批次列表</span><strong>{historyRuns.length ? `${historyRuns.length} 个批次` : "暂无批次"}</strong></div>
             <div className="batch-list">
-              {historyRuns.map((run) => <button key={run.run_id} className={run.run_id === runtimeRunId ? "selected" : ""} onClick={() => void loadHistoricalRun(run.run_id)}>
+              {historyRuns.map((run) => <button key={run.run_id} className={run.run_id === selectedRunId ? "selected" : ""} onClick={() => void loadHistoricalRun(run.run_id)}>
                 <span><b>{run.run_id}</b><small>{runKindLabel(run.run_kind)}</small></span><em className={run.run_status === "running" ? "running" : run.failed_count ? "bad" : "ok"}>{run.run_status === "running" ? "运行中" : run.failed_count ? `${run.failed_count} 个失败` : "全部完成"}</em><small>{formatDateTime(run.updated_at)}</small>
               </button>)}
               {!historyRuns.length && <div className="batch-list-empty">正在等待采集批次…</div>}
@@ -1345,7 +1351,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           </>}
           {inspectorTab === "history" && <div className="collector-history-list">
             {!historyRuns.length && <div className="collector-history-empty">{historyLoaded ? "暂无可读取的持久化运行报告" : "正在加载运行历史…"}</div>}
-            {historyRuns.map((run) => <button key={run.run_id} className={run.run_id === runtimeRunId ? "selected" : ""} onClick={() => void loadHistoricalRun(run.run_id)}><span><strong>{run.run_id}</strong><small>{run.run_kind || "collector-run"}</small></span><em>{run.failed_count ? `${run.failed_count} 个失败` : "全部完成"}</em><small>{run.updated_at ? run.updated_at.replace("T", " ").slice(0, 16) : "时间未提供"}</small></button>)}
+            {historyRuns.map((run) => <button key={run.run_id} className={run.run_id === selectedRunId ? "selected" : ""} onClick={() => void loadHistoricalRun(run.run_id)}><span><strong>{run.run_id}</strong><small>{run.run_kind || "collector-run"}</small></span><em>{run.failed_count ? `${run.failed_count} 个失败` : "全部完成"}</em><small>{run.updated_at ? run.updated_at.replace("T", " ").slice(0, 16) : "时间未提供"}</small></button>)}
           </div>}
           {inspectorTab === "resources" && <div className="collector-resource-panel"><span>输出 manifest</span><strong>{selected.outputs} 个文件 · {selected.records.toLocaleString("zh-CN")} 条记录</strong><p>输出 manifest 和快照导入记录来自当前运行接口；未提供的字段不会被补造。</p></div>}
         </aside>}
