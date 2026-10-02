@@ -463,6 +463,8 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const processListRef = useRef<HTMLDivElement>(null);
   const sourceScrollTop = useRef(0);
   const processScrollTop = useRef(0);
+  const sourceContentHeight = useRef(0);
+  const processContentHeight = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -758,12 +760,24 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   );
 
   useEffect(() => {
-    if (sourceListRef.current) sourceListRef.current.scrollTop = sourceScrollTop.current;
-  }, [collectors]);
+    const element = sourceListRef.current;
+    if (!element) return;
+    const changed = element.scrollHeight !== sourceContentHeight.current;
+    sourceContentHeight.current = element.scrollHeight;
+    element.scrollTop = runtimeRunStatus === "running" && changed
+      ? Math.max(0, element.scrollHeight - element.clientHeight)
+      : sourceScrollTop.current;
+  }, [collectors, runtimeRunStatus]);
 
   useEffect(() => {
-    if (processListRef.current) processListRef.current.scrollTop = processScrollTop.current;
-  }, [ledgerEvents]);
+    const element = processListRef.current;
+    if (!element) return;
+    const changed = element.scrollHeight !== processContentHeight.current;
+    processContentHeight.current = element.scrollHeight;
+    element.scrollTop = runtimeRunStatus === "running" && changed
+      ? Math.max(0, element.scrollHeight - element.clientHeight)
+      : processScrollTop.current;
+  }, [ledgerEvents, runtimeRunStatus]);
 
   function selectCollector(id: string) {
     setSelectedId(id);
