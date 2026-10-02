@@ -392,6 +392,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const [query, setQuery] = useState("");
   const [sourceQuery, setSourceQuery] = useState("");
   const [sourceStateFilter, setSourceStateFilter] = useState<SourceStateFilter>("all");
+  const [selectedSourceKey, setSelectedSourceKey] = useState("");
   const [selectedId, setSelectedId] = useState("iran-escalation-monitor");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
@@ -885,6 +886,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     const matchesState = sourceStateFilter === "all" || normalizedState === sourceStateFilter;
     return matchesQuery && matchesState;
   });
+  const selectedFetchedSource = allFetchedSourceRows.find((source) => `${source.collectorId}:${source.id}` === selectedSourceKey);
   const sourcePoolEmptyReason = !collectors.length
     ? "当前没有可读取的采集器运行记录。"
     : poolSourceGroups.length
@@ -1124,20 +1126,22 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
         <div className="pipeline-audit-panel snapshot-review-panel"><div className="pipeline-panel-heading"><div><span className="collector-kicker"><ShieldCheck size={13} /> 人工选择工作版本</span><h3>确认前建议核对</h3></div><span className="pipeline-panel-note">选择会持久化到 SQLite 工作区状态</span></div><div className="pipeline-check-list compact"><label><input type="checkbox" checked={reviewStatus("snapshot") === "accepted"} onChange={(event) => void updateReview("snapshot", event.target.checked ? "accepted" : "pending")} /><span><b>来源覆盖可以接受</b><small>确认关键来源没有大面积失败或过期。</small></span><em>{reviewStatus("snapshot") === "accepted" ? "已通过" : "待核对"}</em></label><label><input type="checkbox" checked={reviewStatus("import") === "accepted"} onChange={(event) => void updateReview("import", event.target.checked ? "accepted" : "pending")} /><span><b>清洗统计可解释</b><small>确认重复合并和无效记录数量符合预期。</small></span><em>{reviewStatus("import") === "accepted" ? "已通过" : "待核对"}</em></label><label><input type="checkbox" checked={reviewStatus("candidates") === "accepted"} onChange={(event) => void updateReview("candidates", event.target.checked ? "accepted" : "pending")} /><span><b>数据范围适合研究</b><small>确认当前快照可用于问答、指标和简报。</small></span><em>{reviewStatus("candidates") === "accepted" ? "已通过" : "待核对"}</em></label></div><div className="pipeline-action-row"><button className="primary" onClick={confirmWorkingSnapshot} disabled={!pendingSnapshotId || !snapshotNeedsReview}>确认当前待选版本</button><button onClick={() => openPipelineView("pool")}>查看采集池</button></div></div>
       </section>}
 
-      {pipelineView === "pool" && <>
+      {pipelineView === "pool" && <section className="pipeline-pool-view" aria-label="全局已抓取数据池">
       <div className="collector-pool-strip"><div><span>全局已抓取数据池</span><strong>{allFetchedSourceRows.length ? `${allFetchedSourceRows.length} 条来源记录` : "暂无可浏览来源记录"}</strong><small>这里浏览所有已落盘来源，不随当前运行批次切换；筛选只影响列表。</small></div><div><span>来源状态</span><strong>{poolSourceSummary.total ? `${poolSourceSummary.healthy} / ${poolSourceSummary.total}` : "未记录"}</strong><small>正常来源 · 全局数据池</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={poolSourceSummary.failed || poolSourceSummary.missing ? "warning" : ""}>{poolSourceSummary.total ? `${poolSourceSummary.failed} / ${poolSourceSummary.empty} / ${poolSourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors}>定位失败采集器</button><button onClick={() => void retryCurrentRun()}>补采当前失败</button><button className="primary" onClick={generateSnapshotFromPool}>生成当前批次快照</button></div></div>
 
       <section className="fetched-data-browser" aria-label="已抓取数据浏览">
-        <div className="fetched-data-heading"><div><span className="collector-kicker"><Database size={13} /> 全局数据池 · 不限批次</span><h2>浏览已抓取来源记录</h2><p>列表来自所有已发布采集产物；当前运行批次只影响上方“补采”和快照操作。</p></div><div className="fetched-data-filters"><label className="fetched-data-filter"><Search size={14} /><input value={sourceQuery} onChange={(event) => setSourceQuery(event.target.value)} placeholder="搜索来源、发布方或采集器" aria-label="搜索已抓取数据" /></label><select value={sourceStateFilter} onChange={(event) => setSourceStateFilter(event.target.value as SourceStateFilter)} aria-label="来源状态筛选"><option value="all">全部来源状态</option><option value="ok">正常</option><option value="failed">失败 / 空响应</option><option value="disabled">已停用</option><option value="unknown">未记录</option></select></div></div>
+        <div className="fetched-data-heading"><div><span className="collector-kicker"><Database size={13} /> 全局数据池 · 不限批次</span><h2>浏览已抓取来源记录</h2><p>列表来自所有已发布采集产物；第一列是来源稳定标识（用于追溯，不是文件夹名称）。当前运行批次只影响上方“补采”和快照操作。</p></div><div className="fetched-data-filters"><label className="fetched-data-filter"><Search size={14} /><input value={sourceQuery} onChange={(event) => setSourceQuery(event.target.value)} placeholder="搜索来源、发布方或采集器" aria-label="搜索已抓取数据" /></label><select value={sourceStateFilter} onChange={(event) => setSourceStateFilter(event.target.value as SourceStateFilter)} aria-label="来源状态筛选"><option value="all">全部来源状态</option><option value="ok">正常</option><option value="failed">失败 / 空响应</option><option value="disabled">已停用</option><option value="unknown">未记录</option></select></div></div>
         <div className="fetched-data-table" role="table" aria-label="已抓取来源列表">
-          <div className="fetched-data-row heading" role="row"><span>来源 / 发布方</span><span>采集器</span><span>抓取数量</span><span>最近抓取</span><span>状态</span></div>
-          {fetchedSourceRows.slice(0, 80).map((source) => <button key={`${source.collectorId}:${source.id}`} className="fetched-data-row" role="row" onClick={() => { setSelectedId(source.collectorId); setInspectorOpen(true); setInspectorTab("detail"); }}>
+          <div className="fetched-data-row heading" role="row"><span>来源标识 / 发布方</span><span>采集器</span><span>抓取数量</span><span>最近抓取</span><span>状态</span></div>
+          {fetchedSourceRows.slice(0, 80).map((source) => { const sourceKey = `${source.collectorId}:${source.id}`; return <button key={sourceKey} className={`fetched-data-row ${sourceKey === selectedSourceKey ? "selected" : ""}`} role="row" onClick={() => setSelectedSourceKey(sourceKey)}>
             <span><b>{source.id}</b><small>{source.publisher || "发布方未记录"}</small></span><span>{source.collectorId}</span><span>{source.entries ?? source.kept ?? "未记录"}</span><span>{source.updatedAt ? source.updatedAt.replace("T", " ").slice(0, 16) : "未记录"}</span><em className={source.state === "ok" ? "ok" : source.state === "disabled" ? "disabled" : "bad"}>{source.state || "未知"}</em>
-          </button>)}
+          </button>; })}
           {!fetchedSourceRows.length && <div className="fetched-data-empty"><Database size={20} /><strong>{allFetchedSourceRows.length ? "没有符合当前筛选条件的来源记录" : "全局数据池暂无可浏览的来源记录"}</strong><span>{allFetchedSourceRows.length ? "调整搜索词或来源状态筛选。" : sourcePoolEmptyReason}</span>{!allFetchedSourceRows.length && <div className="fetched-data-empty-actions"><button onClick={() => openPipelineView("run")}>查看当前批次日志</button><button className="primary" onClick={() => queueRun([], "重新执行采集")}>重新执行采集</button></div>}</div>}
         </div>
         {allFetchedSourceRows.length > 0 && <small className="fetched-data-more">当前显示 {Math.min(fetchedSourceRows.length, 80)} / {allFetchedSourceRows.length} 条来源记录；筛选仅作用于浏览。</small>}
       </section>
+
+      {selectedFetchedSource && <section className="fetched-data-detail" aria-label="来源记录详情"><div><span className="collector-kicker"><ListChecks size={13} /> 来源记录详情</span><h3>{selectedFetchedSource.id}</h3><p>{selectedFetchedSource.publisher || "发布方未记录"} · 采集器 {selectedFetchedSource.collectorId}</p></div><div className="fetched-data-detail-grid"><span>状态 <b>{selectedFetchedSource.state || "未记录"}</b></span><span>记录数 <b>{selectedFetchedSource.entries ?? selectedFetchedSource.kept ?? "未记录"}</b></span><span>最近抓取 <b>{selectedFetchedSource.updatedAt ? selectedFetchedSource.updatedAt.replace("T", " ").slice(0, 16) : "未记录"}</b></span><span>连续失败 <b>{selectedFetchedSource.consecutive_failures ?? "未记录"}</b></span></div><p className="fetched-data-detail-error">{selectedFetchedSource.error || "本来源没有记录错误信息。"}</p></section>}
 
       <div className="collector-mobile-toolbar">
         <button onClick={() => setFiltersOpen(true)}><Filter size={15} /> 筛选</button>
@@ -1211,7 +1215,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           {inspectorTab === "resources" && <div className="collector-resource-panel"><span>输出 manifest</span><strong>{selected.outputs} 个文件 · {selected.records.toLocaleString("zh-CN")} 条记录</strong><p>输出 manifest 和快照导入记录来自当前运行接口；未提供的字段不会被补造。</p></div>}
         </aside>}
       </div>
-      </>}
+      </section>}
 
       {pipelineDetail && <div className="pipeline-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPipelineDetail(null); }}>
         <section className="pipeline-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="pipeline-detail-title">
