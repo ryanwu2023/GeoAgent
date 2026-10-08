@@ -4,6 +4,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from .link_health import link_health, summary as link_summary
 import json
 import os
+import httpx
 from pathlib import Path
 from typing import Literal
 from datetime import date
@@ -43,6 +44,47 @@ async def lifespan(app):
 app = FastAPI(title="地缘政治研究接口", version="0.6.1",lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 Topic = Literal["all", "usiran", "ukraine"]
+
+
+@app.get("/api/pichat/embed-identity")
+async def pichat_embed_identity(agent_id: str = "geo-research-assistant"):
+    """Mint the short-lived PiChat panel identity for the local GeoAgent UI.
+
+    The pk- application key and product phone stay server-side. The browser only
+    receives the short-lived panel JWT needed by the iframe handshake.
+    """
+    base_url = os.environ.get("PICHAT_EMBED_BASE_URL", "http://127.0.0.1:9172").rstrip("/")
+    app_key = os.environ.get("PICHAT_EMBED_APP_KEY", "").strip()
+    phone = os.environ.get("PICHAT_EMBED_PHONE", "").strip()
+    if not app_key or not phone:
+        raise HTTPException(
+            status_code=503,
+            detail="未配置 PICHAT_EMBED_APP_KEY / PICHAT_EMBED_PHONE；密钥只能由 GeoAgent 后端读取。",
+        )
+    entry = os.environ.get("PICHAT_EMBED_ENTRY", "").strip()
+    payload = {
+        "phone": phone,
+        "productUserId": os.environ.get("PICHAT_EMBED_PRODUCT_USER_ID", "geoagent-local"),
+        "displayName": "GeoAgent 本地研究用户",
+        "clientId": "geoagent-ui",
+        "expiresInSec": 3600,
+    }
+    payload["entry" if entry else "agentId"] = entry or agent_id
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                f"{base_url}/api/v1/embed/identity",
+                headers={"Authorization": f"Bearer {app_key}"},
+                json=payload,
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"PiChat 身份服务不可用: {exc}") from exc
+    if response.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"PiChat 身份签发失败: HTTP {response.status_code}")
+    body = response.json()
+    if not body.get("ok") or not body.get("data", {}).get("token"):
+        raise HTTPException(status_code=502, detail="PiChat 未返回有效的嵌入身份")
+    return {"agentId": body["data"].get("agentId", agent_id), **body["data"]}
 
 class CollectorRunRequest(BaseModel):
     ids: list[str] = Field(default_factory=list, max_length=19)

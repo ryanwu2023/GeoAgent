@@ -1,0 +1,20 @@
+{
+  "credentials": [
+    {
+      "credential_id": "pichat-agent-example",
+      "token_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "expires_at": "2026-12-31T00:00:00Z",
+      "revoked": false,
+      "principal": {
+        "principal_id": "pichat-principal-example",
+        "agent_id": "pichat-agent-example",
+        "geo_workspace_id": "geo-workspace-example",
+        "allowed_snapshot_ids": ["working"],
+        "allowed_topics": ["usiran", "ukraine"],
+        "allowed_dimensions": ["*"],
+        "allowed_tools": ["geo_snapshot_list", "geo_snapshot_get", "geo_workspace_summary", "geo_evidence_search", "geo_evidence_get", "geo_metric_catalog", "geo_metric_series", "geo_analysis_view", "geo_brief_list", "geo_brief_get", "geo_collector_status"],
+        "read_only": true
+      }
+    }
+  ]
+}

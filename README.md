@@ -62,7 +62,9 @@ npm ci && npm run build
 
 ## Pi Chat Agent / 大模型
 
-复制 `.env.example` 为 `.env`。推荐配置 `PICHAT_BASE_URL=http://127.0.0.1:5585` 与 `PICHAT_API_KEY`，后端会调用 pi-chat-server 的 `POST /api/v1/chat`，复用该 Key 绑定的 Agent、工具与治理能力。应用 Key 需要 `chat:invoke` scope，且只由 GeoAgent 后端读取，不会发送到浏览器。
+复制 `.env.example` 为 `.env`。本地 PiChat 使用 `PICHAT_BASE_URL=http://127.0.0.1:9172`，并配置绑定 `geo-research-assistant` 的 `PICHAT_API_KEY`；后端会调用 PiChat 的 `POST /api/v1/chat`，复用该 Key 绑定的 Agent、工具与治理能力。应用 Key 需要 `chat:invoke` scope，且只由 GeoAgent 后端读取，不会发送到浏览器。仅有嵌入身份权限的 Key 不能替代项目级 API Key。
+
+本地 MCP 默认只监听 loopback；未使用 scope 文件时，loopback legacy principal 对快照、主题和维度采用开发期 `*` allowlist，避免嵌入 Agent 因没有 snapshot mapping 被误判为无数据。非 loopback 部署仍必须使用 `GEOAGENT_MCP_SCOPE_FILE`，不能依赖该开发默认。
 
 未配置 Pi Chat 时，也可以配置 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`，使用兼容 `/chat/completions` 的模型作为降级。请求只在用户提问、翻译或生成简报时发起，发送的是检索到的原文片段、计算结果和研究规则；Pi Chat 优先于直连模型配置。
 

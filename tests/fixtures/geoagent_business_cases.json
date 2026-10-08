@@ -1,0 +1,66 @@
+[
+  {
+    "id": "snapshot-change",
+    "menu": "量化指标",
+    "prompt": "本周哪些指标发生变化？请说明当前值、前值、变化幅度、日期和数据缺口。",
+    "required_tools": ["geo_snapshot_list", "geo_metric_catalog", "geo_metric_series"],
+    "required_fields": ["current", "previous", "delta", "provenance"],
+    "direct_checks": ["snapshot_list", "metric_catalog", "metric_series"]
+  },
+  {
+    "id": "counterevidence",
+    "menu": "情景推演",
+    "prompt": "当前判断有哪些反证？请分别区分情景规则中的反证和新闻证据中的反证。",
+    "required_tools": ["geo_analysis_view", "geo_evidence_search", "geo_evidence_get"],
+    "required_fields": ["counter", "evidence_ids", "provenance"],
+    "direct_checks": ["analysis", "evidence_search", "evidence_get"]
+  },
+  {
+    "id": "missing-data",
+    "menu": "数据源",
+    "prompt": "还缺什么数据？请按指标、证据、覆盖范围和时效分别列出缺口。",
+    "required_tools": ["geo_workspace_summary", "geo_metric_catalog", "geo_analysis_view"],
+    "required_fields": ["coverage", "metrics", "missing_data", "provenance"],
+    "direct_checks": ["workspace_coverage", "metric_catalog", "analysis_missing"]
+  },
+  {
+    "id": "evidence-verification",
+    "menu": "证据台账",
+    "prompt": "找出当前主题最相关的两条证据，并说明来源、发布时间、摘要和核验边界。",
+    "required_tools": ["geo_evidence_search", "geo_evidence_get"],
+    "required_fields": ["records", "record", "provenance"],
+    "direct_checks": ["evidence_search", "evidence_get"]
+  },
+  {
+    "id": "risk-overview",
+    "menu": "风险监测",
+    "prompt": "当前快照的风险态势和证据覆盖如何？请说明各主题覆盖量，不要把报道数量当成风险概率。",
+    "required_tools": ["geo_snapshot_get", "geo_workspace_summary", "geo_analysis_view"],
+    "required_fields": ["coverage", "assets", "scenarios", "provenance"],
+    "direct_checks": ["snapshot_get", "workspace_coverage", "analysis"]
+  },
+  {
+    "id": "pipeline-live",
+    "menu": "采集管线监控",
+    "prompt": "当前采集管线是否完成？哪些采集器失败或仍在运行？请区分 live 运行态和冻结快照。",
+    "required_tools": ["geo_collector_status", "geo_snapshot_list"],
+    "required_fields": ["run_status", "collectors", "live", "provenance"],
+    "direct_checks": ["collector_live", "snapshot_list"]
+  },
+  {
+    "id": "asset-impact",
+    "menu": "资产关联",
+    "prompt": "当前主题对权益、利率债、信用债、商品和外汇分别有什么条件影响？请附反证和待补数据。",
+    "required_tools": ["geo_analysis_view", "geo_metric_catalog", "geo_evidence_search"],
+    "required_fields": ["assets", "counter", "missing_data", "provenance"],
+    "direct_checks": ["analysis", "metric_catalog", "evidence_search"]
+  },
+  {
+    "id": "brief-archive",
+    "menu": "研究简报",
+    "prompt": "当前快照是否有已落盘研究简报？如果没有，请明确说明不能用空结果替代简报正文。",
+    "required_tools": ["geo_brief_list", "geo_snapshot_list"],
+    "required_fields": ["briefs", "total", "provenance"],
+    "direct_checks": ["brief_list", "snapshot_list"]
+  }
+]

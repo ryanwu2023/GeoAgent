@@ -105,6 +105,9 @@ export default function App() {
     [asking, setAsking] = useState(false),
     [replay, setReplay] = useState(false),
     [history, setHistory] = useState<Answer[]>([]);
+  const [pichatReady, setPichatReady] = useState(false),
+    [pichatAuthRequired, setPichatAuthRequired] = useState(false),
+    [pichatError, setPichatError] = useState("");
   const [briefs, setBriefs] = useState<Brief[]>([]),
     [brief, setBrief] = useState<Brief | null>(null),
     [generating, setGenerating] = useState(false),
@@ -115,11 +118,125 @@ export default function App() {
     selectionVersion = useRef(0),
     evidenceVersion = useRef(0);
   const lastTopic = useRef("usiran");
+  const pichatOrigin =
+    import.meta.env.VITE_PICHAT_EMBED_ORIGIN || "http://127.0.0.1:9172";
+  const pichatAgentId =
+    import.meta.env.VITE_PICHAT_AGENT_ID || "geo-research-assistant";
   if (page !== "briefs") lastTopic.current = page;
   const topic = lastTopic.current;
   const workspaceCache = useRef(
     new Map<string, { time: number; data: Workspace }>(),
   );
+  const pichatFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const pichatTokenRef = useRef<string | null>(null);
+  const requestPichatIdentity = async () => {
+    setPichatAuthRequired(true);
+    try {
+      const response = await fetch(
+        `/api/pichat/embed-identity?agent_id=${encodeURIComponent(pichatAgentId)}`,
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body.token) {
+        throw new Error(body.detail || `HTTP ${response.status}`);
+      }
+      pichatTokenRef.current = body.token;
+      const message = { type: "pi-chat:embed-identity", agentId: pichatAgentId, token: body.token };
+      const financeMessage = {
+        type: "finance:auth:token",
+        token: body.token,
+        user: {
+          id: import.meta.env.VITE_PICHAT_PRODUCT_USER_ID || "geoagent-local",
+          username: import.meta.env.VITE_PICHAT_PRODUCT_USER_ID || "geoagent-local",
+          role: "user",
+          status: "active",
+          userType: "embed",
+          accounts: [],
+          qqBindings: [],
+          externalBindings: [],
+        },
+      };
+      // The work-embed route may be served by PiChat's product-web proxy even
+      // when the iframe URL starts at the API origin; use the iframe reference
+      // as the capability boundary and avoid rejecting that internal redirect.
+      const deliver = () => pichatFrameRef.current?.contentWindow?.postMessage(message, "*");
+      const deliverFinance = () => pichatFrameRef.current?.contentWindow?.postMessage(financeMessage, pichatOrigin);
+      // The embedded app registers its message listener asynchronously; retry briefly
+      // so a fast iframe load cannot lose the one-time identity handshake.
+      deliver();
+      deliverFinance();
+      window.setTimeout(deliver, 250);
+      window.setTimeout(deliver, 750);
+      window.setTimeout(deliver, 1500);
+      window.setTimeout(deliverFinance, 250);
+      window.setTimeout(deliverFinance, 750);
+      window.setTimeout(deliverFinance, 1500);
+      setPichatAuthRequired(false);
+      setPichatError("");
+    } catch (error) {
+      setPichatAuthRequired(false);
+      setPichatError(error instanceof Error ? error.message : "PiChat 身份签发失败");
+    }
+  };
+  const pichatUrl = (() => {
+    const url = new URL(
+      `/work-embed/${encodeURIComponent(pichatAgentId)}`,
+      pichatOrigin,
+    );
+    url.searchParams.set("org", "default");
+    url.searchParams.set("hideNav", "1");
+    // The host workbench is a dark surface.  PiChat's work-embed supports an
+    // explicit theme query for cross-origin embeds; without it the iframe
+    // falls back to the user's standalone light-theme preference and visually
+    // breaks the GeoAgent panel.
+    url.searchParams.set("theme", "dark");
+    url.searchParams.set("embedParentOrigin", window.location.origin);
+    url.searchParams.set("parentOrigin", window.location.origin);
+    url.searchParams.set(
+      "workspaceScope",
+      `.geo-research-assistant/${workingSid || "default"}`,
+    );
+    return url.toString();
+  })();
+  useEffect(() => {
+    const onPichatMessage = async (event: MessageEvent) => {
+      if (event.origin !== pichatOrigin) return;
+      if (event.source !== pichatFrameRef.current?.contentWindow) return;
+      const data = event.data as { type?: string; agentId?: string } | null;
+      if (!data?.type) return;
+      if (data.type === "finance:auth:request") {
+        if (!pichatTokenRef.current) await requestPichatIdentity();
+        if (pichatTokenRef.current) {
+          (event.source as Window).postMessage(
+            {
+              type: "finance:auth:token",
+              token: pichatTokenRef.current,
+              user: {
+                id: import.meta.env.VITE_PICHAT_PRODUCT_USER_ID || "geoagent-local",
+                username: import.meta.env.VITE_PICHAT_PRODUCT_USER_ID || "geoagent-local",
+                role: "user",
+                status: "active",
+                userType: "embed",
+                accounts: [],
+                qqBindings: [],
+                externalBindings: [],
+              },
+            },
+            event.origin,
+          );
+        }
+      } else if (data.type === "pi-chat:embed-identity-required" && data.agentId === pichatAgentId) {
+        await requestPichatIdentity();
+      } else if (data.type === "finance:chat:ready") {
+        setPichatReady(true);
+        setPichatAuthRequired(false);
+      } else if (data.type === "finance:auth:required") {
+        setPichatReady(false);
+        setPichatAuthRequired(true);
+      }
+    };
+    window.addEventListener("message", onPichatMessage);
+    return () => window.removeEventListener("message", onPichatMessage);
+  }, [pichatOrigin, pichatAgentId]);
   async function refreshStatus() {
     const s = await api<Status>("/status");
     setStatus(s);
@@ -1332,10 +1449,10 @@ export default function App() {
                 <div>
                   <h2>
                     <MessageSquare size={18} />
-                    研究助手
+                    GeoAgent 研究助手
                   </h2>
                   <small>
-                    {names[topic]} · 工作快照 {workingSid.slice(0, 8) || "未确认"}
+                    PiChat Agent · {pichatAgentId} · {names[topic]} · 工作快照 {workingSid.slice(0, 8) || "未确认"}
                   </small>
                 </div>
                 <button
@@ -1348,145 +1465,35 @@ export default function App() {
                   <X />
                 </button>
               </div>
-              <div className="chat-body">
-                <div className="chat-intro">
-                  基于已接入数据检索与分析。数值由程序计算，解释附来源。“本周”以所选快照导入日期为基准。
-                </div>
-                <div className="presets">
-                  {[
-                    "本周哪些指标发生变化？",
-                    "当前判断有哪些反证？",
-                    "还缺什么数据？",
-                  ].map((q) => (
-                    <button
-                      disabled={asking || !workingSid}
-                      key={q}
-                      onClick={() => {
-                        setQuestion(q);
-                        ask(q);
-                      }}
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
-                <select
-                  aria-label="回放问答"
-                  value={replay ? answer?.id || "" : ""}
-                  onChange={(e) => {
-                    const a = history.find((h) => h.id === e.target.value);
-                    if (a) {
-                      setAnswer(a);
-                      setReplay(true);
-                    }
+              <div className="pichat-embed-shell">
+                {!pichatReady && !pichatAuthRequired && !pichatError && (
+                  <div className="pichat-embed-status">
+                    <RefreshCw className="spin" size={16} /> 正在连接 PiChat Agent…
+                  </div>
+                )}
+                {pichatAuthRequired && (
+                  <div className="pichat-embed-status error">
+                    正在获取 PiChat 嵌入身份…
+                  </div>
+                )}
+                {pichatError && (
+                  <div className="pichat-embed-status error">{pichatError}</div>
+                )}
+                <iframe
+                  ref={pichatFrameRef}
+                  title="GeoAgent PiChat 研究助手"
+                  className="pichat-embed-frame"
+                  src={pichatUrl}
+                  onError={() =>
+                    setPichatError("PiChat 面板加载失败，请确认 9172 服务已启动。")
+                  }
+                  onLoad={() => {
+                    setPichatError("");
+                    void requestPichatIdentity();
                   }}
-                >
-                  <option value="">查看当前快照、主题与维度的问答档案</option>
-                  {history.map((h) => (
-                    <option key={h.id} value={h.id}>
-                      {dateText(h.created_at)} {h.query.slice(0, 22)}
-                    </option>
-                  ))}
-                </select>
-                {asking && (
-                  <div className="empty">
-                    <RefreshCw className="spin" />
-                    检索、计算及分析中…
-                  </div>
-                )}
-                {answer && (
-                  <div className="answer">
-                    <div className="question-bubble">{answer.query}</div>
-                    <div className="answer-mode">
-                      {replay ? "历史回放 · " : ""}
-                      {answer.mode}
-                      {replay && (
-                        <small>
-                          原回答范围：{names[answer.topic || "all"]} ·{" "}
-                          {answer.filters?.start || "不限起始日期"} 至{" "}
-                          {answer.filters?.end || "不限结束日期"}
-                        </small>
-                      )}
-                      <small>
-                        {dateText(answer.created_at)} ·{" "}
-                        {answer.snapshot_id.slice(0, 8)} · 数据截至{" "}
-                        {dateText(answer.as_of)}
-                      </small>
-                    </div>
-                    <p>{answer.message}</p>
-                    {answer.facts.map((f, i) => (
-                      <div className="fact" key={i}>
-                        <label>{f.kind}</label>
-                        <p>{f.text}</p>
-                        {f.evidence_ids.map((id) => (
-                          <button
-                            className="citation"
-                            onClick={() => openEvidence(id)}
-                            key={id}
-                          >
-                            查看依据
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                    {answer.inferences.map((f, i) => (
-                      <div className="fact inference" key={i}>
-                        <label>{f.kind}</label>
-                        <p>{f.text}</p>
-                        {f.evidence_ids.map((id) => (
-                          <button
-                            className="citation"
-                            onClick={() => openEvidence(id)}
-                            key={id}
-                          >
-                            查看引用
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                    <h3>检索证据</h3>
-                    {answer.citations.map((r, i) => (
-                      <button
-                        className="reference"
-                        key={r.id}
-                        onClick={() => openEvidence(r.id)}
-                      >
-                        <span>{i + 1}.</span>
-                        {r.title}
-                      </button>
-                    ))}
-                    <h3>信息缺口</h3>
-                    <ul>
-                      {answer.gaps.map((g, i) => (
-                        <li key={i}>{g}</li>
-                      ))}
-                    </ul>
-                    <div className="steps">{answer.steps.join(" → ")}</div>
-                  </div>
-                )}
-              </div>
-              <form
-                className="chat-form"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  ask();
-                }}
-              >
-                <textarea
-                  aria-label="研究问题"
-                  placeholder="例如：采购支出变化能说明什么？"
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  maxLength={3000}
+                  allow="clipboard-read; clipboard-write"
                 />
-                <button
-                  className="primary"
-                  disabled={asking || !workingSid || !question.trim()}
-                  aria-label="发送问题"
-                >
-                  <Send size={17} />
-                </button>
-              </form>
+              </div>
             </aside>
           )}
         </main>

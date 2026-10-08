@@ -183,9 +183,17 @@ def load_runs(runs_root: Path, registry_path: Path, limit: int = 20) -> list[dic
         if parsed is not None:
             # The compatibility state.json can remain `running` when the
             # service is interrupted after collectors have finished. The
-            # ledger is the authoritative lifecycle record in that case.
+            # ledger is authoritative for real lifecycle states in that case.
+            # `ensure_run()` also creates a `historical` placeholder for old
+            # reports so reviews can be stored; that placeholder must not
+            # overwrite the report's actual success/partial/failed status.
             ledger_run = ledger.run(parsed["run_id"]) if ledger is not None else None
-            if ledger_run is not None and ledger_run.get("status") != parsed.get("run_status"):
+            lifecycle_statuses = {"running", "success", "partial", "failed", "abandoned"}
+            if (
+                ledger_run is not None
+                and ledger_run.get("status") in lifecycle_statuses
+                and ledger_run.get("status") != parsed.get("run_status")
+            ):
                 parsed["run_status"] = ledger_run.get("status")
                 parsed["finished_at"] = ledger_run.get("finished_at") or parsed.get("finished_at")
                 parsed["updated_at"] = parsed.get("finished_at") or parsed.get("updated_at")

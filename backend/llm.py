@@ -16,7 +16,7 @@ def config():
     # Explicit process configuration wins; app startup does not copy .env model values.
     for key in keys:
         if os.getenv(key):values[key]=os.environ[key]
-    values['PICHAT_BASE_URL']=values['PICHAT_BASE_URL'] or 'http://127.0.0.1:5585'
+    values['PICHAT_BASE_URL']=values['PICHAT_BASE_URL'] or 'http://127.0.0.1:9172'
     values['LLM_BASE_URL']=values['LLM_BASE_URL'] or 'https://api.openai.com/v1'
     timeout_value=values['PICHAT_TIMEOUT'] if values['PICHAT_API_KEY'] else values['LLM_TIMEOUT']
     try:values['timeout']=max(5,min(300,float(timeout_value or (90 if values['PICHAT_API_KEY'] else 45))))
