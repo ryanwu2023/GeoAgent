@@ -7,7 +7,7 @@ workflow:
     - when: never
 
 default:
-  tags: [pichat-sealos-release]
+  tags: [data-ingestion-platform, artifact, shell]
   interruptible: false
 
 geoagent:sealos:verify:

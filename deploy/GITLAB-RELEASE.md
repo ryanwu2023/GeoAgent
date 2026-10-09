@@ -6,11 +6,13 @@ such as `geoagent-test-v1.2.3`, `stocklink-prod-*`, branches, and unprotected ta
 do not trigger production jobs. GeoAgent currently has no test deployment lane;
 this configuration does not create one or change the pi-chat-server project.
 
-The pipeline follows pi-chat-server's dedicated `pichat-sealos-release` shell
-runner pattern. The runner must have Docker, Git, and kubectl, registry access,
-and network access to the Sealos API. Assign an appropriate protected runner to
-this project before releasing. Do not attach the isolated MR runner or assume
-another project's runner is automatically available here.
+The pipeline follows pi-chat-server's shell runner pattern. The owner assigned
+Runner #4 (`svc-stocklink-runner-214-data-ingestion-platform`) on 2026-10-09;
+jobs match its existing `data-ingestion-platform`, `artifact`, and `shell` tags.
+The shared runner configuration is unchanged. The runner must have Docker, Git,
+and kubectl, registry access, and network access to the Sealos API; assignment
+alone does not verify these prerequisites. Production variables remain protected
+and scoped to this project's production environment.
 
 In GitLab, protect `geoagent-prod-*` tags (Maintainers create them) and configure
 the following protected variables, scoped to `geoagent-sealos-production`:
