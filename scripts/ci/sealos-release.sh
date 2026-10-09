@@ -23,23 +23,9 @@ case ${1:-} in
     : "${GEOAGENT_PROD_KUBECONFIG:?Set a protected File variable scoped to geoagent-sealos-production}"
     : "${GEOAGENT_PROD_ACR_USER:?Set production registry username}"
     : "${GEOAGENT_PROD_ACR_PASSWORD:?Set masked production registry password}"
-    # Install in this job only; the shared shell runner need not have kubectl.
+    # Credentials and tools are isolated from the shared runner's configuration.
     job_tools=$(mktemp -d)
     trap 'rm -rf -- "$job_tools"' EXIT
-    case $(uname -m) in
-      x86_64) arch=amd64 ;;
-      aarch64) arch=arm64 ;;
-      *) echo 'Unsupported runner architecture'; exit 1 ;;
-    esac
-    # Match the Sealos 1.28 API server, with an official checksum verification.
-    kubectl_url="https://dl.k8s.io/release/v1.28.15/bin/linux/$arch/kubectl"
-    curl --fail --silent --show-error --location --retry 3 --connect-timeout 15 --max-time 180 -o "$job_tools/kubectl" "$kubectl_url"
-    curl --fail --silent --show-error --location --retry 3 --connect-timeout 15 --max-time 60 -o "$job_tools/kubectl.sha256" "$kubectl_url.sha256"
-    printf '%s  %s\n' "$(cat "$job_tools/kubectl.sha256")" "$job_tools/kubectl" | sha256sum --check --status
-    chmod 700 "$job_tools/kubectl"
-    export PATH="$job_tools:$PATH"
-    export KUBECONFIG="$GEOAGENT_PROD_KUBECONFIG"
-    [[ $(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}') == https://gzg.sealos.run:6443 ]] || exit 1
     namespace=ns-d40dap45
     registry=crpi-pkfixdfs4f7qepax.cn-shanghai.personal.cr.aliyuncs.com
     repository="$registry/stocklink-base/geoagent"
@@ -49,6 +35,16 @@ case ${1:-} in
     DOCKER_CONFIG="$job_tools/docker"
     mkdir "$DOCKER_CONFIG"
     printf '%s' "$GEOAGENT_PROD_ACR_PASSWORD" | docker login "$registry" --username "$GEOAGENT_PROD_ACR_USER" --password-stdin
+    # Verified kubectl v1.28.15, mirrored to ACR; no external downloads on runner.
+    tools_image="$repository@sha256:18e9a34191812fb74569e8070f6833bbf90adea1da17cdc9d40e0aef427724fb"
+    docker pull "$tools_image"
+    kubectl() {
+      docker run --rm --network host --user "$(id -u):$(id -g)" \
+        --mount "type=bind,source=$GEOAGENT_PROD_KUBECONFIG,target=/kube/config,readonly" \
+        --env KUBECONFIG=/kube/config "$tools_image" "$@"
+    }
+    [[ $(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}') == https://gzg.sealos.run:6443 ]] || exit 1
+    kubectl --request-timeout=30s -n "$namespace" get deployment geoagent -o name
     docker build --build-arg VITE_PICHAT_EMBED_ORIGIN=https://luozi-chat.lhotsetech.com \
       --build-arg VITE_PICHAT_PRODUCT_USER_ID=geoagent-owner -t "$image" .
     docker push "$image"
