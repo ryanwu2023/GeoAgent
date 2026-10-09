@@ -1,9 +1,14 @@
-stages: [verify, release]
+stages: [verify, deploy]
 
-# No broad tag match: testing and other products cannot publish GeoAgent production.
+# Test tags create artifacts only; production deploys require a protected tag.
 workflow:
   rules:
     - if: '$CI_COMMIT_TAG =~ /^geoagent-prod-v[0-9]+\.[0-9]+\.[0-9]+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+    - if: '$CI_COMMIT_TAG =~ /^geoagent-test-v[0-9]+\.[0-9]+\.[0-9]+$/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
     - when: never
 
 default:
@@ -12,19 +17,48 @@ default:
 
 geoagent:sealos:verify:
   stage: verify
+  interruptible: true
   script:
     - bash scripts/ci/sealos-release.sh verify
+  artifacts:
+    when: always
+    expire_in: 7 days
+    reports:
+      junit: release/junit.xml
+    paths:
+      - release/junit.xml
+      - release/candidate.tar.gz
+      - release/candidate.sha256
+      - release/candidate.id
 
-geoagent:sealos:release:
-  stage: release
-  needs: [geoagent:sealos:verify]
+.production:
+  stage: deploy
   resource_group: geoagent-sealos-production
   environment:
     name: geoagent-sealos-production
     url: https://geoagent.lhotsetech.com
-  script:
-    - bash scripts/ci/sealos-release.sh release
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^geoagent-prod-v[0-9]+\.[0-9]+\.[0-9]+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+    - when: never
   artifacts:
     when: always
     expire_in: 90 days
     paths: [release/geoagent-release.txt]
+
+geoagent:sealos:deploy:
+  extends: .production
+  needs:
+    - job: geoagent:sealos:verify
+      artifacts: true
+  allow_failure: false
+  script:
+    - bash scripts/ci/sealos-release.sh deploy
+
+geoagent:sealos:rollback:
+  extends: .production
+  # Works even after deploy fails; the cluster release record supplies the target.
+  needs: []
+  allow_failure: true
+  script:
+    - bash scripts/ci/sealos-release.sh rollback
