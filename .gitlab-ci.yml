@@ -1,0 +1,30 @@
+stages: [verify, release]
+
+# No broad tag match: testing and other products cannot publish GeoAgent production.
+workflow:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^geoagent-prod-v[0-9]+\.[0-9]+\.[0-9]+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+    - when: never
+
+default:
+  tags: [pichat-sealos-release]
+  interruptible: false
+
+geoagent:sealos:verify:
+  stage: verify
+  script:
+    - bash scripts/ci/sealos-release.sh verify
+
+geoagent:sealos:release:
+  stage: release
+  needs: [geoagent:sealos:verify]
+  resource_group: geoagent-sealos-production
+  environment:
+    name: geoagent-sealos-production
+    url: https://geoagent.lhotsetech.com
+  script:
+    - bash scripts/ci/sealos-release.sh release
+  artifacts:
+    when: always
+    expire_in: 90 days
+    paths: [release/geoagent-release.txt]
