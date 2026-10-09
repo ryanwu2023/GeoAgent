@@ -11,7 +11,7 @@ git merge-base --is-ancestor "$CI_COMMIT_SHA" origin/main || { echo 'Release mus
 
 case ${1:-} in
   verify)
-    docker build --build-arg VITE_PICHAT_EMBED_ORIGIN=https://luozi-chat.lhotsetech.com \
+    docker build --provenance=false --sbom=false --build-arg VITE_PICHAT_EMBED_ORIGIN=https://luozi-chat.lhotsetech.com \
       --build-arg VITE_PICHAT_PRODUCT_USER_ID=geoagent-owner \
       -t "geoagent-verify:${CI_JOB_ID}" .
     trap 'docker image rm "geoagent-verify:${CI_JOB_ID}" >/dev/null 2>&1 || true' EXIT
@@ -45,7 +45,8 @@ case ${1:-} in
     }
     [[ $(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}') == https://gzg.sealos.run:6443 ]] || exit 1
     kubectl --request-timeout=30s -n "$namespace" get deployment geoagent -o name
-    docker build --build-arg VITE_PICHAT_EMBED_ORIGIN=https://luozi-chat.lhotsetech.com \
+    # ACR personal registry rejects the runner's OCI attestation artifact format.
+    docker build --provenance=false --sbom=false --build-arg VITE_PICHAT_EMBED_ORIGIN=https://luozi-chat.lhotsetech.com \
       --build-arg VITE_PICHAT_PRODUCT_USER_ID=geoagent-owner -t "$image" .
     docker push "$image"
     digest=$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')
