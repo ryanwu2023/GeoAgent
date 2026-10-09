@@ -41,18 +41,17 @@ def test_unmerged_production_commit_cannot_build(tmp_path):
     assert b"merged into main" in result.stdout
 
 
-@pytest.mark.parametrize("valid_checksum", [True, False])
-def test_release_bootstraps_kubectl_before_cluster_access(tmp_path, valid_checksum):
-    """A runner without kubectl downloads it; corrupt downloads never execute."""
-    import hashlib
-    marker = tmp_path / "kubectl-ran"
-    payload = f'#!/bin/sh\ntouch "{marker}"\necho wrong-cluster\n'
-    checksum = hashlib.sha256(payload.encode()).hexdigest() if valid_checksum else "0" * 64
+@pytest.mark.parametrize("pull_succeeds", [True, False])
+def test_release_uses_registry_kubectl_before_cluster_access(tmp_path, pull_succeeds):
+    """Registry auth precedes tools pull; a failed pull cannot reach Kubernetes."""
+    marker = tmp_path / "commands"
     stubs = {
         "git": "#!/bin/sh\nexit 0\n",
-        "curl": '#!/bin/bash\nwhile [[ $1 != -o ]]; do shift; done\nout=$2\nurl=$3\n'
-                + f"if [[ $url == *.sha256 ]]; then printf '%s' '{checksum}' > \"$out\"; "
-                + f"else cat > \"$out\" <<'PAYLOAD'\n{payload}PAYLOAD\nfi\n",
+        "curl": "#!/bin/sh\nexit 99\n",
+        "docker": f'#!/bin/sh\necho "$*" >> "{marker}"\n'
+                  + 'case "$1" in\nlogin) cat >/dev/null ;;\n'
+                  + f'pull) exit {0 if pull_succeeds else 1} ;;\n'
+                  + 'run) echo wrong-cluster ;;\nesac\n',
     }
     for name, body in stubs.items():
         target = tmp_path / name
@@ -66,4 +65,13 @@ def test_release_bootstraps_kubectl_before_cluster_access(tmp_path, valid_checks
                                  "GEOAGENT_PROD_ACR_USER": "test",
                                  "GEOAGENT_PROD_ACR_PASSWORD": "test"})
     assert result.returncode != 0  # Wrong cluster must still stop deployment.
-    assert marker.exists() == valid_checksum, result.stderr.decode()
+    commands = marker.read_text().splitlines()
+    assert commands[0].startswith("login ")
+    assert commands[1].startswith("pull crpi-") and "@sha256:" in commands[1]
+    if pull_succeeds:
+        assert len(commands) == 3
+        assert commands[2].startswith("run --rm ")
+        assert "readonly" in commands[2]
+        assert "config view --minify" in commands[2]
+    else:
+        assert len(commands) == 2
