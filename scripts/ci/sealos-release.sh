@@ -23,6 +23,21 @@ case ${1:-} in
     : "${GEOAGENT_PROD_KUBECONFIG:?Set a protected File variable scoped to geoagent-sealos-production}"
     : "${GEOAGENT_PROD_ACR_USER:?Set production registry username}"
     : "${GEOAGENT_PROD_ACR_PASSWORD:?Set masked production registry password}"
+    # Install in this job only; the shared shell runner need not have kubectl.
+    job_tools=$(mktemp -d)
+    trap 'rm -rf -- "$job_tools"' EXIT
+    case $(uname -m) in
+      x86_64) arch=amd64 ;;
+      aarch64) arch=arm64 ;;
+      *) echo 'Unsupported runner architecture'; exit 1 ;;
+    esac
+    # Match the Sealos 1.28 API server, with an official checksum verification.
+    kubectl_url="https://dl.k8s.io/release/v1.28.15/bin/linux/$arch/kubectl"
+    curl --fail --silent --show-error --location --retry 3 --connect-timeout 15 --max-time 180 -o "$job_tools/kubectl" "$kubectl_url"
+    curl --fail --silent --show-error --location --retry 3 --connect-timeout 15 --max-time 60 -o "$job_tools/kubectl.sha256" "$kubectl_url.sha256"
+    printf '%s  %s\n' "$(cat "$job_tools/kubectl.sha256")" "$job_tools/kubectl" | sha256sum --check --status
+    chmod 700 "$job_tools/kubectl"
+    export PATH="$job_tools:$PATH"
     export KUBECONFIG="$GEOAGENT_PROD_KUBECONFIG"
     [[ $(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}') == https://gzg.sealos.run:6443 ]] || exit 1
     namespace=ns-d40dap45
@@ -31,8 +46,8 @@ case ${1:-} in
     image="$repository:${CI_COMMIT_TAG}-${CI_COMMIT_SHA}"
     # Job-scoped Docker credentials must not overwrite the runner's shared login.
     export DOCKER_CONFIG
-    DOCKER_CONFIG=$(mktemp -d)
-    trap 'rm -rf -- "$DOCKER_CONFIG"' EXIT
+    DOCKER_CONFIG="$job_tools/docker"
+    mkdir "$DOCKER_CONFIG"
     printf '%s' "$GEOAGENT_PROD_ACR_PASSWORD" | docker login "$registry" --username "$GEOAGENT_PROD_ACR_USER" --password-stdin
     docker build --build-arg VITE_PICHAT_EMBED_ORIGIN=https://luozi-chat.lhotsetech.com \
       --build-arg VITE_PICHAT_PRODUCT_USER_ID=geoagent-owner -t "$image" .
