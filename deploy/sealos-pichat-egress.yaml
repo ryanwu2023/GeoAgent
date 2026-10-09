@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: geoagent-pichat-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: geoagent
+  policyTypes: [Egress]
+  egress:
+    # PiChat public gateway addresses resolved inside Sealos on 2026-10-09.
+    # Refresh this list if the domain's upstream addresses change.
+    - to:
+        - ipBlock: {cidr: 101.33.204.143/32}
+        - ipBlock: {cidr: 106.52.159.126/32}
+        - ipBlock: {cidr: 106.52.89.241/32}
+        - ipBlock: {cidr: 114.132.239.45/32}
+        - ipBlock: {cidr: 119.29.114.72/32}
+        - ipBlock: {cidr: 119.91.219.109/32}
+        - ipBlock: {cidr: 119.91.62.67/32}
+        - ipBlock: {cidr: 129.204.171.42/32}
+        - ipBlock: {cidr: 134.175.100.199/32}
+        - ipBlock: {cidr: 193.112.152.55/32}
+        - ipBlock: {cidr: 42.193.244.135/32}
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
