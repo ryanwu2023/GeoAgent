@@ -1,0 +1,137 @@
+# Target: Guangzhou namespace ns-d40dap45; reuse its existing ACR pull secret.
+# Optional local access: kubectl -n <namespace> port-forward svc/geoagent 8000:8000
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: geoagent-data
+  labels:
+    cloud.sealos.io/app-deploy-manager: geoagent
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: openebs-lvmpv
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: geoagent
+  labels:
+    cloud.sealos.io/app-deploy-manager: geoagent
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: geoagent
+  template:
+    metadata:
+      labels:
+        app: geoagent
+        cloud.sealos.io/app-deploy-manager: geoagent
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: stocklinkes-mcp
+      containers:
+        - name: geoagent
+          image: crpi-pkfixdfs4f7qepax.cn-shanghai.personal.cr.aliyuncs.com/stocklink-base/geoagent@sha256:ec4f28af61d48c81ba492154de35e6371d7c9b7c63dc1d6522bb810857898595
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: GEOAGENT_ALLOWED_ORIGINS
+              value: https://geoagentd40d.sealosgzg.site,https://geoagent.lhotsetech.com
+            - name: PICHAT_EMBED_BASE_URL
+              value: https://luozi-chat.lhotsetech.com
+            - name: PICHAT_EMBED_ENTRY
+              value: dock
+            - name: PICHAT_EMBED_PRODUCT_USER_ID
+              value: geoagent-owner
+            - name: PICHAT_EMBED_APP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: geoagent-pichat-embed
+                  key: PICHAT_EMBED_APP_KEY
+            - name: PICHAT_EMBED_PHONE
+              valueFrom:
+                secretKeyRef:
+                  name: geoagent-pichat-embed
+                  key: PICHAT_EMBED_PHONE
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+        - name: gateway
+          image: nginx:1.28.0-alpine
+          ports:
+            - name: gateway
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          readinessProbe:
+            tcpSocket:
+              port: gateway
+          volumeMounts:
+            - name: gateway-config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+            - name: web-auth
+              mountPath: /etc/geoagent-auth
+              readOnly: true
+      volumes:
+        - name: gateway-config
+          configMap:
+            name: geoagent-gateway
+        - name: web-auth
+          secret:
+            secretName: geoagent-web-auth
+        - name: data
+          persistentVolumeClaim:
+            claimName: geoagent-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: geoagent
+  labels:
+    cloud.sealos.io/app-deploy-manager: geoagent
+spec:
+  type: ClusterIP
+  selector:
+    app: geoagent
+  ports:
+    - name: http
+      port: 8000
+      targetPort: gateway

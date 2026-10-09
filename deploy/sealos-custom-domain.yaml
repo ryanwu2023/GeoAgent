@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: geoagent-lhotsetech
+  labels:
+    cloud.sealos.io/app-deploy-manager: geoagent
+    cloud.sealos.io/app-deploy-manager-domain: geoagent
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: HTTP
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: geoagent.lhotsetech.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: geoagent
+                port:
+                  number: 8000
+  tls:
+    - hosts:
+        - geoagent.lhotsetech.com
+      secretName: pi-chat-lhotsetech-tls

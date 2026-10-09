@@ -134,10 +134,12 @@ REVIEW_ITEMS = (
 
 @app.middleware("http")
 async def protect_local_mutations(request: Request, call_next):
-    # Browser POSTs must originate from this local app; API keys never leave the backend.
+    # Explicit origins only; public access must also be authenticated at the ingress.
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         origin = request.headers.get("origin")
-        if origin and origin not in {"http://127.0.0.1:8000", "http://localhost:8000", "http://127.0.0.1:8010", "http://localhost:8010", "http://127.0.0.1:8011", "http://localhost:8011", "http://127.0.0.1:5173", "http://localhost:5173"}:
+        allowed_origins = {"http://127.0.0.1:8000", "http://localhost:8000", "http://127.0.0.1:8010", "http://localhost:8010", "http://127.0.0.1:8011", "http://localhost:8011", "http://127.0.0.1:5173", "http://localhost:5173"}
+        allowed_origins.update(value.strip() for value in os.getenv("GEOAGENT_ALLOWED_ORIGINS", "").split(",") if value.strip())
+        if origin and origin not in allowed_origins:
             return PlainTextResponse("不允许来自其他站点的写入请求", status_code=403)
     return await call_next(request)
 
