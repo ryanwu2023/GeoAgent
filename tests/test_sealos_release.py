@@ -39,3 +39,31 @@ def test_unmerged_production_commit_cannot_build(tmp_path):
                                  "CI_COMMIT_REF_PROTECTED": "true", "CI_COMMIT_SHA": "abc"})
     assert result.returncode != 0
     assert b"merged into main" in result.stdout
+
+
+@pytest.mark.parametrize("valid_checksum", [True, False])
+def test_release_bootstraps_kubectl_before_cluster_access(tmp_path, valid_checksum):
+    """A runner without kubectl downloads it; corrupt downloads never execute."""
+    import hashlib
+    marker = tmp_path / "kubectl-ran"
+    payload = f'#!/bin/sh\ntouch "{marker}"\necho wrong-cluster\n'
+    checksum = hashlib.sha256(payload.encode()).hexdigest() if valid_checksum else "0" * 64
+    stubs = {
+        "git": "#!/bin/sh\nexit 0\n",
+        "curl": '#!/bin/bash\nwhile [[ $1 != -o ]]; do shift; done\nout=$2\nurl=$3\n'
+                + f"if [[ $url == *.sha256 ]]; then printf '%s' '{checksum}' > \"$out\"; "
+                + f"else cat > \"$out\" <<'PAYLOAD'\n{payload}PAYLOAD\nfi\n",
+    }
+    for name, body in stubs.items():
+        target = tmp_path / name
+        target.write_text(body)
+        target.chmod(0o755)
+    result = subprocess.run(["/bin/bash", str(SCRIPT), "release"], capture_output=True,
+                            env={**os.environ, "PATH": f"{tmp_path}:/usr/bin:/bin",
+                                 "CI_COMMIT_TAG": "geoagent-prod-v1.0.0",
+                                 "CI_COMMIT_REF_PROTECTED": "true", "CI_COMMIT_SHA": "abc",
+                                 "GEOAGENT_PROD_KUBECONFIG": str(tmp_path / "config"),
+                                 "GEOAGENT_PROD_ACR_USER": "test",
+                                 "GEOAGENT_PROD_ACR_PASSWORD": "test"})
+    assert result.returncode != 0  # Wrong cluster must still stop deployment.
+    assert marker.exists() == valid_checksum, result.stderr.decode()
