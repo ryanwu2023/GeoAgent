@@ -376,3 +376,14 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 独立读取第二条证据详情：7ec7704882f0a3c108b18386，新华网，发布时间 10-09 11:20+08、采集 06:59Z、二级来源、原文已采集报道待核验、链接未检查；正文包含特朗普不打伊朗声明、Axios 重启行动准备报道，以及中央司令部所称林肯号返回母港，不能直接等同停火执行或持续撤军。
 - v1.0.11（5288）和 v1.0.12（5290）只做 verify，未触发手动部署；继续发现的修复将合并为下一标签部署，避免在问答生成中重复滚动更新。
 - 轮次 15（05:18，25 秒）：实际 search 三次、get 两次（回答自称“4 次”但明细 3+2，应记 5 次）；两条 ID、新华网、发布时间、原文 URL、verification 待核验、link_health=null 均与独立详情相符，不把声明/单舰返港解释为停火落实或持续撤军。**数据字段缺陷**：面板有 fetched_at，而 MCP _record_summary 未投影，Agent 如实报采集时间缺失；现补 fetched_at/first_seen/event_at/tier，保留 null，不暴露 raw_refs。新增回归。末句仍将两条材料不足扩为整个快照无数据，随 retrieval_scope 修复复测。截图 `/tmp/geoagent-evidence-live-20261013.jpg`。
+- 轮次 16（05:20）：重新摘要 all/usiran 两次；当前风险数与面板一致，明确 not_established、不能根据版本字段首次出现判断部署或回填时间、不能排序原因。**归因核心复测通过**，但附带沿用管线“此后无新事件/无新动作”旧错误；不将跨用例解释标为全通过。截图 `/tmp/geoagent-risk-retest-20261013.jpg`。
+- 合并全部补丁后全量 **197 passed**。一次并发启动的测试因测试服务端口生命周期冲突出现连接失败，结束重叠进程后串行全量复跑 197/197，通过结果以最终串行复跑为准。main `6a95f96f` → v1.0.13，pipeline 5292；等待 verify 27742 / 手动 deploy 27743。尚未把发布等同业务复测通过。
+- v1.0.13 的 verify 27742 / deploy 27743 均已通过；滚动更新完成，两个公网域名匿名 401、initialize/list/snapshot-call 200，发布临时 Key 已撤销。随后在生产嵌入面板发起轮次 17，继续业务复测，不以探针替代问答验收。
+- 轮次 17（05:26，15 秒）：重新 evidence_get 两次，两条 fetched_at 均 2026-10-09T06:59:29.712607Z；来源、发布/采集时间、T2、待核验、link_health=null 与面板吻合。字段修复通过；**分析仍部分通过**：单方返港报道称为事实，结尾又以两条材料泛化“快照内都没有”。发现 evidence_search/get 未返回新增 retrieval_scope，现补边界到这两个实际读取路径并加官方 MCP 客户端断言。截图 `/tmp/geoagent-evidence-v13-20261013.jpg`。
+- 轮次 18（05:29，70 秒）：analysis_view 两次 + summary 一次，无日期无维度，query_scope 与面板一致；五资产方向/条件/反证/缺口、信用债“有近期线索，待核验”均匹配。**同筛选核心通过，但归因仍未通过**：将旧差异归因 limit；代码 limit 只截取结果列表，不参与 topic_paths，补 limit_basis 明确禁止该推断。截图 `/tmp/geoagent-assets-v13-20261013.jpg`。
+- 轮次 19：原生输入中文丢失仅发出标点，立即停止，不作为业务验收。后续先检查完整输入再发送。
+- 轮次 20（05:30，5 秒）：collector_status 实读，四采集器/批次/导入匹配；明确进程与后续事件均未知，来源失败不等于批次失败。但首段仍写“此后约3.7天无更新”，与后段边界矛盾，**仍未完全通过**。新增 activity_assessment：process_running/events_after_latest_visible=unknown，no_updates_since_last_event=not_established。截图 `/tmp/geoagent-pipeline-v13-20261013.jpg`。
+- 补 evidence 边界后串行全量 197 passed（53.76 秒）；此前单跑 MCP 文件出现 ReadTimeout（13 passed/1 failed），全量通过不能抹除该偶发，未确认原因，不称其已修复。最终 activity_assessment/limit_basis 回归将再跑后发布。
+- 轮次 21（05:32，13 秒）：analysis_view + summary 两次；三情景规则与面板匹配，明确候选不是条件满足，旧正文标明沿用旧回执。但标题仍写“已核验反证——没有”，实际 not_evaluated 只能是未评估、是否存在未知；未完全通过。补 verified_counterevidence_available=unknown 与 assessment_summary。截图 `/tmp/geoagent-counter-v13-20261013.jpg`。
+- 轮次 22（05:33，18 秒）：摘要 usiran/all 两次，展开技术详情确认指定工作快照、topic=usiran、limit=1 等实际参数。**告警范围/缺口核心通过**：美伊 count=0、全主题 count=7；候选覆盖不是完整覆盖，22 条 supplemental 排除不是缺失，有效零值/隔离/目录未枚举不再当无数据。覆盖、时效、证据核验缺口与独立面板基线匹配；未新读证据正文，旧材料不作为本轮重新核验。截图 `/tmp/geoagent-gaps-v13-20261013.jpg`。
+- 测试启动器使用 stdout/stderr PIPE 却不读取，长会话存在日志反压卡死风险；改临时日志文件保留诊断，避免依赖无人消费的管道。该项是测试设施修复，不作为生产连接修复或 Agent 验收结果。

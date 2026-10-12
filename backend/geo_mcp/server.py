@@ -62,6 +62,8 @@ def _latest_id(summaries: list[dict[str, Any]]) -> str | None:
 def _analysis_evidence_boundary() -> dict[str, str]:
     return {
         "verified_counterevidence_status": "not_evaluated",
+        "verified_counterevidence_available": "unknown",
+        "assessment_summary": "已核验反证：尚未评估，是否存在未知。不能标题写‘已核验反证——没有’；人工复核0也不能证明无反证。",
         "assessment_scope": "not_evaluated 仅表示系统未建立核验判定，不是系统已判断反证不存在或不成立。Agent 自行判断须另列依据与未核验部分，不可把此状态当成否定结论的证据。",
         "retrieval_scope": "有限检索、候选样本及旧轮次正文只支持所读材料的结论，不能据此断言整个快照没有某类数据。无完整清点时应说本轮已读材料未提供；引用旧正文须标明沿用旧回执，不能计为本轮重新核验。单方行动通报只证明该方报告了行动，不能直接写成实际行动持续或强度已核实；不同战区不能自动充当美伊反证。",
         "basis": "scenarios.counter 是假设失效条件，不是已经发生的反证。evidence_ids 是候选线索，未建立逐条条件满足关系。只证明有人表态、预测或拒绝透露细节，不能坐实停火执行、行动下降、交付中断或未见后续行动；缺乏可见证据不等于事件不存在。正文反向线索须标明推断，未独立核验不得称坐实或证实失效条件。",
@@ -177,6 +179,12 @@ def _collector_projection(run: dict[str, Any]) -> dict[str, Any]:
     }
     result = {key: run.get(key) for key in allowed if key in run}
     result["live"] = True
+    result["activity_assessment"] = {
+        "process_running": "unknown",
+        "events_after_latest_visible": "unknown",
+        "no_updates_since_last_event": "not_established",
+        "basis": "这是最近可见批次的账本，不是全量事件审计或心跳。可以说最后可见记录距取数约若干天，不能说此后若干天没有更新/新动作。",
+    }
     result["interpretation_basis"] = "live 表示本次读取持久化运行账本，不是进程/调度器心跳。只能报告最近可见批次状态；有限 events 不能证明此后无新事件。批次或采集器 success 不代表所有来源成功，某来源本批失败不证明整个快照无该来源材料。records 字段未提供完整抓取计数口径，不得将默认零当成实际抓取零条；应与日志及产物区分。"
     collectors = []
     for item in (run.get("collectors") or [])[:MAX_COLLECTOR_EVENTS]:
@@ -600,14 +608,14 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             matched = _search_records(records, q)
             page = matched[offset : offset + page_limit]
             return (
-                {"records": [_record_summary(item) for item in page], "offset": offset, "limit": page_limit, "has_more": offset + page_limit < len(matched), "total": len(matched)},
+                {"analysis_evidence_boundary": _analysis_evidence_boundary(), "records": [_record_summary(item) for item in page], "offset": offset, "limit": page_limit, "has_more": offset + page_limit < len(matched), "total": len(matched)},
                 snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())),
                 [],
             )
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_evidence_get", description="读取指定快照内单条证据的安全字段投影。", structured_output=False)
+    @server.tool(name="geo_evidence_get", description="读取指定快照内单条证据的正文、来源、发布/采集时间与核验状态。报道及单方通报不是独立核实事实；单条或有限样本不能证明整个快照缺少某类证据，见 analysis_evidence_boundary。", structured_output=False)
     async def geo_evidence_get(snapshot_id: str, record_id: str, ctx: Context) -> str:
         tool = "geo_evidence_get"
 
@@ -621,7 +629,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             item = next((record_item for record_item in snapshot.get("records", []) if record_item.get("id") == record_id), None)
             if item is None:
                 raise MCPError("GEO_EVIDENCE_NOT_FOUND", "快照内不存在该证据", {"record_id": record_id, "snapshot_id": snapshot_id})
-            return {"record": _redacted_record(item)}, snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())), []
+            return {"analysis_evidence_boundary": _analysis_evidence_boundary(), "record": _redacted_record(item)}, snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())), []
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
@@ -658,6 +666,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             data = {
                 "analysis_evidence_boundary": _analysis_evidence_boundary(),
                 "query_scope": {"topic": topic, "dimension": dimension, "start": start, "end": end},
+                "limit_basis": "limit 只截取返回的资产/情景/指标列表项，不参与 topic_paths 匹配计算；列表缺项不是该资产无证据。前后路径状态不同必须核对相同筛选及实际回执，不能仅据 limit 不同断言原因。",
                 "asset_overview": [
                     {key: item.get(key) for key in ("id", "name", "direction", "assessment_kind", "condition", "counter", "missing_data", "topic_paths")}
                     for item in (result.get("assets") or [])[:page_limit]

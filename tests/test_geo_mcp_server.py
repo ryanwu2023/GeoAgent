@@ -6,6 +6,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, timezone
@@ -32,6 +33,8 @@ def test_counterevidence_boundary_does_not_turn_unassessed_into_absent():
     boundary = _analysis_evidence_boundary()
     assert boundary["verified_counterevidence_status"] == "not_evaluated"
     assert "不是系统已判断反证不存在" in boundary["assessment_scope"]
+    assert boundary["verified_counterevidence_available"] == "unknown"
+    assert "是否存在未知" in boundary["assessment_summary"]
     assert "不能据此断言整个快照" in boundary["retrieval_scope"]
     assert "沿用旧回执" in boundary["retrieval_scope"]
     assert "单方行动通报" in boundary["retrieval_scope"]
@@ -43,6 +46,9 @@ def test_collector_projection_distinguishes_ledger_from_heartbeat():
     assert "不是进程/调度器心跳" in result["interpretation_basis"]
     assert "有限 events 不能证明此后无新事件" in result["interpretation_basis"]
     assert "不证明整个快照" in result["interpretation_basis"]
+    assert result["activity_assessment"]["process_running"] == "unknown"
+    assert result["activity_assessment"]["events_after_latest_visible"] == "unknown"
+    assert result["activity_assessment"]["no_updates_since_last_event"] == "not_established"
 
 
 def test_evidence_projection_keeps_panel_timestamps_without_raw_paths():
@@ -307,12 +313,16 @@ async def running_server(
             "GEOAGENT_MCP_ALLOWED_TOOLS": tools,
         }
     )
+    # A long MCP session can fill an undrained PIPE and block the server's
+    # logging thread, appearing as a client ReadTimeout. Keep diagnostics in
+    # a temporary file instead of leaving stdout/stderr pipes undrained.
+    server_log = tempfile.TemporaryFile()
     process = subprocess.Popen(
         [sys.executable, "scripts/start_mcp.py", "--host", "127.0.0.1", "--port", str(port)],
         cwd=os.path.dirname(os.path.dirname(__file__)),
         env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=server_log,
+        stderr=subprocess.STDOUT,
     )
     url = f"http://127.0.0.1:{port}"
     try:
@@ -325,8 +335,8 @@ async def running_server(
             except OSError:
                 time.sleep(0.1)
         else:
-            stdout, stderr = process.communicate(timeout=1)
-            raise RuntimeError(f"MCP server did not start: {stdout!r} {stderr!r}")
+            server_log.seek(0)
+            raise RuntimeError(f"MCP server did not start: {server_log.read()!r}")
         yield url
     finally:
         process.terminate()
@@ -335,6 +345,7 @@ async def running_server(
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=5)
+        server_log.close()
 
 
 @pytest.mark.anyio
@@ -427,6 +438,7 @@ async def test_official_mcp_client_can_initialize_list_and_call() -> None:
                     evidence_payload = json.loads(evidence_result.content[0].text)
                     assert evidence_payload["ok"] is True
                     assert evidence_payload["data"]["limit"] == 1
+                    assert "不能据此断言整个快照" in evidence_payload["data"]["analysis_evidence_boundary"]["retrieval_scope"]
                     if evidence_payload["data"]["records"]:
                         record_id = evidence_payload["data"]["records"][0]["id"]
                         detail_result = await session.call_tool(
@@ -436,6 +448,7 @@ async def test_official_mcp_client_can_initialize_list_and_call() -> None:
                         detail_payload = json.loads(detail_result.content[0].text)
                         assert detail_payload["ok"] is True
                         assert detail_payload["data"]["record"]["id"] == record_id
+                        assert detail_payload["data"]["analysis_evidence_boundary"] == evidence_payload["data"]["analysis_evidence_boundary"]
 
                     invalid_result = await session.call_tool(
                         "geo_metric_series",
@@ -472,6 +485,7 @@ async def test_official_mcp_client_can_initialize_list_and_call() -> None:
                     assert analysis_payload["data"]["query_scope"] == {"topic": "all", "dimension": "", "start": "", "end": ""}
                     assert len(analysis_payload["data"]["asset_overview"]) == len(analysis_payload["data"]["assets"])
                     assert all("topic_paths" in item for item in analysis_payload["data"]["asset_overview"])
+                    assert "不参与 topic_paths 匹配计算" in analysis_payload["data"]["limit_basis"]
 
                     brief_result = await session.call_tool("geo_brief_list", {"snapshot_id": snapshot_id, "limit": 2})
                     brief_payload = json.loads(brief_result.content[0].text)
