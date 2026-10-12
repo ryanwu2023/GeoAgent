@@ -21,7 +21,7 @@ from starlette.responses import JSONResponse
 
 from backend import research, store
 from backend.catalog import TOPICS, RULE_VERSION, topic_dimensions
-from backend.events import SIGNALS
+from backend.events import SIGNALS, event_metadata
 from backend.collector_monitor import load_ledger_events, load_runs
 from backend.paths import project_root
 from scripts.integrate_collectors import load_registry
@@ -70,7 +70,9 @@ def _workspace_counts(snapshot: dict[str, Any], topic: str, dimension: str, star
     reviews = {row["record_id"]: row["signal"] for row in rows}
     counts = {signal: 0 for signal in SIGNALS}
     for item in records:
-        signal = reviews.get(item["id"], item.get("situation_signal", "unknown"))
+        signal = reviews.get(item["id"])
+        if signal is None:
+            signal = event_metadata(item)["situation_signal"]
         counts[signal if signal in counts else "unknown"] += 1
     coverage = research.coverage(snapshot, start=start, end=end)
     dimensions = [item for row in coverage for item in row["dimensions"]]

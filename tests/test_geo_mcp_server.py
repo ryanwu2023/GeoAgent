@@ -41,7 +41,8 @@ def test_workspace_counts_match_panel_scope_and_latest_reviews(monkeypatch):
     monkeypatch.setattr(store, "db", db)
     def record(rid, topic, signal, date, supplemental=False):
         return {"id": rid, "topics": [topic], "dimensions": {topic: "d"},
-                "published_at": date, "situation_signal": signal, "supplemental": supplemental}
+                "published_at": date, "situation_signal": signal, "signal_basis": "fixture",
+                "title": "fixture", "text": "fixture", "points": [], "supplemental": supplemental}
     snapshot = {"id": "snap", "records": [
         record("a", "usiran", "escalation", "2026-10-09"),
         record("b", "usiran", "escalation", "2026-10-09"),
@@ -61,6 +62,18 @@ def test_workspace_counts_match_panel_scope_and_latest_reviews(monkeypatch):
         empty = _workspace_counts(snapshot, "usiran", "", "2026-10-10", "")
         assert empty["records_count"] == 0
         assert not any(empty["signal_counts"].values())
+        # Historical snapshots may contain no precomputed signal at all. The
+        # panel computes event_metadata on read; MCP must use that same path.
+        historical = {"id": "historical", "records": [
+            {**record("strike", "usiran", "unknown", "2026-10-09"), "title": "Iranian strike on tanker"},
+            {**record("peace", "usiran", "unknown", "2026-10-09"), "title": "Peace talks resume"},
+            {**record("supply", "usiran", "unknown", "2026-10-09"), "title": "Resupply continues"},
+        ]}
+        for item in historical["records"]:
+            del item["situation_signal"]
+            del item["signal_basis"]
+        computed = _workspace_counts(historical, "usiran", "", "", "")
+        assert computed["signal_counts"] == {"escalation": 1, "sustain": 1, "easing": 1, "unknown": 0}
     finally:
         connection.close()
 
