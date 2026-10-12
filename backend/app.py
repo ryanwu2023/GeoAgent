@@ -5,6 +5,7 @@ from .link_health import link_health, summary as link_summary
 import json
 import os
 import httpx
+from urllib.parse import urlsplit
 from pathlib import Path
 from typing import Literal
 from datetime import date
@@ -36,13 +37,35 @@ def load_env():
                     os.environ.setdefault(key.strip(), value.strip().strip('"'))
 
 load_env()
+from .integrations import router as integrations_router, settings as integration_settings
+from .geo_mcp.server import create_app as create_mcp_app
+from .geo_mcp.auth import AuthConfig, BearerAuthMiddleware
+from starlette.routing import Route
+
+mcp_config = AuthConfig.from_env()
+
+class ProjectMCP:
+    async def __call__(self, scope, receive, send):
+        await app.state.geo_mcp(scope, receive, send)
+
 @asynccontextmanager
 async def lifespan(app):
     start_translation()
-    yield
+    mcp_app = create_mcp_app(auth_config=mcp_config, managed_keys=True, project_transport=True)
+    app.state.geo_mcp = mcp_app
+    async with mcp_app.router.lifespan_context(mcp_app):
+        yield
 
 app = FastAPI(title="地缘政治研究接口", version="0.6.1",lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(BearerAuthMiddleware, config=mcp_config, managed_keys=True)
+app.include_router(integrations_router)
+# Delegate at the native path, with a fresh SDK session manager per lifecycle.
+app.router.routes.append(Route("/mcp", endpoint=ProjectMCP()))
+
+@app.get("/healthz")
+def mcp_health():
+    return {"status": "ok", "service": "geoagent-mcp", "protocol_version": "geo-mcp/v1"}
 Topic = Literal["all", "usiran", "ukraine"]
 
 
@@ -53,18 +76,20 @@ async def pichat_embed_identity(agent_id: str = "geo-research-assistant"):
     The pk- application key and product phone stay server-side. The browser only
     receives the short-lived panel JWT needed by the iframe handshake.
     """
-    base_url = os.environ.get("PICHAT_EMBED_BASE_URL", "http://127.0.0.1:9172").rstrip("/")
-    app_key = os.environ.get("PICHAT_EMBED_APP_KEY", "").strip()
-    phone = os.environ.get("PICHAT_EMBED_PHONE", "").strip()
+    cfg = integration_settings()
+    base_url = cfg["origin"].rstrip("/")
+    app_key = cfg["app_key"]
+    phone = cfg["phone"]
+    agent_id = cfg["agent_id"]
     if not app_key or not phone:
         raise HTTPException(
             status_code=503,
             detail="未配置 PICHAT_EMBED_APP_KEY / PICHAT_EMBED_PHONE；密钥只能由 GeoAgent 后端读取。",
         )
-    entry = os.environ.get("PICHAT_EMBED_ENTRY", "").strip()
+    entry = cfg["entry"]
     payload = {
         "phone": phone,
-        "productUserId": os.environ.get("PICHAT_EMBED_PRODUCT_USER_ID", "geoagent-local"),
+        "productUserId": cfg["product_user_id"],
         "displayName": "GeoAgent 本地研究用户",
         "clientId": "geoagent-ui",
         "expiresInSec": 3600,
@@ -81,7 +106,10 @@ async def pichat_embed_identity(agent_id: str = "geo-research-assistant"):
         raise HTTPException(status_code=502, detail=f"PiChat 身份服务不可用: {exc}") from exc
     if response.status_code >= 400:
         raise HTTPException(status_code=502, detail=f"PiChat 身份签发失败: HTTP {response.status_code}")
-    body = response.json()
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="PiChat 身份服务未返回 JSON，请检查服务根地址") from exc
     if not body.get("ok") or not body.get("data", {}).get("token"):
         raise HTTPException(status_code=502, detail="PiChat 未返回有效的嵌入身份")
     return {"agentId": body["data"].get("agentId", agent_id), **body["data"]}
@@ -134,12 +162,17 @@ REVIEW_ITEMS = (
 
 @app.middleware("http")
 async def protect_local_mutations(request: Request, call_next):
-    # Browser POSTs must originate from this local app; API keys never leave the backend.
+    # Explicit origins only; do not trust caller-controlled Host headers.
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         origin = request.headers.get("origin")
-        if origin and origin not in {"http://127.0.0.1:8000", "http://localhost:8000", "http://127.0.0.1:8010", "http://localhost:8010", "http://127.0.0.1:8011", "http://localhost:8011", "http://127.0.0.1:5173", "http://localhost:5173"}:
+        local_origins = {f"http://{host}:{port}" for host in ("127.0.0.1", "localhost") for port in (8000, 8010, 8011, 5173)}
+        local_origins.update(value.strip() for value in os.getenv("GEOAGENT_ALLOWED_ORIGINS", "").split(",") if value.strip())
+        if origin and origin not in local_origins:
             return PlainTextResponse("不允许来自其他站点的写入请求", status_code=403)
-    return await call_next(request)
+    response = await call_next(request)
+    if request.url.path == "/api/pichat/embed-identity":
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 def snapshot_or_404(sid):
     try:

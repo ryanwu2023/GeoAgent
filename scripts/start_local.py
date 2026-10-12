@@ -138,8 +138,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_frontend:
         print("Web:", " ".join(frontend_cmd), flush=True)
     print("API status:", f"{api_url}/api/status", flush=True)
+    print("MCP (same backend):", f"{api_url}/mcp", flush=True)
     if not args.no_frontend:
         print("Web URL:", web_url, flush=True)
+        print("MCP public URL:", f"{web_url}mcp", flush=True)
     if args.dry_run:
         return 0
 

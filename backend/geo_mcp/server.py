@@ -1,6 +1,6 @@
-"""Standalone GeoAgent MCP server.
+"""GeoAgent MCP server, usable standalone or through the project backend.
 
-The MCP service is deliberately separate from ``backend.app``.  It exposes
+The MCP business projections remain separate from the REST API. It exposes
 small, read-only projections over immutable snapshots and never exposes the
 SQLite database, collector directory, or the existing REST routes.
 """
@@ -15,6 +15,7 @@ from time import monotonic
 from typing import Any, Callable
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -249,7 +250,7 @@ def _run_tool(
         return json.dumps(error, ensure_ascii=False, separators=(",", ":"))
 
 
-def create_server(*, auth_config: AuthConfig | None = None) -> FastMCP:
+def create_server(*, auth_config: AuthConfig | None = None, project_transport: bool = False) -> FastMCP:
     auth_config = auth_config or AuthConfig.from_env()
     server = FastMCP(
         "GeoAgent MCP",
@@ -259,6 +260,10 @@ def create_server(*, auth_config: AuthConfig | None = None) -> FastMCP:
         streamable_http_path="/mcp",
         stateless_http=True,
         json_response=True,
+        # The project is served behind deployment-owned hostnames. Authentication
+        # is mandatory Bearer (not ambient cookies), so do not use the SDK's
+        # loopback-only Host allowlist for the shared project endpoint.
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False) if project_transport else None,
     )
     server._geo_auth_config = auth_config  # type: ignore[attr-defined]
 
@@ -736,12 +741,12 @@ def create_server(*, auth_config: AuthConfig | None = None) -> FastMCP:
     return server
 
 
-def create_app(*, auth_config: AuthConfig | None = None):
+def create_app(*, auth_config: AuthConfig | None = None, managed_keys: bool = False, project_transport: bool = False):
     config = auth_config or AuthConfig.from_env()
-    server = create_server(auth_config=config)
+    server = create_server(auth_config=config, project_transport=project_transport)
     app = server.streamable_http_app()
-    app.add_middleware(BearerAuthMiddleware, config=config, mcp_path="/mcp")
+    app.add_middleware(BearerAuthMiddleware, config=config, mcp_path="/mcp", managed_keys=managed_keys)
     return app
 
 
-app = create_app()
+app = create_app(managed_keys=True)

@@ -247,3 +247,33 @@ LCF/Plane 仅作为参考材料，不是本项目 MCP 的运行时依赖。当�
 - 尝试执行 `risk-overview`（风险监测）时，独立 Playwright 调试上下文的 `/auth/ws-ticket` 连续返回 HTTP 401；同一时刻用户当前 8010 嵌入面板仍可正常显示并完成已有轮次。
 - 该结果判定为 **自动化上下文失效**，不是 PiChat 产品会话、GeoAgent MCP 或业务数据失败；风险监测问题未成功提交，因此不计入用例通过。
 - 后续从当前可用嵌入会话重新提交 `risk-overview`，再执行证据台账、采集管线、资产关联和研究简报的剩余验收。
+
+### 2026-10-12 页面连接配置、MCP Key 管理与统一启动
+
+范围：用户授权将 PiChat 连接和 MCP Key 管理放到项目页面，配置持久化、保存即生效，MCP 随项目启动；本轮完成本地验收，未发布外网。
+
+实现：
+
+- 顶部新增「连接配置」深色面板，支持 PiChat 服务地址、Agent ID、用户手机号、产品入口 entry、产品用户 ID、应用 Key。`/chat` 地址自动归一到根地址；应用 Key 留空保留原值，读取接口不回传原文；保存后嵌入面板重新连接。公开配置只包含 iframe 所需的根地址、Agent ID、产品用户 ID，不包含手机号/应用 Key。
+- 配置存于 `GEO_DATA_DIR/research.sqlite3`；页面保存优先于进程环境变量。实际通过页面保存本地已有配置，随后不注入 PiChat 临时环境变量重启，身份签发仍然成功。
+- 页面支持 MCP Key 创建、仅一次显示原文、列表和确认撤销。Key 使用随机 256-bit token，数据库只存 SHA-256 哈希；授权本项目全部只读工具、快照、主题和维度，适用于可信 Agent，不宣称细粒度租户隔离。撤销按请求即时检查。
+- 主后端统一提供 `/mcp` Streamable HTTP 和 `/healthz`，主 lifespan 启停 MCP SDK session manager；本地启动脚本无需单独拉起 8401。独立 MCP 调试入口保留兼容，主项目路径位于前端静态回退之前。
+- 公网管理必须提供环境变量 `GEOAGENT_SETTINGS_TOKEN`，页面输入口令后才能管理；未配置时只允许无转发头的 loopback 管理请求。该机制不是完整用户登录，项目访问及身份签发仍需部署入口保护。PiChat 应用 Key 在服务端数据库存储（未加密），须保护持久卷、文件权限及备份。
+
+自动化与 live 证据：
+
+| 检查 | 结果 | 证据 |
+| --- | --- | --- |
+| 后端完整回归 | 通过 | `pytest -q`：165 项通过；新增连接保存/保留密钥/脱敏、地址校验、公网管理鉴权、同源防护、真实 MCP initialize/list/call/revoke、动态身份签发路由测试 |
+| 前端构建 | 通过 | `npm run build`，TypeScript 与 Vite 构建完成；`git diff --check` 通过 |
+| 页面配置保存 | 通过 | Playwright 在 8010 输入 `http://127.0.0.1:9172/chat` 并点击保存；后端归一为根地址，保留已有应用 Key；重启后仍可连接 |
+| MCP 页面创建与业务取数 | 通过 | 页面创建临时 `live-verification-20261012` Key；通过同域 `/mcp` initialize=200、tools/list=11 工具、geo_snapshot_list=200/ok=true/10 快照 |
+| MCP 页面撤销 | 通过 | 点击撤销并确认，同一原始 Key 再请求 tools/list 返回 401；测试 Key 已撤销，包含一次性 Key 的临时快照已清理 |
+| PiChat 真实连接 | 通过 | 页面「验证 PiChat 连接」身份签发 200；`/auth/ws-ticket` 200；实际 `/embed-ws` WebSocket 建连成功；嵌入页面显示历史会话与输入框，无连接遮罩 |
+| 公网 Host 的协议与管理 | 测试通过，未外网部署 | TestClient 使用非 loopback 客户端及公网 Host：无管理口令拒绝、有口令同源创建成功、带 MCP Key 调用成功；不能替代 Sealos 部署验收 |
+
+live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使保存请求的 Host 被改写，触发同源防护误报 403；改为显式 `changeOrigin=false`。同时原后端写操作仅允许固定本地 Origin，已兼容项目外网同源地址，管理接口继续独立检查口令与同源关系。
+
+视觉证据（不包含密钥原文）：`output/playwright/integration-settings-20261012.png`、`output/playwright/pichat-connected-20261012.png`。
+
+外网交付前置（未执行）：发布本轮代码；设置管理口令和持久化 `GEO_DATA_DIR`；页面填写 `https://chat.lhotsetech.com` 及该环境 PiChat 应用 Key/用户/entry；创建 MCP Key 并绑定到目标 Agent。预期 MCP 地址 `https://geoagentd40d.sealosgzg.site/mcp`，需确保网关允许 Bearer 协议访问且 PiChat 允许该嵌入来源。本地连接配置保留 9172，未误改为外网环境。本轮没有提交新的业务问答，不将历史会话内容计为本轮 Agent 分析结果验收。

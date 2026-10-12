@@ -175,9 +175,10 @@ class AuthConfig:
 class BearerAuthMiddleware(BaseHTTPMiddleware):
     """Protect only the MCP endpoint; health checks remain public."""
 
-    def __init__(self, app: Callable[..., Awaitable[Response]], *, config: AuthConfig, mcp_path: str = "/mcp") -> None:
+    def __init__(self, app: Callable[..., Awaitable[Response]], *, config: AuthConfig, mcp_path: str = "/mcp", managed_keys: bool = False) -> None:
         super().__init__(app)
         self.config = config
+        self.managed_keys = managed_keys
         self.mcp_path = mcp_path.rstrip("/") or "/mcp"
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
@@ -186,7 +187,13 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         authorization = request.headers.get("authorization", "")
         scheme, _, token = authorization.partition(" ")
         try:
-            principal = self.config.authenticate(token if scheme.lower() == "bearer" else None)
+            credential = token if scheme.lower() == "bearer" else None
+            principal = None
+            if self.managed_keys:
+                from backend.integrations import managed_principal
+                principal = managed_principal(credential)
+            if principal is None:
+                principal = self.config.authenticate(credential)
         except MCPError as exc:
             return JSONResponse(
                 {"ok": False, "error": {"code": exc.code, "message": exc.message}},

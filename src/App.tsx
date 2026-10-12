@@ -1,4 +1,5 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useRef, useState } from "react";
+import IntegrationSettings from "./IntegrationSettings";
 import {
   Activity,
   ArrowUpRight,
@@ -118,10 +119,24 @@ export default function App() {
     selectionVersion = useRef(0),
     evidenceVersion = useRef(0);
   const lastTopic = useRef("usiran");
-  const pichatOrigin =
-    import.meta.env.VITE_PICHAT_EMBED_ORIGIN || "http://127.0.0.1:9172";
-  const pichatAgentId =
-    import.meta.env.VITE_PICHAT_AGENT_ID || "geo-research-assistant";
+  const [settingsOpen,setSettingsOpen] = useState(false);
+  const [connection,setConnection] = useState({origin:"http://127.0.0.1:9172",agent_id:"geo-research-assistant",product_user_id:"geoagent-local"});
+  const [connectionLoaded,setConnectionLoaded] = useState(false);
+  const [connectionVersion,setConnectionVersion] = useState(0);
+  const pichatOrigin = connection.origin;
+  const pichatAgentId = connection.agent_id;
+  const reloadConnection = async () => {
+    try {
+      const response = await fetch("/api/integrations/public",{cache:"no-store"});
+      if(!response.ok)throw new Error("连接配置读取失败");
+      setConnection(await response.json());
+      setConnectionLoaded(true);
+      setConnectionVersion(value=>value+1);
+      setPichatReady(false);
+      pichatTokenRef.current=null;
+    } catch(error){setPichatError(error instanceof Error?error.message:"连接配置读取失败")}
+  };
+  useEffect(()=>{void reloadConnection()},[]);
   if (page !== "briefs") lastTopic.current = page;
   const topic = lastTopic.current;
   const workspaceCache = useRef(
@@ -145,8 +160,8 @@ export default function App() {
         type: "finance:auth:token",
         token: body.token,
         user: {
-          id: import.meta.env.VITE_PICHAT_PRODUCT_USER_ID || "geoagent-local",
-          username: import.meta.env.VITE_PICHAT_PRODUCT_USER_ID || "geoagent-local",
+          id: connection.product_user_id,
+          username: connection.product_user_id,
           role: "user",
           status: "active",
           userType: "embed",
@@ -158,7 +173,7 @@ export default function App() {
       // The work-embed route may be served by PiChat's product-web proxy even
       // when the iframe URL starts at the API origin; use the iframe reference
       // as the capability boundary and avoid rejecting that internal redirect.
-      const deliver = () => pichatFrameRef.current?.contentWindow?.postMessage(message, "*");
+      const deliver = () => pichatFrameRef.current?.contentWindow?.postMessage(message, pichatOrigin);
       const deliverFinance = () => pichatFrameRef.current?.contentWindow?.postMessage(financeMessage, pichatOrigin);
       // The embedded app registers its message listener asynchronously; retry briefly
       // so a fast iframe load cannot lose the one-time identity handshake.
@@ -211,8 +226,8 @@ export default function App() {
               type: "finance:auth:token",
               token: pichatTokenRef.current,
               user: {
-                id: import.meta.env.VITE_PICHAT_PRODUCT_USER_ID || "geoagent-local",
-                username: import.meta.env.VITE_PICHAT_PRODUCT_USER_ID || "geoagent-local",
+                id: connection.product_user_id,
+                username: connection.product_user_id,
                 role: "user",
                 status: "active",
                 userType: "embed",
@@ -236,7 +251,7 @@ export default function App() {
     };
     window.addEventListener("message", onPichatMessage);
     return () => window.removeEventListener("message", onPichatMessage);
-  }, [pichatOrigin, pichatAgentId]);
+  }, [pichatOrigin, pichatAgentId, connection.product_user_id]);
   async function refreshStatus() {
     const s = await api<Status>("/status");
     setStatus(s);
@@ -549,6 +564,7 @@ export default function App() {
   };
   return (
     <div className="prototype-shell">
+      {settingsOpen ? <IntegrationSettings onClose={()=>setSettingsOpen(false)} onSaved={()=>void reloadConnection()}/> : null}
       <header className="prototype-header">
         <div className="prototype-brand">
           <b>地缘</b>
@@ -568,6 +584,7 @@ export default function App() {
           ))}
         </nav>
         <div className="header-actions">
+          <button onClick={()=>setSettingsOpen(true)}>连接配置</button>
           <label className="snapshot-selector">
             <span>数据快照</span>
             <select
@@ -1479,20 +1496,21 @@ export default function App() {
                 {pichatError && (
                   <div className="pichat-embed-status error">{pichatError}</div>
                 )}
-                <iframe
+                {connectionLoaded ? <iframe
+                  key={connectionVersion}
                   ref={pichatFrameRef}
                   title="GeoAgent PiChat 研究助手"
                   className="pichat-embed-frame"
                   src={pichatUrl}
                   onError={() =>
-                    setPichatError("PiChat 面板加载失败，请确认 9172 服务已启动。")
+                    setPichatError("PiChat 面板加载失败，请在连接配置中检查服务地址。")
                   }
                   onLoad={() => {
                     setPichatError("");
                     void requestPichatIdentity();
                   }}
                   allow="clipboard-read; clipboard-write"
-                />
+                /> : null}
               </div>
             </aside>
           )}
