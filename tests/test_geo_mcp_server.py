@@ -21,7 +21,7 @@ from backend.geo_mcp.auth import AuthConfig
 from backend.geo_mcp.contracts import MCPError, Principal
 from backend.geo_mcp.scope import authorize
 from backend.geo_mcp.provenance import snapshot_provenance
-from backend.geo_mcp.server import create_app, _workspace_counts, _analysis_evidence_boundary
+from backend.geo_mcp.server import create_app, _workspace_counts, _analysis_evidence_boundary, _collector_projection, _redacted_record
 from backend import store
 
 
@@ -35,6 +35,23 @@ def test_counterevidence_boundary_does_not_turn_unassessed_into_absent():
     assert "不能据此断言整个快照" in boundary["retrieval_scope"]
     assert "沿用旧回执" in boundary["retrieval_scope"]
     assert "单方行动通报" in boundary["retrieval_scope"]
+
+
+def test_collector_projection_distinguishes_ledger_from_heartbeat():
+    result = _collector_projection({"run_id": "r", "collectors": []})
+    assert result["live"] is True
+    assert "不是进程/调度器心跳" in result["interpretation_basis"]
+    assert "有限 events 不能证明此后无新事件" in result["interpretation_basis"]
+    assert "不证明整个快照" in result["interpretation_basis"]
+
+
+def test_evidence_projection_keeps_panel_timestamps_without_raw_paths():
+    item = _redacted_record({"id": "r", "published_at": "2026-10-09T11:20:20+08:00", "fetched_at": "2026-10-09T06:59:00Z", "first_seen": None, "event_at": None, "tier": "T2", "raw_refs": ["/private/archive.json"]})
+    assert item["fetched_at"] == "2026-10-09T06:59:00Z"
+    assert item["published_at"] == "2026-10-09T11:20:20+08:00"
+    assert item["event_at"] is None
+    assert item["tier"] == "T2"
+    assert "raw_refs" not in item
 
 
 def test_relative_week_uses_selected_snapshot_import_date():
@@ -452,6 +469,9 @@ async def test_official_mcp_client_can_initialize_list_and_call() -> None:
                     assert analysis_payload["ok"] is True
                     assert analysis_payload["provenance"]["snapshot_id"] == snapshot_id
                     assert len(analysis_payload["data"]["assets"]) <= 2
+                    assert analysis_payload["data"]["query_scope"] == {"topic": "all", "dimension": "", "start": "", "end": ""}
+                    assert len(analysis_payload["data"]["asset_overview"]) == len(analysis_payload["data"]["assets"])
+                    assert all("topic_paths" in item for item in analysis_payload["data"]["asset_overview"])
 
                     brief_result = await session.call_tool("geo_brief_list", {"snapshot_id": snapshot_id, "limit": 2})
                     brief_payload = json.loads(brief_result.content[0].text)

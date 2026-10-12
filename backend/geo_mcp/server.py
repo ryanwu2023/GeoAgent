@@ -128,6 +128,10 @@ def _record_summary(record_item: dict[str, Any]) -> dict[str, Any]:
         "topics": record_item.get("topics", []),
         "dimensions": record_item.get("dimensions", {}),
         "published_at": record_item.get("published_at"),
+        "fetched_at": record_item.get("fetched_at"),
+        "first_seen": record_item.get("first_seen"),
+        "event_at": record_item.get("event_at"),
+        "tier": record_item.get("tier"),
         "origin_id": record_item.get("origin_id"),
         "source": record_item.get("source") or record_item.get("source_name"),
     }
@@ -173,6 +177,7 @@ def _collector_projection(run: dict[str, Any]) -> dict[str, Any]:
     }
     result = {key: run.get(key) for key in allowed if key in run}
     result["live"] = True
+    result["interpretation_basis"] = "live 表示本次读取持久化运行账本，不是进程/调度器心跳。只能报告最近可见批次状态；有限 events 不能证明此后无新事件。批次或采集器 success 不代表所有来源成功，某来源本批失败不证明整个快照无该来源材料。records 字段未提供完整抓取计数口径，不得将默认零当成实际抓取零条；应与日志及产物区分。"
     collectors = []
     for item in (run.get("collectors") or [])[:MAX_COLLECTOR_EVENTS]:
         if not isinstance(item, dict):
@@ -620,7 +625,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_analysis_view", description="读取快照内五类资产和三类情景的结构化条件研判。", structured_output=False)
+    @server.tool(name="geo_analysis_view", description="读取快照内五类资产和三类情景的结构化条件研判。对照业务面板时须保持同一 topic、dimension、start、end；用户未指定日期或维度时不要自行收窄。不同筛选的 topic_paths/status 不可拼接成同一面板结论。asset_overview 是精简五类资产信息，完整 assets 含更多材料。", structured_output=False)
     async def geo_analysis_view(
         snapshot_id: str,
         topic: str = "all",
@@ -652,6 +657,11 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             result = research.analysis(snapshot, topic=topic, dimension=dimension, start=start, end=end)
             data = {
                 "analysis_evidence_boundary": _analysis_evidence_boundary(),
+                "query_scope": {"topic": topic, "dimension": dimension, "start": start, "end": end},
+                "asset_overview": [
+                    {key: item.get(key) for key in ("id", "name", "direction", "assessment_kind", "condition", "counter", "missing_data", "topic_paths")}
+                    for item in (result.get("assets") or [])[:page_limit]
+                ],
                 "assets": (result.get("assets") or [])[:page_limit],
                 "scenarios": (result.get("scenarios") or [])[:page_limit],
                 "rule_version": result.get("rule_version", RULE_VERSION),
