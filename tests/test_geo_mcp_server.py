@@ -350,10 +350,14 @@ async def test_official_mcp_client_can_initialize_list_and_call() -> None:
                     overview = await session.call_tool("geo_workspace_summary", {"snapshot_id": snapshot_id, "topic": "usiran", "limit": 1})
                     overview_payload = json.loads(overview.content[0].text)
                     assert overview_payload["ok"] is True
+                    assert datetime.fromisoformat(overview_payload["read_at"]).tzinfo is not None
                     counts = overview_payload["data"]
                     assert sum(counts["signal_counts"].values()) == counts["records_count"]
                     assert counts["framework_candidate_coverage"]["total"] == 13
                     assert "supplemental" in counts["coverage_basis"]
+                    assert len(counts["asset_data_gaps"]) == 5
+                    assert all(item["missing_data"] for item in counts["asset_data_gaps"])
+                    assert "有效零值不是缺失" in counts["metric_quality_basis"]
                     if len(payload["data"]["snapshots"]) > 1:
                         historical_id = payload["data"]["snapshots"][1]["id"]
                         historical_result = await session.call_tool(

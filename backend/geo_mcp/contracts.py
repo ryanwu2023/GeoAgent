@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -56,6 +57,8 @@ def success_envelope(
             "ok": True,
             "request_id": request_id,
             "tool": tool,
+            "read_at": datetime.now(timezone.utc).isoformat(),
+            "read_time_basis": "取数时间只引用本响应 read_at；缓存回执保留原时间，不能以回答时间冒充重新取数时间。",
             "data": data,
             "provenance": provenance or {},
             "warnings": warnings or [],

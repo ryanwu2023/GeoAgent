@@ -392,6 +392,11 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             analysis = research.analysis(snapshot, topic=topic, dimension=dimension, start=start, end=end)
             summary = {
                 **_workspace_counts(snapshot, topic, dimension, start, end),
+                "asset_data_gaps": [
+                    {"id": item["id"], "name": item["name"], "missing_data": item.get("missing_data", "")}
+                    for item in analysis.get("assets", [])
+                ],
+                "metric_quality_basis": "有效零值不是缺失；隔离值不是不存在原始数据。shared_market/美国整体背景按业务主题映射入选，topic=null 不能推断未绑定或不相关。排除 supplemental 是统计范围，不是缺数据；少量来源抽查不能代表全体来源单一。",
                 "metrics": [
                     {
                         "id": item.get("id"),
