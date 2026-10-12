@@ -361,3 +361,4 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 轮次 9（UI 完成时间 00:22，8 秒）：先独立打开研究简报面板，显示“点击生成双主题简报创建首份档案”，随后嵌入查询 `geo_brief_list` 两次（指定快照 / 全部可见），都为 total=0。**简报空结果核心业务通过**：无档案、无正文、即时回答不是档案，未伪造简报正文。面板截图 `/tmp/geoagent-brief-baseline-20261013.jpg`。
 - 另记录跨用例质量问题：Agent 自写“取数时点”偶有与 UI 轮次时间不一致（如 00:22 完成却写约 00:26）。新增服务端 `read_at` 与缓存时间口径，不能用模型估计时间替代回执；尚待复测。上述新增修复后全量 **194 passed**，官方 MCP 客户端断言五类缺口完整与时区时间字段。
 - Mac 锁屏后原生 Chrome 返回无法自动解锁；已请用户手动解锁，未尝试绕过。外网嵌入的剩余 pipeline-live、asset-impact、独立 evidence-verification，以及修复后的指标/反证/缺口/归因复测仍待继续，不把锁屏后未执行的用例记为通过。IAB 的 GitLab 只读检查仍可用，确认 v1.0.9 发布完成。
+- `0033c00a` → `geoagent-prod-v1.0.10`，[pipeline 5284](https://gitlab.lz.internal/yujunjun/GeoAgent/-/pipelines/5284)；verify 27724、[deploy 27725](https://gitlab.lz.internal/yujunjun/GeoAgent/-/jobs/27725) 均已通过。滚动更新成功，两个公网域名 MCP 匿名 401、initialize/list/snapshot-call 200；这只确认发布与协议探针，不能替代锁屏后未完成的嵌入业务复测。
