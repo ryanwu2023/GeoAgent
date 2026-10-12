@@ -332,3 +332,12 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - GitLab main `6c235c3e00134fb4db6a831f71c55a8351f9460f` → `geoagent-prod-v1.0.6`，流水线 [5275](https://gitlab.lz.internal/yujunjun/GeoAgent/-/pipelines/5275)，verify 27706 / deploy 27707 通过；两个外网域名匿名 401、MCP initialize/list/snapshot-call 200，临时 release-live Key 已撤销。
 - 外网嵌入第 3 轮（23:47–23:48，约 43 秒）不提供预期数字，Agent 自行调用 workspace_summary，纠正了每类 5 条的旧答案，也正确解释 3979/3957、22 条补充报告及全框架 13/13。但三类 signal_counts 均为 0、unknown 为 3979，与面板不符，**不记为通过**。
 - 追加根因：历史快照原始记录未持久化 situation_signal；REST 地图面板经 `event_metadata` 在读取时分类，首次 MCP 修复直接读取原字段。现改为复用同一 `event_metadata`，再应用最新人工复核；新增无预计算字段的升级/持续/缓和标题样本回归，防止新格式 fixture 掩盖历史数据投影问题。该补丁仍需独立发布后外网复测。
+
+#### v1.0.7 发布与外网最终取数：计数通过，分析解释保留缺陷
+
+- 本地真实旧快照 `0b18ddf4468552d911eba06e`，直接比较面板 `present_map_record` 与 MCP 投影：升级 92 / 持续 54 / 缓和 135 / 待研判 2020，总记录 2301，完全一致；全量 193 项测试再次通过。
+- GitLab main `a3c4cb9aa6fabc30392a662ec9419559e3a13f4d` → `geoagent-prod-v1.0.7`，流水线 [5277](https://gitlab.lz.internal/yujunjun/GeoAgent/-/pipelines/5277)，verify [27711](https://gitlab.lz.internal/yujunjun/GeoAgent/-/jobs/27711) / deploy [27712](https://gitlab.lz.internal/yujunjun/GeoAgent/-/jobs/27712) 均通过。生产滚动更新、两个公网域名 MCP initialize/list/snapshot-call 成功，匿名 401，临时探针 Key 已撤销；正式专用连接与凭证保留。
+- Chrome 外网嵌入第 4 轮（23:52，约 24 秒）输入自然问题，不提供预期数字，要求重新实时读取相同快照。实际执行 3 次 MCP 调用：`geo_workspace_summary`（usiran / all）及 `geo_snapshot_get`。美伊回答 **227 / 68 / 139 / 待研判 3545、3979、全框架 13/13**，与右侧面板逐项相符；能解释 22 条 supplemental、候选覆盖不等于数据完整、情景样本数不是报道数。取数与范围口径验收通过。截图 `output/live-production/risk-overview-matched-20261012.jpg`。
+- **仍有分析解释缺陷，不标整轮完全通过**：Agent 将上轮 0/0/0 → 当前值变化确定归因为人工复核更新；工具仅说明“复核可以变化”，并未返回发生过复核的证据。本次真实原因是代码投影修复，不能用能力描述推断已发生事件。Agent 另将 coverage.count 3957 口语化为“维度合计”，实际该值是去补充报告后的主题记录数，维度计数不可相加。
+- 下一步：独立执行未通过生产验收的业务用例；补充“相同快照数值变化不能无依据归因”“主题记录数与多标签维度合计”反例，并验证 Agent 不把候选覆盖、可变字段描述写成事实。当前交付仅确认专用授权、外网嵌入、真实 MCP 取数及本用例核心计数通过，不宣称所有业务分析问题已验收。
+- QA 边界：本轮未改前端；实际 Chrome 嵌入可输入、生成、显示结果。原生 Chrome 无控制台读取能力，不宣称浏览器 console 零错误。Sealos 部署仍存在既有 PodSecurity restricted 警告，本轮未修改容器权限或安全策略。
