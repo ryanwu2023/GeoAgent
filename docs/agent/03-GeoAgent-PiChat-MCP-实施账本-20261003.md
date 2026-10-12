@@ -362,3 +362,9 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 另记录跨用例质量问题：Agent 自写“取数时点”偶有与 UI 轮次时间不一致（如 00:22 完成却写约 00:26）。新增服务端 `read_at` 与缓存时间口径，不能用模型估计时间替代回执；尚待复测。上述新增修复后全量 **194 passed**，官方 MCP 客户端断言五类缺口完整与时区时间字段。
 - Mac 锁屏后原生 Chrome 返回无法自动解锁；已请用户手动解锁，未尝试绕过。外网嵌入的剩余 pipeline-live、asset-impact、独立 evidence-verification，以及修复后的指标/反证/缺口/归因复测仍待继续，不把锁屏后未执行的用例记为通过。IAB 的 GitLab 只读检查仍可用，确认 v1.0.9 发布完成。
 - `0033c00a` → `geoagent-prod-v1.0.10`，[pipeline 5284](https://gitlab.lz.internal/yujunjun/GeoAgent/-/pipelines/5284)；verify 27724、[deploy 27725](https://gitlab.lz.internal/yujunjun/GeoAgent/-/jobs/27725) 均已通过。滚动更新成功，两个公网域名 MCP 匿名 401、initialize/list/snapshot-call 200；这只确认发布与协议探针，不能替代锁屏后未完成的嵌入业务复测。
+
+#### 解锁后继续外网嵌入验收
+
+- Chrome 刷新项目并重新建立嵌入身份，未更改权限或凭证。轮次 10（UI 完成 05:10）输入四项指标的自然问题，不提供预期数值或周起止日期；实际四次 `geo_metric_series`，展开首条技术回执确认 `finance:brent`、指定快照、查询窗口 09-28→10-13、`read_at=2026-10-12T21:10:20.618986+00:00`。
+- **本周口径修复通过**：回答采用快照周 10-05→10-09，另列今天所在周无观测但不称无变化；四项最近一期数值、前值、变化及日期与此前独立量化面板基线一致。周内首末变化另列，并明确为 history 计算、不同指标末观测日不同（10-07/08/09），不冒充同步截止日。`read_at` 与实际回执相符，不再臆写未来取数时点。
+- 周内首值四项为 100.32 / 5.31 / 4156.80 / 312，回答周变化 +3.15 / -9bp / +60.90 / -3bp；该部分来自工具 history，尚不将其记为已独立逐点核对图表的通过项。截图 `/tmp/geoagent-metrics-retest-20261013.jpg`。原生 Chrome 无 console 读取，控制台检查仍未测。

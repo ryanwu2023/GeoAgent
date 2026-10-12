@@ -21,11 +21,20 @@ from backend.geo_mcp.auth import AuthConfig
 from backend.geo_mcp.contracts import MCPError, Principal
 from backend.geo_mcp.scope import authorize
 from backend.geo_mcp.provenance import snapshot_provenance
-from backend.geo_mcp.server import create_app, _workspace_counts
+from backend.geo_mcp.server import create_app, _workspace_counts, _analysis_evidence_boundary
 from backend import store
 
 
 TOKEN = "geoagent-test-token"
+
+
+def test_counterevidence_boundary_does_not_turn_unassessed_into_absent():
+    boundary = _analysis_evidence_boundary()
+    assert boundary["verified_counterevidence_status"] == "not_evaluated"
+    assert "不是系统已判断反证不存在" in boundary["assessment_scope"]
+    assert "不能据此断言整个快照" in boundary["retrieval_scope"]
+    assert "沿用旧回执" in boundary["retrieval_scope"]
+    assert "单方行动通报" in boundary["retrieval_scope"]
 
 
 def test_relative_week_uses_selected_snapshot_import_date():
