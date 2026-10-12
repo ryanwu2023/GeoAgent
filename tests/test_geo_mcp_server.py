@@ -367,6 +367,10 @@ async def test_official_mcp_client_can_initialize_list_and_call() -> None:
                     assert len(counts["asset_data_gaps"]) == 5
                     assert all(item["missing_data"] for item in counts["asset_data_gaps"])
                     assert "有效零值不是缺失" in counts["metric_quality_basis"]
+                    assert "不在目录不证明没有原始数据" in counts["metric_quality_basis"]
+                    assert counts["query_scope"]["topic"] == "usiran"
+                    assert counts["quality_warning_scope"]["topic"] == "usiran"
+                    assert counts["quality_warning_scope"]["count"] == len(overview_payload["warnings"])
                     if len(payload["data"]["snapshots"]) > 1:
                         historical_id = payload["data"]["snapshots"][1]["id"]
                         historical_result = await session.call_tool(

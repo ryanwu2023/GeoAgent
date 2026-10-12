@@ -398,7 +398,9 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                     {"id": item["id"], "name": item["name"], "missing_data": item.get("missing_data", "")}
                     for item in analysis.get("assets", [])
                 ],
-                "metric_quality_basis": "有效零值不是缺失；隔离值不是不存在原始数据。shared_market/美国整体背景按业务主题映射入选，topic=null 不能推断未绑定或不相关。排除 supplemental 是统计范围，不是缺数据；少量来源抽查不能代表全体来源单一。",
+                "metric_quality_basis": "有效零值不是缺失；隔离值不是不存在原始数据。shared_market/美国整体背景按业务主题映射入选，topic=null 不能推断未绑定或不相关。排除 supplemental 是统计范围，不是缺数据；少量来源抽查不能代表全体来源单一。目录仅枚举当前范围可用序列，不在目录不证明没有原始数据或工具不能读取；不能把全主题 warnings 无标注地当成当前主题缺口。",
+                "query_scope": {"topic": topic, "dimension": dimension, "start": start, "end": end},
+                "quality_warning_scope": {"topic": topic, "dimension": dimension, "start": start, "end": end, "count": len(analysis.get("data_warnings", []))},
                 "metrics": [
                     {
                         "id": item.get("id"),
