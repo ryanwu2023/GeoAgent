@@ -31,6 +31,7 @@ repo={REPO!r}
 if args[0]=="image":
  print(repo+"@sha256:"+"b"*64 if "RepoDigests" in args[-1] else "sha256:"+"c"*64)
 elif args[0]=="run":
+ if any(a.startswith("geoagent-ci:") for a in args): sys.exit(0)
  i=next(i for i,a in enumerate(args) if a.startswith(repo+"@"))
  k=args[i+1:]
  if "config" in k: print("https://gzg.sealos.run:6443")

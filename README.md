@@ -72,7 +72,7 @@ npm ci && npm run build
 
 MCP 已随主后端启动：开发页面地址为 `http://127.0.0.1:8010/mcp`，后端直连为 `http://127.0.0.1:8011/mcp`；单进程发布后为 `https://<项目域名>/mcp`。在页面创建 MCP Key 后，把地址和 Bearer Token 配到可信 Agent 的 MCP 来源中。Key 授权本项目全部只读工具/快照；仅创建时显示原文，数据库只存 SHA-256 哈希，撤销立即生效。`/healthz` 返回 MCP 健康信息，但协议验收应使用带 Key 的 initialize、tools/list、tools/call。
 
-公网配置页面需先在部署环境设置强随机 `GEOAGENT_SETTINGS_TOKEN`，然后在页面输入该管理口令加载/保存。没有口令时只允许无转发头的 loopback 管理请求；公网读写被拒绝。PiChat 用户身份签发仍是业务页面功能，不等同于管理权限。部署入口应保护项目访问；管理口令不是完整用户登录系统。配置与 Key 存于 `GEO_DATA_DIR/research.sqlite3`，务必持久挂载该数据目录、限制文件权限，并随数据备份保护其中的 PiChat 应用密钥（服务端存储，不加密）。
+独立公网部署需设置强随机 `GEOAGENT_SETTINGS_TOKEN`，页面输入管理口令后加载/保存。Sealos 单用户部署沿用网关 Basic 登录：显式启用 `GEOAGENT_TRUST_AUTHENTICATED_GATEWAY=true`，仅信任 loopback 网关覆盖写入的身份头；应用端口必须隔离，使用 `scripts.serve` 禁用代理客户端地址改写。未启用这两种方式时，管理只允许无转发头的本机请求。网关仅对 `/mcp` 取消 Basic 登录，后端仍强制 Bearer Key；其他路径继续保护。PiChat 用户身份签发不等同于管理权限。配置与 Key 存于 `GEO_DATA_DIR/research.sqlite3`，务必持久挂载该数据目录、限制文件权限，并随数据备份保护其中的 PiChat 应用密钥（服务端存储，不加密）。
 
 本项目外网预期 MCP 地址为 `https://geoagentd40d.sealosgzg.site/mcp`，PiChat 服务根地址配置为 `https://chat.lhotsetech.com`。部署网关必须允许 Agent 的 Bearer 请求到达 `/mcp`，不能用前端 SPA 回退或交互式登录页替代 MCP 响应。PiChat 应用还需允许 GeoAgent 外网域名作为嵌入来源，并配置相应 entry/用户权限。
 

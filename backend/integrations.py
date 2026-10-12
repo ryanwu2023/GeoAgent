@@ -48,17 +48,23 @@ def normalize_origin(value):
 
 
 def admin(request: Request):
+    host = request.client.host if request.client else ""
+    try:
+        local = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        local = False
+    # Opt-in delegation to the isolated, loopback Nginx sidecar. The gateway
+    # overwrites this header only after its existing Basic login succeeds.
+    trusted_gateway = (os.getenv("GEOAGENT_TRUST_AUTHENTICATED_GATEWAY", "false").lower() == "true"
+                       and local and bool(request.headers.get("X-GeoAgent-Gateway-User")))
     expected = os.getenv("GEOAGENT_SETTINGS_TOKEN", "")
     presented = request.headers.get("X-GeoAgent-Admin", "")
-    if expected:
+    if trusted_gateway:
+        pass
+    elif expected:
         if not hmac.compare_digest(expected, presented):
             raise HTTPException(403, "请输入项目管理口令")
     else:
-        host = request.client.host if request.client else ""
-        try:
-            local = ipaddress.ip_address(host).is_loopback
-        except ValueError:
-            local = False
         # A local reverse proxy must not make a public caller a local admin.
         forwarded = request.headers.get("forwarded") or request.headers.get("x-forwarded-for")
         if not local or forwarded or request.url.hostname not in {"localhost", "127.0.0.1", "::1", "testserver"}:

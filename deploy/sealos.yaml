@@ -45,7 +45,9 @@ spec:
             - name: GEOAGENT_ALLOWED_ORIGINS
               value: https://geoagentd40d.sealosgzg.site,https://geoagent.lhotsetech.com
             - name: PICHAT_EMBED_BASE_URL
-              value: https://luozi-chat.lhotsetech.com
+              value: https://chat.lhotsetech.com
+            - name: GEOAGENT_TRUST_AUTHENTICATED_GATEWAY
+              value: "true"
             - name: PICHAT_EMBED_ENTRY
               value: dock
             - name: PICHAT_EMBED_PRODUCT_USER_ID

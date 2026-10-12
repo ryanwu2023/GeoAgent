@@ -105,3 +105,15 @@ def test_identity_uses_saved_config_without_restart(client, monkeypatch):
     assert json.loads(calls[0].content)["agentId"] == "saved-agent"
     assert json.loads(calls[0].content)["productUserId"] == "saved-user"
     assert "pk-private" not in result.text
+
+
+def test_gateway_delegation_is_opt_in_and_loopback_only(client, monkeypatch):
+    monkeypatch.delenv("GEOAGENT_SETTINGS_TOKEN")
+    with TestClient(app, base_url="https://geo.example.com", client=("127.0.0.1", 8080)) as proxy:
+        headers={"X-Forwarded-For":"203.0.113.10", "X-GeoAgent-Gateway-User":"owner"}
+        assert proxy.get("/api/integrations", headers=headers).status_code == 403
+        monkeypatch.setenv("GEOAGENT_TRUST_AUTHENTICATED_GATEWAY", "true")
+        assert proxy.get("/api/integrations", headers=headers).status_code == 200
+        assert proxy.get("/api/integrations", headers={"X-Forwarded-For":"203.0.113.10"}).status_code == 403
+    with TestClient(app, base_url="https://geo.example.com", client=("203.0.113.10", 8080)) as remote:
+        assert remote.get("/api/integrations", headers=headers).status_code == 403

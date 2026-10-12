@@ -20,7 +20,7 @@ source "$(dirname "$0")/release-policy.sh"
 
 case ${1:-} in
   verify)
-    docker build --provenance=false --sbom=false --build-arg VITE_PICHAT_EMBED_ORIGIN=https://luozi-chat.lhotsetech.com \
+    docker build --provenance=false --sbom=false --build-arg VITE_PICHAT_EMBED_ORIGIN=https://chat.lhotsetech.com \
       --build-arg VITE_PICHAT_PRODUCT_USER_ID=geoagent-owner \
       -t "$candidate" .
     trap 'docker image rm "$candidate" >/dev/null 2>&1 || true' EXIT
@@ -58,6 +58,7 @@ case ${1:-} in
     kubectl() {
       docker run --rm -i --network host --user "$(id -u):$(id -g)" \
         --mount "type=bind,source=$GEOAGENT_PROD_KUBECONFIG,target=/kube/config,readonly" \
+        --mount "type=bind,source=$PWD,target=/workspace,readonly" --workdir /workspace \
         --env KUBECONFIG=/kube/config "$tools_image" "$@"
     }
     [[ $(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}') == https://gzg.sealos.run:6443 ]] || exit 1
@@ -91,6 +92,10 @@ case ${1:-} in
         --from-literal="backup=$backup_path"
       next_owner=$CI_PIPELINE_ID
       next_sequence=$CI_PIPELINE_ID
+      # Reconcile this release's gateway policy. Browser/API login is unchanged;
+      # only /mcp delegates to the mandatory application Bearer validator.
+      kubectl -n "$namespace" create configmap geoagent-gateway \
+        --from-file=default.conf=deploy/gateway.conf --dry-run=client -o yaml | kubectl -n "$namespace" apply -f -
     else
       digest=$(kubectl -n "$namespace" get configmap "$record" -o jsonpath='{.data.previous}')
       deployed_image=$(kubectl -n "$namespace" get configmap "$record" -o jsonpath='{.data.image}')
@@ -106,9 +111,27 @@ case ${1:-} in
     init_annotations=''
     [[ -n $annotations ]] || init_annotations='{"op":"add","path":"/metadata/annotations","value":{}},'
     patch="[{\"op\":\"test\",\"path\":\"/metadata/resourceVersion\",\"value\":\"$revision\"},${init_annotations}{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/$index/image\",\"value\":\"$digest\"},{\"op\":\"add\",\"path\":\"/metadata/annotations/geoagent-release-owner\",\"value\":\"$next_owner\"},{\"op\":\"add\",\"path\":\"/metadata/annotations/geoagent-release-sequence\",\"value\":\"$next_sequence\"}]"
+    if [[ $action == deploy ]]; then
+      env_names=$(kubectl -n "$namespace" get deployment geoagent -o jsonpath="{range .spec.template.spec.containers[$index].env[*]}{.name}{'\n'}{end}")
+      for setting in GEOAGENT_TRUST_AUTHENTICATED_GATEWAY PICHAT_EMBED_BASE_URL; do
+        value=true
+        [[ $setting != PICHAT_EMBED_BASE_URL ]] || value=https://chat.lhotsetech.com
+        env_index=0
+        found=false
+        while IFS= read -r env_name; do
+          if [[ $env_name == "$setting" ]]; then found=true; break; fi
+          env_index=$((env_index+1))
+        done <<< "$env_names"
+        position=-
+        operation=add
+        if [[ $found == true ]]; then position=$env_index; operation=replace; fi
+        patch="${patch%]},{\"op\":\"$operation\",\"path\":\"/spec/template/spec/containers/$index/env/$position\",\"value\":{\"name\":\"$setting\",\"value\":\"$value\"}}]"
+      done
+    fi
     kubectl -n "$namespace" patch deployment geoagent --type=json -p "$patch"
     status=failed
     if kubectl -n "$namespace" rollout status deployment/geoagent --timeout=300s &&
+       { [[ $action != deploy ]] || kubectl -n "$namespace" exec deployment/geoagent -c geoagent -- python -m scripts.ci.configure_integrations; } &&
        kubectl -n "$namespace" exec deployment/geoagent -c geoagent -- python -c 'import json,urllib.request; r=urllib.request.urlopen("http://127.0.0.1:8000/api/status",timeout=15); assert r.status==200; assert "snapshots" in json.load(r); print("GeoAgent status: HTTP 200")' &&
        [[ $(curl --silent --show-error --max-time 30 -o /dev/null -w '%{http_code}' https://geoagent.lhotsetech.com/api/status) == 401 ]]; then
       status=passed
@@ -116,6 +139,17 @@ case ${1:-} in
     printf 'status=%s\n' "$status" >> release/geoagent-release.txt
     kubectl -n "$namespace" annotate configmap "$record" "geoagent-$action-status=$status" --overwrite
     [[ $status == passed ]] || { echo 'Health check failed. Inspect the release; manual rollback is available. Database was not restored.'; exit 1; }
+    if [[ $action == deploy ]]; then
+      # Short-lived verification key stays in process memory, never in artifacts.
+      read -r probe_id MCP_LIVE_KEY <<< "$(kubectl -n "$namespace" exec deployment/geoagent -c geoagent -- python -c 'from backend.integrations import create_key,NewKey; k=create_key(NewKey(label="release-live")); print(k["id"],k["key"])')"
+      export MCP_LIVE_KEY
+      probe_status=failed
+      if docker run --rm --network host --env MCP_LIVE_KEY --entrypoint python "$candidate" -m scripts.ci.probe_mcp; then probe_status=passed; fi
+      kubectl -n "$namespace" exec deployment/geoagent -c geoagent -- python -c 'import sys; from backend.integrations import revoke_key; revoke_key(sys.argv[1]); print("Release live key revoked")' "$probe_id"
+      unset MCP_LIVE_KEY
+      printf 'mcp_live=%s\n' "$probe_status" >> release/geoagent-release.txt
+      [[ $probe_status == passed ]] || { echo 'Public MCP validation failed'; exit 1; }
+    fi
     ;;
   *) echo 'Usage: sealos-release.sh verify|deploy|rollback'; exit 2 ;;
 esac

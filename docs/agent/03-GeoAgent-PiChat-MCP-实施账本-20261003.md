@@ -277,3 +277,11 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 视觉证据（不包含密钥原文）：`output/playwright/integration-settings-20261012.png`、`output/playwright/pichat-connected-20261012.png`。
 
 外网交付前置（未执行）：发布本轮代码；设置管理口令和持久化 `GEO_DATA_DIR`；页面填写 `https://chat.lhotsetech.com` 及该环境 PiChat 应用 Key/用户/entry；创建 MCP Key 并绑定到目标 Agent。预期 MCP 地址 `https://geoagentd40d.sealosgzg.site/mcp`，需确保网关允许 Bearer 协议访问且 PiChat 允许该嵌入来源。本地连接配置保留 9172，未误改为外网环境。本轮没有提交新的业务问答，不将历史会话内容计为本轮 Agent 分析结果验收。
+
+### 2026-10-12：GitLab main 外网发布（进行中）
+
+- 用户确认沿用 GitLab main → 受保护生产 tag → 手动 deploy 的 Sealos 发布链路，不使用本地替代部署。
+- 发布配置将 PiChat 根地址设置为 `https://chat.lhotsetech.com`，保留生产既有应用密钥、用户和 entry，持久化配置优先于环境变量。
+- 网关项目页面保留 Basic 登录；仅 `/mcp` 使用后端强制 Bearer。已登录的隔离 loopback 网关可管理连接配置及 Key（显式 opt-in，身份头覆盖，应用端口隔离，服务禁用代理客户端地址改写）。
+- 发布任务增加两个公网域名的真实 TLS / MCP initialize、tools/list、geo_snapshot_list 验证；测试 Key 使用后撤销，不落日志或产物。
+- 发布前后端回归 192 项通过，前端构建通过。外网部署、协议与嵌入结果待流水线和浏览器验收，不预先记为完成。
