@@ -21,6 +21,7 @@ from starlette.responses import JSONResponse
 
 from backend import research, store
 from backend.catalog import TOPICS, RULE_VERSION, topic_dimensions
+from backend.events import SIGNALS
 from backend.collector_monitor import load_ledger_events, load_runs
 from backend.paths import project_root
 from scripts.integrate_collectors import load_registry
@@ -56,6 +57,37 @@ def _validate_filters(topic: str, dimension: str) -> None:
 
 def _latest_id(summaries: list[dict[str, Any]]) -> str | None:
     return summaries[0]["id"] if summaries else None
+
+
+def _workspace_counts(snapshot: dict[str, Any], topic: str, dimension: str, start: str, end: str) -> dict[str, Any]:
+    """Panel counts, distinct from the bounded scenario candidate samples."""
+    records = research.filtered_records(snapshot, topic, dimension, start, end)
+    with store.db() as connection:
+        rows = connection.execute(
+            "SELECT record_id, signal FROM reviews WHERE snapshot_id=? ORDER BY version",
+            (snapshot["id"],),
+        ).fetchall()
+    reviews = {row["record_id"]: row["signal"] for row in rows}
+    counts = {signal: 0 for signal in SIGNALS}
+    for item in records:
+        signal = reviews.get(item["id"], item.get("situation_signal", "unknown"))
+        counts[signal if signal in counts else "unknown"] += 1
+    coverage = research.coverage(snapshot, start=start, end=end)
+    dimensions = [item for row in coverage for item in row["dimensions"]]
+    return {
+        "records_count": len(records),
+        "supplemental_records_count": sum(bool(item.get("supplemental")) for item in records),
+        "signal_counts": counts,
+        "signal_labels": SIGNALS,
+        "signal_count_basis": "当前筛选范围内全部记录，采用快照自动分类及最新研究员复核；报道线索数量不是情景概率，也不是 scenarios.evidence_ids 的抽样长度。复核可在快照创建后更新。",
+        "coverage_basis": "coverage 为全部主题的候选维度覆盖，排除 supplemental 补充报告；不随 topic/dimension 筛选。一条记录可属于多个维度，不能加总。",
+        "framework_candidate_coverage": {
+            "covered": sum(item["count"] > 0 for item in dimensions),
+            "total": len(dimensions),
+            "scope": "all_topics",
+        },
+        "coverage": coverage,
+    }
 
 
 def _visible_snapshot(principal: Any, snapshot_id: str, working_id: str | None) -> bool:
@@ -313,7 +345,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_workspace_summary", description="读取快照的主题覆盖、指标摘要、资产和情景结果。", structured_output=False)
+    @server.tool(name="geo_workspace_summary", description="读取风险监测面板：升级相关/持续相关/缓和相关/待研判报道数量 signal_counts、范围内记录数 records_count、全框架候选维度覆盖，以及指标、资产和情景摘要。问‘风险概览、各类线索多少、维度覆盖多少、还缺什么数据’时使用。报道计数不是 scenarios.evidence_ids 的有限候选样本数量，也不是情景概率。coverage 排除补充报告且为全部主题，records_count 遵循 topic/dimension/日期筛选。", structured_output=False)
     async def geo_workspace_summary(
         snapshot_id: str,
         topic: str = "all",
@@ -337,7 +369,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             metrics = research.metrics(snapshot, topic=topic, dimension=dimension, start=start, end=end)
             analysis = research.analysis(snapshot, topic=topic, dimension=dimension, start=start, end=end)
             summary = {
-                "coverage": research.coverage(snapshot, start=start, end=end),
+                **_workspace_counts(snapshot, topic, dimension, start, end),
                 "metrics": [
                     {
                         "id": item.get("id"),
@@ -355,7 +387,6 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 ],
                 "assets": analysis.get("assets", []),
                 "scenarios": analysis.get("scenarios", []),
-                "records_count": len(research.filtered_records(snapshot, topic, dimension, start, end)),
                 "observations_count": len(metrics),
             }
             warnings = analysis.get("data_warnings", [])

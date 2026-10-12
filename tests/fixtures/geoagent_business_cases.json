@@ -34,9 +34,9 @@
   {
     "id": "risk-overview",
     "menu": "风险监测",
-    "prompt": "当前快照的风险态势和证据覆盖如何？请说明各主题覆盖量，不要把报道数量当成风险概率。",
+    "prompt": "当前快照升级、持续、缓和相关报道各多少？范围内记录数和全框架候选维度覆盖多少？请区分报道计数、情景候选样本及补充报告，不要把报道数量当成风险概率。",
     "required_tools": ["geo_snapshot_get", "geo_workspace_summary", "geo_analysis_view"],
-    "required_fields": ["coverage", "assets", "scenarios", "provenance"],
+    "required_fields": ["signal_counts", "records_count", "framework_candidate_coverage", "supplemental_records_count", "coverage_basis", "coverage", "assets", "scenarios", "provenance"],
     "direct_checks": ["snapshot_get", "workspace_coverage", "analysis"]
   },
   {

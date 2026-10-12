@@ -300,3 +300,29 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 | PiChat iframe | **未通过**：Chrome 显示连接被拒绝；实测 `/work-embed/geo-research-assistant` 返回 HTTP 200，但 `Content-Security-Policy: frame-ancestors` 仅含 self、StockLink 及本地地址，不含两个 GeoAgent 域名 |
 
 下一步必须由生产 PiChat 配置完成：提供该环境有效应用 Key（在 GeoAgent 页面填写即可，无需重新发布），允许两个 GeoAgent HTTPS 父域嵌入，并确认该应用 entry / Agent / 用户权限；之后重跑身份 → iframe → WebSocket → 新业务问答。当前不宣称外网 Agent 已连通，也不将 MCP 协议通过等同于 Agent 业务验收。未修改其他项目的生产访问策略。
+
+### 2026-10-12：生产 PiChat 专用应用配置接续（尚未提交）
+
+- 用户澄清已有 GeoAgent 智能体，授权创建独立 API 嵌入应用及专用 Key，仅允许两个 GeoAgent HTTPS 来源，不修改 StockLink / LCF 应用。
+- 已进入生产 API 管理页，列表当前仅显示 StockLink 与 LCF；新建表单可切换到产品嵌入工作台，支持命名入口、精确 Origin、面板 Token TTL（默认 1800 秒）。
+- 管理会话解锁后，表单未提交即再次退回 `/chat`；本轮未创建应用、未签发密钥、未更改 GeoAgent 生产凭证。该现象不能判定为 GeoAgent MCP 故障，也未确认 PiChat 会话退出的根因。
+- Chrome 的独立管理会话仍要求密码验证，待用户在 Chrome 解锁后改用原生 Chrome 完成配置与外网嵌入验收；本轮不新增业务用例通过记录。
+
+### 2026-10-12 23:31–23:35：生产专用应用已配置，业务 live 定位 MCP 装配缺口
+
+- 用户登录 `https://chat.test/admin/api` 后，已创建 `GeoAgent` 独立产品嵌入应用；仅一个 `dock` 紧凑对话入口，绑定现有 `geo-research-assistant`，仅允许 `https://geoagentd40d.sealosgzg.site` 与 `https://geoagent.lhotsetech.com` 两个 Origin，面板 Token TTL 1800 秒。未更改 StockLink / LCF。
+- 专用应用 Key 已签发（仅 `embed:identity`、90 天有效期），通过项目连接配置保存到生产 GeoAgent 后端；未保存到浏览器密码管理器，未将原文写入代码、日志或账本。PiChat 地址仍为 `https://chat.lhotsetech.com`。
+- 首次保存后验证仍返回 401；重新明确填入并保存后，页面「验证 PiChat 连接」显示身份签发通过。只记录最终成功，不将首次失败隐藏。
+- 两个 PiChat 域名的实际 HTTP 响应 CSP 已包含两个 GeoAgent Origin。Chrome 外网项目实际显示 GeoAgent 欢迎页、模型与可编辑输入框，原 iframe 拒绝连接已解除。
+- 在外网嵌入面板提交新轮次：指定工作快照 `57fb9e48f6a0fa1f10f8502d`，要求美伊局势升级/持续/缓和线索、范围记录数及候选维度覆盖。面板基线为 **227 / 68 / 139、3979、13/13**。
+- 新轮次实际进入生成并完成（23:34，耗时约 27 秒）；回答报告 `mcp_connection list` 无 GeoAgent 连接、工具搜索为空，明确 unsupported，未产出上述数字，未换快照、未编造。故 **嵌入交互通过，MCP 业务取数未通过**，不能以欢迎页替代业务验收。
+- PiChat 管理页站点 MCP 连接清单也未发现 GeoAgent；已准备专用连接表单，目标 `https://geoagentd40d.sealosgzg.site/mcp`、Streamable HTTP、Bearer。尚未创建 MCP Key 或保存该连接，待行动时确认仅向 GeoAgent Agent 授予项目只读数据访问后继续。
+
+### 2026-10-12 23:36 起：专用 MCP 授权完成，真实问答发现计数契约缺口
+
+- 用户行动时确认后，在生产项目创建 `PiChat GeoAgent production` MCP Key（ID `844e2fc5615a3ebd`），只读访问全部快照和业务工具；原文仅保存到 PiChat 专用连接凭证，不写入仓库、截图或账本。
+- PiChat 新建 `GeoAgent 地缘数据与分析`，运行 ID `site:geoagent`，Streamable HTTP 地址 `https://geoagentd40d.sealosgzg.site/mcp`，Bearer 共用凭证。检测得到 11 个工具（约 614 ms），保存时健康检查 1/1 用户、11 工具通过。仅绑定 `geo-research-assistant`，其余 Agent 未扩权；未来新增工具默认不开放。截图 `output/live-production/mcp-assignment-20261012.jpg`。
+- 外网嵌入第 2 轮真实问答（23:38–23:39，约 59 秒）实际调用 6 次 GeoAgent 工具，读取指定工作快照，返回美伊记录 3979、主题候选维度 8 个；但将升级/持续/缓和报道计数误答为情景候选样本各 5 条，**风险概览业务验收未通过**。截图 `output/live-production/risk-overview-before-20261012.jpg`。
+- 面板口径澄清：227 / 68 / 139 是当前美伊筛选内的报道分类数；3979 为范围内全部记录；13/13 是全部主题的框架候选维度，不是美伊单主题（8 个）。覆盖 API 的 3957 排除 22 条补充报告，不应呈现为无解释的数据冲突。情景候选 IDs 会随筛选变化，不据此声称同一输入不稳定。
+- 根因：`geo_workspace_summary` 未暴露面板 signal_counts；返回 coverage 未说明全主题及排除 supplemental 的范围。已补上靠前返回的分类计数、范围记录数、补充报告数、全框架覆盖及业务描述，计数采用最新研究员复核，避免与面板自动分类/复核结果偏离。
+- 新增测试覆盖主题/日期/维度筛选、复核版本顺序与快照隔离、补充报告差异、零记录、计数守恒；官方 MCP 客户端真实调用也断言计数与全框架 13 维度。更新风险概览测试用例，防止再次把协议连通误记为业务通过。后端全量 **193 passed**，MCP 专项 **10 passed**；外网修复版本尚待发布与再问答验收。

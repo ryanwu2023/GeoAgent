@@ -3,10 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, timezone
 from urllib.request import urlopen
 
@@ -19,11 +20,49 @@ from starlette.testclient import TestClient
 from backend.geo_mcp.auth import AuthConfig
 from backend.geo_mcp.contracts import MCPError, Principal
 from backend.geo_mcp.scope import authorize
-from backend.geo_mcp.server import create_app
+from backend.geo_mcp.server import create_app, _workspace_counts
 from backend import store
 
 
 TOKEN = "geoagent-test-token"
+
+
+def test_workspace_counts_match_panel_scope_and_latest_reviews(monkeypatch):
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    connection.execute("CREATE TABLE reviews(snapshot_id TEXT, record_id TEXT, version INTEGER, signal TEXT)")
+    connection.executemany("INSERT INTO reviews VALUES(?,?,?,?)", [
+        ("snap", "a", 2, "easing"), ("snap", "a", 1, "sustain"),
+        ("other", "b", 1, "easing"),
+    ])
+    @contextmanager
+    def db():
+        yield connection
+    monkeypatch.setattr(store, "db", db)
+    def record(rid, topic, signal, date, supplemental=False):
+        return {"id": rid, "topics": [topic], "dimensions": {topic: "d"},
+                "published_at": date, "situation_signal": signal, "supplemental": supplemental}
+    snapshot = {"id": "snap", "records": [
+        record("a", "usiran", "escalation", "2026-10-09"),
+        record("b", "usiran", "escalation", "2026-10-09"),
+        record("c", "usiran", "unknown", "2026-10-09", True),
+        record("d", "ukraine", "sustain", "2026-10-09"),
+        record("e", "usiran", "sustain", "2026-10-08"),
+    ]}
+    try:
+        result = _workspace_counts(snapshot, "usiran", "d", "2026-10-09", "2026-10-09")
+        assert result["records_count"] == 3
+        assert result["supplemental_records_count"] == 1
+        assert result["signal_counts"] == {"escalation": 1, "sustain": 0, "easing": 1, "unknown": 1}
+        assert sum(result["signal_counts"].values()) == result["records_count"]
+        assert next(row for row in result["coverage"] if row["id"] == "usiran")["count"] == 2
+        assert next(row for row in result["coverage"] if row["id"] == "ukraine")["count"] == 1
+        assert result["framework_candidate_coverage"]["total"] == 13
+        empty = _workspace_counts(snapshot, "usiran", "", "2026-10-10", "")
+        assert empty["records_count"] == 0
+        assert not any(empty["signal_counts"].values())
+    finally:
+        connection.close()
 
 
 def auth_config(*, tools: set[str] | None = None) -> AuthConfig:
@@ -276,6 +315,13 @@ async def test_official_mcp_client_can_initialize_list_and_call() -> None:
 
                     snapshot_id = payload["provenance"]["working_snapshot_id"] or payload["data"]["snapshots"][0]["id"]
                     assert snapshot_id in {item["id"] for item in payload["data"]["snapshots"]}
+                    overview = await session.call_tool("geo_workspace_summary", {"snapshot_id": snapshot_id, "topic": "usiran", "limit": 1})
+                    overview_payload = json.loads(overview.content[0].text)
+                    assert overview_payload["ok"] is True
+                    counts = overview_payload["data"]
+                    assert sum(counts["signal_counts"].values()) == counts["records_count"]
+                    assert counts["framework_candidate_coverage"]["total"] == 13
+                    assert "supplemental" in counts["coverage_basis"]
                     if len(payload["data"]["snapshots"]) > 1:
                         historical_id = payload["data"]["snapshots"][1]["id"]
                         historical_result = await session.call_tool(
