@@ -59,6 +59,13 @@ def _latest_id(summaries: list[dict[str, Any]]) -> str | None:
     return summaries[0]["id"] if summaries else None
 
 
+def _analysis_evidence_boundary() -> dict[str, str]:
+    return {
+        "verified_counterevidence_status": "not_evaluated",
+        "basis": "scenarios.counter 是假设失效条件，不是已经发生的反证。evidence_ids 是候选线索，未建立逐条条件满足关系。只证明有人表态、预测或拒绝透露细节，不能坐实停火执行、行动下降、交付中断或未见后续行动；缺乏可见证据不等于事件不存在。正文反向线索须标明推断，未独立核验不得称坐实或证实失效条件。",
+    }
+
+
 def _workspace_counts(snapshot: dict[str, Any], topic: str, dimension: str, start: str, end: str) -> dict[str, Any]:
     """Panel counts, distinct from the bounded scenario candidate samples."""
     records = research.filtered_records(snapshot, topic, dimension, start, end)
@@ -79,6 +86,7 @@ def _workspace_counts(snapshot: dict[str, Any], topic: str, dimension: str, star
     coverage = research.coverage(snapshot, start=start, end=end)
     dimensions = [item for row in coverage for item in row["dimensions"]]
     return {
+        "analysis_evidence_boundary": _analysis_evidence_boundary(),
         "records_count": len(records),
         "supplemental_records_count": sum(bool(item.get("supplemental")) for item in records),
         "signal_counts": counts,
@@ -91,7 +99,7 @@ def _workspace_counts(snapshot: dict[str, Any], topic: str, dimension: str, star
         },
         "change_attribution": {
             "status": "not_established",
-            "basis": "本响应是单次读取，未提供前后同口径读数与变更审计。不得将数值差异确定归因为人工复核、采集更新或代码修改；只能报告差异及原因尚未证实。",
+            "basis": "本响应是单次读取，未提供前后同口径读数与变更审计。不得将数值差异确定归因为人工复核、采集更新或代码修改；只能报告差异及原因尚未证实。投影版本标签没有部署时间，字段首次出现在对话的时间不是部署或回填时间，不支持原因排序。",
         },
         "signal_count_basis": "当前筛选范围内全部记录，采用与面板相同的自动分类及实际最新研究员复核；报道线索数量不是情景概率，也不是 scenarios.evidence_ids 的抽样长度。",
         "coverage_basis": "coverage 为全部主题的候选维度覆盖，排除 supplemental 补充报告；不随 topic/dimension 筛选。coverage[].count 是主题记录数，不是维度合计；一条记录可属于多个维度，dimensions[].count 不能加总。候选覆盖不是证据充分或数据完整。",
@@ -300,7 +308,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
     auth_config = auth_config or AuthConfig.from_env()
     server = FastMCP(
         "GeoAgent MCP",
-        instructions="只读访问 GeoAgent 快照、证据和业务分析。所有结果带 snapshot provenance。区分事实、规则条件和假设；描述某字段可以更新，不证明本次发生过更新。没有前后同口径数据及变更证据，不得确定归因。候选覆盖不等于数据完整，情景候选证据不等于已核验反证。",
+        instructions="只读访问 GeoAgent 快照、证据和业务分析。所有结果带 snapshot provenance。本周默认按所选快照导入日所在周周一至导入日，见 relative_time_basis，不按今天猜测。区分事实、规则条件和假设；描述某字段可以更新，不证明本次发生过更新。没有前后同口径数据及变更证据，不得确定归因或对原因排序。候选覆盖不等于数据完整，情景候选证据不等于已核验反证。冻结运行记录不能证明之后没有新事件；当前管线必须读取 live 状态及其时间。",
         host=os.getenv("GEOAGENT_MCP_HOST", "127.0.0.1"),
         port=int(os.getenv("GEOAGENT_MCP_PORT", "8401")),
         streamable_http_path="/mcp",
@@ -634,6 +642,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 raise MCPError("GEO_SNAPSHOT_NOT_FOUND", "快照不存在", {"snapshot_id": snapshot_id}) from exc
             result = research.analysis(snapshot, topic=topic, dimension=dimension, start=start, end=end)
             data = {
+                "analysis_evidence_boundary": _analysis_evidence_boundary(),
                 "assets": (result.get("assets") or [])[:page_limit],
                 "scenarios": (result.get("scenarios") or [])[:page_limit],
                 "rule_version": result.get("rule_version", RULE_VERSION),

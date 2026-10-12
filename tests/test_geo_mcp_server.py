@@ -20,11 +20,20 @@ from starlette.testclient import TestClient
 from backend.geo_mcp.auth import AuthConfig
 from backend.geo_mcp.contracts import MCPError, Principal
 from backend.geo_mcp.scope import authorize
+from backend.geo_mcp.provenance import snapshot_provenance
 from backend.geo_mcp.server import create_app, _workspace_counts
 from backend import store
 
 
 TOKEN = "geoagent-test-token"
+
+
+def test_relative_week_uses_selected_snapshot_import_date():
+    result = snapshot_provenance({"id": "historical", "created_at": "2026-10-09T07:30:40Z"}, working_snapshot_id="newer", latest_snapshot_id="newer")
+    assert result["relative_time_basis"]["this_week"] == {"start": "2026-10-05", "end": "2026-10-09"}
+    assert not result["is_latest_snapshot"]
+    missing = snapshot_provenance({"id": "missing"}, working_snapshot_id=None, latest_snapshot_id=None)
+    assert missing["relative_time_basis"]["this_week"] is None
 
 
 def test_workspace_counts_match_panel_scope_and_latest_reviews(monkeypatch):
@@ -63,6 +72,7 @@ def test_workspace_counts_match_panel_scope_and_latest_reviews(monkeypatch):
         assert result["review_evidence"]["applied_records_count"] == 1
         assert result["review_evidence"]["latest_applied_review_at"] == "2026-10-10T12:00:00Z"
         assert result["change_attribution"]["status"] == "not_established"
+        assert result["analysis_evidence_boundary"]["verified_counterevidence_status"] == "not_evaluated"
         assert "不是维度合计" in result["coverage_basis"]
         empty = _workspace_counts(snapshot, "usiran", "", "2026-10-10", "")
         assert empty["records_count"] == 0
