@@ -278,10 +278,25 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 
 外网交付前置（未执行）：发布本轮代码；设置管理口令和持久化 `GEO_DATA_DIR`；页面填写 `https://chat.lhotsetech.com` 及该环境 PiChat 应用 Key/用户/entry；创建 MCP Key 并绑定到目标 Agent。预期 MCP 地址 `https://geoagentd40d.sealosgzg.site/mcp`，需确保网关允许 Bearer 协议访问且 PiChat 允许该嵌入来源。本地连接配置保留 9172，未误改为外网环境。本轮没有提交新的业务问答，不将历史会话内容计为本轮 Agent 分析结果验收。
 
-### 2026-10-12：GitLab main 外网发布（进行中）
+### 2026-10-12：GitLab main 外网发布（部署与 MCP 通过，PiChat 配置阻塞）
 
 - 用户确认沿用 GitLab main → 受保护生产 tag → 手动 deploy 的 Sealos 发布链路，不使用本地替代部署。
 - 发布配置将 PiChat 根地址设置为 `https://chat.lhotsetech.com`，保留生产既有应用密钥、用户和 entry，持久化配置优先于环境变量。
 - 网关项目页面保留 Basic 登录；仅 `/mcp` 使用后端强制 Bearer。已登录的隔离 loopback 网关可管理连接配置及 Key（显式 opt-in，身份头覆盖，应用端口隔离，服务禁用代理客户端地址改写）。
 - 发布任务增加两个公网域名的真实 TLS / MCP initialize、tools/list、geo_snapshot_list 验证；测试 Key 使用后撤销，不落日志或产物。
 - 发布前后端回归 192 项通过，前端构建通过。外网部署、协议与嵌入结果待流水线和浏览器验收，不预先记为完成。
+
+发布与 live 结果：
+
+| 项目 | 结果与证据 |
+| --- | --- |
+| GitLab main | 已推送 `eaed746f818b452e7088f9b5477911f7bca8cd62`；生产 tag `geoagent-prod-v1.0.5` |
+| 生产验证与部署 | 流水线 [5272](https://gitlab.lz.internal/yujunjun/GeoAgent/-/pipelines/5272)；verify [27702](https://gitlab.lz.internal/yujunjun/GeoAgent/-/jobs/27702) 与 deploy [27703](https://gitlab.lz.internal/yujunjun/GeoAgent/-/jobs/27703) 均成功；CI 191 passed / 1 skipped；镜像 digest `sha256:f91438d682979b0426278358fb1bd4e8947ed2516f1d1e8fec31241eeeada069` |
+| 生产持久配置 | 发布任务成功设置 `https://chat.lhotsetech.com`，保留生产既有 Key / 用户 / entry；Chrome 已登录页面「连接配置」实际读取根地址及 `geo-research-assistant`，无需额外管理口令 |
+| 公网 MCP | `https://geoagentd40d.sealosgzg.site/mcp` 和 `https://geoagent.lhotsetech.com/mcp` 均通过真实 TLS 请求：匿名 401、initialize 200、tools/list 200（至少 11 工具）、geo_snapshot_list 200 / ok=true |
+| 测试凭证清理 | 发布任务创建的 release-live Key 已撤销；Chrome 页面列表显示已撤销；原文未写入日志和发布产物 |
+| 页面 live | 用户在 Chrome 完成现有 Basic 登录后，实际点击「智能问答」「连接配置」，页面及业务数据正常、配置读取成功；无前端框架错误遮罩。Chrome 自动化仅原生可访问，未取得浏览器控制台，故不宣称 console 无错误 |
+| PiChat 身份签发 | **未通过**：实际嵌入显示 `PiChat 身份签发失败: HTTP 401`；当前生产 Key 不被目标 PiChat 身份接口接受，未覆盖或重签凭证 |
+| PiChat iframe | **未通过**：Chrome 显示连接被拒绝；实测 `/work-embed/geo-research-assistant` 返回 HTTP 200，但 `Content-Security-Policy: frame-ancestors` 仅含 self、StockLink 及本地地址，不含两个 GeoAgent 域名 |
+
+下一步必须由生产 PiChat 配置完成：提供该环境有效应用 Key（在 GeoAgent 页面填写即可，无需重新发布），允许两个 GeoAgent HTTPS 父域嵌入，并确认该应用 entry / Agent / 用户权限；之后重跑身份 → iframe → WebSocket → 新业务问答。当前不宣称外网 Agent 已连通，也不将 MCP 协议通过等同于 Agent 业务验收。未修改其他项目的生产访问策略。
