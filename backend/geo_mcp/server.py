@@ -64,10 +64,12 @@ def _workspace_counts(snapshot: dict[str, Any], topic: str, dimension: str, star
     records = research.filtered_records(snapshot, topic, dimension, start, end)
     with store.db() as connection:
         rows = connection.execute(
-            "SELECT record_id, signal FROM reviews WHERE snapshot_id=? ORDER BY version",
+            "SELECT record_id, signal, version, created_at FROM reviews WHERE snapshot_id=? ORDER BY version",
             (snapshot["id"],),
         ).fetchall()
     reviews = {row["record_id"]: row["signal"] for row in rows}
+    latest_reviews = {row["record_id"]: row for row in rows}
+    applied_reviews = [latest_reviews[item["id"]] for item in records if item["id"] in latest_reviews]
     counts = {signal: 0 for signal in SIGNALS}
     for item in records:
         signal = reviews.get(item["id"])
@@ -81,8 +83,18 @@ def _workspace_counts(snapshot: dict[str, Any], topic: str, dimension: str, star
         "supplemental_records_count": sum(bool(item.get("supplemental")) for item in records),
         "signal_counts": counts,
         "signal_labels": SIGNALS,
-        "signal_count_basis": "当前筛选范围内全部记录，采用快照自动分类及最新研究员复核；报道线索数量不是情景概率，也不是 scenarios.evidence_ids 的抽样长度。复核可在快照创建后更新。",
-        "coverage_basis": "coverage 为全部主题的候选维度覆盖，排除 supplemental 补充报告；不随 topic/dimension 筛选。一条记录可属于多个维度，不能加总。",
+        "counting_projection_version": "risk-panel-signals/v2",
+        "review_evidence": {
+            "applied_records_count": len(applied_reviews),
+            "latest_applied_review_at": max((row["created_at"] or "" for row in applied_reviews), default="") or None,
+            "basis": "仅统计当前筛选内实际应用的每条记录最新复核，不包含其他快照或筛选外记录。存在复核不证明两次读数差异由复核造成。",
+        },
+        "change_attribution": {
+            "status": "not_established",
+            "basis": "本响应是单次读取，未提供前后同口径读数与变更审计。不得将数值差异确定归因为人工复核、采集更新或代码修改；只能报告差异及原因尚未证实。",
+        },
+        "signal_count_basis": "当前筛选范围内全部记录，采用与面板相同的自动分类及实际最新研究员复核；报道线索数量不是情景概率，也不是 scenarios.evidence_ids 的抽样长度。",
+        "coverage_basis": "coverage 为全部主题的候选维度覆盖，排除 supplemental 补充报告；不随 topic/dimension 筛选。coverage[].count 是主题记录数，不是维度合计；一条记录可属于多个维度，dimensions[].count 不能加总。候选覆盖不是证据充分或数据完整。",
         "framework_candidate_coverage": {
             "covered": sum(item["count"] > 0 for item in dimensions),
             "total": len(dimensions),
@@ -288,7 +300,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
     auth_config = auth_config or AuthConfig.from_env()
     server = FastMCP(
         "GeoAgent MCP",
-        instructions="只读访问 GeoAgent 快照、证据和业务分析。所有结果带 snapshot provenance。",
+        instructions="只读访问 GeoAgent 快照、证据和业务分析。所有结果带 snapshot provenance。区分事实、规则条件和假设；描述某字段可以更新，不证明本次发生过更新。没有前后同口径数据及变更证据，不得确定归因。候选覆盖不等于数据完整，情景候选证据不等于已核验反证。",
         host=os.getenv("GEOAGENT_MCP_HOST", "127.0.0.1"),
         port=int(os.getenv("GEOAGENT_MCP_PORT", "8401")),
         streamable_http_path="/mcp",
@@ -347,7 +359,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_workspace_summary", description="读取风险监测面板：升级相关/持续相关/缓和相关/待研判报道数量 signal_counts、范围内记录数 records_count、全框架候选维度覆盖，以及指标、资产和情景摘要。问‘风险概览、各类线索多少、维度覆盖多少、还缺什么数据’时使用。报道计数不是 scenarios.evidence_ids 的有限候选样本数量，也不是情景概率。coverage 排除补充报告且为全部主题，records_count 遵循 topic/dimension/日期筛选。", structured_output=False)
+    @server.tool(name="geo_workspace_summary", description="读取风险监测面板：升级相关/持续相关/缓和相关/待研判报道数量 signal_counts、范围内记录数 records_count、全框架候选维度覆盖，以及指标、资产和情景摘要。问‘风险概览、各类线索多少、维度覆盖多少、还缺什么数据’时使用。review_evidence 仅证明本次应用的复核，change_attribution 限定差异原因尚未证实，不能把可更新机制当成实际变更原因。报道计数不是 scenarios.evidence_ids 的有限候选样本数量，也不是情景概率。coverage 排除补充报告且为全部主题，coverage[].count 是主题记录数而非维度合计；records_count 遵循 topic/dimension/日期筛选。", structured_output=False)
     async def geo_workspace_summary(
         snapshot_id: str,
         topic: str = "all",

@@ -30,10 +30,11 @@ TOKEN = "geoagent-test-token"
 def test_workspace_counts_match_panel_scope_and_latest_reviews(monkeypatch):
     connection = sqlite3.connect(":memory:")
     connection.row_factory = sqlite3.Row
-    connection.execute("CREATE TABLE reviews(snapshot_id TEXT, record_id TEXT, version INTEGER, signal TEXT)")
-    connection.executemany("INSERT INTO reviews VALUES(?,?,?,?)", [
-        ("snap", "a", 2, "easing"), ("snap", "a", 1, "sustain"),
-        ("other", "b", 1, "easing"),
+    connection.execute("CREATE TABLE reviews(snapshot_id TEXT, record_id TEXT, version INTEGER, signal TEXT, created_at TEXT)")
+    connection.executemany("INSERT INTO reviews VALUES(?,?,?,?,?)", [
+        ("snap", "a", 2, "easing", "2026-10-10T12:00:00Z"), ("snap", "a", 1, "sustain", "2026-10-09T12:00:00Z"),
+        ("other", "b", 1, "easing", "2026-10-11T12:00:00Z"),
+        ("snap", "e", 3, "sustain", "2026-10-12T12:00:00Z"),
     ])
     @contextmanager
     def db():
@@ -59,9 +60,15 @@ def test_workspace_counts_match_panel_scope_and_latest_reviews(monkeypatch):
         assert next(row for row in result["coverage"] if row["id"] == "usiran")["count"] == 2
         assert next(row for row in result["coverage"] if row["id"] == "ukraine")["count"] == 1
         assert result["framework_candidate_coverage"]["total"] == 13
+        assert result["review_evidence"]["applied_records_count"] == 1
+        assert result["review_evidence"]["latest_applied_review_at"] == "2026-10-10T12:00:00Z"
+        assert result["change_attribution"]["status"] == "not_established"
+        assert "不是维度合计" in result["coverage_basis"]
         empty = _workspace_counts(snapshot, "usiran", "", "2026-10-10", "")
         assert empty["records_count"] == 0
         assert not any(empty["signal_counts"].values())
+        assert empty["review_evidence"]["applied_records_count"] == 0
+        assert empty["review_evidence"]["latest_applied_review_at"] is None
         # Historical snapshots may contain no precomputed signal at all. The
         # panel computes event_metadata on read; MCP must use that same path.
         historical = {"id": "historical", "records": [
@@ -74,6 +81,8 @@ def test_workspace_counts_match_panel_scope_and_latest_reviews(monkeypatch):
             del item["signal_basis"]
         computed = _workspace_counts(historical, "usiran", "", "", "")
         assert computed["signal_counts"] == {"escalation": 1, "sustain": 1, "easing": 1, "unknown": 0}
+        assert computed["review_evidence"]["applied_records_count"] == 0
+        assert computed["change_attribution"]["status"] == "not_established"
     finally:
         connection.close()
 
