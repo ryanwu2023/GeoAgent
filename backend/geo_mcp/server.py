@@ -84,6 +84,11 @@ def _latest_id(summaries: list[dict[str, Any]]) -> str | None:
     return summaries[0]["id"] if summaries else None
 
 
+def _latest_snapshot_id() -> str | None:
+    # Provenance needs IDs/dates only, not every archived record/history.
+    return _latest_id(store.snapshots())
+
+
 def _analysis_evidence_boundary() -> dict[str, str]:
     return {
         "verified_counterevidence_status": "not_evaluated",
@@ -497,7 +502,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 "observations_count": len(metrics),
             }
             warnings = analysis.get("data_warnings", [])
-            return summary, snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())), warnings
+            return summary, snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_snapshot_id()), warnings
 
         return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
@@ -562,7 +567,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                     "has_more": offset + page_limit < len(metrics),
                     "total": len(metrics),
                 },
-                snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())),
+                snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_snapshot_id()),
                 [],
             )
 
@@ -638,7 +643,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 warnings.append({"code": "GEO_OUTPUT_TRUNCATED", "message": "时间序列已按 max_points 截断", "max_points": point_limit})
             return (
                 data,
-                snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())),
+                snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_snapshot_id()),
                 warnings,
             )
 
@@ -675,7 +680,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             page = matched[offset : offset + page_limit]
             return (
                 {"analysis_evidence_boundary": _analysis_evidence_boundary(), "query_scope": {"snapshot_id": snapshot_id, "topic": topic, "dimension": dimension, "start": start, "end": end, "q": q}, "search_basis": "与证据台账相同的大小写无关子串检索，包含原文、已有译文及来源，不是语义搜索。", "records": [{**_record_summary(item), **evidence_semantics(item, reviews.get(item['id']))} for item in page], "offset": offset, "limit": page_limit, "has_more": offset + page_limit < len(matched), "total": len(matched)},
-                snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())),
+                snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_snapshot_id()),
                 [],
             )
 
@@ -698,7 +703,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             detail = {**_redacted_record(item), **evidence_semantics(item, review_index(snapshot_id).get(record_id))}
             detail['link_health'] = {k: v for k, v in link_health(snapshot_id, item.get('url', '')).items() if k in ('status', 'url', 'http_status', 'checked_at', 'final_url')}
             detail['link_health_basis'] = '与台账详情读取同一份链接检查记录，不在调用时发起网络检查；链接可访问不等于正文事实已核实。核验时点见checked_at，未检查不等于链接失效。'
-            return {"analysis_evidence_boundary": _analysis_evidence_boundary(), "record": detail}, snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())), []
+            return {"analysis_evidence_boundary": _analysis_evidence_boundary(), "record": detail}, snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_snapshot_id()), []
 
         return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
@@ -765,7 +770,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             }
             return (
                 data,
-                snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())),
+                snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_snapshot_id()),
                 result.get("data_warnings") or [],
             )
 
@@ -857,7 +862,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                         "text_basis": "研究简报看板的中文展示正文；原始归档不修改，来源标签翻译可更新。",
                     }
                 },
-                snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())),
+                snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_snapshot_id()),
                 warnings,
             )
 
@@ -924,7 +929,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             snapshot = store.get_snapshot(snapshot_id)
         except KeyError as exc:
             raise MCPError('GEO_SNAPSHOT_NOT_FOUND', '快照不存在', {'snapshot_id': snapshot_id}) from exc
-        return snapshot, snapshot_provenance(snapshot, working_snapshot_id=working, latest_snapshot_id=_latest_id(store.snapshot_summaries()))
+        return snapshot, snapshot_provenance(snapshot, working_snapshot_id=working, latest_snapshot_id=_latest_snapshot_id())
 
     @server.tool(description="回答风险地图主要事件、哪些地区关联报道多、地图数量为何与右侧不同。保持快照/主题/日期范围，支持图层和信号；地点是报道关联区域，不证明部署或事件事实，不读取当前地图视口。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_risk_map(snapshot_id: SnapshotId, topic: Topic='all', dimension: Dimension='', start: Start='', end: End='', categories: Annotated[list[str] | None, Field(description='事件图层机器值：military军事、diplomacy外交、policy政策、energy能源、support援助、domestic社会；null为全部六类，空数组为关闭全部。')]=None, signal: Annotated[str, Field(description='信号：all全部、escalation升级、sustain持续、easing缓和、unknown待研判；应用人工复核后筛选。')]='all', region: Annotated[str, Field(description='地点中文标签子串，例如霍尔木兹或伊朗；空串全部。不是地图视口、国家边界或全文检索。')]='', limit: Limit=20, *, ctx: Context) -> str:

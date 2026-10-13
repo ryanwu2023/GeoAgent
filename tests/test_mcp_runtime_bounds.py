@@ -5,6 +5,16 @@ from contextlib import contextmanager
 from backend.geo_mcp import server
 
 
+def test_latest_lineage_uses_metadata_without_decoding_archive(monkeypatch):
+    monkeypatch.setattr(server.store, 'snapshots', lambda: [{'id': 'latest', 'created_at': '2026-10-14'}])
+    def forbidden():
+        raise AssertionError('Full archive summaries must not be used for lineage')
+    monkeypatch.setattr(server.store, 'snapshot_summaries', forbidden)
+    assert server._latest_snapshot_id() == 'latest'
+    monkeypatch.setattr(server.store, 'snapshots', lambda: [])
+    assert server._latest_snapshot_id() is None
+
+
 def test_workspace_classifies_each_record_once_and_retains_review(monkeypatch):
     class FakeConnection:
         def execute(self, *args): return self
