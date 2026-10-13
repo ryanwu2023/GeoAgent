@@ -1,4 +1,3 @@
-import difflib
 from . import llm
 from starlette.middleware.gzip import GZipMiddleware
 from .link_health import link_health, summary as link_summary
@@ -37,7 +36,7 @@ def load_env():
                     os.environ.setdefault(key.strip(), value.strip().strip('"'))
 
 load_env()
-from .integrations import router as integrations_router, settings as integration_settings
+from .integrations import router as integrations_router, settings as integration_settings, pichat_tls_context
 from .geo_mcp.server import create_app as create_mcp_app
 from .geo_mcp.auth import AuthConfig, BearerAuthMiddleware
 from starlette.routing import Route
@@ -60,6 +59,8 @@ app = FastAPI(title="地缘政治研究接口", version="0.6.1",lifespan=lifespa
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(BearerAuthMiddleware, config=mcp_config, managed_keys=True)
 app.include_router(integrations_router)
+from .mcp_workbench import router as workbench_router
+app.include_router(workbench_router)
 # Delegate at the native path, with a fresh SDK session manager per lifecycle.
 app.router.routes.append(Route("/mcp", endpoint=ProjectMCP()))
 
@@ -96,7 +97,7 @@ async def pichat_embed_identity(agent_id: str = "geo-research-assistant"):
     }
     payload["entry" if entry else "agentId"] = entry or agent_id
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=10, verify=pichat_tls_context()) as client:
             response = await client.post(
                 f"{base_url}/api/v1/embed/identity",
                 headers={"Authorization": f"Bearer {app_key}"},
@@ -663,19 +664,9 @@ def evidence_page(snapshot_id: str, topic: Topic = "all", dimension: str = "", q
     s = snapshot_or_404(snapshot_id)
     validate_range(start, end)
     records = filtered_records(s, topic, dimension, start, end)
-    needle = q.strip().casefold()
     cache = translation_cache()
-    if needle:
-        def matches(record):
-            values = (
-                record.get("title", ""), record.get("text", ""),
-                record.get("title_zh", ""), record.get("summary_zh", ""),
-                record.get("source_name", ""), record.get("publisher", ""),
-                source_name(record.get("source_name", ""), cache),
-            )
-            return any(needle in str(value).casefold() for value in values)
-        records = [record for record in records if matches(record)]
-    records.sort(key=lambda record: (record.get("published_at") or "", record["id"]), reverse=True)
+    from .semantic import search_evidence
+    records = search_evidence(records, q)
     total = len(records)
     page = records[offset:offset + limit]
     reviews = review_index(snapshot_id)
@@ -783,18 +774,17 @@ def brief_diff(before: str, after: str):
         b = c.execute("SELECT markdown FROM briefs WHERE id=?", (after,)).fetchone()
     if not a or not b:
         raise HTTPException(404)
-    return {"diff": "\n".join(difflib.unified_diff(localize_brief_markdown(a[0]).splitlines(), localize_brief_markdown(b[0]).splitlines(), fromfile='前一版本 '+before, tofile='当前版本 '+after))}
+    from .chinese import compare_brief_markdown
+    return {"diff": compare_brief_markdown(a[0], b[0], before, after)}
 
 SIGNAL_LABELS = {"escalation":"升级相关","sustain":"持续相关","easing":"缓和相关","unknown":"待研判"}
 def review_index(sid):
-    with db() as c:
-        rows=c.execute("SELECT * FROM reviews WHERE snapshot_id=? ORDER BY version",(sid,)).fetchall()
-    return {r["record_id"]:dict(r) for r in rows}
+    from .semantic import review_index as shared_index
+    return shared_index(sid)
 
 def apply_review(record, review):
-    if review:
-        return {**record,"automatic_signal":record["situation_signal"],"situation_signal":review["signal"],"signal_label":SIGNAL_LABELS[review["signal"]],"signal_basis":"研究员研判："+review["reason"],"review":review}
-    return record
+    from .semantic import apply_review as shared_review
+    return shared_review(record, review)
 
 class ReviewInput(BaseModel):
     signal: Literal["escalation","sustain","easing","unknown"]

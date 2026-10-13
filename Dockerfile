@@ -4,11 +4,13 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig.json vite.config.ts index.html ./
 COPY src ./src
+COPY config ./config
 COPY public ./public
+COPY tests/*.cjs ./tests/
 ARG VITE_PICHAT_EMBED_ORIGIN=http://127.0.0.1:9172
 ARG VITE_PICHAT_AGENT_ID=geo-research-assistant
 ARG VITE_PICHAT_PRODUCT_USER_ID=geoagent-local
-RUN npm run build
+RUN npm test && npm run build
 
 FROM python:3.12-slim-bookworm
 WORKDIR /app

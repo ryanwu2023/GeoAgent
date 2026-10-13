@@ -1,5 +1,6 @@
 """Chinese presentation cache, separate from immutable original evidence."""
 import re
+import difflib
 import subprocess
 import sys
 import os
@@ -159,3 +160,14 @@ def localize_brief_markdown(markdown):
     cache=translation_cache()
     # Only change source-link labels in presentation; keep the stored archive immutable.
     return re.sub(r'\[([^\]\n]+)\]\((https?://[^\s)]+)\)',lambda m:'['+chinese_text(m[1],cache)+']('+m[2]+')',markdown).replace(' USD',' 美元')
+
+def compare_brief_markdown(before, after, before_id, after_id):
+    """Compare the same display projection used by the archived-brief panel.
+
+    Stored originals remain immutable; link-label translations can evolve.
+    """
+    return '\n'.join(difflib.unified_diff(
+        localize_brief_markdown(before).splitlines(),
+        localize_brief_markdown(after).splitlines(),
+        fromfile='前一版本 '+before_id, tofile='当前版本 '+after_id,
+    ))

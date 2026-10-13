@@ -1,5 +1,9 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useRef, useState } from "react";
 import IntegrationSettings from "./IntegrationSettings";
+import McpWorkbench from "./McpWorkbench";
+import projectLabels from "../config/project-labels.json";
+import { panelEntryScope } from "./hostViewContext";
+import { useEmbedIdentity } from "./useEmbedIdentity";
 import {
   Activity,
   ArrowUpRight,
@@ -35,6 +39,7 @@ import CollectorMonitor from "./CollectorMonitor";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { briefPresentation } from "./briefPresentation";
+import { useHostViewContext } from "./useHostViewContext";
 
 const MapView = lazy(() => import("./MapView"));
 
@@ -106,9 +111,13 @@ export default function App() {
     [asking, setAsking] = useState(false),
     [replay, setReplay] = useState(false),
     [history, setHistory] = useState<Answer[]>([]);
-  const [pichatReady, setPichatReady] = useState(false),
-    [pichatAuthRequired, setPichatAuthRequired] = useState(false),
-    [pichatError, setPichatError] = useState("");
+  const [embedWorkspaceScope, setEmbedWorkspaceScope] = useState("");
+  const openResearchAssistant = () => {
+    const scope = panelEntryScope(embedWorkspaceScope, chatOpen, workingSid);
+    if (!scope) return;
+    setEmbedWorkspaceScope(scope);
+    setChatOpen(true);
+  };
   const [briefs, setBriefs] = useState<Brief[]>([]),
     [brief, setBrief] = useState<Brief | null>(null),
     [generating, setGenerating] = useState(false),
@@ -120,6 +129,7 @@ export default function App() {
     evidenceVersion = useRef(0);
   const lastTopic = useRef("usiran");
   const [settingsOpen,setSettingsOpen] = useState(false);
+  const [mcpWorkbenchOpen,setMcpWorkbenchOpen] = useState(false);
   const [connection,setConnection] = useState({origin:"http://127.0.0.1:9172",agent_id:"geo-research-assistant",product_user_id:"geoagent-local"});
   const [connectionLoaded,setConnectionLoaded] = useState(false);
   const [connectionVersion,setConnectionVersion] = useState(0);
@@ -132,8 +142,6 @@ export default function App() {
       setConnection(await response.json());
       setConnectionLoaded(true);
       setConnectionVersion(value=>value+1);
-      setPichatReady(false);
-      pichatTokenRef.current=null;
     } catch(error){setPichatError(error instanceof Error?error.message:"连接配置读取失败")}
   };
   useEffect(()=>{void reloadConnection()},[]);
@@ -143,55 +151,12 @@ export default function App() {
     new Map<string, { time: number; data: Workspace }>(),
   );
   const pichatFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const pichatTokenRef = useRef<string | null>(null);
-  const requestPichatIdentity = async () => {
-    setPichatAuthRequired(true);
-    try {
-      const response = await fetch(
-        `/api/pichat/embed-identity?agent_id=${encodeURIComponent(pichatAgentId)}`,
-      );
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok || !body.token) {
-        throw new Error(body.detail || `HTTP ${response.status}`);
-      }
-      pichatTokenRef.current = body.token;
-      const message = { type: "pi-chat:embed-identity", agentId: pichatAgentId, token: body.token };
-      const financeMessage = {
-        type: "finance:auth:token",
-        token: body.token,
-        user: {
-          id: connection.product_user_id,
-          username: connection.product_user_id,
-          role: "user",
-          status: "active",
-          userType: "embed",
-          accounts: [],
-          qqBindings: [],
-          externalBindings: [],
-        },
-      };
-      // The work-embed route may be served by PiChat's product-web proxy even
-      // when the iframe URL starts at the API origin; use the iframe reference
-      // as the capability boundary and avoid rejecting that internal redirect.
-      const deliver = () => pichatFrameRef.current?.contentWindow?.postMessage(message, pichatOrigin);
-      const deliverFinance = () => pichatFrameRef.current?.contentWindow?.postMessage(financeMessage, pichatOrigin);
-      // The embedded app registers its message listener asynchronously; retry briefly
-      // so a fast iframe load cannot lose the one-time identity handshake.
-      deliver();
-      deliverFinance();
-      window.setTimeout(deliver, 250);
-      window.setTimeout(deliver, 750);
-      window.setTimeout(deliver, 1500);
-      window.setTimeout(deliverFinance, 250);
-      window.setTimeout(deliverFinance, 750);
-      window.setTimeout(deliverFinance, 1500);
-      setPichatAuthRequired(false);
-      setPichatError("");
-    } catch (error) {
-      setPichatAuthRequired(false);
-      setPichatError(error instanceof Error ? error.message : "PiChat 身份签发失败");
-    }
-  };
+  const {ready:pichatReady,loading:pichatAuthRequired,error:pichatError,
+    request:requestPichatIdentity,setError:setPichatError} = useEmbedIdentity(pichatFrameRef,
+      pichatOrigin,pichatAgentId,connection.product_user_id,connectionVersion,
+      chatOpen && connectionLoaded && !!embedWorkspaceScope);
+  const viewBridge = useHostViewContext(pichatFrameRef,pichatOrigin,pichatAgentId,connectionVersion,
+    chatOpen && connectionLoaded, {version:'geoagent-view/v1',snapshot_id:workingSid,topic,dimension,start,end});
   const pichatUrl = (() => {
     const url = new URL(
       `/work-embed/${encodeURIComponent(pichatAgentId)}`,
@@ -208,50 +173,11 @@ export default function App() {
     url.searchParams.set("parentOrigin", window.location.origin);
     url.searchParams.set(
       "workspaceScope",
-      `.geo-research-assistant/${workingSid || "default"}`,
+      // Preserve legacy history on entry, then freeze until explicit re-entry.
+      embedWorkspaceScope,
     );
     return url.toString();
   })();
-  useEffect(() => {
-    const onPichatMessage = async (event: MessageEvent) => {
-      if (event.origin !== pichatOrigin) return;
-      if (event.source !== pichatFrameRef.current?.contentWindow) return;
-      const data = event.data as { type?: string; agentId?: string } | null;
-      if (!data?.type) return;
-      if (data.type === "finance:auth:request") {
-        if (!pichatTokenRef.current) await requestPichatIdentity();
-        if (pichatTokenRef.current) {
-          (event.source as Window).postMessage(
-            {
-              type: "finance:auth:token",
-              token: pichatTokenRef.current,
-              user: {
-                id: connection.product_user_id,
-                username: connection.product_user_id,
-                role: "user",
-                status: "active",
-                userType: "embed",
-                accounts: [],
-                qqBindings: [],
-                externalBindings: [],
-              },
-            },
-            event.origin,
-          );
-        }
-      } else if (data.type === "pi-chat:embed-identity-required" && data.agentId === pichatAgentId) {
-        await requestPichatIdentity();
-      } else if (data.type === "finance:chat:ready") {
-        setPichatReady(true);
-        setPichatAuthRequired(false);
-      } else if (data.type === "finance:auth:required") {
-        setPichatReady(false);
-        setPichatAuthRequired(true);
-      }
-    };
-    window.addEventListener("message", onPichatMessage);
-    return () => window.removeEventListener("message", onPichatMessage);
-  }, [pichatOrigin, pichatAgentId, connection.product_user_id]);
   async function refreshStatus() {
     const s = await api<Status>("/status");
     setStatus(s);
@@ -479,7 +405,7 @@ export default function App() {
     setAsking(true);
     setAnswer(null);
     setReplay(false);
-    setChatOpen(true);
+    openResearchAssistant();
     setSourcesOpen(false);
     setTab("chat");
     try {
@@ -565,6 +491,7 @@ export default function App() {
   return (
     <div className="prototype-shell">
       {settingsOpen ? <IntegrationSettings onClose={()=>setSettingsOpen(false)} onSaved={()=>void reloadConnection()}/> : null}
+      {mcpWorkbenchOpen ? <McpWorkbench context={{snapshot_id:workingSid,topic,dimension,start,end}} onClose={()=>setMcpWorkbenchOpen(false)}/> : null}
       <header className="prototype-header">
         <div className="prototype-brand">
           <b>地缘</b>
@@ -585,6 +512,7 @@ export default function App() {
         </nav>
         <div className="header-actions">
           <button onClick={()=>setSettingsOpen(true)}>连接配置</button>
+          <button onClick={()=>setMcpWorkbenchOpen(true)}>MCP 工作台</button>
           <label className="snapshot-selector">
             <span>数据快照</span>
             <select
@@ -668,7 +596,8 @@ export default function App() {
                   } else {
                     if (page === "briefs") setPage(lastTopic.current);
                     setTab(id);
-                    setChatOpen(id === "chat");
+                    if (id === "chat") openResearchAssistant();
+                    else setChatOpen(false);
                     setSourcesOpen(id === "sources");
                   }
                 }}
@@ -1354,28 +1283,7 @@ export default function App() {
                 {work?.projects?.map((p) => (
                   <div className="source-row" key={p.id}>
                     <strong>
-                      {(
-                        {
-                          "xinhua-monitor": "新华网中文国际动态",
-                          "ua-front-monitor": "俄乌军事战线",
-                          "ukraine-aid-monitor": "乌克兰后援",
-                          "russia-domestic-monitor": "俄罗斯内政",
-                          "eu-domestic-monitor": "欧盟内政",
-                          "ru-diplomacy-monitor": "俄乌外交",
-                          "opinion-monitor": "美国民意",
-                          "israel-monitor": "以色列动向",
-                          "mideast-monitor": "中东各国",
-                          "iran-domestic-monitor": "伊朗内政",
-                          "diplomacy-monitor": "美伊外交",
-                          "iran-escalation-monitor": "伊朗战备",
-                          "naval-monitor": "海军动态",
-                          "readiness-monitor": "战备表态",
-                          "defense-spend-monitor": "军费与补给",
-                          "finance-front-monitor": "金融战线",
-                          "market-context-monitor": "市场补充",
-                          "asset-transmission-monitor": "资产传导跟踪",
-                        } as Record<string, string>
-                      )[p.id] || "新增数据项目"}
+                      {(projectLabels as Record<string, string>)[p.id] || "新增数据项目"}
                     </strong>
                     <span>
                       {p.state === "connected" ? "已接入" : "格式待适配"}
@@ -1471,6 +1379,7 @@ export default function App() {
                   <small>
                     PiChat Agent · {pichatAgentId} · {names[topic]} · 工作快照 {workingSid.slice(0, 8) || "未确认"}
                   </small>
+                  <small role="status" aria-label="看板范围同步状态">{viewBridge.status}。仅同步快照、主题、维度、日期。</small>
                 </div>
                 <button
                   aria-label="关闭研究助手"
@@ -1494,9 +1403,11 @@ export default function App() {
                   </div>
                 )}
                 {pichatError && (
-                  <div className="pichat-embed-status error">{pichatError}</div>
+                  <div className="pichat-embed-status error">{pichatError}
+                    <button type="button" onClick={()=>void requestPichatIdentity(true)}>重试连接</button>
+                  </div>
                 )}
-                {connectionLoaded ? <iframe
+                {connectionLoaded && embedWorkspaceScope ? <iframe
                   key={connectionVersion}
                   ref={pichatFrameRef}
                   title="GeoAgent PiChat 研究助手"
@@ -1506,6 +1417,7 @@ export default function App() {
                     setPichatError("PiChat 面板加载失败，请在连接配置中检查服务地址。")
                   }
                   onLoad={() => {
+                    viewBridge.reset();
                     setPichatError("");
                     void requestPichatIdentity();
                   }}
@@ -1722,7 +1634,7 @@ export default function App() {
               onClick={() => {
                 setQuestion(`分析${asset.name}的关联证据、条件及反证`);
                 setAsset(null);
-                setChatOpen(true);
+                openResearchAssistant();
                 setSourcesOpen(false);
                 setTab("chat");
               }}

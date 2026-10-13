@@ -23,3 +23,4 @@ collectors/**/state
 collectors/**/.probe
 collectors/**/_probe*
 docs
+output

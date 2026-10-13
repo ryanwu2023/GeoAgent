@@ -34,6 +34,8 @@ def metric_view(obs, start="", end=""):
         delta_unit='基点' if obs.get('bucket')=='rates' else '个百分点'
         if delta is not None and delta_unit=='基点':delta*=100
         pct=None
+    if delta is not None:delta=round(delta,10)
+    if pct is not None:pct=round(pct,10)
     return {**obs, "comparison_step":step,"delta_unit":delta_unit,"history": history, "current": current, "previous": previous, "delta": delta, "pct": pct, "status": "有可比前值" if delta is not None else "历史不足或数值缺失"}
 
 def metrics(snapshot, topic="all", dimension="", start="", end=""):

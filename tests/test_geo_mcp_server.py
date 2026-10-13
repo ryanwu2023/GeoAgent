@@ -63,6 +63,14 @@ def test_evidence_projection_keeps_panel_timestamps_without_raw_paths():
 def test_relative_week_uses_selected_snapshot_import_date():
     result = snapshot_provenance({"id": "historical", "created_at": "2026-10-09T07:30:40Z"}, working_snapshot_id="newer", latest_snapshot_id="newer")
     assert result["relative_time_basis"]["this_week"] == {"start": "2026-10-05", "end": "2026-10-09"}
+    boundary = result["collection_snapshot_boundary"]
+    assert "采集恢复不等于补齐旧快照" in boundary["collection_recovery"]
+    assert "原始归档材料" in boundary["historical_material"]
+    assert "展示投影更新不等于新增归档材料" in boundary["historical_material"]
+    assert "未读取不能断言" in boundary["verification"]
+    for status in ("success", "partial", "failed"):
+        projected = _collector_projection({"run_id": "r", "run_status": status, "collectors": []})
+        assert projected["collection_snapshot_boundary"] == boundary
     assert not result["is_latest_snapshot"]
     missing = snapshot_provenance({"id": "missing"}, working_snapshot_id=None, latest_snapshot_id=None)
     assert missing["relative_time_basis"]["this_week"] is None
@@ -354,12 +362,20 @@ async def test_official_mcp_client_can_initialize_list_and_call() -> None:
         async with httpx.AsyncClient(
             base_url=base_url,
             headers={"Authorization": f"Bearer {TOKEN}"},
+            # Full snapshot projections can exceed httpx's default 5s locally.
+            # This bounds only the isolated contract test, not the live service.
+            timeout=30,
         ) as http_client:
             async with streamable_http_client(f"{base_url}/mcp", http_client=http_client) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     tools = await session.list_tools()
                     names = {tool.name for tool in tools.tools}
+                    assert {'geo_business_catalog', 'geo_metric_changes', 'geo_source_health', 'geo_collector_runs', 'geo_brief_compare', 'geo_risk_map'} <= names
+                    for tool in tools.tools:
+                        assert tool.annotations.readOnlyHint is True
+                        for parameter in tool.inputSchema.get('properties', {}).values():
+                            assert parameter.get('description'), tool.name
                     assert {
                         "geo_snapshot_list",
                         "geo_snapshot_get",
@@ -384,6 +400,21 @@ async def test_official_mcp_client_can_initialize_list_and_call() -> None:
 
                     snapshot_id = payload["provenance"]["working_snapshot_id"] or payload["data"]["snapshots"][0]["id"]
                     assert snapshot_id in {item["id"] for item in payload["data"]["snapshots"]}
+                    for name, arguments in [
+                        ('geo_business_catalog', {}),
+                        ('geo_metric_changes', {'snapshot_id': snapshot_id, 'topic': 'usiran', 'limit': 2}),
+                        ('geo_source_health', {'snapshot_id': snapshot_id, 'limit': 2}),
+                        ('geo_risk_map', {'snapshot_id': snapshot_id, 'topic': 'usiran', 'limit': 2}),
+                        ('geo_collector_runs', {'limit': 2}),
+                    ]:
+                        trial = json.loads((await session.call_tool(name, arguments)).content[0].text)
+                        assert trial['ok'], (name, trial)
+                        if name == 'geo_collector_runs':
+                            assert '采集恢复不等于补齐旧快照' in trial['data']['collection_snapshot_boundary']['collection_recovery']
+                        elif 'snapshot_id' in arguments:
+                            assert '采集恢复不等于补齐旧快照' in trial['provenance']['collection_snapshot_boundary']['collection_recovery']
+                    invalid_date = json.loads((await session.call_tool('geo_metric_changes', {'snapshot_id': snapshot_id, 'start': '2026-02-30'})).content[0].text)
+                    assert invalid_date['ok'] is False
                     overview = await session.call_tool("geo_workspace_summary", {"snapshot_id": snapshot_id, "topic": "usiran", "limit": 1})
                     overview_payload = json.loads(overview.content[0].text)
                     assert overview_payload["ok"] is True
