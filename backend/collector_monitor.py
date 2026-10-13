@@ -142,7 +142,7 @@ def _load_report(report: Path, labels: dict[str, str]) -> dict[str, Any] | None:
     }
 
 
-def load_runs(runs_root: Path, registry_path: Path, limit: int = 20) -> list[dict[str, Any]]:
+def load_runs(runs_root: Path, registry_path: Path, limit: int = 20, *, run_id: str = '') -> list[dict[str, Any]]:
     """Return parseable persisted reports newest first."""
     reports = []
     if runs_root.is_dir():
@@ -162,6 +162,7 @@ def load_runs(runs_root: Path, registry_path: Path, limit: int = 20) -> list[dic
         reports = list(
             directory / ("results.json" if (directory / "results.json").is_file() else "state.json")
             for directory in report_dirs
+            if not run_id or directory.name == run_id
         )
 
         def sort_key(path: Path) -> tuple[str, float]:

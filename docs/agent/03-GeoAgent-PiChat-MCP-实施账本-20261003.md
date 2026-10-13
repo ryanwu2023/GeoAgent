@@ -387,3 +387,167 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 轮次 21（05:32，13 秒）：analysis_view + summary 两次；三情景规则与面板匹配，明确候选不是条件满足，旧正文标明沿用旧回执。但标题仍写“已核验反证——没有”，实际 not_evaluated 只能是未评估、是否存在未知；未完全通过。补 verified_counterevidence_available=unknown 与 assessment_summary。截图 `/tmp/geoagent-counter-v13-20261013.jpg`。
 - 轮次 22（05:33，18 秒）：摘要 usiran/all 两次，展开技术详情确认指定工作快照、topic=usiran、limit=1 等实际参数。**告警范围/缺口核心通过**：美伊 count=0、全主题 count=7；候选覆盖不是完整覆盖，22 条 supplemental 排除不是缺失，有效零值/隔离/目录未枚举不再当无数据。覆盖、时效、证据核验缺口与独立面板基线匹配；未新读证据正文，旧材料不作为本轮重新核验。截图 `/tmp/geoagent-gaps-v13-20261013.jpg`。
 - 测试启动器使用 stdout/stderr PIPE 却不读取，长会话存在日志反压卡死风险；改临时日志文件保留诊断，避免依赖无人消费的管道。该项是测试设施修复，不作为生产连接修复或 Agent 验收结果。
+- 最终补丁冻结后全量 **197 passed（54.92秒）**，MCP 专项再跑 **14 passed（24.48秒）**。`78a90c1a` / `geoagent-prod-v1.0.14` 已推送 main；pipeline 5294 verify 27746 通过，手动 deploy 27747 已启动，等待外网复测。
+- v1.0.14 deploy 27747 已通过，两个公网域名匿名 401 / initialize、list、snapshot-call 200，临时发布 Key 撤销。继续生产嵌入轮次23起复测。
+- 轮次 23（05:37，9秒）：analysis_view 重新取数，明确 not_evaluated/unknown、不能说没有反证；情景规则、候选和旧正文分层正确，**反证未知状态核心通过**。末尾仍把 limit_basis 误解为旧假阴性解释，跨项归因未通过。截图 `/tmp/geoagent-counter-v14-20261013.jpg`。
+- 轮次 24（05:38，8秒）：collector_status 新回执，最近可见批次/四采集器/源失败/导入与管线面板一致；明确 process_running=unknown、events_after_latest_visible=unknown、no_updates_since_last_event=not_established，不再断言几天无更新，**管线主用例核心通过**。截图 `/tmp/geoagent-pipeline-v14-20261013.jpg`。
+- 轮次 25（05:39，10秒）：新 get 两条正文，采集/发布/核验/链接状态匹配，未再泛化整个快照无数据；情景失效是否成立保持未知。**证据字段与有限样本范围通过**，但“单舰返港这一事实由中央司令部发布”措辞仍易将被报道通报读为独立核验事实，保留解释风险。截图 `/tmp/geoagent-evidence-v14-20261013.jpg`。
+- 轮次 26（05:40，18秒）：针对错误 limit 归因的追问，真实 analysis_view 两次、limit=5/1；确认低 limit 只有 equity 项，不改变 credit 路径匹配。Agent 撤回旧归因，指出先前带 financial 筛选不同、具体原因仍未证实，**被挑战后的纠错通过，不等于未经提醒的稳定通过**。截图 `/tmp/geoagent-attribution-limit-v14-20261013.jpg`。
+- 用户再次解锁后检查生产专用 Agent 管理页：revision 956844beddc967c40e2820b2；基础/执行策略/工具能力/装配页未见系统提示词编辑入口，未更改描述、模型、权限、其他 Agent 或站点默认值。不能把“配置可改善”当作已执行指令修复；继续原始自然问题复测。
+- 轮次 27（05:42，13秒）：只输入原始问题“当前判断有哪些反证？”，实际 analysis_view / workspace_summary 两次新读取（read_at 21:42:39Z / 21:42:42Z）。正文正确引用 not_evaluated、available=unknown 及“尚未评估，是否存在未知”，但标题仍写“系统核验状态：尚无已核验反证”，容易误读为已核查后的否定判断；结尾的正确限定不能消除标题歧义。**反证口径稳定性未通过**，不能用轮次23或纠错追问的通过替代。截图 `/tmp/geoagent-counter-natural-v14-20261013.jpg`。
+- 本轮判定：连接与数据字段修复、问答分析稳定性分别记账。连接配置（URL/Key/MCP assignment）不是这一语义问题的修复点；专用分析指令可作为下一修复方向，但管理页未找到编辑入口，尚未实际修改或验证。所有复测仍在既有长会话，未完成独立新会话验收；不得宣称生产全套完成。
+
+### 2026-10-13：MCP 工作台与已撤销 Key 清理（本地实现）
+
+- 根据用户两张参考图新增顶部独立「MCP 工作台」，沿用深色系统 UI；工具搜索、描述字数、原始 description/inputSchema、参数字段表、服务 instructions、annotations/outputSchema、JSON 试调用与真实返回、近7天调用记录和 P95。
+- 模型视角明确限定为 MCP 原始契约，不宣称等同 PiChat 加工后的上下文，不照抄参考图中的500字/50000字符等未核实阈值；返回区来自真实试调用，不伪造静态样例。
+- 工作台 catalog/call 均受现有项目管理鉴权保护；试调用由后端固定转发至同项目 `/mcp`，仍经真实 Bearer 授权与 SDK 参数校验，不支持任意 URL 或权限绕过。用户提供的试调用 Key 只在面板内存使用，不持久化，不进入调用统计。
+- 统计从本功能启用开始，保留7天，仅记录工具名、时间、状态、耗时、回执ID；最多展示最近2000条。认证失败与进入工具前的协议错误未进入统计，历史零记录不解释为从未调用。
+- 已撤销 Key 增加「删除记录」，仅从管理列表移除，后端保留撤销 tombstone，不能恢复访问。启用 Key 删除返回409，必须先撤销；原有启用连接不受清理影响。
+- 本地 `npm run build` 通过；integration 专项15项通过，覆盖清理幂等、禁止删除启用Key、删除后认证仍拒绝、管理403、真实MCP成功/失效401、未知工具与超大参数422、SDK缺参数错误及统计不存Key。
+- 本地服务8010/8011已启动（MCP随后端）；经真实HTTP检查前端200、health ok、工作台11个工具和instructions。现有IAB标签绑定被浏览器安全策略阻止，未绕过、未另换浏览器；页面视觉/点击/响应式/console live验收未执行，不把构建/API通过当作UI通过。未发布外网，未删除生产Key记录。
+- 最终串行全量回归 **199 passed（51.12秒）**。本轮浏览器专用技能不可用，原计划使用现有CUA页面验证；该路径被策略阻止后停止，未改用终端浏览器自动化绕过。
+
+### 2026-10-13：工作台免 Key 调试与本地 UI live 验收
+
+- 本节更新上一节的调试方式与 UI 验收状态：管理员试调用不再输入 MCP Key。后端通过隔离的进程内 MCP transport 调用相同业务工具，保留 SDK 参数校验；临时凭证不持久化、不下发前端。项目管理鉴权仍保留，对外 `/mcp` 仍要求 Bearer Key，匿名访问401。该调试路径不替代外部 Agent 的 Key/权限验收。
+- 在右侧本地内嵌浏览器 `http://127.0.0.1:8010/` 实际操作：中文描述搜索「快照」、工具名搜索 `geo_snapshot_get` 和无匹配搜索均符合预期；参数表显示必填 snapshot_id 及摘要工具默认值，与原始 inputSchema 对照一致。非法 JSON 在前端提示，空参数触发 SDK 缺必填错误，合法快照参数真实返回成功。
+- `geo_workspace_summary` 指定工作快照 `0b18ddf4468552d911eba06e`、topic=usiran、limit=1，返回风险计数92/54/135、记录2301，与右侧面板逐项匹配。不存在的快照返回 `GEO_SNAPSHOT_NOT_FOUND`，界面显示业务失败而非成功。
+- 调用实况核对成功/业务失败的时间、状态、耗时和 audit_event_id，计数随实际调用增加；非法 JSON 和进入业务工具前的 SDK 错误不计入业务统计。修复固定请求 ID 导致回执 ID 重复的问题，连续两次成功调用已得到不同 ID；既有历史记录不回写。
+- 返回区改为格式化业务 JSON，原始 MCP 协议回执仍可展开查看，避免嵌套转义文本难以阅读。工作台明示管理调试与外部认证的边界。
+- 实际点击删除本地已撤销 `final-restart-check`（ID c2590c3fd8c1cdb1）的记录，刷新及服务重启后均不再显示，另一条已撤销记录仍在；后端保留撤销 tombstone。未删除生产 Key，未创建额外启用 Key；启用 Key 禁止删除409由回归测试验证。
+- live 发现并修复旧 Key 表并发迁移的 `duplicate column name: deleted_at` 500：获取 SQLite 写锁后重新检查列再迁移；新增8线程/16次并发回归。配置接口非 JSON 错误也改为可读提示。
+- 冻结补丁后串行全量 **200 passed（30.35秒）**，`npm run build` 通过，`git diff --check` 通过。最终本地页面 error/warn console 记录为空；桌面截图已检查，移动端未测。证据：`/tmp/geoagent-mcp-workbench-keyless-20261013.png`、`/tmp/geoagent-mcp-workbench-calls-20261013.png`、`/tmp/geoagent-mcp-key-deleted-20261013.png`。
+- 本地8010/8011与随项目运行的 MCP 保持启动，右侧页面保持打开。仅完成本地工作台验收，未提交/推送或发布外网，不将其记为生产 Agent 剩余业务用例已通过。
+
+### 2026-10-13：按用户要求移除独立项目管理口令
+
+- 移除连接配置、MCP工作台的管理口令输入、前端请求头及后端 `GEOAGENT_SETTINGS_TOKEN` 校验；本地和公网均不要求该额外口令。旧环境变量不再参与校验，环境示例同步删除。部署层已有站点登录不变；仍保留同源 Origin 检查。这不是新增用户权限系统：能够访问项目接口的人可管理连接/签发撤销Key并通过工作台读取业务数据，无站点登录的部署会开放这些能力。
+- 对外 `/mcp` Bearer认证不变，跨站管理请求仍403；原始应用Key不返回给前端。公网来源TestClient无需管理口令即可读取配置、执行工作台调用及创建MCP Key，匿名直接访问 `/mcp` 仍401。
+- 本地重启8010/8011，在右侧页面实际打开连接配置，自动加载成功且无口令框；切换工作台加载11个工具，无口令执行 `geo_snapshot_list` 返回ok=true。页面身份正确、无空白/框架错误覆盖，最终error/warn日志为空。截图 `/tmp/geoagent-no-management-password-20261013.png`，桌面1610×1314，移动端未测。
+- integration专项16 passed；全量200 passed（28.56秒）；前端构建和diff检查通过。React技能用于清理失效状态/请求头，前端验证技能用于实际交互检查；Browser插件不可用，采用现有CUA内Playwright接口。仅本地生效，未提交/推送/外网发布。
+
+### 2026-10-13：05业务语义重构首批实施（未全部完成）
+
+- R0：新增06业务映射与验收文档，覆盖九菜单读取路径和27条自然问题。地图地区/图层范围、链接健康实时复核等缺口明确列出，细项全量验收仍待进行。
+- R1：指标解释抽取至config/metric-guides.json，前端MetricGuide与backend.semantic共用；指标详情补含义、作用、边界、比较周期及展示单位。证据子串检索、事件分类/人工复核投影统一；16个工具全部参数附业务description，新增主题/维度字典，日期无效或倒置返回结构化错误。
+- R2：新增geo_business_catalog、geo_metric_changes、geo_source_health、geo_collector_runs、geo_brief_compare。区间首末有效观测由程序计算，零值/隔离/缺观测与基点转换分开；分析工具支持asset_id/scenario_id按需详情，情景证据关系明确candidate_only/not_evaluated。概览compact参数为可选，默认保留旧字段，未做破坏性删减。
+- 工作台按当前看板范围预填Schema支持的参数；不宣称这已解决嵌入Agent上下文。
+- R3证据：全量207 passed（30.01s），前端build通过。官方SDK初始化/列工具、参数描述、新增4工具调用、日期拒绝与既有权限测试通过；真实简报双版本比较未验收。随后仅增加说明字段/文档及前端预填，build再次通过。
+- 本地live：工作台16工具，搜索“本周”能定位变化工具。快照0b18ddf4/usiran/limit=2回执workbench-6959187d96c84bdea9f6013450e7bee2返回ok=true，范围09-28至09-30、total31、有后续页；月度财政序列两条无有效观测，正确返回insufficient_observations。不能将前两条结果说成全体没有变化。
+- S08阻塞：只读核对PiChat AgentEmbedPage消息接收，当前缺GeoAgent业务上下文消费路径。跨项目修改不在本轮默认实施范围，未伪造已传递/已消费。需授权配合修改PiChat或由其Agent实现后，再验收快照/主题/日期切换。
+- R4未通过：本轮尚未完成逐菜单独立新会话自然问答，不把MCP协议或工作台测试算Agent验收；地图地区聚合、历史批次结构化比较等仍有剩余工作，见06。按React技能抽取共享配置并保持增量兼容，按前端验证技能做真实工作台交互。
+- 本地服务保持8010/8011，MCP随后端启动。未提交/推送/发布外网。
+- 补充UI试调用：搜索“来源健康”，选择工具自动预填所选快照，回执workbench-3aba2d13a41d4535b78436c493aa87eb成功返回项目状态与缺发布时间/采集时间。截图/tmp/geoagent-semantic-source-health-20261013.png；最终专项回归37 passed。
+
+### 2026-10-13：GeoAgent剩余语义重构与本地工作台逐类live（PiChat另侧实施）
+
+- 本轮只修改GeoAgent；PiChat上下文桥接由用户指定另一Agent处理，不修改其仓库、不操作生产权限、不发布。
+- 地图新增geo_risk_map，17工具均标记readOnlyHint/destructiveHint；沿用看板分类、复核和地点投影，提供图层/信号/地点名称筛选、分类数、可定位数、无地点数与地区关联报道。一个报道关联多地，地区数不能相加当总记录；不声称读取视口、证明部署或确认事件。
+- 链接健康读取与REST详情相同的检查档案，区分尚未检查、检查时间与HTTP状态；不会因为读取工具就声称实时复核。证据正文以UTF-8字节限制并明示截断。来源项目中文名称提取config/project-labels.json由前后端共用，来源缺时间字段补业务语义，错误提示脱敏。
+- 历史批次按run_id在limit前定位，补compare_run_id与结构化比较；未知字段不置零，不编造失败原因。修复特定旧批次因最近20条边界而找不到的问题。
+- 指标区间结果增加全匹配集summary，不用当前页推断全体；共享metric_view精度修复5.26%-5.24%出现1.999999…基点的问题，返回2基点。审计事件ID改为独立UUID，避免不同MCP会话复用JSON-RPC请求ID时碰撞；既有历史不重写。工作台切换工具中止旧请求并忽略迟到结果。
+- 自动验证：串行全量216 passed（28.72s），npm run build与git diff --check通过。新增隔离数据测试涵盖25批次历史查询、两个简报UTF-8差异截断、地图去重/人工复核、空图层/非法参数、链接检查档案、基点精度与审计唯一性；没有用模拟结果替代以下真实UI。
+- 本地右侧内嵌浏览器实际操作http://127.0.0.1:8010/：搜索/选择/JSON参数/试调用/返回/调用记录，工作快照0b18ddf4468552d911eba06e、美伊、全部维度、无日期。概览92/54/135、范围2301，全快照4384；地图分类2279/定位1831/无地点448与面板一致。geo_risk_map修复后审计geo-audit-21ef4ac9e95447f5874feaa8ef2ba4e8。
+- 来源面板与工具均显示defense-spend-monitor缺发布时间7、缺采集时间144，未把字段缺失冒充来源失败。周范围09-28至09-30共31指标，13可比较且变化、18观测不足；10年美债5.24%→5.26%/+2基点与量化面板一致，audit geo-audit-c61efe00977a46b8a6fc2e00d20621de。
+- 情景escalate的成立/反向条件及缺口与面板一致，状态仍为研究假设、未判定成立；候选关系candidate_only/not_evaluated，不报告“没有反证”。信用债返回信用利差302基点/+9基点、VIX16.04/-0.03及条件和缺口，不把条件机制当冲突归因。
+- 当前批次manual-20261012T085105Z-b9fd1a5f为partial，18采集器/1失败，导入skipped_collection_status；对比manual-20261009T023209Z-52f88f68的success/0失败/succeeded，UI及工具一致。未触发新采集。非法地图参数GEO_INVALID_FILTER在UI与调用记录均显示失败。
+- 切俄乌/军事战线后，工作台自动预填ukraine/frontline，返回分类611/定位432与地图一致。运行中切换工具两次检查新工具均“尚未执行”，无旧结果串入。日期原生控件的自动输入未可靠触发筛选状态，日期UI传递不记通过；协议日期校验已有测试。输入无效超长年份时后端拒绝，清除后恢复，未修改业务数据。
+- 本地只有1份真实归档简报，同ID比较无差异通过；两份不同真实档案未验收，双版本计算仅由隔离测试覆盖。桌面页面无空白/框架覆盖，最终error/warn日志为空；移动端未测。证据/tmp/geoagent-semantic-live-results-20261013.json、/tmp/geoagent-semantic-map-live-20261013.png。
+- 当前结论：本轮GeoAgent工具层与本地工作台重构增量通过；R4独立新会话、自然问题→自主选工具→最终回答仍未通过，不能拿上述工作台试调用替代。待PiChat侧完成S08后联验上下文切换、无证据归因及逐菜单首问。服务8010/8011与随项目MCP保持运行，未提交/推送/发布。
+
+### 2026-10-13：日期控件同步与真实双简报比较收尾
+
+- 范围：仅GeoAgent本地；PiChat不处理。本轮按前端验证技能进行实际页面操作，Browser插件未提供，采用现有CUA内Playwright接口；未修改日期控件代码，没有将自动化填值问题包装成应用修复。
+- 日期同步：在0b18ddf4468552d911eba06e、美伊、全部维度下，用原生date控件键盘事件设定2026-09-28至09-30。仅fill改变DOM值而未触发React状态；补真实ArrowDown/ArrowUp事件后看板筛选确实更新。打开工作台选择geo_risk_map，自动JSON的start/end正确，未手改参数直接执行。看板与返回均分类534/定位398/无地点136、风险线索升级3/持续19/缓和7。回执workbench-158be2da075c427bbabdf0df1d174044，audit geo-audit-70705595c1174ec5a649a409daebc7c3。
+- 清除与恢复：实际点击“清除”，看板恢复分类2279/定位1831、范围2301；后续恢复原快照0b18ddf4并重新打开工作台，自动参数start/end为空、snapshot_id正确。日期同步由“待验收”改为本地UI通过，不代表PiChat消费日期上下文已通过。
+- 真实档案：通过页面“生成双主题简报”分别从0b18ddf4和9163e282生成两份简报，非测试插入。before=b530cd7437c29264a7bbdb70（2026-10-13T02:19:54.276434Z，原文64712字节），after=3d33806bd844f547bbce381a（02:20:26.554124Z，原文71916字节）。模式均“本地证据简报（含模型状态说明）”，不声称模型生成成功。两份档案重启后均可见，保留供复核，不删除旧档案。
+- 修复发现：研究简报REST比较使用localize_brief_markdown后的展示正文，而MCP compare/get用原文，可能出现面板与Agent差异。增加chinese.compare_brief_markdown供REST/MCP共用；MCP正文读取也使用看板展示投影，说明来源链接标签翻译可更新，原始归档不改写。测试检查USD展示为美元且数据库原文保持USD。
+- 真实差异113358 UTF-8字节，原单次30KB返回无法读完整。geo_brief_compare新增可选offset_chars及has_more/next_offset_chars/total_chars/total_bytes/returned_bytes，按完整UTF-8字符边界续读；小到装不下一个字符时返回结构化错误，避免无进度循环。默认参数兼容，描述提示Agent不得以首段概括全文。
+- 页面“比较简报→比较版本”取得完整差异，再在工作台真实输入同一对ID分4次试调用，拼接全文与面板逐字完全一致（113358字节）；快照、时间、模式一致。回执依次workbench-24f23b70d0834e35825bf7e0c629d059、workbench-4bf22336541644f49ebdfd221424e4d5、workbench-92295df877ac4abd97928d7f6a9a81f9、workbench-8bab3071b8c04cd99e254c3e3393d8e2。正文可见俄乌摘要/市场观测及证据引用发生变化，不自动推断因果或判断被证实。
+- 自动测试扩充：隔离简报REST/MCP差异完全一致、展示正文与不可变原文分离、分页续读拼回完整文本。专项4 passed；前端build、diff检查通过。首轮全量216 passed（33.45s）；分页最终代码一轮全量215 passed/1 SDK ReadTimeout（25.48s），该SDK用例独立复测1 passed（12.85s），继续串行全量复测，结果追加于下。没有把超时隐藏为通过。
+- 现场页面身份http://127.0.0.1:8010/、V6研究工作台正确，无空白/框架覆盖，最终error/warn日志为空；桌面验证，移动端未测。证据/tmp/geoagent-date-brief-live-receipts-20261013.json、/tmp/geoagent-date-sync-live-20261013.png、/tmp/geoagent-real-brief-panel-20261013.png、/tmp/geoagent-real-brief-mcp-20261013.png。
+- 结论：本轮两个指定剩余项本地live通过，保留新生成的两份真实档案。本地8010/8011及MCP运行，工作快照恢复0b18ddf4、无日期过滤；不修改PiChat，不提交/推送/发布，R4独立Agent问答仍另行验收。
+- 最终冻结代码串行全量回归216 passed（29.47s），前端build与git diff --check通过；上述SDK超时复测未再出现，不据此推断已查明超时根因。
+
+### 2026-10-13：根据PiChat任务委托配合5585上下文桥（联合验收待准备）
+
+- 收到用户授权的跨任务对接：阅读PiChat主检出host-view-context.md，在GeoAgent实现ready/set/result，禁止改PiChat/9172/生产，暂不进行模型问答。实现、恢复与准备条件归档07文档。
+- 新增独立状态机及React hook，监听器按origin/当前iframe窗口校验；按panelId/Agent/session/scope重绑，UUID requestId与递增revision，只同步快照/主题/维度/日期。成功回执须匹配当前绑定、请求、revision、范围、received/modelConsumed=false/next_user_turn；旧回执忽略，失败/超时显示未同步。无隐藏提问、无会话强制创建、无聊天输入操作、无看板localStorage。
+- workspaceScope固定为项目scope，快照改变只经数据桥、不再重载iframe。实际本地切0b18ddf4→9163e282时src不变，再恢复基线。地图等筛选未接入；不把received说成模型已使用。
+- 通过只允许回环地址的临时环境覆盖，把本地iframe与BFF身份目标一并改为5585。原持久配置/Key原样保留，不复用到5585；缺独立GEOAGENT_LOCAL_PICHAT_APP_KEY时BFF503且不发出凭证请求。覆盖开启时配置保存409防止误覆盖。恢复方式见07，未改生产/9172配置或进程。
+- 状态机Node4 passed（strict TS/noEmitOnError）；Python集成18 passed；全量218 passed（29.78s），随后仅补配置写保护及稳定scope，专项18再次通过，最终全量结果追加。前端build通过，git diff --check通过。
+- 当前5585未监听，内嵌连接拒绝，GeoAgent正确显示“未同步：等待面板就绪”和独立Key未配置。截图/tmp/geoagent-host-view-awaiting-5585-20261013.png。页面非空、无框架错误覆盖；当前不是成功握手/模型使用证明，移动端未测。未发起真实模型问题，未输出凭证。
+- 待PiChat侧准备：启动含新协议的5585版本及其独立GeoAgent应用凭证（宿主8010、Agent及入口/用户许可），双方运行版本一致后统一内嵌浏览器验收provider独立上下文块、MCP参数及看板回答。仅GeoAgent宿主实现/本地准备完成，S08/R4仍不能标完成。
+- 最终全量218 passed（31.71s），严格TS状态机测试4 passed（含发送字段白名单、不夹带额外token字段）；前端build及diff检查通过。当前GeoAgent进程使用5585临时覆盖保持运行，原配置可按07恢复；没有真实received回执或模型调用，不将单元测试计为联合live成功。
+
+### 2026-10-13：旧快照会话scope最小兼容修正
+
+- 更正上一条“固定项目scope”：PiChat历史列表按scope精确匹配，父scope不能展示旧快照scope的会话。未删除历史，不进行迁移、合并或扩大列表权限。App三个打开入口统一在明确进入时捕获旧`.geo-research-assistant/<snapshot_id>`，面板存续期间固定；范围变化仅更新view桥。
+- 本地实际UI：0b18ddf4打开→切9163e282，iframe src保持完全一致；关闭重入进入9163e282旧scope；关闭→选0b18ddf4→重入恢复原scope。空快照不进入，不静默填latest。Node新增未完成请求期间切范围scope不变及明确重入各旧scope测试，最终5 passed；npm run build与git diff --check通过。此次仅前端增量，上一轮Python218 passed不冒充本次重新运行。
+- 页面8010/V6正确、有内容、无框架错误覆盖，error/warn日志为空；Browser插件未提供，使用CUA内Playwright。截图/tmp/geoagent-snapshot-scope-compat-20261013.png。5585连接拒绝和缺独立Key仍为已知联合准备条件；未发真实模型、未验证旧会话内容恢复，不把URL证据当运行中模型冻结证据。移动端未测。
+- 07同步修正兼容方案及明确恢复入口。日期控件同步、两份真实简报逐字比较仍按上方已完成证据；真实简报保留。页面最终停留简报档案、工作快照0b18ddf4、无日期过滤。未修改PiChat、9172、生产配置，未提交/推送/发布。
+
+### 2026-10-13：5585专用本地凭证准备
+
+- 依据用户授权的PiChat任务委托，只重启GeoAgent8010/8011，使用5585独立App Key环境覆盖，原DB配置/凭证不变。phone/product user/entry已有配置，不输出其值。当前身份BFF502、上游签发403，待PiChat侧核对应用配置；未发真实模型问答，不声明嵌入已成功。
+- 新建本地24小时MCP只读scope凭证，绑定geo-research-assistant/local；仓库外目录0700及文件0600，未输出密钥，未复用旧Key。载入后官方SDK initialize/list_tools/geo_snapshot_list成功，17工具全部只读；未认证8010/mcp与8011/mcp均401。有效期至2026-10-14T04:16:48Z。恢复/条件见07，未改PiChat、9172、生产、源码或业务数据，未提交/发布。
+
+### 2026-10-13：采集恢复与旧快照边界补强（未重启，待生效）
+
+- 用户要求只改代码及账本，不影响当前联合Live。新增共享collection_snapshot_boundary，进入所有快照型工具的provenance，以及geo_collector_status详情、geo_collector_runs列表data。明确采集恢复不等于补齐旧快照；采集成功/导入成功/覆盖补齐分开；旧原始归档不自动回填，复核及翻译等展示投影更新不代表新增材料；须确认导入snapshot_id并读同范围指标/证据，不能未读就称完整一周或可比项增多。
+- 增量返回字段，不改变计数、查询范围或旧数据，不将Agent答复错误硬编码为Host业务判定。当前8011不是reload模式，未重启，因此当前联合Live尚未载入新字段；须待Live结束协调重启后，另行验证实际Provider消费。
+- 测试覆盖共享快照语义、采集success/partial/failed状态仍不能证明回填，以及官方SDK实际快照/来源/地图/批次返回字段。首轮14 passed（19.38s）；追加SDK字段断言后一轮13 passed/1 httpx.ReadTimeout，正在串行复测，不隐藏超时。
+- 其他答复问题及验收要求归档08移交提示词：霍尔木兹5写6、HY单期与周区间混用、未读10/9就断言覆盖改善。PiChat回报L1–L4轨迹与部分数字正确，但答复质量仍有未通过项；此为联调侧证据，不冒充GeoAgent独立Provider验证。
+- 联调侧报告13:26 L5连接失败。只读检查BFF PID52843启动于12:17:56、前端PID52867于12:17:57，当前仍同PID，本轮未在13:22–13:28重启，也未修改筛选。原24小时Token以新独立MCP会话initialize/geo_snapshot_list成功；没有检验或改变PiChat原连接会话/熔断状态，不能据此判定原连接仍有效或确定故障根因。未操作当前UI、未发问、未改PiChat、9172或生产，未提交/发布。
+- 最终回归：新增SDK断言后两轮分别13 passed/1 ReadTimeout（11.96s、12.28s）；仅将隔离SDK契约测试httpx timeout从默认5秒改为30秒，最终14 passed（20.97s），git diff --check通过。未修改服务超时，未查明两次超时根因，不据此声明L5故障修复。当前运行仍未载入本轮代码，需协调重启后另验收。
+
+### 2026-10-13：嵌入身份续期最小修复（前端，未重启）
+
+- PiChat侧委托定位：finance:auth:request复用非空旧Token，finance:auth:required只置loading；BFF身份200、TTL1800秒，不是服务停止。只修Geo宿主，不改PiChat/权限/TTL/原配置，不发模型问答。
+- 新增embedIdentity.ts状态机与useEmbedIdentity.ts生命周期Hook，App移除旧缓存/无清理投递逻辑并加入“重试连接”。检查exp及30秒临期，失效重新签发、并发single-flight；15秒请求超时及10秒ready超时给恢复反馈。关闭/连接变更中止请求、清定时器/监听，generation阻止旧投递，过期/畸形响应不缓存；固定origin/窗口校验复用既有trustedViewSource。
+- 红绿：旧逻辑行为适配器6项全红，修复6绿；补清理和临期用例最终8 passed。装载缺模块的失败不计业务红测。范围桥5 passed、strict TS编译通过；前端build及diff检查最终结果追加于下。没有修改workspaceScope、会话API、筛选或输入行为。
+- 生效边界：未重启8010/8011（PID52867/52843自12:17仍运行），Vite自动热更新前端，新增Hook可能使FastRefresh重置开发页组件状态。只读浏览器观察本地6/7标签均为风险监测、10/9快照，无嵌入面板；未刷新、重开、切筛选或发问，不能声明原会话/未发送输入保持已实测。只读标签6控制台error/warn为空、页面有内容且无框架覆盖；Browser插件未提供，使用CUA只读接口。真实空闲续期/重试UI/历史会话恢复仍待PiChat侧联合验收，不把单元测试或BFF200当通过。
+- 后端采集语义新增仍未生效，继续等待联合Live结束协调重启；无提交/推送/发布。07同步续期契约和限制。
+- 最终npm run build通过（2.43s），git diff --check通过；本轮不计真实续期UI验收通过。
+
+### 2026-10-13：身份恢复联合UI部分复验（PiChat侧证据）
+
+- PiChat联调任务回报：8010正常打开助手，不再卡获取身份；关闭助手→选原09-30快照→打开后，原会话第5轮内容及未发送草稿恢复。保持同一iframe切回9163e282/usiran/us_readiness/2026-10-08～10-09，宿主/iframe revision8一致，右侧26/2/0/282。证据/tmp/geoagent-identity-recovered-20261013.png。这是PiChat侧实际UI证据，GeoAgent本轮未重复操作或独立复查。
+- PiChat补丁fad683402a处理embed API401 epoch guard与WS ticket401父页续期，定向51项/类型/构建通过，据其回报5585静态bundle已更新；未推送/MR。与Geo宿主8项身份状态机、5项范围桥验证分开记录。
+- 只确认本次面板进入、旧会话/草稿恢复和范围同步；自然超过30分钟空闲续期仍未验，不标通过。跨域iframe自动发送不可用，等待用户点击原草稿；不代发、不重开、不改变当前页面/筛选、不重启8010/8011。后端采集语义新增仍待协调生效。混合工作树未整批提交，避免夹带前序重构。
+
+### 2026-10-13：L5恢复轮同范围取数通过（PiChat侧联合Live证据）
+
+- 用户在原8010 iframe实际发送；会话s-871cdebaf82c第6轮，run-b19c9e84-a479-4b41-b309-dae996f008a4，新panel20337b01-5ba1-4db4-a4eb-47873553b67e、revision10。PiChat侧回报真实模型输入及summary/risk_map两次调用均为9163e282/usiran/us_readiness/2026-10-08～10-09，2调用0失败，回答升级26，与看板26/2/0/282一致；原会话保留。截图/tmp/geoagent-l5-recovery-live-20261013.png。GeoAgent未重复操作或独立复查Provider轨迹。
+- L5恢复后的同范围取数验收通过，不抹去原13:26失败。Q5仍未通过：实际2次调用却称4次成功；不能宣布全部答复质量通过。14:50截图至15:25发送虽超过30分钟，但没有捕获自动续期握手，长期空闲自动换发仍未单独验收。
+- 未再改Key/连接配置、未重启，当前场景保持。后端采集边界新增仍待协调重启生效；不自动补发L6或其他问题。
+
+### 2026-10-14：本地连接已发布chat.test，使用公网MCP验收
+
+- 用户明确确认现有GeoAgent应用增加http://127.0.0.1:8010来源，并确认签发独立嵌入Key保存本地。通过chat.test管理UI只改GeoAgent应用：保留两公网来源、dock入口、geo-research-assistant和1800秒TTL，增加第三个来源8010。独立Key仅embed:identity、7天，原公网Key未撤销。凭证和原配置备份仅在仓库外0700目录/0600文件及本地持久配置，不记明文、不提交。未修改StockLink/LCF。
+- 本地保存origin=https://chat.test、entry=dock，保留既有phone/product user映射；取消旧5585环境覆盖并重启8010/8011使配置生效。未改PiChat运行进程，未发布Geo代码；此次后端重启也载入此前collection_snapshot_boundary，但公网MCP仍旧v1.0.14，不能认为它已收到新字段。原24小时本地scope凭证未续期或转授远端。
+- TLS发现及修复：Python3.14首先不信任内部CA，之后严格扩展验证拒绝Luozi Internal CA缺Key Usage。从系统钥匙串读取既有Luozi Internal CA，并与公共certifi根合并；新增显式GEOAGENT_PICHAT_CA_FILE，仅PiChat httpx请求使用SSLContext标准链验证（去掉VERIFY_X509_STRICT扩展约束），CERT_REQUIRED/check_hostname仍开启，不verify=False、不忽略浏览器警告。默认未配置时行为不变。测试test_integration_settings.py 19 passed（1.56s），diff检查通过。
+- 本地启动：.venv/bin/python /tmp/geoagent-start-chat-test-20261014.py，CA文件与启动脚本在仓库外；保存配置是持久的，CA环境变量仍需本地启动器载入。身份签发HTTP200、token_present=true、Agent正确；无输出Token/手机号。iframe实际origin=chat.test，范围r1/r2 received。不得认为域名映射后来源策略自动适用于所有域名，未来chat.lhotsetech.com须另核对TLS及部署映射。
+- 语音装配只读核对：已发布GeoAgent已有固定常驻“声音生成”，speech_generate/speech_operation/speech_reply在包内，无需重复配置/扩大其他权限。实际第二轮speech_generate失败SPEECH_PROVIDER_NOT_CONFIGURED；chat.test配置中心的streamingSpeech、glmTts及tencentTts Provider/credentialRef未设置。没有生成音频，不宣称语音通过；语音输入控件存在但未录音测试，需PiChat侧提供可用Provider及凭据再验收，不擅自改站点共享模型/凭据。
+- 真实UI首问（00:40北京时间）：要求列公网快照并核对宿主0b18ddf4，MCP list/get两次调用，公网可见e6f55aa2、57fb9e48、fb975ea1，目标返回GEO_SNAPSHOT_NOT_FOUND。Agent没有静默切latest；但“看起来是本地看板标识而非落盘研究快照”归因不准确，该快照确在本地归档，仅不在公网数据源，另记质量缺口。
+- 真实第二问明确指定57fb9e48f6a0fa1f10f8502d/usiran/空维度/空日期覆盖宿主：Agent工具返回与答复升级227/持续68/缓和139、范围3979，与Chrome已登录公网项目同快照风险面板一致。该通过只属于公网MCP连接/指定范围取数；本地面板0b18ddf4仍92/54/135/2301，不能把异源快照说成同看板数据通过。本地→远端PiChat→公网GeoMCP链真实调用成功，不是API代发或模型模拟。未独立复查Provider完整轨迹，未验全部业务用例、长期空闲续期或真实语音音频。
+- 证据：/tmp/geoagent-chat-test-origin-saved-20261014.png（密钥弹窗关闭后）、/tmp/geoagent-chat-test-live-20261014.png、/tmp/geoagent-public-counts-20261014.png。右侧本地tab保留，未触发采集/修改公网工作快照/公开本地MCP。Geo远端main仍78a90c1a，当前本地重构未提交/推送/发布。
+
+### 2026-10-14：整理本地重构并提交 GitLab MR
+
+- 范围：业务语义共用配置、MCP 业务工具及工作台、撤销 Key 列表清理、取消额外管理口令（部署层仍负责站点访问控制，对外 MCP 保留 Bearer 认证）、嵌入身份续期与宿主范围/日期同步、采集恢复与旧快照材料边界、内部 CA 连接兼容及回归测试。
+- 本地验证：`.venv/bin/python -m pytest -q` 全量219项通过（30.59秒）；`npm run build` TypeScript与生产构建通过（仅现有大分块提示）；`npm test` 状态机13项通过。首次直接运行前端测试因未设置临时编译路径失败，已补内存编译测试入口，无临时JS产物；Docker构建也执行该测试入口。
+- 整理约束：`output/` 加入Git与Docker忽略，不提交截图、`.env`、数据库、CA、密钥或临时脚本；只提交源代码、共享业务配置、测试及设计/验收/移交文档。实际配置与凭据仍在本地后端数据目录或外部临时目录。
+- 交付方式：独立 `codex/geoagent-mcp-business-refactor` 分支，目标main，通过push建立MR；不直接推main、不合并、不发布、不重启当前live。MR及流水线回执在创建后补记。
+- 验收边界：本地自动测试通过不等于全部公网业务场景通过；当前语音生成通过但嵌入播放失败，仍按下节及08移交跟进，不在本MR中宣称修复PiChat播放器。
+
+### 2026-10-14：本地嵌入语音生成与播放Live复验（播放未通过）
+
+- 用户已在chat.test配置腾讯TTS。管理页面只读显示已配置、鉴权及真实出音已验证，最近生成验证00:49:35、M4A42.2KB/5秒；这是管理Provider验证，不替代GeoAgent嵌入播放。本轮未重复Provider验证或改凭据。
+- 保留本地8010原嵌入会话、看板0b18ddf4/usiran/空维度日期。已有第3轮用户“用语音和我说个你好”在配置前speech_reply失败，不抹去历史。本轮第4轮通过UI自然发送明确公网57fb9e48f6a0fa1f10f8502d/usiran/空维度日期覆盖宿主，要求重新取数及speech_generate；未用API代发、未静默切latest或写工作快照。
+- 本轮可见调用回执两步：geo_workspace_summary（约3.8s，audit geo-audit-ddbff61f62688df7d8ee）及speech_generate。展开真实MCP回执核对snapshot_id/topic/query_scope，升级227/持续68/缓和139、范围3979，与Chrome已登录公网同快照看板一致。答复及实际“查看讲稿”数字同样一致；本地旁栏92/54/135/2301是另一个本地快照，不算同面板一致性通过。
+- 腾讯语音operation speech-66289721-290d-4df5-bc42-64f08ba98009从accepted/playable=false推进至“已生成”，音频M4A479.4KB、55秒、默认音色；讲稿为本轮数字及限制说明。生成通过。两次点击“播放声音”均短暂显示暂停播放/00:00，随后“播放中断，点击播放可重试读取”，不能记播放通过。卡片有data-first-audio-at标记，仅说明播放器报告过首音频事件，不证明实际可听或完整播完；没有听觉完整核验。
+- 未为掩盖问题重复生成。按下载UI一次尝试读取同一制品，12秒未收到浏览器download事件，不能判文件下载成功或确定服务端失败。只读检查宿主日志error/warn为空，iframe DOM没有普通audio元素；PiChat源码显示header-token客户端使用认证PCM/AudioWorklet，cookie客户端可走完整文件Range播放器。此为候选调查方向，不是已确定网络、权限、解码或缓冲根因；未放宽iframe权限、未修改PiChat源码/部署。
+- 额外答复质量缺口：把待研判约89%解释为“自动分类尚未覆盖大部分记录”，unknown信号不直接等于分类覆盖缺失；MCP该计数本身正确。讲稿同步带入了此推断，须PiChat侧另核对，不能因数字一致宣称全部分析正确。
+- 证据/tmp/geoagent-speech-generated-playback-failed-20261014.png及/tmp/geoagent-public-counts-verified-20261014.png。账本状态：MCP指定范围读数通过、语音生成通过、嵌入播放失败、下载未验证、真实语音输入/长期空闲续期未验。保留原会话和失败音频，没有存入报告库或触发采集/重启/发布；后续须PiChat排查相同operation的PCM请求状态、Worklet错误及播放器事件，再用同制品复测播放，不新增生成掩盖问题。

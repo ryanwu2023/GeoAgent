@@ -12,7 +12,8 @@ import logging
 import os
 import re
 from time import monotonic
-from typing import Any, Callable
+from typing import Any, Callable, Annotated
+from pydantic import Field
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -20,8 +21,13 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from backend import research, store
+from backend.geo_mcp.provenance import collection_snapshot_boundary
+from backend.semantic import metric_semantics, interval_change, validate_dates, search_evidence, evidence_semantics, review_index, map_projection, collector_comparison
+from backend.link_health import link_health
+from backend.chinese import localize_brief_markdown, compare_brief_markdown
+from backend.semantic import project_labels
 from backend.catalog import TOPICS, RULE_VERSION, topic_dimensions
-from backend.events import SIGNALS, event_metadata
+from backend.events import SIGNALS, CATEGORIES, event_metadata
 from backend.collector_monitor import load_ledger_events, load_runs
 from backend.paths import project_root
 from scripts.integrate_collectors import load_registry
@@ -38,12 +44,30 @@ logger = logging.getLogger("geoagent.mcp")
 MAX_BRIEF_BYTES = 30_000
 MAX_COLLECTOR_EVENTS = 100
 
+# Descriptions are part of the model-visible inputSchema, not only UI labels.
+SnapshotId = Annotated[str, Field(description="所选看板快照ID，从geo_snapshot_list获取；不得自行替换为latest。")]
+Topic = Annotated[str, Field(description="业务主题：all综合、usiran美伊局势、ukraine俄乌冲突；优先保持用户当前看板范围。", json_schema_extra={"enum": ["all", "usiran", "ukraine"]})]
+Dimension = Annotated[str, Field(description="跟踪维度机器值；空串表示全部。合法值与中文名见geo_business_catalog，不按名称猜测。")]
+Start = Annotated[str, Field(description="含起点YYYY-MM-DD；空串不限。证据按发布时间日期，指标按观测日期；本周基于所选快照导入日。")]
+End = Annotated[str, Field(description="含终点YYYY-MM-DD；空串不限。须不早于start。不同类型时间不能冒充同一时间轴。")]
+Limit = Annotated[int, Field(description="返回列表项上限1—50（采集工具1—100）；不是证据充分性或检索范围限制。")]
+Offset = Annotated[int, Field(description="分页偏移，从0开始；total/has_more表示是否还有结果。")]
+Series = Annotated[str, Field(description="指标series或id，从geo_metric_catalog获取；如dgs10是美债10年收益率，不能自行编造。")]
+RecordId = Annotated[str, Field(description="证据ID，从检索结果或分析候选evidence_ids获取，必须属于指定快照。")]
+Query = Annotated[str, Field(description="与台账相同的子串关键词；原文/已有译文/来源匹配，不支持自然语言语义检索；空串按时间列出。")]
+RunId = Annotated[str, Field(description="采集批次ID，从geo_collector_runs获取；空串读取最近可见批次，不代表当前进程正在运行。")]
+CollectorId = Annotated[str, Field(description="采集器ID，空串为批次内全部采集器；与来源source不同。")]
+BriefId = Annotated[str, Field(description="已归档简报ID，从geo_brief_list获取；即时问答不是档案。")]
+MaxPoints = Annotated[int, Field(description="返回最近观测点上限1—50，截断标志见history_truncated；区间计算基于截断前有效点。")]
+MaxBytes = Annotated[int, Field(description="简报正文UTF-8字节上限1—30000；truncated=true时不能当成完整正文。")]
+
 
 def _topic_ids() -> set[str]:
     return {topic["id"] for topic in TOPICS}
 
 
-def _validate_filters(topic: str, dimension: str) -> None:
+def _validate_filters(topic: str, dimension: str, start: str = '', end: str = '') -> None:
+    validate_dates(start, end)
     if topic != "all" and topic not in _topic_ids():
         raise MCPError("GEO_INVALID_DIMENSION", f"未知 topic: {topic}", {"topic": topic})
     if dimension:
@@ -94,6 +118,8 @@ def _workspace_counts(snapshot: dict[str, Any], topic: str, dimension: str, star
         "records_count": len(records),
         "supplemental_records_count": sum(bool(item.get("supplemental")) for item in records),
         "signal_counts": counts,
+        "event_category_counts": {category: sum(event_metadata(r)['event_category'] == category for r in records) for category in sorted({event_metadata(r)['event_category'] for r in records})},
+        "event_category_basis": "当前topic/dimension/日期范围全部记录的自动事件分类，可能含地图图例未展示类别；不应用地图图层、信号或地理点位筛选，不能冒充地图可见点数。",
         "signal_labels": SIGNALS,
         "counting_projection_version": "risk-panel-signals/v2",
         "review_evidence": {
@@ -141,7 +167,11 @@ def _record_summary(record_item: dict[str, Any]) -> dict[str, Any]:
 
 def _redacted_record(record_item: dict[str, Any]) -> dict[str, Any]:
     result = _record_summary(record_item)
-    result["text"] = (record_item.get("text") or "")[:MAX_TEXT_BYTES]
+    body = (record_item.get("text") or "").encode('utf8')
+    result["text"] = body[:MAX_TEXT_BYTES].decode('utf8', errors='ignore')
+    result['text_truncated'] = len(body) > MAX_TEXT_BYTES
+    result['text_bytes_total'] = len(body)
+    result['text_limit_bytes'] = MAX_TEXT_BYTES
     result["original_title"] = record_item.get("original_title") or result["title"]
     result["verification"] = record_item.get("verification")
     result["link_health"] = record_item.get("link_health")
@@ -179,6 +209,7 @@ def _collector_projection(run: dict[str, Any]) -> dict[str, Any]:
     }
     result = {key: run.get(key) for key in allowed if key in run}
     result["live"] = True
+    result["collection_snapshot_boundary"] = collection_snapshot_boundary()
     result["activity_assessment"] = {
         "process_running": "unknown",
         "events_after_latest_visible": "unknown",
@@ -340,7 +371,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
     async def healthz(_: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "service": "geoagent-mcp", "protocol_version": "geo-mcp/v1"})
 
-    @server.tool(name="geo_snapshot_list", description="列出当前 principal 可见的 GeoAgent 快照版本和统计。", structured_output=False)
+    @server.tool(name="geo_snapshot_list", description="列出当前 principal 可见的 GeoAgent 快照版本和统计。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_snapshot_list(ctx: Context) -> str:
         tool = "geo_snapshot_list"
 
@@ -362,8 +393,8 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_snapshot_get", description="读取一个可见快照的轻量元数据，不返回全量 records。", structured_output=False)
-    async def geo_snapshot_get(snapshot_id: str, ctx: Context) -> str:
+    @server.tool(name="geo_snapshot_get", description="读取一个可见快照的轻量元数据，不返回全量 records。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    async def geo_snapshot_get(snapshot_id: SnapshotId, ctx: Context) -> str:
         tool = "geo_snapshot_get"
 
         def handler(principal: Any, _: str) -> tuple[Any, dict[str, Any], list[dict[str, Any]]]:
@@ -377,25 +408,26 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             summary = next((item for item in summaries if item["id"] == snapshot_id), None)
             if summary is None:
                 raise MCPError("GEO_SNAPSHOT_NOT_FOUND", "快照不存在", {"snapshot_id": snapshot_id})
-            data = {"snapshot": summary}
+            data = {"snapshot": summary, "records_basis": "records为全快照归并后的记录数；不是当前主题/维度/日期筛选的面板记录数。面板计数请读取geo_workspace_summary。"}
             return data, snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(summaries)), []
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_workspace_summary", description="读取风险监测面板：升级相关/持续相关/缓和相关/待研判报道数量 signal_counts、范围内记录数 records_count、全框架候选维度覆盖，以及指标、资产和情景摘要。问‘风险概览、各类线索多少、维度覆盖多少、还缺什么数据’时使用。review_evidence 仅证明本次应用的复核，change_attribution 限定差异原因尚未证实，不能把可更新机制当成实际变更原因。报道计数不是 scenarios.evidence_ids 的有限候选样本数量，也不是情景概率。coverage 排除补充报告且为全部主题，coverage[].count 是主题记录数而非维度合计；records_count 遵循 topic/dimension/日期筛选。", structured_output=False)
+    @server.tool(name="geo_workspace_summary", description="读取风险监测面板：升级相关/持续相关/缓和相关/待研判报道数量 signal_counts、范围内记录数 records_count、全框架候选维度覆盖，以及指标、资产和情景摘要。问‘风险概览、各类线索多少、维度覆盖多少、还缺什么数据’时使用。review_evidence 仅证明本次应用的复核，change_attribution 限定差异原因尚未证实，不能把可更新机制当成实际变更原因。报道计数不是 scenarios.evidence_ids 的有限候选样本数量，也不是情景概率。coverage 排除补充报告且为全部主题，coverage[].count 是主题记录数而非维度合计；records_count 遵循 topic/dimension/日期筛选。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_workspace_summary(
-        snapshot_id: str,
-        topic: str = "all",
-        dimension: str = "",
-        start: str = "",
-        end: str = "",
-        limit: int = 20,
+        snapshot_id: SnapshotId,
+        topic: Topic = "all",
+        dimension: Dimension = "",
+        start: Start = "",
+        end: End = "",
+        limit: Limit = 20,
+        compact: Annotated[bool, Field(description="true仅返回概览，完整资产/情景用geo_analysis_view按需读取；false保留旧版完整字段。建议概览使用true。")]=False,
         *,
         ctx: Context,
     ) -> str:
         tool = "geo_workspace_summary"
         def handler(principal: Any, _: str) -> tuple[Any, dict[str, Any], list[dict[str, Any]]]:
-            _validate_filters(topic, dimension)
+            _validate_filters(topic, dimension, start, end)
             page_limit = clamp_limit(limit)
             working_id = store.get_working_snapshot_id()
             authorize(principal, tool=tool, snapshot_id=snapshot_id, working_snapshot_id=working_id, topic=topic if topic != "all" else None, dimension=dimension or None)
@@ -429,8 +461,11 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                     }
                     for item in metrics[:page_limit]
                 ],
-                "assets": analysis.get("assets", []),
-                "scenarios": analysis.get("scenarios", []),
+                "assets": ([{k: item.get(k) for k in ('id', 'name', 'direction', 'assessment_kind')} for item in analysis.get("assets", [])[:page_limit]] if compact else analysis.get('assets', [])),
+                "scenarios": ([{k: item.get(k) for k in ('id', 'name', 'status')} for item in analysis.get("scenarios", [])[:page_limit]] if compact else analysis.get('scenarios', [])),
+                "projection": "compact-v1" if compact else "legacy-full",
+                "details_tool": "geo_analysis_view",
+                "result_limits": {"limit": page_limit, "total_metrics": len(metrics), "total_assets": len(analysis.get('assets', [])), "total_scenarios": len(analysis.get('scenarios', [])), "basis": "metrics返回前limit项；compact=true时资产/情景也返回前limit项，否则保留旧版完整字段。完整规则/候选按需读取geo_analysis_view；coverage为全主题独立统计。"},
                 "observations_count": len(metrics),
             }
             warnings = analysis.get("data_warnings", [])
@@ -438,22 +473,22 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_metric_catalog", description="列出快照内可用指标的轻量目录，不返回完整时间序列。", structured_output=False)
+    @server.tool(name="geo_metric_catalog", description="列出快照内可用指标的轻量目录，不返回完整时间序列。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_metric_catalog(
-        snapshot_id: str,
-        topic: str = "all",
-        dimension: str = "",
-        start: str = "",
-        end: str = "",
-        offset: int = 0,
-        limit: int = 20,
+        snapshot_id: SnapshotId,
+        topic: Topic = "all",
+        dimension: Dimension = "",
+        start: Start = "",
+        end: End = "",
+        offset: Offset = 0,
+        limit: Limit = 20,
         *,
         ctx: Context,
     ) -> str:
         tool = "geo_metric_catalog"
 
         def handler(principal: Any, _: str) -> tuple[Any, dict[str, Any], list[dict[str, Any]]]:
-            _validate_filters(topic, dimension)
+            _validate_filters(topic, dimension, start, end)
             if offset < 0:
                 raise MCPError("GEO_INVALID_OFFSET", "offset 不能为负数")
             page_limit = clamp_limit(limit)
@@ -505,22 +540,22 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_metric_series", description="读取快照内指定指标的有界时间序列和程序计算摘要。", structured_output=False)
+    @server.tool(name="geo_metric_series", description="读取快照内指定指标的有界时间序列和程序计算摘要。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_metric_series(
-        snapshot_id: str,
-        series: str,
-        topic: str = "all",
-        dimension: str = "",
-        start: str = "",
-        end: str = "",
-        max_points: int = 50,
+        snapshot_id: SnapshotId,
+        series: Series,
+        topic: Topic = "all",
+        dimension: Dimension = "",
+        start: Start = "",
+        end: End = "",
+        max_points: MaxPoints = 50,
         *,
         ctx: Context,
     ) -> str:
         tool = "geo_metric_series"
 
         def handler(principal: Any, _: str) -> tuple[Any, dict[str, Any], list[dict[str, Any]]]:
-            _validate_filters(topic, dimension)
+            _validate_filters(topic, dimension, start, end)
             if not series.strip():
                 raise MCPError("GEO_METRIC_INVALID", "series 不能为空")
             point_limit = clamp_limit(max_points)
@@ -563,6 +598,8 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                     "pct": metric.get("pct"),
                     "freshness": metric.get("freshness"),
                     "status": metric.get("status"),
+                    "semantics": metric_semantics(metric),
+                    "interval_change": interval_change(metric, start, end),
                     "source_ids": (metric.get("source_ids") or [])[:10],
                     "history": bounded_history,
                     "history_truncated": len(history) > len(bounded_history),
@@ -579,22 +616,22 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_evidence_search", description="在指定快照内分页检索证据摘要。", structured_output=False)
+    @server.tool(name="geo_evidence_search", description="在指定快照内分页检索证据摘要。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_evidence_search(
-        snapshot_id: str,
-        q: str = "",
-        topic: str = "all",
-        dimension: str = "",
-        start: str = "",
-        end: str = "",
-        offset: int = 0,
-        limit: int = 20,
+        snapshot_id: SnapshotId,
+        q: Query = "",
+        topic: Topic = "all",
+        dimension: Dimension = "",
+        start: Start = "",
+        end: End = "",
+        offset: Offset = 0,
+        limit: Limit = 20,
         *,
         ctx: Context,
     ) -> str:
         tool = "geo_evidence_search"
         def handler(principal: Any, _: str) -> tuple[Any, dict[str, Any], list[dict[str, Any]]]:
-            _validate_filters(topic, dimension)
+            _validate_filters(topic, dimension, start, end)
             if offset < 0:
                 raise MCPError("GEO_INVALID_OFFSET", "offset 不能为负数")
             page_limit = clamp_limit(limit)
@@ -605,18 +642,19 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             except KeyError as exc:
                 raise MCPError("GEO_SNAPSHOT_NOT_FOUND", "快照不存在", {"snapshot_id": snapshot_id}) from exc
             records = research.filtered_records(snapshot, topic, dimension, start, end)
-            matched = _search_records(records, q)
+            matched = search_evidence(records, q)
+            reviews = review_index(snapshot_id)
             page = matched[offset : offset + page_limit]
             return (
-                {"analysis_evidence_boundary": _analysis_evidence_boundary(), "records": [_record_summary(item) for item in page], "offset": offset, "limit": page_limit, "has_more": offset + page_limit < len(matched), "total": len(matched)},
+                {"analysis_evidence_boundary": _analysis_evidence_boundary(), "query_scope": {"snapshot_id": snapshot_id, "topic": topic, "dimension": dimension, "start": start, "end": end, "q": q}, "search_basis": "与证据台账相同的大小写无关子串检索，包含原文、已有译文及来源，不是语义搜索。", "records": [{**_record_summary(item), **evidence_semantics(item, reviews.get(item['id']))} for item in page], "offset": offset, "limit": page_limit, "has_more": offset + page_limit < len(matched), "total": len(matched)},
                 snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())),
                 [],
             )
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_evidence_get", description="读取指定快照内单条证据的正文、来源、发布/采集时间与核验状态。报道及单方通报不是独立核实事实；单条或有限样本不能证明整个快照缺少某类证据，见 analysis_evidence_boundary。", structured_output=False)
-    async def geo_evidence_get(snapshot_id: str, record_id: str, ctx: Context) -> str:
+    @server.tool(name="geo_evidence_get", description="读取指定快照内单条证据的正文、来源、发布/采集时间与核验状态。报道及单方通报不是独立核实事实；单条或有限样本不能证明整个快照缺少某类证据，见 analysis_evidence_boundary。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    async def geo_evidence_get(snapshot_id: SnapshotId, record_id: RecordId, ctx: Context) -> str:
         tool = "geo_evidence_get"
 
         def handler(principal: Any, _: str) -> tuple[Any, dict[str, Any], list[dict[str, Any]]]:
@@ -629,25 +667,30 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             item = next((record_item for record_item in snapshot.get("records", []) if record_item.get("id") == record_id), None)
             if item is None:
                 raise MCPError("GEO_EVIDENCE_NOT_FOUND", "快照内不存在该证据", {"record_id": record_id, "snapshot_id": snapshot_id})
-            return {"analysis_evidence_boundary": _analysis_evidence_boundary(), "record": _redacted_record(item)}, snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())), []
+            detail = {**_redacted_record(item), **evidence_semantics(item, review_index(snapshot_id).get(record_id))}
+            detail['link_health'] = {k: v for k, v in link_health(snapshot_id, item.get('url', '')).items() if k in ('status', 'url', 'http_status', 'checked_at', 'final_url')}
+            detail['link_health_basis'] = '与台账详情读取同一份链接检查记录，不在调用时发起网络检查；链接可访问不等于正文事实已核实。核验时点见checked_at，未检查不等于链接失效。'
+            return {"analysis_evidence_boundary": _analysis_evidence_boundary(), "record": detail}, snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())), []
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_analysis_view", description="读取快照内五类资产和三类情景的结构化条件研判。对照业务面板时须保持同一 topic、dimension、start、end；用户未指定日期或维度时不要自行收窄。不同筛选的 topic_paths/status 不可拼接成同一面板结论。asset_overview 是精简五类资产信息，完整 assets 含更多材料。", structured_output=False)
+    @server.tool(name="geo_analysis_view", description="读取快照内五类资产和三类情景的结构化条件研判。对照业务面板时须保持同一 topic、dimension、start、end；用户未指定日期或维度时不要自行收窄。不同筛选的 topic_paths/status 不可拼接成同一面板结论。asset_overview 是精简五类资产信息，完整 assets 含更多材料。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_analysis_view(
-        snapshot_id: str,
-        topic: str = "all",
-        dimension: str = "",
-        start: str = "",
-        end: str = "",
-        limit: int = 20,
+        snapshot_id: SnapshotId,
+        topic: Topic = "all",
+        dimension: Dimension = "",
+        start: Start = "",
+        end: End = "",
+        limit: Limit = 20,
+        asset_id: Annotated[str, Field(description="只读取指定资产：equity权益、rates利率债、credit信用债、commodity商品、fx外汇；空串全部。") ] = "",
+        scenario_id: Annotated[str, Field(description="只读取指定情景：sustain持续消耗、escalate升级扩散、ease缓和收束；空串全部。") ] = "",
         *,
         ctx: Context,
     ) -> str:
         tool = "geo_analysis_view"
 
         def handler(principal: Any, _: str) -> tuple[Any, dict[str, Any], list[dict[str, Any]]]:
-            _validate_filters(topic, dimension)
+            _validate_filters(topic, dimension, start, end)
             page_limit = clamp_limit(limit)
             working_id = store.get_working_snapshot_id()
             authorize(
@@ -663,6 +706,19 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             except KeyError as exc:
                 raise MCPError("GEO_SNAPSHOT_NOT_FOUND", "快照不存在", {"snapshot_id": snapshot_id}) from exc
             result = research.analysis(snapshot, topic=topic, dimension=dimension, start=start, end=end)
+            if asset_id and asset_id not in {a['id'] for a in result['assets']}:
+                raise MCPError('GEO_ASSET_NOT_FOUND', '资产ID不存在')
+            if scenario_id and scenario_id not in {s['id'] for s in result['scenarios']}:
+                raise MCPError('GEO_SCENARIO_NOT_FOUND', '情景ID不存在')
+            result['assets'] = [a for a in result['assets'] if not asset_id or a['id'] == asset_id]
+            result['scenarios'] = [s for s in result['scenarios'] if not scenario_id or s['id'] == scenario_id]
+            for scenario in result['scenarios']:
+                scenario['evidence_condition_links'] = [
+                    {'record_id': rid, 'relation': 'candidate_only', 'verification': 'not_evaluated',
+                     'condition': scenario['condition'], 'counter_condition': scenario['counter'],
+                     'basis': '检索候选，不构成条件已满足或反证已成立的判定；须读取正文独立核验。'}
+                    for rid in scenario.get('evidence_ids', [])
+                ]
             data = {
                 "analysis_evidence_boundary": _analysis_evidence_boundary(),
                 "query_scope": {"topic": topic, "dimension": dimension, "start": start, "end": end},
@@ -686,11 +742,11 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_brief_list", description="列出 principal 可见的已落盘研究简报元数据。", structured_output=False)
+    @server.tool(name="geo_brief_list", description="列出 principal 可见的已落盘研究简报元数据。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_brief_list(
-        snapshot_id: str = "",
-        offset: int = 0,
-        limit: int = 20,
+        snapshot_id: SnapshotId = "",
+        offset: Offset = 0,
+        limit: Limit = 20,
         *,
         ctx: Context,
     ) -> str:
@@ -739,8 +795,8 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_brief_get", description="读取已落盘研究简报的受限正文和 snapshot lineage。", structured_output=False)
-    async def geo_brief_get(brief_id: str, max_bytes: int = MAX_BRIEF_BYTES, *, ctx: Context) -> str:
+    @server.tool(name="geo_brief_get", description="读取已落盘研究简报的受限正文和 snapshot lineage。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    async def geo_brief_get(brief_id: BriefId, max_bytes: MaxBytes = MAX_BRIEF_BYTES, *, ctx: Context) -> str:
         tool = "geo_brief_get"
 
         def handler(principal: Any, _: str) -> tuple[Any, dict[str, Any], list[dict[str, Any]]]:
@@ -755,7 +811,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 raise MCPError("GEO_BRIEF_NOT_FOUND", "研究简报不存在", {"brief_id": brief_id})
             working_id = store.get_working_snapshot_id()
             authorize(principal, tool=tool, snapshot_id=row["snapshot_id"], working_snapshot_id=working_id)
-            encoded = row["markdown"].encode("utf-8")
+            encoded = localize_brief_markdown(row["markdown"]).encode("utf-8")
             truncated = len(encoded) > max_bytes
             markdown = encoded[:max_bytes].decode("utf-8", errors="ignore")
             warnings = [{"code": "GEO_OUTPUT_TRUNCATED", "message": "简报正文已按 max_bytes 截断", "max_bytes": max_bytes}] if truncated else []
@@ -769,6 +825,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                         "mode": row["mode"],
                         "markdown": markdown,
                         "truncated": truncated,
+                        "text_basis": "研究简报看板的中文展示正文；原始归档不修改，来源标签翻译可更新。",
                     }
                 },
                 snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())),
@@ -777,11 +834,12 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_collector_status", description="读取采集运行态的有界 live 投影，不混入快照 provenance。", structured_output=False)
+    @server.tool(name="geo_collector_status", description="读取采集运行态的有界 live 投影，不混入快照 provenance。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_collector_status(
-        run_id: str = "",
-        collector_id: str = "",
-        limit: int = 20,
+        run_id: RunId = "",
+        collector_id: CollectorId = "",
+        limit: Limit = 20,
+        compare_run_id: Annotated[str, Field(description="可选前一批次ID，从geo_collector_runs获取；与run_id逐项对比，不推断差异原因。空串不比较。")]='',
         *,
         ctx: Context,
     ) -> str:
@@ -794,7 +852,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             registry_path = project_root() / "collectors" / "collectors.json"
             try:
                 load_registry(registry_path)
-                runs = load_runs(runs_root, registry_path, limit=max(page_limit, 20))
+                runs = load_runs(runs_root, registry_path, limit=max(page_limit, 20), run_id=run_id)
             except (OSError, ValueError, KeyError) as exc:
                 raise MCPError("GEO_COLLECTOR_UNAVAILABLE", "采集运行态暂不可用", {"reason": type(exc).__name__}) from exc
             if run_id:
@@ -807,6 +865,14 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             if collector_id:
                 run = {**run, "collectors": [item for item in (run.get("collectors") or []) if item.get("id") == collector_id]}
             projected = _collector_projection(run)
+            if compare_run_id:
+                previous = load_runs(runs_root, registry_path, limit=1, run_id=compare_run_id)
+                if not previous:
+                    raise MCPError('GEO_RUN_NOT_FOUND', '对比批次不存在', {'run_id': compare_run_id})
+                old = previous[0]
+                if collector_id:
+                    old = {**old, 'collectors': [c for c in old.get('collectors', []) if c.get('id') == collector_id]}
+                projected['comparison'] = collector_comparison(_collector_projection(old), projected)
             if projected.get("run_id"):
                 event_result = load_ledger_events(runs_root, projected["run_id"], collector_id=collector_id or None, limit=page_limit)
                 projected["events"] = [
@@ -819,6 +885,119 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             return projected, {"kind": "live", "source": "collector-monitor", "live": True}, []
 
         return _run_tool(ctx=ctx, tool=tool, handler=handler)
+
+    def scoped_snapshot(principal, tool, snapshot_id, topic='all', dimension='', start='', end=''):
+        _validate_filters(topic, dimension, start, end)
+        working = store.get_working_snapshot_id()
+        authorize(principal, tool=tool, snapshot_id=snapshot_id, working_snapshot_id=working,
+                  topic=topic if topic != 'all' else None, dimension=dimension or None)
+        try:
+            snapshot = store.get_snapshot(snapshot_id)
+        except KeyError as exc:
+            raise MCPError('GEO_SNAPSHOT_NOT_FOUND', '快照不存在', {'snapshot_id': snapshot_id}) from exc
+        return snapshot, snapshot_provenance(snapshot, working_snapshot_id=working, latest_snapshot_id=_latest_id(store.snapshot_summaries()))
+
+    @server.tool(description="回答风险地图主要事件、哪些地区关联报道多、地图数量为何与右侧不同。保持快照/主题/日期范围，支持图层和信号；地点是报道关联区域，不证明部署或事件事实，不读取当前地图视口。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    async def geo_risk_map(snapshot_id: SnapshotId, topic: Topic='all', dimension: Dimension='', start: Start='', end: End='', categories: Annotated[list[str] | None, Field(description='事件图层机器值：military军事、diplomacy外交、policy政策、energy能源、support援助、domestic社会；null为全部六类，空数组为关闭全部。')]=None, signal: Annotated[str, Field(description='信号：all全部、escalation升级、sustain持续、easing缓和、unknown待研判；应用人工复核后筛选。')]='all', region: Annotated[str, Field(description='地点中文标签子串，例如霍尔木兹或伊朗；空串全部。不是地图视口、国家边界或全文检索。')]='', limit: Limit=20, *, ctx: Context) -> str:
+        def handler(principal, _):
+            snapshot, provenance = scoped_snapshot(principal, 'geo_risk_map', snapshot_id, topic, dimension, start, end)
+            layers = list(CATEGORIES) if categories is None else categories
+            if any(c not in CATEGORIES for c in layers) or signal not in {'all', *SIGNALS}:
+                raise MCPError('GEO_INVALID_FILTER', '非法事件图层或信号', {'categories': list(CATEGORIES), 'signals': ['all', *SIGNALS]})
+            size = clamp_limit(limit)
+            data = map_projection(research.filtered_records(snapshot, topic, dimension, start, end), review_index(snapshot_id), layers, signal, region, size)
+            data['query_scope'] = {'snapshot_id': snapshot_id, 'topic': topic, 'dimension': dimension, 'start': start, 'end': end, 'categories': layers, 'signal': signal, 'region': region}
+            return data, provenance, []
+        return _run_tool(ctx=ctx, tool='geo_risk_map', handler=handler)
+
+    @server.tool(description="发现业务主题/跟踪维度中文名与机器值，以及看板到工具的问答路径；参数不明时先查此工具，不提供具体快照数值。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    async def geo_business_catalog(ctx: Context) -> str:
+        def handler(principal, _):
+            authorize(principal, tool='geo_business_catalog')
+            return {'topics': [{'id': t['id'], 'name': t['name'], 'dimensions': [{'id': k, 'name': v} for k, v in t['dimensions']]} for t in TOPICS],
+                    'questions': {'本周哪些指标发生变化': ['geo_metric_changes', 'geo_metric_series'],
+                                  '地图主要事件与关联地区': ['geo_risk_map', 'geo_evidence_get'],
+                                  '当前判断有哪些反证': ['geo_analysis_view', 'geo_evidence_search', 'geo_evidence_get'],
+                                  '还缺什么数据': ['geo_workspace_summary', 'geo_source_health', 'geo_metric_catalog'],
+                                  '快照版本列表（不代表当前页面筛选）': ['geo_snapshot_list']},
+                    'context_priority': '用户明确指定优先，其次当前看板上下文；不知道当前范围时先澄清，不静默切换latest/all。'}, {}, []
+        return _run_tool(ctx=ctx, tool='geo_business_catalog', handler=handler)
+
+    @server.tool(description="回答本周/指定区间哪些指标发生变化：程序按区间首末有效观测计算，默认快照导入周。返回单位、日期、质量和分页；单期比较与区间变化不同，解释详情用geo_metric_series。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    async def geo_metric_changes(snapshot_id: SnapshotId, topic: Topic = 'all', dimension: Dimension = '', start: Start = '', end: End = '', offset: Offset = 0, limit: Limit = 20, *, ctx: Context) -> str:
+        def handler(principal, _):
+            snapshot, provenance = scoped_snapshot(principal, 'geo_metric_changes', snapshot_id, topic, dimension, start, end)
+            week = provenance['relative_time_basis']['this_week']
+            lower, upper = (start, end) if start or end else ((week or {}).get('start', ''), (week or {}).get('end', ''))
+            validate_dates(lower, upper)
+            if offset < 0:
+                raise MCPError('GEO_INVALID_OFFSET', 'offset不能为负数')
+            size = clamp_limit(limit)
+            rows = research.metrics(snapshot, topic, dimension, lower, upper)
+            changes = [interval_change(m, lower, upper) for m in rows]
+            return {'query_scope': {'topic': topic, 'dimension': dimension, 'start': lower, 'end': upper},
+                    'summary': {'comparable': sum(c['status']=='comparable' for c in changes), 'changed': sum(c['status']=='comparable' and c['delta']!=0 for c in changes), 'unchanged': sum(c['status']=='comparable' and c['delta']==0 for c in changes), 'insufficient_observations': sum(c['status']=='insufficient_observations' for c in changes), 'quality_excluded': sum(c['status']=='quality_excluded' for c in changes), 'basis': '当前范围全部指标的区间计算统计，不受分页影响；未可比不等于未发生变化。'},
+                    'metrics': [{'id': m['id'], 'series': m.get('series'), 'name': m['name'], 'unit': m['unit'], 'freshness': m.get('freshness'), 'quality_issue': m.get('quality_issue'), 'interval_change': c} for m, c in list(zip(rows, changes))[offset:offset+size]],
+                    'total': len(rows), 'offset': offset, 'limit': size, 'has_more': offset+size < len(rows),
+                    'basis': '每个指标区间内首末有效观测日可能不同；无两点不等于无变化；有效零值不是缺失；不作因果归因。'}, provenance, []
+        return _run_tool(ctx=ctx, tool='geo_metric_changes', handler=handler)
+
+    @server.tool(description="读取数据源菜单的快照来源健康、爬虫项目接入、失败来源及缺发布时间/采集时间计数。冻结快照不是当前实时状态，当前采集另用geo_collector_status。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    async def geo_source_health(snapshot_id: SnapshotId, offset: Offset = 0, limit: Limit = 20, *, ctx: Context) -> str:
+        def handler(principal, _):
+            snapshot, provenance = scoped_snapshot(principal, 'geo_source_health', snapshot_id)
+            if offset < 0:
+                raise MCPError('GEO_INVALID_OFFSET', 'offset不能为负数')
+            size = clamp_limit(limit)
+            projects, sources = snapshot.get('projects', []), snapshot.get('sources', [])
+            from backend.chinese import source_name, translation_cache
+            cache = translation_cache()
+            return {'projects': [{'name': project_labels().get(p['id'], '新增数据项目'), **{k: p.get(k) for k in ('id', 'state', 'records', 'topic_records', 'failed_sources', 'sources', 'missing_published', 'missing_fetched')}} for p in projects[offset:offset+size]],
+                    'sources': [{**{k: s.get(k) for k in ('id', 'monitor', 'state', 'count', 'latest', 'checked_at', 'tier', 'http_status')}, 'error_hint': _sanitize_runtime_text(s.get('error')), 'name': source_name(s.get('name', ''), cache)} for s in sources[offset:offset+size]],
+                    'field_semantics': {'project_state': '项目接入状态，不代表所有来源成功', 'source_state': '来源在该快照归档时的检查状态，时点见checked_at', 'missing_published': '项目记录中缺发布时间的条数，不等于缺正文', 'missing_fetched': '项目记录中缺采集时间的条数，不能据此判断从未采集', 'coverage': '全框架候选覆盖，不代表完整性'},
+                    'total_projects': len(projects), 'total_sources': len(sources), 'offset': offset, 'limit': size,
+                    'has_more': offset+size < max(len(projects), len(sources)),
+                    'coverage': research.coverage(snapshot),
+                    'basis': '全快照项目/来源统计，不随当前主题筛选。项目可能重复采集同一报道，数量不可相加；维度是候选覆盖；来源失败对维度影响未建立逐条映射，不能臆断缺失范围。'}, provenance, []
+        return _run_tool(ctx=ctx, tool='geo_source_health', handler=handler)
+
+    @server.tool(description="发现最近可见采集批次及启动/结束、采集器失败和导入状态，用run_id再读取geo_collector_status。账本不是调度器或进程心跳。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    async def geo_collector_runs(limit: Limit = 20, *, ctx: Context) -> str:
+        def handler(principal, _):
+            authorize(principal, tool='geo_collector_runs')
+            size = clamp_limit(limit, maximum=MAX_COLLECTOR_EVENTS)
+            runs = load_runs(store.data_dir() / 'collection-runs', project_root() / 'collectors' / 'collectors.json', limit=size+1)
+            return {'runs': [{k: r.get(k) for k in ('run_id', 'run_status', 'started_at', 'finished_at', 'updated_at', 'collector_count', 'failed_count', 'import_status', 'snapshot_id')} for r in runs[:size]],
+                    'limit': size, 'has_more': len(runs)>size,
+                    'collection_snapshot_boundary': collection_snapshot_boundary(),
+                    'basis': '仅最近可见账本，可按run_id比较已读批次；有界结果不证明无其他运行。'}, {'kind': 'live', 'source': 'collector-monitor', 'live': True}, []
+        return _run_tool(ctx=ctx, tool='geo_collector_runs', handler=handler)
+
+    @server.tool(description="比较两份已归档简报的看板展示正文，返回差异及快照/生成时间。has_more为true时按next_offset_chars继续读取，不用首段概括全文；文本差异不是事实证实，不生成简报。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    async def geo_brief_compare(before: Annotated[str, Field(description='前一份简报ID，从geo_brief_list获取。')], after: Annotated[str, Field(description='后一份简报ID，从geo_brief_list获取。')], max_bytes: MaxBytes = MAX_BRIEF_BYTES, offset_chars: Annotated[int, Field(ge=0, description='差异文本的字符偏移，首次0；后续使用next_offset_chars，同一对简报保持一致。')] = 0, *, ctx: Context) -> str:
+        def handler(principal, _):
+            if max_bytes < 1 or max_bytes > MAX_BRIEF_BYTES:
+                raise MCPError('GEO_LIMIT_EXCEEDED', 'max_bytes必须为1—30000')
+            briefs = []
+            for bid in (before, after):
+                with store.db() as conn:
+                    row = conn.execute('SELECT id,snapshot_id,created_at,mode,markdown FROM briefs WHERE id=?', (bid,)).fetchone()
+                if row is None:
+                    raise MCPError('GEO_BRIEF_NOT_FOUND', '研究简报不存在', {'brief_id': bid})
+                scoped_snapshot(principal, 'geo_brief_compare', row['snapshot_id'])
+                briefs.append(dict(row))
+            text = compare_brief_markdown(briefs[0]['markdown'], briefs[1]['markdown'], before, after)
+            encoded = text.encode('utf8')
+            chunk = text[offset_chars:].encode('utf8')[:max_bytes].decode('utf8', errors='ignore')
+            if offset_chars < len(text) and not chunk:
+                raise MCPError('GEO_LIMIT_EXCEEDED', 'max_bytes不足以容纳下一个完整UTF-8字符，请增大max_bytes')
+            next_offset = offset_chars + len(chunk)
+            more = next_offset < len(text)
+            return {'before': _brief_projection(briefs[0]), 'after': _brief_projection(briefs[1]), 'diff': chunk, 'truncated': offset_chars > 0 or more,
+                    'has_more': more, 'next_offset_chars': next_offset if more else None, 'offset_chars': offset_chars,
+                    'total_chars': len(text), 'total_bytes': len(encoded), 'returned_bytes': len(chunk.encode('utf8')),
+                    'basis': '与研究简报看板相同的中文展示正文差异（来源标签翻译可更新），不是不可变原文差异；判断是否变化须看正文语义及各自材料，不能自动归因。'}, {'kind': 'brief_comparison', 'snapshot_ids': [b['snapshot_id'] for b in briefs]}, []
+        return _run_tool(ctx=ctx, tool='geo_brief_compare', handler=handler)
 
     return server
 

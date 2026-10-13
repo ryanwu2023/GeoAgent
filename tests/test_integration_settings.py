@@ -8,12 +8,45 @@ from backend.app import app
 from backend.integrations import managed_principal
 from backend.store import db
 
+def test_explicit_pichat_ca_preserves_chain_and_hostname_checks(monkeypatch):
+    import ssl,certifi
+    from backend.integrations import pichat_tls_context
+    monkeypatch.delenv('GEOAGENT_PICHAT_CA_FILE', raising=False)
+    assert pichat_tls_context() is True
+    monkeypatch.setenv('GEOAGENT_PICHAT_CA_FILE', certifi.where())
+    context=pichat_tls_context()
+    assert context.check_hostname is True
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert not context.verify_flags & ssl.VERIFY_X509_STRICT
+
+
+def test_local_pichat_override_never_reuses_saved_key(client, monkeypatch):
+    from backend.integrations import settings
+    payload = dict(origin='http://127.0.0.1:9172', agent_id='geo-research-assistant',
+                   phone='13000000000', entry='geo', product_user_id='geo-test', app_key='old-site-secret')
+    assert client.put('/api/integrations/pichat', json=payload).status_code == 200
+    monkeypatch.setenv('GEOAGENT_LOCAL_PICHAT_ORIGIN', 'http://127.0.0.1:5585')
+    assert settings()['origin'] == 'http://127.0.0.1:5585'
+    assert settings()['app_key'] == ''
+    assert client.put('/api/integrations/pichat', json={**payload, 'origin':'http://127.0.0.1:5585'}).status_code == 409
+    assert client.get('/api/pichat/embed-identity').status_code == 503
+    monkeypatch.setenv('GEOAGENT_LOCAL_PICHAT_APP_KEY', 'local-only-secret')
+    assert settings()['app_key'] == 'local-only-secret'
+    monkeypatch.delenv('GEOAGENT_LOCAL_PICHAT_ORIGIN')
+    assert settings()['origin'] == payload['origin']
+    assert settings()['app_key'] == 'old-site-secret'
+
+
+def test_local_pichat_override_rejects_public_origin(client, monkeypatch):
+    monkeypatch.setenv('GEOAGENT_LOCAL_PICHAT_ORIGIN', 'https://example.com')
+    assert client.get('/api/integrations/public').status_code == 422
+
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("GEO_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("GEOAGENT_SETTINGS_TOKEN", "test-management")
-    with TestClient(app, headers={"X-GeoAgent-Admin": "test-management"}) as client:
+    with TestClient(app) as client:
         yield client
 
 
@@ -39,14 +72,14 @@ def test_bad_origin(client, origin):
     assert client.put("/api/integrations/pichat", json=dict(origin=origin, agent_id="geo", phone="")).status_code == 422
 
 
-def test_management_protection(client, monkeypatch):
-    assert client.get("/api/integrations", headers={"X-GeoAgent-Admin": "bad"}).status_code == 403
+def test_no_separate_management_password_and_cross_site_protection(client, monkeypatch):
+    assert client.get("/api/integrations", headers={"X-GeoAgent-Admin": "bad"}).status_code == 200
     assert client.post("/api/integrations/mcp-keys", json={"label": "bad"}, headers={"Origin": "https://evil.example"}).status_code == 403
     monkeypatch.delenv("GEOAGENT_SETTINGS_TOKEN")
-    assert client.get("/api/integrations").status_code == 403
+    assert client.get("/api/integrations").status_code == 200
     with TestClient(app, client=("127.0.0.1", 9000), base_url="http://localhost") as local:
         assert local.get("/api/integrations").status_code == 200
-        assert local.get("/api/integrations", headers={"X-Forwarded-For":"8.8.8.8"}).status_code == 403
+        assert local.get("/api/integrations", headers={"X-Forwarded-For":"8.8.8.8"}).status_code == 200
 
 
 def test_mcp_live_key_lifecycle(client):
@@ -76,12 +109,70 @@ def test_mcp_live_key_lifecycle(client):
     assert client.get("/healthz").json()["service"] == "geoagent-mcp"
 
 
-def test_remote_management_token_and_public_host(client, monkeypatch):
+def test_delete_only_revoked_key(client):
+    key = client.post("/api/integrations/mcp-keys", json={"label": "cleanup-test"}).json()
+    url = f"/api/integrations/mcp-keys/{key['id']}"
+    assert client.delete(url + "/record").status_code == 409
+    assert managed_principal(key["key"]) is not None
+    assert client.delete(url).status_code == 200
+    assert client.delete(url + "/record").status_code == 200
+    assert client.delete(url + "/record").status_code == 200
+    assert key["id"] not in {item["id"] for item in client.get("/api/integrations/mcp-keys").json()}
+    assert managed_principal(key["key"]) is None
+    assert client.delete("/api/integrations/mcp-keys/nonexistent/record").status_code == 404
+
+
+def test_legacy_key_schema_concurrent_migration(client):
+    from concurrent.futures import ThreadPoolExecutor
+    from backend.integrations import key_table
+    with db() as conn:
+        conn.execute("CREATE TABLE integration_mcp_keys (id TEXT PRIMARY KEY, label TEXT NOT NULL, token_hash TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT)")
+    def migrate(_):
+        with db() as conn:
+            key_table(conn)
+            assert "deleted_at" in {row[1] for row in conn.execute("PRAGMA table_info(integration_mcp_keys)")}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(migrate, range(16)))
+
+
+def test_workbench_real_mcp_and_management_auth(client):
+    url = "/api/integrations/mcp-workbench"
+    assert client.get(url, headers={"X-GeoAgent-Admin": "bad"}).status_code == 200
+    catalog = client.get(url)
+    assert catalog.headers["cache-control"] == "no-store"
+    assert len(catalog.json()["tools"]) == 17
+    assert "inputSchema" in catalog.json()["tools"][0]
+    assert catalog.json()["instructions"]
+    key = client.post("/api/integrations/mcp-keys", json={"label": "trial"}).json()
+    body = {"tool": "geo_snapshot_list", "arguments": {}}
+    result = client.post(url + "/call", json=body)
+    assert result.status_code == 200, result.text
+    assert json.loads(result.json()["result"]["content"][0]["text"])["ok"]
+    second = client.post(url + "/call", json=body)
+    first_payload = json.loads(result.json()["result"]["content"][0]["text"])
+    second_payload = json.loads(second.json()["result"]["content"][0]["text"])
+    assert first_payload["audit_event_id"] != second_payload["audit_event_id"]
+    calls = client.get(url).json()["calls"]
+    assert calls[0]["tool"] == body["tool"] and calls[0]["status"] == "ok"
+    assert key["key"] not in json.dumps(calls)
+    assert client.post(url + "/call", json={**body,"tool":"unknown"}).status_code == 422
+    assert client.post(url + "/call", json={**body,"arguments":{"value":"x"*21000}}).status_code == 422
+    assert client.post(url + "/call", json={**body,"tool":"geo_snapshot_get"}).json()["result"]["isError"]
+    assert client.delete(f"/api/integrations/mcp-keys/{key['id']}").status_code == 200
+    assert client.post(url + "/call", json=body).status_code == 200
+    assert client.post("/mcp", json={"jsonrpc":"2.0","id":1,"method":"tools/list"}).status_code == 401
+    assert client.post(url + "/call", json=body, headers={"Origin":"https://evil.example"}).status_code == 403
+
+
+def test_remote_no_password_and_public_mcp_bearer(client, monkeypatch):
     monkeypatch.setenv("GEOAGENT_ALLOWED_ORIGINS", "https://geo.example.com")
     with TestClient(app, base_url="https://geo.example.com", client=("203.0.113.10", 9000)) as remote:
         assert remote.get("/api/integrations/public").status_code == 200
-        assert remote.get("/api/integrations").status_code == 403
-        headers = {"X-GeoAgent-Admin":"test-management", "Origin":"https://geo.example.com"}
+        assert remote.get("/api/integrations").status_code == 200
+        headers = {"Origin":"https://geo.example.com"}
+        assert remote.get("/api/integrations/mcp-workbench").status_code == 200
+        assert remote.post("/api/integrations/mcp-workbench/call", json={"tool":"geo_snapshot_list","arguments":{}}, headers=headers).status_code == 200
+        assert remote.post("/mcp", json={}).status_code == 401
         key = remote.post("/api/integrations/mcp-keys", json={"label":"remote"}, headers=headers).json()["key"]
         result = remote.post("/mcp", json={"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}},
                              headers={"Authorization":f"Bearer {key}", "Accept":"application/json, text/event-stream"})
@@ -107,13 +198,14 @@ def test_identity_uses_saved_config_without_restart(client, monkeypatch):
     assert "pk-private" not in result.text
 
 
-def test_gateway_delegation_is_opt_in_and_loopback_only(client, monkeypatch):
+def test_gateway_headers_not_required_but_cross_site_still_rejected(client, monkeypatch):
     monkeypatch.delenv("GEOAGENT_SETTINGS_TOKEN")
     with TestClient(app, base_url="https://geo.example.com", client=("127.0.0.1", 8080)) as proxy:
         headers={"X-Forwarded-For":"203.0.113.10", "X-GeoAgent-Gateway-User":"owner"}
-        assert proxy.get("/api/integrations", headers=headers).status_code == 403
+        assert proxy.get("/api/integrations", headers=headers).status_code == 200
         monkeypatch.setenv("GEOAGENT_TRUST_AUTHENTICATED_GATEWAY", "true")
         assert proxy.get("/api/integrations", headers=headers).status_code == 200
-        assert proxy.get("/api/integrations", headers={"X-Forwarded-For":"203.0.113.10"}).status_code == 403
+        assert proxy.get("/api/integrations", headers={"X-Forwarded-For":"203.0.113.10"}).status_code == 200
     with TestClient(app, base_url="https://geo.example.com", client=("203.0.113.10", 8080)) as remote:
-        assert remote.get("/api/integrations", headers=headers).status_code == 403
+        assert remote.get("/api/integrations", headers=headers).status_code == 200
+        assert remote.post("/api/integrations/mcp-keys", json={"label":"blocked"}, headers={"Origin":"https://evil.example"}).status_code == 403

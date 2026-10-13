@@ -1,10 +1,9 @@
 """Persisted runtime integration settings and hash-only MCP credentials."""
 import hashlib
-import hmac
-import ipaddress
 import json
 import os
 import secrets
+import ssl
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
@@ -12,6 +11,16 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from .store import db
+
+def pichat_tls_context():
+    """Explicit internal CA compatibility; still verify chain and hostname."""
+    ca_file = os.getenv('GEOAGENT_PICHAT_CA_FILE', '')
+    if not ca_file:
+        return True
+    context = ssl.create_default_context(cafile=ca_file)
+    # Older internal roots omit KU; OpenSSL standard verification accepts them.
+    context.verify_flags &= ~ssl.VERIFY_X509_STRICT
+    return context
 
 def no_cache(response: Response):
     response.headers["Cache-Control"] = "no-store"
@@ -29,7 +38,17 @@ def settings():
     with db() as conn:
         row = conn.execute("SELECT value FROM workspace_state WHERE key='integrations.pichat'").fetchone()
     saved = json.loads(row["value"]) if row else {}
-    return {key: saved.get(key, os.getenv(env, default)) for key, (env, default) in FIELDS.items()}
+    cfg = {key: saved.get(key, os.getenv(env, default)) for key, (env, default) in FIELDS.items()}
+    # Local acceptance overrides never reuse another instance's credential.
+    # The persisted configuration is untouched and returns after restart.
+    local_origin = os.getenv('GEOAGENT_LOCAL_PICHAT_ORIGIN', '')
+    if local_origin:
+        origin = normalize_origin(local_origin)
+        if urlsplit(origin).hostname not in {'127.0.0.1', 'localhost', '::1'}:
+            raise HTTPException(422, '本地联调覆盖仅允许回环地址')
+        cfg['origin'] = origin
+        cfg['app_key'] = os.getenv('GEOAGENT_LOCAL_PICHAT_APP_KEY', '')
+    return cfg
 
 
 def normalize_origin(value):
@@ -48,27 +67,11 @@ def normalize_origin(value):
 
 
 def admin(request: Request):
-    host = request.client.host if request.client else ""
-    try:
-        local = ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        local = False
-    # Opt-in delegation to the isolated, loopback Nginx sidecar. The gateway
-    # overwrites this header only after its existing Basic login succeeds.
-    trusted_gateway = (os.getenv("GEOAGENT_TRUST_AUTHENTICATED_GATEWAY", "false").lower() == "true"
-                       and local and bool(request.headers.get("X-GeoAgent-Gateway-User")))
-    expected = os.getenv("GEOAGENT_SETTINGS_TOKEN", "")
-    presented = request.headers.get("X-GeoAgent-Admin", "")
-    if trusted_gateway:
-        pass
-    elif expected:
-        if not hmac.compare_digest(expected, presented):
-            raise HTTPException(403, "请输入项目管理口令")
-    else:
-        # A local reverse proxy must not make a public caller a local admin.
-        forwarded = request.headers.get("forwarded") or request.headers.get("x-forwarded-for")
-        if not local or forwarded or request.url.hostname not in {"localhost", "127.0.0.1", "::1", "testserver"}:
-            raise HTTPException(403, "公网配置需先设置 GEOAGENT_SETTINGS_TOKEN")
+    """No separate management password; deployment owns site access control.
+
+    Retain same-origin protection. Public MCP Bearer authentication is separate.
+    The name is retained for existing router dependency imports.
+    """
     origin = request.headers.get("origin")
     if origin and urlsplit(origin).netloc != request.headers.get("host"):
         raise HTTPException(403, "禁止跨站管理请求")
@@ -102,6 +105,8 @@ class PiChatSettings(BaseModel):
 
 @router.put("/pichat", dependencies=[Depends(admin)])
 def save(body: PiChatSettings):
+    if os.getenv('GEOAGENT_LOCAL_PICHAT_ORIGIN', ''):
+        raise HTTPException(409, '本地联调覆盖已启用，原配置保留只读；取消覆盖并重启后再保存')
     cfg = body.model_dump()
     cfg["origin"] = normalize_origin(cfg["origin"])
     cfg = {k: v.strip() for k, v in cfg.items()}
@@ -115,13 +120,20 @@ def save(body: PiChatSettings):
 
 def key_table(conn):
     conn.execute("CREATE TABLE IF NOT EXISTS integration_mcp_keys (id TEXT PRIMARY KEY, label TEXT NOT NULL, token_hash TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT)")
+    if "deleted_at" not in {row[1] for row in conn.execute("PRAGMA table_info(integration_mcp_keys)")}:
+        # StrictMode or multiple tabs can race on the first old-schema load.
+        # Serialize migration, then re-check after acquiring the writer lock.
+        if not conn.in_transaction:
+            conn.execute("BEGIN IMMEDIATE")
+        if "deleted_at" not in {row[1] for row in conn.execute("PRAGMA table_info(integration_mcp_keys)")}:
+            conn.execute("ALTER TABLE integration_mcp_keys ADD COLUMN deleted_at TEXT")
 
 
 @router.get("/mcp-keys", dependencies=[Depends(admin)])
 def keys():
     with db() as conn:
         key_table(conn)
-        return [dict(row) for row in conn.execute("SELECT id,label,created_at,revoked_at FROM integration_mcp_keys ORDER BY created_at DESC")]
+        return [dict(row) for row in conn.execute("SELECT id,label,created_at,revoked_at FROM integration_mcp_keys WHERE deleted_at IS NULL ORDER BY created_at DESC")]
 
 
 class NewKey(BaseModel):
@@ -135,7 +147,7 @@ def create_key(body: NewKey):
     created = datetime.now(timezone.utc).isoformat()
     with db() as conn:
         key_table(conn)
-        conn.execute("INSERT INTO integration_mcp_keys VALUES(?,?,?,?,NULL)",
+        conn.execute("INSERT INTO integration_mcp_keys(id,label,token_hash,created_at,revoked_at) VALUES(?,?,?,?,NULL)",
                      (key_id, body.label, hashlib.sha256(raw.encode()).hexdigest(), created))
     return {"id": key_id, "label": body.label, "created_at": created, "key": raw}
 
@@ -148,6 +160,21 @@ def revoke_key(key_id: str):
                               (datetime.now(timezone.utc).isoformat(), key_id))
         if not result.rowcount:
             raise HTTPException(404, "Key 不存在")
+    return {"ok": True}
+
+
+@router.delete("/mcp-keys/{key_id}/record", dependencies=[Depends(admin)])
+def delete_revoked_key(key_id: str):
+    # Retain a revoked tombstone, never restore the credential through cleanup.
+    with db() as conn:
+        key_table(conn)
+        row = conn.execute("SELECT revoked_at FROM integration_mcp_keys WHERE id=?", (key_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Key 不存在")
+        if not row["revoked_at"]:
+            raise HTTPException(409, "启用中的 Key 不可删除，请先撤销")
+        conn.execute("UPDATE integration_mcp_keys SET deleted_at=? WHERE id=?",
+                     (datetime.now(timezone.utc).isoformat(), key_id))
     return {"ok": True}
 
 

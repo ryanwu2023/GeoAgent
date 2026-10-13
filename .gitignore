@@ -1,5 +1,6 @@
 node_modules/
 dist/
+output/
 .playwright-cli/
 .venv/
 __pycache__/
