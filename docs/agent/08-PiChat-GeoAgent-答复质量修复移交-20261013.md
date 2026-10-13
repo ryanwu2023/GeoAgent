@@ -48,3 +48,16 @@
 路由请核对模型实际装配新增geo_metric_changes、geo_business_catalog等工具及描述刷新。17工具是GeoAgent原始目录，不等于PiChat模型全部可见；14次series有正确结果但效率低。修复后通过公网嵌入原问句、3个并发真实MCP请求及菜单重进验证，保留失败历史。日志位于206的/home/pichat/.pm2/logs/pi-chat-runner-error.log、pi-chat-server-out-0.log及/var/log/nginx/chat.access.log；不得将Token、票据或个人资料复制进移交。
 
 补充06:27的v1.0.16实际回归：4个并行工具成功，分析结果已由126221字符缩为23480字符，后端概览仍11.6/13.5秒，GeoAgent继续修复lineage全快照解码。不要将来源体缩小当PiChat所有压缩/引用已通过。答复“usiran（含并列all）与宿主一致、无覆盖差异”措辞不严谨：all是用户明确要求的另一个比较范围，不等于宿主usiran。请每个结果标自己的scope；not_evaluated时应写“未完成反证核验”，避免“本轮无任何counter被核验为已发生”被误读为做完了核验。
+
+### v1.0.17回归补充与本次移交范围
+
+GeoAgent已在main发布751b0419、geoagent-prod-v1.0.17，流水线5363/部署28107通过。06:36同一公网嵌入会话4项并行均成功：概览7.9/8.4秒、目录5.1秒、情景8.1秒，全轮24秒；情景call_03_ET_292aA08JM86zDpgQLdN36272真实结果23480字符/37312字节且complete/succeeded。两次业务菜单重进正常、原会话保留，但未再次触发故障，不能据此宣布身份异常根因消失。GeoAgent未改PiChat源码或服务配置。
+
+请在本次授权的已发布PiChat实例排查并给出修复方案（本文件开头旧联调“不要改生产”的限制属于当时场景，本次先调查、部署变更仍与用户协调）：
+
+1. 关联同一调用者的identity签发、frame载入、ready/ack、auth/me、ws-ticket与WS建立；两个PiChat域名映射同实例，不将其他父域/浏览器401挪用为本会话根因。验证失败后重连与重试确实恢复，不清空对话、不静默切身份。
+2. 按请求始末定位30秒deadline包含的排队、HTTP连接复用和上游执行时间；联合Sealos故障期Ingress/Pod日志解释no healthy upstream。GeoAgent审计不含工具前队列/认证失败，不能直接与客户端墙钟视作同一指标。不能只提高deadline。
+3. 区分单次返回与累计历史上下文：本次UI显示429440缓存输入+402939非缓存输入词元，虽然情景返回已缩小，仍是约83万输入上下文。查历史工具材料是否重复展开、落盘后是否仍反复入模、压缩/引用是否真的作用于Provider。保留范围、数字、日期与证据边界，不靠删除用户会话或重放旧结果“优化”。
+4. 自然问题路由核对geo_metric_changes等实际模型可见工具，改善14次series读数的效率；最终输出不要用“无覆盖差异”模糊usiran与all，也不要把not_evaluated/unknown转写成完成了反证核验。语音播放问题仍按原operation另验，未在本轮修复。
+
+验收必须在GeoAgent公网嵌入面板自然输入三个业务原问句，逐项对照同范围看板和最新工具回执，再测试冷启动、菜单重进异常恢复与4项并发。记录实际Provider输入大小、端到端耗时、失败/重试状态及前后session/context revision，保留初次失败；只写“配置正常”或HTTP200不算闭环。

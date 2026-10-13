@@ -578,7 +578,7 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 本轮未确认数值/业务范围计算缺陷，没有盲改业务代码或发布。余项：PiChat工具装配/选择效率、响应体精简专项、重新进入身份超时与上游失败链定位；新会话、日期切换、新闻正文独立重读及语音仍须另验。浏览器完整详情核对参数/执行状态，AX长文本截断下未独立导出全部JSON，不声称逐字比对所有原始回包。
 - 证据仅/tmp：geoagent-q1-public-live-20261014.png、geoagent-q2-public-live-20261014.png、geoagent-q3-public-partial-20261014.png、geoagent-q3-public-recovered-20261014.png、geoagent-panel-reentry-timeout-20261014.png；14项首末点AX、工具及答复文本同目录保存。保留历史失败，不用恢复成功覆盖。
 
-### 2026-10-14：超时及大返回体专项定位与修复（发布回归待补）
+### 2026-10-14：超时及大返回体专项定位与修复（v1.0.17已发布，限定回归通过）
 
 - 实际SSH只读检查chat.test解析到192.168.100.206，Nginx配置server_name同时含chat.test/chat.lhotsetech.com，转发127.0.0.1:9292。未把公网映射误当另一个PiChat实例，未改该端源码、凭据或配置。
 - PiChat实际runner日志06:05:34三条对应geo_workspace_summary和两次geo_metric_catalog：mcp.request.idle上限30秒、由本端掐断；06:05:40记录Streamable HTTP POST no healthy upstream。专用Agent装配日志显示site:geoagent白名单连接18→1，不能据未选择新工具断言没有装配。
@@ -590,3 +590,9 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 本地同一真实快照旧/新投影逐字段一致，单次计数1.853s→0.210s；此为本机复现，非生产速度保证。后端全量222项通过（29.56s）、前端13项及生产构建通过、diff检查通过。将按独立MR/保护生产标签发布再回归，不把本地测试当外网修复完成。
 - MR !7通过流水线5357（222测试）合并b3d9c966；生产v1.0.16/5359验证、部署28096成功，双公网MCP真实认证调用通过。外网06:27真实新轮次4并行调用全部成功，目录16/total31/has_more=true，概览美伊3979及227/68/139、all6978及318/92/196分开；情景口径未改变。analysis调用call_03_UjpIzduvfISAWP8uJOTP9743同快照/usiran/limit5，完整回执字符126221→23480、字节137831→37312，未截断/执行成功。并行后端概览审计11556ms和13475ms，无30秒超时，但并未降至理想水平；不能将本机8倍改善宣称生产8倍。
 - 二次定位：多个工具仅为latest lineage却调用snapshot_summaries()，每次解码全部历史快照完整payload；本地10快照约0.912s。改只读取store.snapshots()的ID/created_at元数据，保留真正列表/统计工具的完整计算；不会将latest替代用户所选快照。新增禁止lineage读取归档payload的测试，后端223项通过（22.09s），待再次发布回归。
+- MR !8/c30c9fb4通过5361（223项）后合并751b0419；保护标签geoagent-prod-v1.0.17/流水线5363验证28106、部署28107通过。06:35双公网域名initialize/list/snapshot-call=200、匿名401，发布临时Key已撤销，现有身份及应用Key保留；未改PiChat端配置或凭据。
+- 06:36公网原嵌入会话自然输入第二轮并发回归，实际4调用：美伊概览7.9s、all概览8.4s、目录第一页5.1s、情景分析8.1s；全轮24s结束，4项均成功、无30秒截断。范围仍57fb9e48/usiran/空维度日期，另一次all明确为用户要求的对照；概览3979/227/68/139、all6978/318/92/196、目录16/total31/has_more=true、资产5/情景3与面板口径一致。没有切快照、触发采集或保存简报。
+- 新情景调用call_03_ET_292aA08JM86zDpgQLdN36272的真实回执sourceExecutionStatus=succeeded/sourceCompleteness=complete、23480字符/37312字节，保持有界摘要；不是沿用06:27旧回执。服务端持久审计06:36:18=6911ms（geo-audit-33136fb46d1244ed926e6f66823d4ec6）、06:36:19=8221ms（geo-audit-7916e2f50f52476b93d56225b9963c6c），较v16的11556/13475ms下降；浏览器耗时与审计口径不同，不以累加29.6s当墙钟24s。206 runner-error近期日志未出现06:35–06:39对应tool-failure/timeout/healthy-upstream；只证明此限定窗口，不是长期稳定性证明。
+- 上线后刷新一次正常连接，随后“数据源→智能问答”“情景推演→智能问答”两次重进均正常：输入框可用、r2范围已接收、原持久对话保留。未再次触发原身份超时，因此手动重建iframe修复有代码/构建证据，异常握手恢复仍待PiChat联合故障复测；不能宣称身份超时根因已全部闭环。
+- 尚未关闭：无Sealos Pod/Ingress故障期日志，no healthy upstream根因仍待关联；PiChat deadline/并发重连与Host/Origin/WS握手移交08。最终答案仍带“与看板一致，无覆盖差异”和“本轮无任何counter被核验为已发生”易混措辞，已将应分scope及未完成核验的边界交给PiChat。此次总上下文显示约83万输入词元（429440缓存+402939非缓存），单次情景返回缩小不等于历史上下文已压缩；不在GeoAgent侧删对话掩盖问题。
+- 证据仅/tmp：geoagent-v17-parallel-live-20261014.txt/png、geoagent-v17-server-audit-20261014.txt；密钥、数据库、临时日志与截图均不提交。后续应在PiChat修复后联合复测冷启动、重进异常恢复、自然周变化路由及连续并发；本轮不扩大权限、不增加超时、不关闭TLS。
