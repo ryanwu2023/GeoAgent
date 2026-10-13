@@ -553,3 +553,14 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 未为掩盖问题重复生成。按下载UI一次尝试读取同一制品，12秒未收到浏览器download事件，不能判文件下载成功或确定服务端失败。只读检查宿主日志error/warn为空，iframe DOM没有普通audio元素；PiChat源码显示header-token客户端使用认证PCM/AudioWorklet，cookie客户端可走完整文件Range播放器。此为候选调查方向，不是已确定网络、权限、解码或缓冲根因；未放宽iframe权限、未修改PiChat源码/部署。
 - 额外答复质量缺口：把待研判约89%解释为“自动分类尚未覆盖大部分记录”，unknown信号不直接等于分类覆盖缺失；MCP该计数本身正确。讲稿同步带入了此推断，须PiChat侧另核对，不能因数字一致宣称全部分析正确。
 - 证据/tmp/geoagent-speech-generated-playback-failed-20261014.png及/tmp/geoagent-public-counts-verified-20261014.png。账本状态：MCP指定范围读数通过、语音生成通过、嵌入播放失败、下载未验证、真实语音输入/长期空闲续期未验。保留原会话和失败音频，没有存入报告库或触发采集/重启/发布；后续须PiChat排查相同operation的PCM请求状态、Worklet错误及播放器事件，再用同制品复测播放，不新增生成掩盖问题。
+
+### 2026-10-14：MR !6 合并、v1.0.15 发布及公网嵌入 Live 验收
+
+- 用户授权核对流水线、通过后合并及发布。实际检查时[MR !6](https://gitlab.lz.internal/yujunjun/GeoAgent/-/merge_requests/6)已由yujunjun合并，合并提交cddbe70a7f36daa22ee757e95d5f815b7eb309f4；未重复合并。[MR流水线5350](https://gitlab.lz.internal/yujunjun/GeoAgent/-/pipelines/5350)及[main流水线5352](https://gitlab.lz.internal/yujunjun/GeoAgent/-/pipelines/5352)均Passed，取代此前“API权限不足未核实”状态。通过已登录GitLab UI核对，无新增凭据或权限。
+- 同步main并创建保护生产标签geoagent-prod-v1.0.15，指向上述合并提交。[生产流水线5354](https://gitlab.lz.internal/yujunjun/GeoAgent/-/pipelines/5354)验证作业28088通过，CI报告219项测试；镜像前端测试/构建层使用已通过缓存。手动执行部署作业28089，最终Job succeeded、流水线Passed；北京约05:53完成。沿用备份、已验证镜像、滚动更新和健康检查流程，未执行回滚。
+- 发布日志确认两个公网域名https://geoagent.lhotsetech.com及https://geoagentd40d.sealosgzg.site：匿名MCP=401，Bearer初始化/工具列表/geo_snapshot_list真实调用=200。发布临时release-live Key已撤销，未写入仓库/账本。站点API仍要求部署层登录；未修改既有Agent授权或工作快照。
+- 用户在Chrome完成公网站点登录后刷新，页面出现MCP工作台和新版范围同步状态。智能问答嵌入实际连接https://chat.lhotsetech.com/work-embed/geo-research-assistant；身份加载结束、可输入，宿主r2与嵌入“下轮看板范围”一致：57fb9e48f6a0fa1f10f8502d/usiran/全部维度/空起止日期。“已接收”不是模型已使用证明，后续以真实用户轮次取数核验。
+- 在公网嵌入面板自然输入发布后连接验收问题（第28轮），要求重新调用MCP核对风险计数和采集恢复/旧快照边界。实际geo_workspace_summary调用参数limit=1、snapshot_id=57fb9e48f6a0fa1f10f8502d、topic=usiran；工具详情sourceExecutionStatus=succeeded、sourceCompleteness=complete，call_00_HVHjDPg5wMOK9FBPJBzh6059。两步调用13.9秒，整轮27秒，北京05:55完成；不是API代发或沿用旧回答。
+- 新答复升级227/持续68/缓和139、范围3979、候选维度13/13，与同屏当前看板一致；答复明确采集成功、导入成功、目标范围补齐不同，旧快照材料不会自动回填，复核/翻译展示更新不等于新增材料。保持原57fb9e48工作快照，未触发采集或保存简报。额外说明最新快照是e6f55aa2不作为本轮切换。
+- 状态：MR/main CI通过、生产发布通过、两个公网MCP认证及协议探测通过、公网Agent嵌入连接与本轮真实取数通过。未验全部业务场景、长期续期或语音播放；此前语音播放失败仍未解决，不能因本轮连接通过宣称语音通过。答复超过用户200字目标，简洁度仍需PiChat跟进。
+- 现场证据：/tmp/geoagent-prod-v1.0.15-pipeline-20261014.png、/tmp/geoagent-prod-v1.0.15-embedded-live-20261014.png。临时截图不提交；仅账本文档追加提交，不重新发布文档提交。
