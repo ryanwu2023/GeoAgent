@@ -540,6 +540,7 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 本地验证：`.venv/bin/python -m pytest -q` 全量219项通过（30.59秒）；`npm run build` TypeScript与生产构建通过（仅现有大分块提示）；`npm test` 状态机13项通过。首次直接运行前端测试因未设置临时编译路径失败，已补内存编译测试入口，无临时JS产物；Docker构建也执行该测试入口。
 - 整理约束：`output/` 加入Git与Docker忽略，不提交截图、`.env`、数据库、CA、密钥或临时脚本；只提交源代码、共享业务配置、测试及设计/验收/移交文档。实际配置与凭据仍在本地后端数据目录或外部临时目录。
 - 交付方式：独立 `codex/geoagent-mcp-business-refactor` 分支，目标main，通过push建立MR；不直接推main、不合并、不发布、不重启当前live。MR及流水线回执在创建后补记。
+- 提交回执：代码提交94c6ded已推送origin同名分支。现有glab凭据为其他项目机器人，对GeoAgent API返回404；不更换凭据或扩大权限，改用现有SSH权限的GitLab push option创建MR。
 - 验收边界：本地自动测试通过不等于全部公网业务场景通过；当前语音生成通过但嵌入播放失败，仍按下节及08移交跟进，不在本MR中宣称修复PiChat播放器。
 
 ### 2026-10-14：本地嵌入语音生成与播放Live复验（播放未通过）
