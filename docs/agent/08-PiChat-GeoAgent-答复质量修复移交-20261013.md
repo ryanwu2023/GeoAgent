@@ -27,3 +27,22 @@
 用户配置腾讯TTS后，8010原嵌入会话第4轮实际geo_workspace_summary读数227/68/139/3979与公网57fb9e48看板一致，audit geo-audit-ddbff61f62688df7d8ee。speech_generate的operation speech-66289721-290d-4df5-bc42-64f08ba98009已生成M4A479.4KB/55秒，讲稿数字一致；两次播放短暂00:00后均报“播放中断”，不是生成未配置问题。请优先对同一operation检查嵌入Bearer PCM响应、Stream-Key/Sample-Rate检查、AudioWorklet错误及播放器状态，避免重新生成掩盖失败。卡片首音频标记存在，不代表完整听到；下载UI未收到事件也不能单独确定服务端下载失败。请保留用户会话/草稿/制品，不无条件刷新或切身份。
 
 另有语义问题：答复及讲稿把unknown待研判占比解释为自动分类覆盖不足。unknown是信号待研判，不能据该数单独断言分类覆盖缺失；数值正确不等于分析正确。该项与播放阻点分别验收。GeoAgent本轮未改PiChat代码或权限，详细证据见03账本。
+
+## 2026-10-14补充：公网三个业务问题与恢复验收
+
+- v1.0.15、57fb9e48/usiran/全部维度/空日期，05:58–06:07在实际公网站点嵌入自然输入三个原问句。14项指标首末日期/值与看板一致；反证规则及not_evaluated/unknown解释一致；缺口在首次失败后顺序复测补齐目录31与全主题告警7（当前主题0），明确旧/新回执及有效零值。详见03账本，不重写失败历史。
+- 路由效率：指标问题用了18次MCP（14次series）、72秒，未用geo_metric_changes；请核对本实例GeoAgent专用工具装配是否包含新增业务工具及模型实际可见description，再评估路由。现有证据不能断言工具未装配，不盲目扩大权限。
+- 体积/稳定性：analysis_view本轮结果126221字符，调用call_00_p4DCb8xLOhHUwlOQpgT49709；缺口首次3调用30秒超时，补试no healthy upstream。顺序目录两页1.3s/1.4s及all概览21.8s恢复。请关联相同会话s-ffe599973451的工具生命周期、网关响应与服务日志，区分队列/客户端超时/实际服务端执行时间；不要凭结果大或顺序恢复就认定根因。可按查询问题减少材料体积，但不得丢失范围、时间、缺口与证据语义。
+- 重新进入：看板菜单切换后一次身份确认超时、UI重试无效，页面刷新后恢复。现场/tmp/geoagent-panel-reentry-timeout-20261014.png；请区分iframe加载与auth-ready握手，并验证重试是否确实重载未完成frame。根因尚未确认，不要求关闭TLS或放宽权限。
+- 反证问题仅重新读analysis/summary，新闻正文引用虽明确标记旧回执，仍不是本轮独立正文核验。若验收目标是当前事实反证，须重新读目标材料且保留候选/已核验边界；长篇规则复述及不必要历史材料应收敛。
+- 本项目本轮未更改PiChat源码、部署或凭据，未确认确定业务计算缺陷；恢复通过不等于稳定性修复。语音仍按上节独立复测。
+
+## 移交提示词：公网映射、握手及MCP超时专项
+
+请只排查GeoAgent专用Agent，不改其他Agent或扩大权限。外网chat.lhotsetech.com映射同一内网chat.test；实际206节点Nginx两域名同server_name，代理9292。GeoAgent修复重复事件分类、同步投影阻塞及分析重要指标携带完整历史的问题，发布后的回执见03账本。
+
+请关联实际会话s-ffe599973451：06:05:34 runner出现geo_workspace_summary及两次geo_metric_catalog的mcp.request.idle=30秒截断，06:05:40 Streamable HTTP POST no healthy upstream。GeoAgent持久审计06:05:41仍ok、执行22207ms，audit geo-audit-8c731901808d4e8a92e5cf4323cbf16b；不能把客户端超时说成后端没执行或用户缺数据。请查客户端并发复用、连接失效后的重连、deadline排队计时、网关/Ingress状态，关联请求始末，不以增加超时作为唯一修复。
+
+身份问题请分层验证：签发embed/identity200不代表iframe加载/finance:chat:ready或WS票据通过。查公网Host/Origin/Bearer是否在映射中保留，匹配请求来源、父站域名与会话；已有其他浏览器geoagent.lhotsetech.com父站日志反复/auth/ws-ticket401，不可混作Chrome d40d同会话的根因。本项目手动重试会重建未就绪frame，不静默改已连接会话；请对比重试前后auth/me、ws-ticket及ready事件，严禁关TLS或放宽嵌入来源来掩盖失败。
+
+路由请核对模型实际装配新增geo_metric_changes、geo_business_catalog等工具及描述刷新。17工具是GeoAgent原始目录，不等于PiChat模型全部可见；14次series有正确结果但效率低。修复后通过公网嵌入原问句、3个并发真实MCP请求及菜单重进验证，保留失败历史。日志位于206的/home/pichat/.pm2/logs/pi-chat-runner-error.log、pi-chat-server-out-0.log及/var/log/nginx/chat.access.log；不得将Token、票据或个人资料复制进移交。

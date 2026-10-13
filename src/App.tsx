@@ -1404,7 +1404,7 @@ export default function App() {
                 )}
                 {pichatError && (
                   <div className="pichat-embed-status error">{pichatError}
-                    <button type="button" onClick={()=>void requestPichatIdentity(true)}>重试连接</button>
+                    <button type="button" onClick={()=>setConnectionVersion(value=>value+1)}>重试连接</button>
                   </div>
                 )}
                 {connectionLoaded && embedWorkspaceScope ? <iframe

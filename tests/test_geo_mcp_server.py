@@ -517,6 +517,8 @@ async def test_official_mcp_client_can_initialize_list_and_call() -> None:
                     assert len(analysis_payload["data"]["asset_overview"]) == len(analysis_payload["data"]["assets"])
                     assert all("topic_paths" in item for item in analysis_payload["data"]["asset_overview"])
                     assert "不参与 topic_paths 匹配计算" in analysis_payload["data"]["limit_basis"]
+                    assert all('history' not in m and m['history_included'] is False
+                               for m in analysis_payload['data']['important_metrics'])
 
                     brief_result = await session.call_tool("geo_brief_list", {"snapshot_id": snapshot_id, "limit": 2})
                     brief_payload = json.loads(brief_result.content[0].text)
