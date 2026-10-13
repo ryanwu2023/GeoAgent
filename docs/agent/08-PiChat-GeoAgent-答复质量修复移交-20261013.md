@@ -46,3 +46,5 @@
 身份问题请分层验证：签发embed/identity200不代表iframe加载/finance:chat:ready或WS票据通过。查公网Host/Origin/Bearer是否在映射中保留，匹配请求来源、父站域名与会话；已有其他浏览器geoagent.lhotsetech.com父站日志反复/auth/ws-ticket401，不可混作Chrome d40d同会话的根因。本项目手动重试会重建未就绪frame，不静默改已连接会话；请对比重试前后auth/me、ws-ticket及ready事件，严禁关TLS或放宽嵌入来源来掩盖失败。
 
 路由请核对模型实际装配新增geo_metric_changes、geo_business_catalog等工具及描述刷新。17工具是GeoAgent原始目录，不等于PiChat模型全部可见；14次series有正确结果但效率低。修复后通过公网嵌入原问句、3个并发真实MCP请求及菜单重进验证，保留失败历史。日志位于206的/home/pichat/.pm2/logs/pi-chat-runner-error.log、pi-chat-server-out-0.log及/var/log/nginx/chat.access.log；不得将Token、票据或个人资料复制进移交。
+
+补充06:27的v1.0.16实际回归：4个并行工具成功，分析结果已由126221字符缩为23480字符，后端概览仍11.6/13.5秒，GeoAgent继续修复lineage全快照解码。不要将来源体缩小当PiChat所有压缩/引用已通过。答复“usiran（含并列all）与宿主一致、无覆盖差异”措辞不严谨：all是用户明确要求的另一个比较范围，不等于宿主usiran。请每个结果标自己的scope；not_evaluated时应写“未完成反证核验”，避免“本轮无任何counter被核验为已发生”被误读为做完了核验。
