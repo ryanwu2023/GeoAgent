@@ -19,6 +19,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from backend import research, store
 from backend.geo_mcp.provenance import collection_snapshot_boundary
@@ -106,10 +107,14 @@ def _workspace_counts(snapshot: dict[str, Any], topic: str, dimension: str, star
     latest_reviews = {row["record_id"]: row for row in rows}
     applied_reviews = [latest_reviews[item["id"]] for item in records if item["id"] in latest_reviews]
     counts = {signal: 0 for signal in SIGNALS}
+    category_counts: dict[str, int] = {}
     for item in records:
+        metadata = event_metadata(item)
+        category = metadata['event_category']
+        category_counts[category] = category_counts.get(category, 0) + 1
         signal = reviews.get(item["id"])
         if signal is None:
-            signal = event_metadata(item)["situation_signal"]
+            signal = metadata["situation_signal"]
         counts[signal if signal in counts else "unknown"] += 1
     coverage = research.coverage(snapshot, start=start, end=end)
     dimensions = [item for row in coverage for item in row["dimensions"]]
@@ -118,7 +123,7 @@ def _workspace_counts(snapshot: dict[str, Any], topic: str, dimension: str, star
         "records_count": len(records),
         "supplemental_records_count": sum(bool(item.get("supplemental")) for item in records),
         "signal_counts": counts,
-        "event_category_counts": {category: sum(event_metadata(r)['event_category'] == category for r in records) for category in sorted({event_metadata(r)['event_category'] for r in records})},
+        "event_category_counts": dict(sorted(category_counts.items())),
         "event_category_basis": "当前topic/dimension/日期范围全部记录的自动事件分类，可能含地图图例未展示类别；不应用地图图层、信号或地理点位筛选，不能冒充地图可见点数。",
         "signal_labels": SIGNALS,
         "counting_projection_version": "risk-panel-signals/v2",
@@ -291,7 +296,27 @@ def _context_principal(ctx: Context) -> Any:
     return principal_from_request(ctx.request_context.request)
 
 
-def _run_tool(
+async def _run_tool(*, ctx: Context, tool: str, handler: Callable) -> str:
+    # SQLite reads, JSON snapshot decoding and research projections are sync.
+    # Keep them off the ASGI loop so health/identity/MCP requests can progress.
+    return await run_in_threadpool(_execute_tool, ctx=ctx, tool=tool, handler=handler)
+
+
+def _analysis_metric_projection(metric: dict[str, Any]) -> dict[str, Any]:
+    """Overview facts, not a repeated unbounded time-series archive."""
+    fields = ('id', 'series', 'name', 'unit', 'frequency', 'scope', 'topic', 'dimension',
+              'current', 'previous', 'delta', 'delta_unit', 'pct', 'freshness',
+              'quality_issue', 'comparison_step', 'method', 'boundary', 'selection_reason')
+    result = {key: metric.get(key) for key in fields}
+    source_ids = metric.get('source_ids') or []
+    result.update(source_ids=source_ids[:50], source_ids_count=len(source_ids),
+                  source_ids_truncated=len(source_ids)>50,
+                  history_included=False, history_points_count=len(metric.get('history') or []),
+                  details_tool='geo_metric_series', semantics=metric_semantics(metric))
+    return result
+
+
+def _execute_tool(
     *,
     ctx: Context,
     tool: str,
@@ -313,7 +338,7 @@ def _run_tool(
             status="ok",
             started=started,
         )
-        return success_envelope(
+        response = success_envelope(
             data=data,
             request_id=request_id,
             tool=tool,
@@ -321,6 +346,9 @@ def _run_tool(
             warnings=warnings,
             audit_event_id=audit_event_id,
         )
+        logger.info("mcp_projection tool=%s response_bytes=%d total_duration_ms=%d",
+                    tool, len(response.encode('utf-8')), round((monotonic()-started)*1000))
+        return response
     except MCPError as exc:
         audit_event_id = record(
             request_id=request_id,
@@ -391,7 +419,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             ]
             return {"snapshots": visible}, list_provenance(working_snapshot_id=working_id, latest_snapshot_id=latest_id), []
 
-        return _run_tool(ctx=ctx, tool=tool, handler=handler)
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
     @server.tool(name="geo_snapshot_get", description="读取一个可见快照的轻量元数据，不返回全量 records。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_snapshot_get(snapshot_id: SnapshotId, ctx: Context) -> str:
@@ -411,7 +439,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             data = {"snapshot": summary, "records_basis": "records为全快照归并后的记录数；不是当前主题/维度/日期筛选的面板记录数。面板计数请读取geo_workspace_summary。"}
             return data, snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(summaries)), []
 
-        return _run_tool(ctx=ctx, tool=tool, handler=handler)
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
     @server.tool(name="geo_workspace_summary", description="读取风险监测面板：升级相关/持续相关/缓和相关/待研判报道数量 signal_counts、范围内记录数 records_count、全框架候选维度覆盖，以及指标、资产和情景摘要。问‘风险概览、各类线索多少、维度覆盖多少、还缺什么数据’时使用。review_evidence 仅证明本次应用的复核，change_attribution 限定差异原因尚未证实，不能把可更新机制当成实际变更原因。报道计数不是 scenarios.evidence_ids 的有限候选样本数量，也不是情景概率。coverage 排除补充报告且为全部主题，coverage[].count 是主题记录数而非维度合计；records_count 遵循 topic/dimension/日期筛选。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_workspace_summary(
@@ -471,9 +499,9 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             warnings = analysis.get("data_warnings", [])
             return summary, snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())), warnings
 
-        return _run_tool(ctx=ctx, tool=tool, handler=handler)
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_metric_catalog", description="列出快照内可用指标的轻量目录，不返回完整时间序列。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    @server.tool(name="geo_metric_catalog", description="列出看板可用指标目录，不返回完整时间序列；本周/区间变化优先geo_metric_changes一次批量计算，含义和有界历史用geo_metric_series。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_metric_catalog(
         snapshot_id: SnapshotId,
         topic: Topic = "all",
@@ -538,7 +566,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 [],
             )
 
-        return _run_tool(ctx=ctx, tool=tool, handler=handler)
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
     @server.tool(name="geo_metric_series", description="读取快照内指定指标的有界时间序列和程序计算摘要。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_metric_series(
@@ -614,7 +642,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 warnings,
             )
 
-        return _run_tool(ctx=ctx, tool=tool, handler=handler)
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
     @server.tool(name="geo_evidence_search", description="在指定快照内分页检索证据摘要。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_evidence_search(
@@ -651,7 +679,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 [],
             )
 
-        return _run_tool(ctx=ctx, tool=tool, handler=handler)
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
     @server.tool(name="geo_evidence_get", description="读取指定快照内单条证据的正文、来源、发布/采集时间与核验状态。报道及单方通报不是独立核实事实；单条或有限样本不能证明整个快照缺少某类证据，见 analysis_evidence_boundary。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_evidence_get(snapshot_id: SnapshotId, record_id: RecordId, ctx: Context) -> str:
@@ -672,7 +700,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             detail['link_health_basis'] = '与台账详情读取同一份链接检查记录，不在调用时发起网络检查；链接可访问不等于正文事实已核实。核验时点见checked_at，未检查不等于链接失效。'
             return {"analysis_evidence_boundary": _analysis_evidence_boundary(), "record": detail}, snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_id(store.snapshot_summaries())), []
 
-        return _run_tool(ctx=ctx, tool=tool, handler=handler)
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
     @server.tool(name="geo_analysis_view", description="读取快照内五类资产和三类情景的结构化条件研判。对照业务面板时须保持同一 topic、dimension、start、end；用户未指定日期或维度时不要自行收窄。不同筛选的 topic_paths/status 不可拼接成同一面板结论。asset_overview 是精简五类资产信息，完整 assets 含更多材料。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_analysis_view(
@@ -730,7 +758,8 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 "assets": (result.get("assets") or [])[:page_limit],
                 "scenarios": (result.get("scenarios") or [])[:page_limit],
                 "rule_version": result.get("rule_version", RULE_VERSION),
-                "important_metrics": (result.get("important_metrics") or [])[:page_limit],
+                "important_metrics": [_analysis_metric_projection(m) for m in (result.get("important_metrics") or [])[:page_limit]],
+                "metric_projection_basis": "概览保留首末单期观测、变化、质量、语义和来源；不附完整历史。history_points_count不是连续覆盖证明，序列及区间详情用geo_metric_series/geo_metric_changes。",
                 "total_assets": len(result.get("assets") or []),
                 "total_scenarios": len(result.get("scenarios") or []),
             }
@@ -740,7 +769,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 result.get("data_warnings") or [],
             )
 
-        return _run_tool(ctx=ctx, tool=tool, handler=handler)
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
     @server.tool(name="geo_brief_list", description="列出 principal 可见的已落盘研究简报元数据。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_brief_list(
@@ -793,7 +822,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 [],
             )
 
-        return _run_tool(ctx=ctx, tool=tool, handler=handler)
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
     @server.tool(name="geo_brief_get", description="读取已落盘研究简报的受限正文和 snapshot lineage。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_brief_get(brief_id: BriefId, max_bytes: MaxBytes = MAX_BRIEF_BYTES, *, ctx: Context) -> str:
@@ -832,7 +861,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 warnings,
             )
 
-        return _run_tool(ctx=ctx, tool=tool, handler=handler)
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
     @server.tool(name="geo_collector_status", description="读取采集运行态的有界 live 投影，不混入快照 provenance。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_collector_status(
@@ -884,7 +913,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 projected["events"] = []
             return projected, {"kind": "live", "source": "collector-monitor", "live": True}, []
 
-        return _run_tool(ctx=ctx, tool=tool, handler=handler)
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
     def scoped_snapshot(principal, tool, snapshot_id, topic='all', dimension='', start='', end=''):
         _validate_filters(topic, dimension, start, end)
@@ -908,7 +937,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             data = map_projection(research.filtered_records(snapshot, topic, dimension, start, end), review_index(snapshot_id), layers, signal, region, size)
             data['query_scope'] = {'snapshot_id': snapshot_id, 'topic': topic, 'dimension': dimension, 'start': start, 'end': end, 'categories': layers, 'signal': signal, 'region': region}
             return data, provenance, []
-        return _run_tool(ctx=ctx, tool='geo_risk_map', handler=handler)
+        return await _run_tool(ctx=ctx, tool='geo_risk_map', handler=handler)
 
     @server.tool(description="发现业务主题/跟踪维度中文名与机器值，以及看板到工具的问答路径；参数不明时先查此工具，不提供具体快照数值。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_business_catalog(ctx: Context) -> str:
@@ -921,7 +950,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                                   '还缺什么数据': ['geo_workspace_summary', 'geo_source_health', 'geo_metric_catalog'],
                                   '快照版本列表（不代表当前页面筛选）': ['geo_snapshot_list']},
                     'context_priority': '用户明确指定优先，其次当前看板上下文；不知道当前范围时先澄清，不静默切换latest/all。'}, {}, []
-        return _run_tool(ctx=ctx, tool='geo_business_catalog', handler=handler)
+        return await _run_tool(ctx=ctx, tool='geo_business_catalog', handler=handler)
 
     @server.tool(description="回答本周/指定区间哪些指标发生变化：程序按区间首末有效观测计算，默认快照导入周。返回单位、日期、质量和分页；单期比较与区间变化不同，解释详情用geo_metric_series。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_metric_changes(snapshot_id: SnapshotId, topic: Topic = 'all', dimension: Dimension = '', start: Start = '', end: End = '', offset: Offset = 0, limit: Limit = 20, *, ctx: Context) -> str:
@@ -940,7 +969,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                     'metrics': [{'id': m['id'], 'series': m.get('series'), 'name': m['name'], 'unit': m['unit'], 'freshness': m.get('freshness'), 'quality_issue': m.get('quality_issue'), 'interval_change': c} for m, c in list(zip(rows, changes))[offset:offset+size]],
                     'total': len(rows), 'offset': offset, 'limit': size, 'has_more': offset+size < len(rows),
                     'basis': '每个指标区间内首末有效观测日可能不同；无两点不等于无变化；有效零值不是缺失；不作因果归因。'}, provenance, []
-        return _run_tool(ctx=ctx, tool='geo_metric_changes', handler=handler)
+        return await _run_tool(ctx=ctx, tool='geo_metric_changes', handler=handler)
 
     @server.tool(description="读取数据源菜单的快照来源健康、爬虫项目接入、失败来源及缺发布时间/采集时间计数。冻结快照不是当前实时状态，当前采集另用geo_collector_status。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_source_health(snapshot_id: SnapshotId, offset: Offset = 0, limit: Limit = 20, *, ctx: Context) -> str:
@@ -959,7 +988,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                     'has_more': offset+size < max(len(projects), len(sources)),
                     'coverage': research.coverage(snapshot),
                     'basis': '全快照项目/来源统计，不随当前主题筛选。项目可能重复采集同一报道，数量不可相加；维度是候选覆盖；来源失败对维度影响未建立逐条映射，不能臆断缺失范围。'}, provenance, []
-        return _run_tool(ctx=ctx, tool='geo_source_health', handler=handler)
+        return await _run_tool(ctx=ctx, tool='geo_source_health', handler=handler)
 
     @server.tool(description="发现最近可见采集批次及启动/结束、采集器失败和导入状态，用run_id再读取geo_collector_status。账本不是调度器或进程心跳。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_collector_runs(limit: Limit = 20, *, ctx: Context) -> str:
@@ -971,7 +1000,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                     'limit': size, 'has_more': len(runs)>size,
                     'collection_snapshot_boundary': collection_snapshot_boundary(),
                     'basis': '仅最近可见账本，可按run_id比较已读批次；有界结果不证明无其他运行。'}, {'kind': 'live', 'source': 'collector-monitor', 'live': True}, []
-        return _run_tool(ctx=ctx, tool='geo_collector_runs', handler=handler)
+        return await _run_tool(ctx=ctx, tool='geo_collector_runs', handler=handler)
 
     @server.tool(description="比较两份已归档简报的看板展示正文，返回差异及快照/生成时间。has_more为true时按next_offset_chars继续读取，不用首段概括全文；文本差异不是事实证实，不生成简报。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_brief_compare(before: Annotated[str, Field(description='前一份简报ID，从geo_brief_list获取。')], after: Annotated[str, Field(description='后一份简报ID，从geo_brief_list获取。')], max_bytes: MaxBytes = MAX_BRIEF_BYTES, offset_chars: Annotated[int, Field(ge=0, description='差异文本的字符偏移，首次0；后续使用next_offset_chars，同一对简报保持一致。')] = 0, *, ctx: Context) -> str:
@@ -997,7 +1026,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                     'has_more': more, 'next_offset_chars': next_offset if more else None, 'offset_chars': offset_chars,
                     'total_chars': len(text), 'total_bytes': len(encoded), 'returned_bytes': len(chunk.encode('utf8')),
                     'basis': '与研究简报看板相同的中文展示正文差异（来源标签翻译可更新），不是不可变原文差异；判断是否变化须看正文语义及各自材料，不能自动归因。'}, {'kind': 'brief_comparison', 'snapshot_ids': [b['snapshot_id'] for b in briefs]}, []
-        return _run_tool(ctx=ctx, tool='geo_brief_compare', handler=handler)
+        return await _run_tool(ctx=ctx, tool='geo_brief_compare', handler=handler)
 
     return server
 
