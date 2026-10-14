@@ -23,6 +23,7 @@ RUN python -m venv /app/.venv && /app/.venv/bin/pip install --no-cache-dir -r re
 ENV PATH="/app/.venv/bin:${PATH}"
 COPY backend ./backend
 COPY scripts ./scripts
+COPY start.ps1 stop.ps1 ./
 COPY collectors ./collectors
 COPY config ./config
 COPY knowledge ./knowledge

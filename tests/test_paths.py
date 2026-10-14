@@ -54,6 +54,10 @@ def test_direct_collector_outputs_are_incrementally_synced(tmp_path):
     assert second == {"projects": 0, "files": 0, "bytes": 0}
 
     source.write_text('{"id":"newer"}\n', encoding="utf-8")
+    # Container/filesystem timestamp resolution may make rapid same-size edits
+    # indistinguishable by stat. Content changes must still be imported.
+    import os
+    os.utime(source, ns=(target.stat().st_atime_ns, target.stat().st_mtime_ns))
     third = sync_local_collector_outputs(source_root, data_root)
     assert third["files"] == 1
     assert "newer" in target.read_text(encoding="utf-8")

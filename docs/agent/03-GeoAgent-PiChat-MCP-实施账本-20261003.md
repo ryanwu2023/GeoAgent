@@ -604,3 +604,8 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 保留启动/停止脚本创建时间+命令路径的进程身份校验，为新增爬虫管理进程同样记录和校验createdAt，避免PID复用误停。补4项合并兼容回归：项目MCP与新闻配置共存、工作快照不被状态替代、首次产物先同步再选根目录、Windows脚本身份及端口契约。
 - 最终后端231 passed、1 skipped（19.00s；Windows真实cmd批处理在macOS跳过），前端13 passed及tsc/Vite生产构建通过；合并差异空白检查通过。只使用隔离测试数据，未调用实际新闻服务、启动采集或重启当前live；Windows进程树实际执行仍需Windows环境验证。未提交密钥、data、临时日志或构建产物。
 - 本次目标是本地main与GitHub同步；不推生产标签、不触发公网部署，GitLab origin/main未随此次请求同步。生产继续v1.0.17，不将合并测试当作部署/外网验收。
+
+### 2026-10-14：合并版 GitLab 同步及外网发布（进行中）
+
+- 用户追加授权同步GitLab、核对CI、通过后发布与外网live。f5e9e76已推GitLab；5371/28140失败，未发布该失败构建。真实容器报告228 passed/2 failed/2 skipped：Windows脚本契约测试读取/app/start.ps1失败；增量同步同大小且同时间戳内容变化被误跳过。
+- 镜像补COPY start.ps1/stop.ps1供静态契约测试，不在Linux启动Windows采集；同步在同大小/时间戳条件下增加分块内容比较，避免仅凭stat忽略真实改写。测试强制同大小同mtime复现，不用sleep或跳过断言掩盖问题。本地全量231 passed/1 skipped（20.86s），待新CI及实际发布/live补记。此前前端13项与构建通过且本次无前端变更。

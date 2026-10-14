@@ -31,6 +31,17 @@ def collector_read_root() -> Path:
     return runtime if recognizable else project_root() / "examples" / "demo-data"
 
 
+def _same_file_content(source: Path, target: Path) -> bool:
+    """Compare without a stat-based cache; equal timestamps can hide edits."""
+    with source.open("rb") as left, target.open("rb") as right:
+        while True:
+            chunk = left.read(1024 * 1024)
+            if chunk != right.read(1024 * 1024):
+                return False
+            if not chunk:
+                return True
+
+
 def sync_local_collector_outputs(
     source_root: Path | None = None, data_root: Path | None = None
 ) -> dict[str, int]:
@@ -62,6 +73,7 @@ def sync_local_collector_outputs(
                 if (
                     source_stat.st_size == target_stat.st_size
                     and source_stat.st_mtime_ns <= target_stat.st_mtime_ns
+                    and _same_file_content(source, target)
                 ):
                     continue
             target.parent.mkdir(parents=True, exist_ok=True)
