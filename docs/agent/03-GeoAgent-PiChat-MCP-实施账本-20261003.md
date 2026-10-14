@@ -623,3 +623,8 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 已确认探针自身缺陷：HTTPError响应状态和内容类型被丢弃，仅剩断言；初始化通知、协商协议头及会话头未完整处理。修订为逐阶段记录HTTP状态、受限错误码、字节数及耗时，传播会话/协议头、唯一请求id、发送initialized，兼容JSON/SSE并限制返回体。协议成功与业务结果成功分开，任一失败立即退出，不自动重试；不输出凭据、响应正文、Session ID或错误消息。
 - 新增7项隔离回归覆盖生命周期、503首错保留、不重试、RPC错误脱敏、SSE匹配、非法/过大返回、业务失败不冒充探针通过。专项7 passed，最终全量238 passed/1 skipped（43.82s），diff检查通过。尚未发布该修订，不声称历史根因已经修复或生产流水线已通过。
 - 身份确认仍交PiChat按同一frame关联ready/ack/auth/WS日志，沿用08移交文档；本轮不改其配置或源码、不重启当前live。下一轮Runner必须持有效Key；用户已确认沿用原一次性release-live Key流程，现有PiChat Key不变，随后发布采证。
+- 修订67c7a26通过MR !9/流水线5379（239项报告）后合并d906125；main5380通过。保护标签geoagent-prod-v1.0.19/5381验证28173、部署28174均通过，10:25:01 rollout成功，10:25:20 Job succeeded。没有重试部署或自动重试探针，没有回滚。
+- Runner .214本次实际双域首轮：匿名401、initialize200、initialized202、list200/17工具、snapshot-call200且业务ok。lhotsetech域调用2152ms，Sealos域1768ms；10:25:19发布一次性Key撤销，PiChat现有应用Key与身份保留。真实阶段日志已打印HTTP状态/内容类型/大小/耗时；不记录正文或凭据。生产流水线5381最终Passed，证据/tmp/geoagent-v19-pipeline-20261014.png。
+- 已关闭的是探针协议与可观测性缺陷，并完成新版本Runner首轮验收；旧28145故障时HTTP状态无法追溯，未证实其历史根因，不能说“初始化通知就是旧故障原因”。v18失败历史保留。身份间歇问题不因新发布MCP通过而关闭。
+- 10:27重新打开公网Chrome d40d页面→智能问答，身份连接正常、r2范围接收，原两轮对话保留；自然输入新验收问题，要求重新取数、不采集/切快照/存简报。实际geo_workspace_summary调用snapshot_id=e6f55aa20d3fdc1d0f1a1dae/topic=usiran/limit1/compact=true，维度和日期不限；request_id=2/read_at=2026-10-14T02:27:54.023544+00:00，2.6秒，本轮约6秒。回答231/60/126/unknown3480/范围3897/supplemental22与同屏看板一致，未沿用09:52旧回执。此是发布后正常连接与新取数验收，不是原间歇身份故障注入复测。
+- 完整详情定位本轮会话s-1571760299a3、调用call_00_0s1bXhfUQwNFYKhpf9lP7214：10:27:51.519 start→10:27:54.088 end/2.57s，结果未截断、外层status=ok、内层ok=true及新read_at。AX结果正文受展示长度限制，未独立导出所有JSON字段，不声称全部回包逐字核对。现场截图/tmp/geoagent-v19-embedded-live-20261014.png；未提交临时文件/密钥，身份专项08移交已补责任边界。
