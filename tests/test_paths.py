@@ -34,3 +34,26 @@ def test_latest_records_are_recognized_as_runtime_data(monkeypatch, tmp_path):
     monkeypatch.setenv("COLLECTOR_DATA_ROOT", str(runtime))
     monkeypatch.delenv("CRAWLER_ROOT", raising=False)
     assert collector_read_root() == runtime
+
+
+def test_direct_collector_outputs_are_incrementally_synced(tmp_path):
+    from backend.paths import sync_local_collector_outputs
+
+    source_root = tmp_path / "collectors"
+    data_root = tmp_path / "runtime"
+    source = source_root / "sample-monitor" / "output" / "LATEST-records.jsonl"
+    source.parent.mkdir(parents=True)
+    source.write_text('{"id":"fresh"}\n', encoding="utf-8")
+
+    first = sync_local_collector_outputs(source_root, data_root)
+    target = data_root / "sample-monitor" / "output" / source.name
+    assert first["projects"] == 1 and first["files"] == 1
+    assert target.read_text(encoding="utf-8") == source.read_text(encoding="utf-8")
+
+    second = sync_local_collector_outputs(source_root, data_root)
+    assert second == {"projects": 0, "files": 0, "bytes": 0}
+
+    source.write_text('{"id":"newer"}\n', encoding="utf-8")
+    third = sync_local_collector_outputs(source_root, data_root)
+    assert third["files"] == 1
+    assert "newer" in target.read_text(encoding="utf-8")

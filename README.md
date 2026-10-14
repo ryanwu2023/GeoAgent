@@ -49,6 +49,19 @@ npm ci && npm run build
 只启动 API：`.venv/bin/python -m scripts.start_local --no-frontend`；查看命令但不启动：`.venv/bin/python -m scripts.start_local --dry-run`。按 `Ctrl-C` 会同时停止该入口拉起的两个子进程。
 
 如果只需要单进程页面，继续使用 `.venv/bin/python -m scripts.serve`；它默认监听 8000，也支持 `--port` 或 `GEOAGENT_API_PORT`。不要让 Vite 的 8010 代理指向被 Colima/SSH 占用的 8000。
+Windows `start.ps1` 正常启动会在后台按注册表顺序逐个执行全部爬虫；每个项目优先使用 `run_new.bat`，没有时使用 `run.bat`。单个任务失败不会阻塞后续任务，全部结束后自动导入并生成冻结快照，但不会自动切换用户当前工作快照。运行进度、最近结果和失败日志可在页面“数据源”查看，详细日志保存在 `data/crawler-runs`。上述 macOS/Linux 入口不会启动这套 Windows 批处理。开发调试且不希望启动爬虫时使用：
+
+```powershell
+.\start.ps1 -NoCrawlers
+```
+
+停止服务会同时停止仍在运行的爬虫进程树：
+
+```powershell
+.\stop.ps1
+```
+
+开发：一个终端运行 `python -m uvicorn backend.app:app --reload --host 127.0.0.1 --port 8000`，另一个运行 `npm.cmd run dev`。
 
 ## 接入现有数据
 
@@ -83,6 +96,14 @@ MCP 已随主后端启动：开发页面地址为 `http://127.0.0.1:8010/mcp`，
 未配置模型时，使用真实的本地检索、数值计算及模板简报，并明确标注，不伪装成模型输出。模型输出需要 JSON，引用不存在、出现未经授权的新数值、接口失败或超时都会保留本地结果。引用校验不代表语义已经验证。
 
 “分析资产影响”可生成当前主题/筛选/快照范围内的有条件资产与情景解释并保存版本；模型判断始终待研究员核验。无模型或无证据时，资产矩阵显示研究规则及证据不足，不机械输出涨跌。
+
+## MCP 新闻源
+
+在页面“数据源 → MCP 新闻源配置”填写名称、HTTP 地址和 Authorization。凭据只保存在本机且已被 Git 忽略的 `data/mcp-config.json`，后端接口和页面都不会回显原值。保存后可测试连接并发现工具，再按主题、研究维度和日期检索新闻。
+
+MCP 结果会先保存原始响应，再转换成统一记录并直接生成新快照。页面统一标记为“MCP 导入，待核验”，保留原始链接、发布时间、采集时间和服务返回的稳定 ID；MCP 内容不会被当作系统指令执行。
+
+当前实现支持 Streamable HTTP JSON-RPC，并优先调用 `knowledge_search`。更换其他 MCP 服务时，该服务需要提供兼容的检索工具或在 `backend/mcp_news.py` 增加字段适配。
 
 ## 新爬虫扩展
 

@@ -596,3 +596,11 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 上线后刷新一次正常连接，随后“数据源→智能问答”“情景推演→智能问答”两次重进均正常：输入框可用、r2范围已接收、原持久对话保留。未再次触发原身份超时，因此手动重建iframe修复有代码/构建证据，异常握手恢复仍待PiChat联合故障复测；不能宣称身份超时根因已全部闭环。
 - 尚未关闭：无Sealos Pod/Ingress故障期日志，no healthy upstream根因仍待关联；PiChat deadline/并发重连与Host/Origin/WS握手移交08。最终答案仍带“与看板一致，无覆盖差异”和“本轮无任何counter被核验为已发生”易混措辞，已将应分scope及未完成核验的边界交给PiChat。此次总上下文显示约83万输入词元（429440缓存+402939非缓存），单次情景返回缩小不等于历史上下文已压缩；不在GeoAgent侧删对话掩盖问题。
 - 证据仅/tmp：geoagent-v17-parallel-live-20261014.txt/png、geoagent-v17-server-audit-20261014.txt；密钥、数据库、临时日志与截图均不提交。后续应在PiChat修复后联合复测冷启动、重进异常恢复、自然周变化路由及连续并发；本轮不扩大权限、不增加超时、不关闭TLS。
+
+### 2026-10-14：GitHub main 双向历史整合（仅代码同步，不发布）
+
+- 用户要求先合并GitHub独有改动、解决冲突并测试，再将本地main同步至GitHub。整合前本地cea3706、GitHub f40534a，共同祖先4a5c786；GitHub有7个独有提交。未强推或丢弃远端提交，在codex/github-main-integration保留双亲历史。
+- 8个冲突文件均逐项整合：保留现有PiChat嵌入、项目MCP认证/17工具、快照选择与轻量地图，同时保留GitHub新闻源配置/导入、Windows批处理编排和报告抽取修复。修正新闻路由mcp_config与现有AuthConfig同名覆盖、首次本地采集产物同步前误选demo、自定义Windows端口未传给导入器；后台采集完成只提示新版本，不静默切当前工作快照。显式新闻导入后的选择沿用workspace-selection同步。
+- 保留启动/停止脚本创建时间+命令路径的进程身份校验，为新增爬虫管理进程同样记录和校验createdAt，避免PID复用误停。补4项合并兼容回归：项目MCP与新闻配置共存、工作快照不被状态替代、首次产物先同步再选根目录、Windows脚本身份及端口契约。
+- 最终后端231 passed、1 skipped（19.00s；Windows真实cmd批处理在macOS跳过），前端13 passed及tsc/Vite生产构建通过；合并差异空白检查通过。只使用隔离测试数据，未调用实际新闻服务、启动采集或重启当前live；Windows进程树实际执行仍需Windows环境验证。未提交密钥、data、临时日志或构建产物。
+- 本次目标是本地main与GitHub同步；不推生产标签、不触发公网部署，GitLab origin/main未随此次请求同步。生产继续v1.0.17，不将合并测试当作部署/外网验收。

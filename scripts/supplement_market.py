@@ -9,6 +9,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 import httpx
 import inspect
+import sys
 from urllib.request import getproxies
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

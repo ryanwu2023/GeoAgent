@@ -16,15 +16,16 @@ from pydantic import BaseModel, Field
 from .store import ROOT, snapshots, snapshot_summaries, get_snapshot, save_snapshot, db, data_dir, get_working_snapshot_id, set_working_snapshot_id
 from .adapters import load_bundle
 from .research import filtered_records, metrics, analysis, coverage, answer, create_brief, model_status
-from .catalog import RULE_VERSION
+from .catalog import RULE_VERSION, topic_dimensions
 from .chinese import present_record, present_record_summary, present_map_record, present_answer, translation_cache, source_name, start_translation, translation_status, localize_brief_markdown
-from .paths import collector_read_root, collector_data_root
+from .paths import collector_read_root, collector_data_root, sync_local_collector_outputs
 from .collector_monitor import load_latest_run, load_runs, load_ledger_events, load_ledger_runs, load_source_status
 from .collector_jobs import CollectorBusyError, collector_jobs
 from .collector_config import apply_config, load_config, save_config
 from .collector_import import import_collector_output
 from .collector_ledger import CollectorLedger
 from scripts.integrate_collectors import load_registry
+from .mcp_news import McpClient, load_config as load_mcp_config, public_config as public_mcp_config, save_config as save_mcp_config, store_news
 
 def load_env():
     file = ROOT / ".env"
@@ -201,9 +202,19 @@ def validate_range(start, end):
     if start and end and start > end:
         raise HTTPException(422, "起始日期不能晚于结束日期")
 
+def legacy_crawler_status():
+    crawler = {"state": "idle", "total": 0, "current": None, "results": []}
+    crawler_file = data_dir() / "crawler-runs" / "current.json"
+    if crawler_file.is_file():
+        try:
+            crawler = {**crawler, **json.loads(crawler_file.read_text(encoding="utf-8"))}
+        except (OSError, ValueError, TypeError):
+            crawler = {**crawler, "state": "status_error"}
+    return crawler
+
 @app.get("/api/status")
 def status():
-    return {"model": model_status(), "translation":translation_status(), "crawler_root": str(collector_read_root()), "rule_version": RULE_VERSION, "snapshots": snapshots(), "working_snapshot_id": get_working_snapshot_id()}
+    return {"model": model_status(), "translation":translation_status(), "crawler_root": str(collector_read_root()), "crawler": legacy_crawler_status(), "mcp": public_mcp_config(), "rule_version": RULE_VERSION, "snapshots": snapshots(), "working_snapshot_id": get_working_snapshot_id()}
 
 @app.get("/api/collector/snapshots")
 def collector_snapshots():
@@ -625,6 +636,79 @@ def collector_run(run_id: str):
             return run
     raise HTTPException(404, "采集运行记录不存在")
 
+
+class McpConfigInput(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    url: str = Field(min_length=8, max_length=1000)
+    authorization: str = Field(default="", max_length=4000)
+    verify_tls: bool = True
+
+
+class McpFetchInput(BaseModel):
+    query: str = Field(min_length=2, max_length=500)
+    topic: Literal["usiran", "ukraine"]
+    dimension: str = Field(min_length=1, max_length=80)
+    top_k: int = Field(default=20, ge=1, le=100)
+    date_from: str = Field(default="", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+    date_to: str = Field(default="", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+
+
+@app.get("/api/mcp/config")
+def get_mcp_news_config():
+    return public_mcp_config()
+
+
+@app.post("/api/mcp/config")
+def update_mcp_config(body: McpConfigInput):
+    try:
+        return save_mcp_config(body.name, body.url, body.authorization, body.verify_tls)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@app.post("/api/mcp/test")
+async def test_mcp():
+    try:
+        client = McpClient()
+        tools = await client.list_tools()
+        return {
+            "ok": True,
+            "server": public_mcp_config(),
+            "tools": [
+                {"name": item.get("name"), "title": item.get("title") or item.get("name"), "description": item.get("description", "")[:300], "inputSchema": item.get("inputSchema", {})}
+                for item in tools
+            ],
+        }
+    except (ValueError, OSError, httpx.HTTPError, json.JSONDecodeError) as exc:
+        return {"ok": False, "message": f"MCP 连接失败：{type(exc).__name__}：{str(exc)[:300]}", "tools": []}
+
+
+@app.post("/api/mcp/fetch")
+async def fetch_mcp_news(body: McpFetchInput):
+    validate_range(body.date_from, body.date_to)
+    if body.dimension not in topic_dimensions(body.topic):
+        raise HTTPException(422, "主题与维度不匹配")
+    try:
+        config = load_mcp_config()
+        client = McpClient(config)
+        service = await client.call("service_status", {})
+        if not service.get("ok") or service.get("data", {}).get("overall") not in {None, "ok", "degraded"}:
+            raise ValueError("MCP 服务状态不可用")
+        arguments = {"query": body.query, "top_k": body.top_k, "mode": "hybrid"}
+        if body.date_from:
+            arguments["date_from"] = body.date_from
+        if body.date_to:
+            arguments["date_to"] = body.date_to
+        envelope = await client.call("knowledge_search", arguments)
+        _, fetched = store_news(config, body.query, body.topic, body.dimension, envelope)
+        root = collector_read_root()
+        bundle = load_bundle(root)
+        sid, created = save_snapshot(bundle)
+        start_translation()
+        return {"ok": True, "id": sid, "created": created, "fetched": fetched, "count": len(bundle["records"]), "errors": bundle["errors"]}
+    except (ValueError, OSError, KeyError, TypeError, httpx.HTTPError, json.JSONDecodeError) as exc:
+        raise HTTPException(422, f"MCP 新闻导入失败：{type(exc).__name__}：{str(exc)[:300]}") from exc
+
 @app.post("/api/model/check")
 async def check_model():
     if not llm.status()['configured']:
@@ -637,16 +721,22 @@ async def check_model():
 
 @app.post("/api/import")
 def import_data():
-    root = Path(status()["crawler_root"])
-    if not root.is_dir():
-        raise HTTPException(400, "爬虫目录不存在，请在 .env 设置 CRAWLER_ROOT")
     try:
+        sync = {"projects": 0, "files": 0, "bytes": 0}
+        configured = os.getenv("CRAWLER_ROOT")
+        if not configured or Path(configured).resolve() == collector_data_root().resolve():
+            sync = sync_local_collector_outputs(data_root=collector_data_root())
+        # Synchronize first: otherwise a first local run would select demo data
+        # before the published runtime directory has been populated.
+        root = collector_read_root()
+        if not root.is_dir():
+            raise HTTPException(400, "爬虫目录不存在，请在 .env 设置 CRAWLER_ROOT")
         bundle = load_bundle(root)
         sid, created = save_snapshot(bundle)
         start_translation()
     except (ValueError, OSError, KeyError, TypeError) as exc:
         raise HTTPException(422, f"数据导入未完成：{type(exc).__name__}：{str(exc)[:180]}") from exc
-    return {"id": sid, "created": created, "errors": bundle["errors"], "count": len(bundle["records"])}
+    return {"id": sid, "created": created, "errors": bundle["errors"], "count": len(bundle["records"]), "sync": sync}
 
 @app.get("/api/workspace")
 def workspace(snapshot_id: str, topic: Topic = "all", dimension: str = "", start: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$"), end: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")):

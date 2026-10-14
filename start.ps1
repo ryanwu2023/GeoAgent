@@ -1,9 +1,11 @@
-param([switch]$NoBrowser, [switch]$Build, [int]$Port = 8000, [string]$BindHost = '127.0.0.1')
+param([switch]$NoBrowser, [switch]$Build, [int]$Port = 8000, [string]$BindHost = '127.0.0.1', [switch]$NoCrawlers)
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 $statePath = Join-Path $PSScriptRoot 'data\server-process.json'
 $entryPath = Join-Path $PSScriptRoot 'scripts\serve.py'
 $url = "http://$BindHost`:$Port/"
+$crawlerStatePath = Join-Path $PSScriptRoot 'data\crawler-manager-process.json'
+$crawlerEntryPath = Join-Path $PSScriptRoot 'scripts\crawler_manager.py'
 try {
     $listener = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
     if ($listener) {
@@ -52,6 +54,12 @@ try {
     }
     if (-not $ready) { throw 'Server is starting slowly. See logs; stop.ps1 can stop the tracked process.' }
     Write-Host "Project started: $url"
+    if (-not $NoCrawlers) {
+        $crawlerProcess = Start-Process -FilePath $python -ArgumentList @('-u', ('"' + $crawlerEntryPath + '"'), '--import-url', ($url+'api/import')) -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $PSScriptRoot 'crawler-manager.stdout.log') -RedirectStandardError (Join-Path $PSScriptRoot 'crawler-manager.stderr.log') -PassThru
+        $crawlerIdentity = Get-CimInstance Win32_Process -Filter "ProcessId=$($crawlerProcess.Id)"
+        @{processId=$crawlerProcess.Id;entry=$crawlerEntryPath;createdAt=$crawlerIdentity.CreationDate.ToUniversalTime().ToString('o');startedAt=(Get-Date).ToUniversalTime().ToString('o')} | ConvertTo-Json | Set-Content -LiteralPath $crawlerStatePath -Encoding UTF8
+        Write-Host "Crawler manager started in background: PID $($crawlerProcess.Id)"
+    }
     Write-Host 'Stop: stop.bat / stop.ps1. Logs: server.stdout.log / server.stderr.log'
     if (-not $NoBrowser) { Start-Process $url }
 } catch { Write-Error $_ -ErrorAction Continue; exit 1 }

@@ -5,3 +5,23 @@
 @media(max-width:850px){.sidebar{width:74px;padding:24px 9px}.brand{padding:0;justify-content:center;margin-bottom:25px}.brand>div,.side-caption,.side-bottom,.sidebar .nav>svg:last-child:not(:first-child){display:none}.sidebar .nav{font-size:0;gap:0;justify-content:center;padding:14px}.sidebar .nav svg{width:20px;height:20px}.side-divider{margin:20px 6px}.content{padding:20px 16px}.topbar{padding:0 16px}.snapshot-note{display:none}.scenario-grid{grid-template-columns:1fr}.scenario{border-right:0;border-bottom:1px solid var(--border)}.page-heading{align-items:flex-start}.page-heading>button{font-size:11px;padding:9px}.page-heading p{max-width:340px}.brief-layout{grid-template-columns:1fr}.brief-list{max-height:260px;overflow:auto}.filter-row small{margin-left:0;flex-basis:100%}}
 @media(max-width:600px){.sidebar{width:56px;padding:20px 5px}.brand svg{width:25px}.content{padding:18px 12px}.page-heading{flex-wrap:wrap;gap:15px}h1{font-size:24px}.topic-grid{grid-template-columns:1fr}.snapshot-bar{gap:9px;padding:10px}.snapshot-bar select{min-width:0;width:100%}.stats-strip{grid-template-columns:1fr 1fr;gap:22px}.stats-strip>div:nth-child(3){border:0;padding-left:3px}.metrics-grid{grid-template-columns:1fr;padding:13px}.research-tabs{gap:16px;padding:0 13px;flex-wrap:wrap}.research-tabs .ask-context{display:none}.evidence-row{padding:15px 12px;gap:10px}.evidence-time{min-width:61px;font-size:9px}.evidence-main strong{font-size:12px}.evidence-main p{font-size:10px}.evidence-tools{padding:12px;flex-wrap:wrap;gap:8px}.search-box{max-width:100%;width:100%}.map-shell{height:400px}.map-top{left:10px;top:10px;max-width:200px}.map-layers{top:95px;left:10px;right:auto;padding:9px}.topbar{height:56px}.model-state{display:none}.section-heading{padding:17px 14px}.topic-card{padding:18px}.drawer{padding:20px}.chat-launch{right:16px;bottom:16px}footer{display:block;line-height:1.9}footer span{display:block}.breadcrumb{font-size:11px;gap:8px}.brief-text{padding:5px 14px 20px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;scroll-behavior:auto!important}}
+
+.integration-card{margin:18px 0;padding:16px;border:1px solid #29465d;border-radius:12px;background:rgba(10,28,42,.72)}
+.integration-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.integration-heading h3{margin:0 0 4px}.integration-heading p{margin:0}
+.run-state{flex:none;padding:4px 9px;border:1px solid #49647a;border-radius:999px;color:#b9cbd9;font-size:12px}
+.run-state.running{border-color:#3aa6c9;color:#86ddf2;box-shadow:0 0 0 3px rgba(58,166,201,.08)}
+.run-summary{display:grid;grid-template-columns:repeat(4,auto 1fr);gap:4px 8px;align-items:baseline;margin:14px 0;padding:10px 12px;background:#0b2233;border-radius:8px}
+.run-summary strong{color:#dceaf3;font-size:18px}.run-summary span{color:#8fa8ba;font-size:12px}
+.run-row{display:grid;grid-template-columns:minmax(130px,1fr) auto 42px;gap:10px;align-items:center;padding:7px 0;border-top:1px solid rgba(86,116,138,.25)}
+.run-row code,.tool-row code{color:#7fc8dd;background:transparent;font-size:11px}
+.config-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.config-grid label{display:flex;flex-direction:column;gap:5px;color:#9fb5c5;font-size:12px}
+.config-grid input,.config-grid select{width:100%;min-width:0;padding:9px 10px;border:1px solid #35536a;border-radius:7px;background:#0a1f2f;color:#dceaf3}
+.config-grid .wide-field{grid-column:1/-1}.config-grid .check-field{grid-column:1/-1;flex-direction:row;align-items:center}.config-grid .check-field input{width:auto}
+.button-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.tool-row{display:grid;grid-template-columns:minmax(120px,.7fr) minmax(140px,.8fr);gap:5px 12px;padding:8px 0;border-top:1px solid rgba(86,116,138,.25)}
+.tool-row small{grid-column:1/-1;color:#879faf;line-height:1.45}
+.mcp-card h4{margin:18px 0 4px}.mcp-message{padding:9px 11px;border-left:3px solid #4fa5c3;background:#102b3e;color:#cce7f2}
+.source-jumps{position:sticky;top:0;z-index:3;padding:8px 0;background:#0c2030}.source-jumps button{flex:1}
+@media(max-width:720px){.config-grid{grid-template-columns:1fr}.config-grid .wide-field,.config-grid .check-field{grid-column:auto}.run-summary{grid-template-columns:repeat(2,auto 1fr)}.run-row{grid-template-columns:1fr auto}.run-row code{grid-column:1/-1}}

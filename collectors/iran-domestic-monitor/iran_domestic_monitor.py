@@ -690,7 +690,8 @@ class Engine:
                             "context": s.strip()[:200]})
             # --- bbl ---
             for mt in self.bbl_re.finditer(s):
-                val = self._num(mt.group(1)) * self.mult[mt.group(2)]
+                scale = mt.group(2).lower() if mt.group(2) else None
+                val = self._num(mt.group(1)) * self.mult[scale]
                 tail = s[mt.end():mt.end() + 24].lower()
                 if self.persd_re.search(tail) and not self.perday_re.search(tail):
                     continue   # 每秒/人均/公里等非日流量
