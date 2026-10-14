@@ -61,3 +61,9 @@ GeoAgent已在main发布751b0419、geoagent-prod-v1.0.17，流水线5363/部署2
 4. 自然问题路由核对geo_metric_changes等实际模型可见工具，改善14次series读数的效率；最终输出不要用“无覆盖差异”模糊usiran与all，也不要把not_evaluated/unknown转写成完成了反证核验。语音播放问题仍按原operation另验，未在本轮修复。
 
 验收必须在GeoAgent公网嵌入面板自然输入三个业务原问句，逐项对照同范围看板和最新工具回执，再测试冷启动、菜单重进异常恢复与4项并发。记录实际Provider输入大小、端到端耗时、失败/重试状态及前后session/context revision，保留初次失败；只写“配置正常”或HTTP200不算闭环。
+
+### 2026-10-14 v1.0.18发布后联合核查补充
+
+GeoAgent 36ce052/v1.0.18已rollout，main5372与生产验证28142通过；部署28145后置Sealos initialize探针失败、该CI仍红，未把恢复改成初次通过。用户要求复用现有Key后，在206只读使用site:geoagent已有凭据，两个公网域名匿名401、认证initialize/list/geo_snapshot_list200，17工具可见；现有连接endpoint就是https://geoagentd40d.sealosgzg.site/mcp，凭据未改。
+
+09:47–09:49 Chrome父站d40d嵌入出现“PiChat未确认身份”“智能体加载尚未完成”；显式重试先失败，随后恢复。请关联这次frame/会话的ready与ack，不用多调用者的identity200或票据200代替握手成功。09:52随后实际新geo_workspace_summary约2.6秒、全轮8秒，read_at=2026-10-14T01:52:54Z，e6f55aa20d3fdc1d0f1a1dae/usiran/空维度日期，231/60/126/3897与看板一致；恢复回执不抹掉身份初次失败。当前未读取该新会话session ID，不沿用旧s-ffe599973451标识这次回归。不要扩大权限或重新签Key，先查实际关联轨迹。

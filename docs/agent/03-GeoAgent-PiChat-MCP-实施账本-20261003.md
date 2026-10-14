@@ -605,7 +605,13 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 最终后端231 passed、1 skipped（19.00s；Windows真实cmd批处理在macOS跳过），前端13 passed及tsc/Vite生产构建通过；合并差异空白检查通过。只使用隔离测试数据，未调用实际新闻服务、启动采集或重启当前live；Windows进程树实际执行仍需Windows环境验证。未提交密钥、data、临时日志或构建产物。
 - 本次目标是本地main与GitHub同步；不推生产标签、不触发公网部署，GitLab origin/main未随此次请求同步。生产继续v1.0.17，不将合并测试当作部署/外网验收。
 
-### 2026-10-14：合并版 GitLab 同步及外网发布（进行中）
+### 2026-10-14：合并版 GitLab 同步及外网发布（v1.0.18已上线，独立live通过，CI探针初次失败保留）
 
 - 用户追加授权同步GitLab、核对CI、通过后发布与外网live。f5e9e76已推GitLab；5371/28140失败，未发布该失败构建。真实容器报告228 passed/2 failed/2 skipped：Windows脚本契约测试读取/app/start.ps1失败；增量同步同大小且同时间戳内容变化被误跳过。
 - 镜像补COPY start.ps1/stop.ps1供静态契约测试，不在Linux启动Windows采集；同步在同大小/时间戳条件下增加分块内容比较，避免仅凭stat忽略真实改写。测试强制同大小同mtime复现，不用sleep或跳过断言掩盖问题。本地全量231 passed/1 skipped（20.86s），待新CI及实际发布/live补记。此前前端13项与构建通过且本次无前端变更。
+- 修复提交36ce052同步GitLab后main流水线5372通过；保护标签geoagent-prod-v1.0.18/5373验证28142通过（232项报告）。首部署28143因真实采集锁在备份阶段失败，没有替换线上镜像。公网管线批次manual-20261014T003957Z-bf6a8e94日志持续更新，18源最终完成、08:52:49导入和批次结束，生成d3cfb20d…；未删锁或停止采集。工作快照仍e6f55aa20d3fdc1d0f1a1dae，没有静默切新快照。
+- 批次结束后重试28145完成rollout、运行态配置保留原身份/Key、API健康200，v1.0.18已实际应用；其后geoagent.lhotsetech.com匿名401及认证initialize/list/call200。Sealos域名initialize断言失败，原日志未打印实际HTTP状态，无法从AssertionError推断401/502或根因；release-live临时Key已撤销。5373/28145仍保留失败状态，不将后续独立成功改写成CI全绿，也不重复运行已存在release记录的deploy或触发回滚。
+- 用户指定复用老Key、不再新建：只读取PiChat现有site:geoagent连接的Authorization，在206内存中按原Secret Store作用域解密并向两个既有GeoAgent公网地址发送只读协议调用，没有输出/落盘Key，也没有写配置/Secret Store或撤销原Key。实际配置endpoint=Sealos域名。两个域名独立anonymous=401、initialize=200、tools/list=200/17工具、geo_snapshot_list真实调用=200/ok；调用耗时约1935/2271ms。这是发布后独立恢复验证，不证明08:54探针失败根因已关闭。
+- 09:47–09:49嵌入曾出现“PiChat未确认身份/智能体加载尚未完成”，显式重试仍先失败，随后输入框恢复。PiChat对应时间窗身份签发、work-embed/auth/票据路径可见200，但多个调用者并行，不能把这些状态码视为当前frame握手已完成证据。原失败截图/tmp/geoagent-v18-identity-failure-20261014.png保留，未改PiChat端或放宽来源/TLS。
+- 09:52在公网Chrome实际嵌入自然输入发布连接验收，独立新geo_workspace_summary约2.6秒、整轮8秒，read_at=2026-10-14T01:52:54.241158+00:00/request_id=20；参数e6f55aa2/usiran、limit3、compact=true，维度/日期未限定。答案231/60/126、unknown3480、范围3897、补充22与同屏一致，正确区分采集恢复/导入/旧快照补齐，不触发采集或保存简报。回执与截图/tmp/geoagent-v18-agent-live-20261014.txt、geoagent-v18-live-receipt-20261014.txt、geoagent-v18-live-final-20261014.png。新新闻配置只读接口/api/mcp/config已返回配置形状，未经实际配置/导入，不记新闻接入live通过；浏览器曾显示旧布局的缓存/加载差异尚未独立闭环。
+- 当前结论：main验证通过、生产镜像已上线、现有Key双域MCP及真实嵌入问答独立通过；部署CI后置探针初次失败与身份间歇问题仍开放。后续应补探针逐阶段HTTP状态/错误码的脱敏观测及PiChat握手关联，不靠增加超时、强行刷新会话或删除失败记录“通过”。
