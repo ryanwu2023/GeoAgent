@@ -615,3 +615,11 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 09:47–09:49嵌入曾出现“PiChat未确认身份/智能体加载尚未完成”，显式重试仍先失败，随后输入框恢复。PiChat对应时间窗身份签发、work-embed/auth/票据路径可见200，但多个调用者并行，不能把这些状态码视为当前frame握手已完成证据。原失败截图/tmp/geoagent-v18-identity-failure-20261014.png保留，未改PiChat端或放宽来源/TLS。
 - 09:52在公网Chrome实际嵌入自然输入发布连接验收，独立新geo_workspace_summary约2.6秒、整轮8秒，read_at=2026-10-14T01:52:54.241158+00:00/request_id=20；参数e6f55aa2/usiran、limit3、compact=true，维度/日期未限定。答案231/60/126、unknown3480、范围3897、补充22与同屏一致，正确区分采集恢复/导入/旧快照补齐，不触发采集或保存简报。回执与截图/tmp/geoagent-v18-agent-live-20261014.txt、geoagent-v18-live-receipt-20261014.txt、geoagent-v18-live-final-20261014.png。新新闻配置只读接口/api/mcp/config已返回配置形状，未经实际配置/导入，不记新闻接入live通过；浏览器曾显示旧布局的缓存/加载差异尚未独立闭环。
 - 当前结论：main验证通过、生产镜像已上线、现有Key双域MCP及真实嵌入问答独立通过；部署CI后置探针初次失败与身份间歇问题仍开放。后续应补探针逐阶段HTTP状态/错误码的脱敏观测及PiChat握手关联，不靠增加超时、强行刷新会话或删除失败记录“通过”。
+
+### 2026-10-14：后置 MCP 探针诊断修订（本地完成，Runner验收待执行）
+
+- 原部署流程本身会签发一次性release-live Key、注入探针进程，结束后撤销；28145同一Key在第一个域名通过、第二个域名initialize失败，不能直接归因“没有Key”。现有PiChat长期Key不变，未复制到CI变量或仓库。
+- 206节点另用现有Key和Python urllib重现旧探针请求方式（相同User-Agent、重复id及缺少initialized通知），两个域名仍为401/200/200/200，调用约1673/1675ms。因此未在该节点复现08:54失败；206不是GitLab Runner，不能以此关闭网络来源、时点或临时凭据差异。当前214节点从本机不可达，未获得故障期Ingress/Pod证据。
+- 已确认探针自身缺陷：HTTPError响应状态和内容类型被丢弃，仅剩断言；初始化通知、协商协议头及会话头未完整处理。修订为逐阶段记录HTTP状态、受限错误码、字节数及耗时，传播会话/协议头、唯一请求id、发送initialized，兼容JSON/SSE并限制返回体。协议成功与业务结果成功分开，任一失败立即退出，不自动重试；不输出凭据、响应正文、Session ID或错误消息。
+- 新增7项隔离回归覆盖生命周期、503首错保留、不重试、RPC错误脱敏、SSE匹配、非法/过大返回、业务失败不冒充探针通过。专项7 passed，最终全量238 passed/1 skipped（43.82s），diff检查通过。尚未发布该修订，不声称历史根因已经修复或生产流水线已通过。
+- 身份确认仍交PiChat按同一frame关联ready/ack/auth/WS日志，沿用08移交文档；本轮不改其配置或源码、不重启当前live。下一轮Runner必须持有效Key；用户已确认沿用原一次性release-live Key流程，现有PiChat Key不变，随后发布采证。
