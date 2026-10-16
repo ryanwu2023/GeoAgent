@@ -629,9 +629,15 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 10:27重新打开公网Chrome d40d页面→智能问答，身份连接正常、r2范围接收，原两轮对话保留；自然输入新验收问题，要求重新取数、不采集/切快照/存简报。实际geo_workspace_summary调用snapshot_id=e6f55aa20d3fdc1d0f1a1dae/topic=usiran/limit1/compact=true，维度和日期不限；request_id=2/read_at=2026-10-14T02:27:54.023544+00:00，2.6秒，本轮约6秒。回答231/60/126/unknown3480/范围3897/supplemental22与同屏看板一致，未沿用09:52旧回执。此是发布后正常连接与新取数验收，不是原间歇身份故障注入复测。
 - 完整详情定位本轮会话s-1571760299a3、调用call_00_0s1bXhfUQwNFYKhpf9lP7214：10:27:51.519 start→10:27:54.088 end/2.57s，结果未截断、外层status=ok、内层ok=true及新read_at。AX结果正文受展示长度限制，未独立导出所有JSON字段，不声称全部回包逐字核对。现场截图/tmp/geoagent-v19-embedded-live-20261014.png；未提交临时文件/密钥，身份专项08移交已补责任边界。
 
-### 2026-10-16：生产 PiChat 身份恢复阻塞修复（验收中）
+### 2026-10-16：生产 PiChat 身份恢复阻塞修复（v1.0.20已发布，限定回归通过）
 
 - 用户报告生产连接失效。使用授权站点登录后，生产连接配置签发验证成功，但智能问答停在“正在恢复投研工作台”，宿主报“PiChat未确认身份”。07:37 UTC身份签发200，独立原身份Bearer的/auth/me及/api/agents均200且GeoAgent可见；没有以这些200代替frame就绪。未改Key/来源/TLS或PiChat源码。
 - 确认本项目错误：useEmbedIdentity丢弃签发响应中的真实user，使用产品绑定ID构造finance:auth:token.user。现行PiChat重复投递去重比较token和user.id，/auth/me已经写入真实用户后，本项目250/750/1500ms重发的伪用户会再次覆盖已验证用户并增加auth epoch，导致验证结果被废弃或sameIdentity=false永久阻挡。产品user ID不是PiChat内部用户ID。
 - 改为发送同一次后端签发返回的token与真实user，校验userId=user.id、当前token与当前frame匹配，不允许缺少真实用户时回退伪造身份。原产品绑定只用于后端签发，不承担PiChat用户身份。保留来源校验、重复发送、有界超时、原会话及权限，不通过增加超时掩盖竞态。
 - 新增真实用户重复投递不覆盖、缺失/不一致身份失败关闭测试。前端15项测试及tsc/Vite生产构建通过，后端238 passed/1 skipped（21.17s）、diff检查通过，生产发布/live待补。此次修复不宣称旧版本所有间歇握手原因已解释；以新版本冷启动/重进/真实问答验收为准。
+- MR !10/432745e首次流水线5575作业28749在镜像依赖安装阶段失败：uvicorn无可用下载版本（07:43 UTC），没有测试报告且未部署。只重试验证作业28750一次，已能下载uvicorn并继续依赖解析；保留首次失败，不能说本轮修复了解决包源可用性的根因。没有绕过测试或对失败镜像发生产标签。
+- 重试作业28750实际用约12分钟完成依赖下载，容器237 passed/2 skipped（46.71s），07:56:54 UTC succeeded。MR !10随门禁通过合并fb1058e；main5577通过后推保护生产标签geoagent-prod-v1.0.20。完整生产与live结果继续补记。
+- 生产v1.0.20/5579验证28757、部署28758通过（08:00:55 UTC Job succeeded），没有重试生产部署；双域匿名401、initialize200、initialized202、list200/17工具、snapshot-call200/ok，工具调用约2215/1924ms。发布一次性Key撤销，原PiChat应用Key/身份配置保留；没有改PiChat服务或工作快照。截图/tmp/geoagent-v20-pipeline-20261016.png。
+- 生产Chrome硬刷新新前端后首次打开智能问答，自动完成握手、r2范围接收、输入框可用；“数据源→智能问答”再次成功，均未点重试、未清会话，原34轮对话保留。当前仍57fb9e48/usiran/全维度/空日期，未为测试切换快照。PiChat进程PID2340531/启动时间仍10:07:42（节点本地时间），本次没有重启其进程。修复前截图/tmp/geoagent-auth-before-20261016.png保留。
+- “情景推演→智能问答”第二次重进同样就绪。原会话自然发送第35轮新问题，实际mcp__geoagent__geo_workspace_summary(snapshot_id=57fb9e48f6a0fa1f10f8502d,topic=usiran,limit=1)，调用call_00_ET_YAXsRw2j6uhblePX2dbb7113，sourceCompleteness=complete/sourceExecutionStatus=succeeded，14197字符/22477字节；约2.5秒，整轮11秒，本轮read_at=2026-10-16T08:04:28Z。回答227/68/139/unknown3545/范围3979/supplemental22与同屏看板一致，没有沿用10-14旧回执。未独立导出所有返回字段，不把模型“无覆盖差异”措辞当工具回显query_scope证明；该答复质量边界继续由PiChat改进。
+- 本次关闭：本项目伪造用户导致的重复身份投递覆盖缺陷，且完成生产冷启动、两次重进及真实取数回归；不宣称所有历史间歇、长期空闲续期或语音问题全部解决。新截图/tmp/geoagent-v20-embedded-live-20261016.png，AX记录/tmp/geoagent-v20-live-20261016.txt。账本与08移交同步，密钥、密码、临时文件不提交。
