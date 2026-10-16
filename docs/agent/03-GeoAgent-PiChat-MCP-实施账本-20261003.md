@@ -628,3 +628,10 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 已关闭的是探针协议与可观测性缺陷，并完成新版本Runner首轮验收；旧28145故障时HTTP状态无法追溯，未证实其历史根因，不能说“初始化通知就是旧故障原因”。v18失败历史保留。身份间歇问题不因新发布MCP通过而关闭。
 - 10:27重新打开公网Chrome d40d页面→智能问答，身份连接正常、r2范围接收，原两轮对话保留；自然输入新验收问题，要求重新取数、不采集/切快照/存简报。实际geo_workspace_summary调用snapshot_id=e6f55aa20d3fdc1d0f1a1dae/topic=usiran/limit1/compact=true，维度和日期不限；request_id=2/read_at=2026-10-14T02:27:54.023544+00:00，2.6秒，本轮约6秒。回答231/60/126/unknown3480/范围3897/supplemental22与同屏看板一致，未沿用09:52旧回执。此是发布后正常连接与新取数验收，不是原间歇身份故障注入复测。
 - 完整详情定位本轮会话s-1571760299a3、调用call_00_0s1bXhfUQwNFYKhpf9lP7214：10:27:51.519 start→10:27:54.088 end/2.57s，结果未截断、外层status=ok、内层ok=true及新read_at。AX结果正文受展示长度限制，未独立导出所有JSON字段，不声称全部回包逐字核对。现场截图/tmp/geoagent-v19-embedded-live-20261014.png；未提交临时文件/密钥，身份专项08移交已补责任边界。
+
+### 2026-10-16：生产 PiChat 身份恢复阻塞修复（验收中）
+
+- 用户报告生产连接失效。使用授权站点登录后，生产连接配置签发验证成功，但智能问答停在“正在恢复投研工作台”，宿主报“PiChat未确认身份”。07:37 UTC身份签发200，独立原身份Bearer的/auth/me及/api/agents均200且GeoAgent可见；没有以这些200代替frame就绪。未改Key/来源/TLS或PiChat源码。
+- 确认本项目错误：useEmbedIdentity丢弃签发响应中的真实user，使用产品绑定ID构造finance:auth:token.user。现行PiChat重复投递去重比较token和user.id，/auth/me已经写入真实用户后，本项目250/750/1500ms重发的伪用户会再次覆盖已验证用户并增加auth epoch，导致验证结果被废弃或sameIdentity=false永久阻挡。产品user ID不是PiChat内部用户ID。
+- 改为发送同一次后端签发返回的token与真实user，校验userId=user.id、当前token与当前frame匹配，不允许缺少真实用户时回退伪造身份。原产品绑定只用于后端签发，不承担PiChat用户身份。保留来源校验、重复发送、有界超时、原会话及权限，不通过增加超时掩盖竞态。
+- 新增真实用户重复投递不覆盖、缺失/不一致身份失败关闭测试。前端15项测试及tsc/Vite生产构建通过，后端238 passed/1 skipped（21.17s）、diff检查通过，生产发布/live待补。此次修复不宣称旧版本所有间歇握手原因已解释；以新版本冷启动/重进/真实问答验收为准。
