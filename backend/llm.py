@@ -1,80 +1,100 @@
 """Agent/model transports, hot-readable local configuration, no browser secrets."""
-import os
-from urllib.parse import urlsplit
+import hashlib
 import httpx
 from .store import ROOT
+from . import model_settings
+from .integrations import pichat_tls_context
 
 def config():
-    keys=('PICHAT_BASE_URL','PICHAT_API_KEY','PICHAT_TIMEOUT','LLM_BASE_URL','LLM_MODEL','LLM_API_KEY','LLM_TIMEOUT')
-    values={k:os.getenv(k,'') for k in keys}
-    path=ROOT/'.env'
-    if path.exists():
-        for line in path.read_text(encoding='utf-8-sig').splitlines():
-            if '=' in line and not line.lstrip().startswith('#'):
-                key,value=line.split('=',1)
-                if key.strip() in values:values[key.strip()]=value.strip().strip('\"').strip("'")
-    # Explicit process configuration wins; app startup does not copy .env model values.
-    for key in keys:
-        if os.getenv(key):values[key]=os.environ[key]
-    values['PICHAT_BASE_URL']=values['PICHAT_BASE_URL'] or 'http://127.0.0.1:9172'
-    values['LLM_BASE_URL']=values['LLM_BASE_URL'] or 'https://api.openai.com/v1'
-    timeout_value=values['PICHAT_TIMEOUT'] if values['PICHAT_API_KEY'] else values['LLM_TIMEOUT']
-    try:values['timeout']=max(5,min(300,float(timeout_value or (90 if values['PICHAT_API_KEY'] else 45))))
-    except ValueError:values['timeout']=45
-    return values
+    current = model_settings.effective_settings(env_root=ROOT)
+    # Legacy internal readers still use these names. Populate only the selected
+    # provider, never append an environment key to a saved selection.
+    pichat = current["provider"] == "pichat"
+    return {
+        **current, "timeout": current["timeout_seconds"],
+        "PICHAT_BASE_URL": current["base_url"] if pichat else "",
+        "PICHAT_API_KEY": current["api_key"] if pichat else "",
+        "LLM_BASE_URL": current["base_url"] if not pichat else "",
+        "LLM_API_KEY": current["api_key"] if not pichat else "",
+        "LLM_MODEL": current["model"] if not pichat else "",
+    }
 
 def endpoint(url):
-    url=url.rstrip('/')
-    parsed=urlsplit(url)
-    if parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise ValueError('模型地址需为不含凭据与查询参数的 HTTP(S) 地址')
-    return url if url.endswith('/chat/completions') else url+'/chat/completions'
+    return model_settings.normalize_base_url(url, "openai-compatible", allow_legacy_http=True) + "/chat/completions"
 
 def pichat_endpoint(url):
-    url=url.rstrip('/')
-    parsed=urlsplit(url)
-    if parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise ValueError('Pi Chat 地址需为不含凭据与查询参数的 HTTP(S) 地址')
-    return url if url.endswith('/api/v1/chat') else url+'/api/v1/chat'
+    return model_settings.normalize_base_url(url, "pichat", allow_legacy_http=True) + "/api/v1/chat"
 
 def status():
-    c=config()
-    if c['PICHAT_API_KEY']:
-        return {'configured':True,'model':'Pi Chat Agent','mode':'Agent 增强分析','provider':'pichat','protocol':'Pi Chat /api/v1/chat','auto_model':False}
-    return {'configured':bool(c['LLM_API_KEY']),'model':c['LLM_MODEL'] or '自动发现','mode':'模型分析' if c['LLM_API_KEY'] else '本地证据检索','provider':'openai-compatible' if c['LLM_API_KEY'] else 'local','protocol':'兼容 Chat Completions','auto_model':not bool(c['LLM_MODEL'])}
+    view = model_settings.public_settings(env_root=ROOT)
+    return {
+        **view,
+        "model": view["model"] or ("自动发现" if view["configured"] else "未接入模型"),
+        "mode": (
+            "Agent 增强分析" if view["provider"] == "pichat" and view["configured"]
+            else "模型分析" if view["configured"] else "本地证据检索"
+        ),
+        "auto_model": bool(view["configured"] and view["provider"] != "pichat" and not view["model"]),
+    }
+
+def cache_identity():
+    """Return a non-secret identity used to invalidate persisted model output."""
+    c = model_settings.public_settings(env_root=ROOT)
+    provider = c["provider"]
+    model = "Pi Chat Agent" if provider == "pichat" else c["model"] or "自动发现"
+    target = model_settings.endpoint_for(c) if provider != "disabled" else ""
+    return {
+        'provider': provider,
+        'model': model,
+        'endpoint_hash': hashlib.sha256(target.encode('utf-8')).hexdigest()[:16],
+    }
 
 async def resolve_model(client,c):
-    if c['LLM_MODEL']:return c['LLM_MODEL']
-    base=endpoint(c['LLM_BASE_URL']).removesuffix('/chat/completions')
-    response=await client.get(base+'/models',headers={'Authorization':'Bearer '+c['LLM_API_KEY']})
+    if c["model"]:return c["model"]
+    response=await client.get(c["base_url"]+'/models',headers={'Authorization':'Bearer '+c["api_key"]})
     response.raise_for_status()
     names=[x['id'] for x in response.json().get('data',[]) if isinstance(x,dict) and isinstance(x.get('id'),str) and x['id'] and not any(k in x['id'].lower() for k in ('embedding','whisper','tts','dall-e'))]
     if not names:raise ValueError('服务未返回可用模型，请在 .env 填写 LLM_MODEL')
     return names[0]
 
-async def complete(messages):
-    c=config()
-    if c['PICHAT_API_KEY']:
+async def complete(messages, *, settings_override=None):
+    if settings_override is None:
+        c=config()
+    else:
+        # An explicit draft is self-contained. Never consult persisted or
+        # environment settings while testing a different target.
+        c=model_settings.validate_settings(settings_override, source="saved")
+    if c["provider"] == "disabled":
+        raise ValueError("后台模型已停用")
+    if not c["api_key"]:
+        raise ValueError("尚未配置后台模型 API Key")
+    verify = pichat_tls_context() if c["provider"] == "pichat" else True
+    if c["provider"] == "pichat":
         prompt='\n\n'.join(f"[{str(item.get('role','user')).upper()}]\n{item.get('content','')}" for item in messages)
-        async with httpx.AsyncClient(timeout=c['timeout']) as client:
-            response=await client.post(pichat_endpoint(c['PICHAT_BASE_URL']),headers={'Authorization':'Bearer '+c['PICHAT_API_KEY']},json={'message':prompt,'stream':False})
+        async with httpx.AsyncClient(timeout=c["timeout_seconds"], verify=verify, follow_redirects=False) as client:
+            response=await client.post(model_settings.endpoint_for(c),headers={'Authorization':'Bearer '+c["api_key"]},json={'message':prompt,'stream':False})
             response.raise_for_status()
             content=response.json().get('text')
             if not isinstance(content,str) or not content.strip():raise ValueError('Pi Chat Agent 未返回文本内容')
             return content,'Pi Chat Agent'
-    if not c['LLM_API_KEY']:raise ValueError('尚未配置 Agent 或模型密钥')
-    async with httpx.AsyncClient(timeout=c['timeout']) as client:
+    async with httpx.AsyncClient(timeout=c["timeout_seconds"], verify=verify, follow_redirects=False) as client:
         model=await resolve_model(client,c)
-        response=await client.post(endpoint(c['LLM_BASE_URL']),headers={'Authorization':'Bearer '+c['LLM_API_KEY']},json={'model':model,'messages':messages})
+        payload={'model':model,'messages':messages,'stream':False}
+        if c["provider"] == "deepseek":
+            payload["thinking"]={"type":"disabled"}
+        response=await client.post(model_settings.endpoint_for(c),headers={'Authorization':'Bearer '+c["api_key"]},json=payload)
         response.raise_for_status()
-        content=response.json()['choices'][0]['message']['content']
-        if not isinstance(content,str):raise ValueError('模型未返回文本内容')
+        choice=response.json()['choices'][0]
+        if "finish_reason" in choice and choice["finish_reason"] != "stop":
+            raise ValueError('模型返回未完整完成的结果')
+        content=choice['message']['content']
+        if not isinstance(content,str) or not content.strip():raise ValueError('模型未返回文本内容')
         return content,model
 
 def error_message(exc):
-    if isinstance(exc,httpx.TimeoutException):return '模型响应超时，请检查服务或增加 LLM_TIMEOUT'
+    if isinstance(exc,httpx.TimeoutException):return '模型响应超时，请检查服务或增加后台模型超时设置'
     if isinstance(exc,httpx.HTTPStatusError):
         code=exc.response.status_code
         return {401:'Agent 或模型密钥无效',403:'Agent 或模型权限不足',404:'Agent 或模型地址不存在',429:'Agent 并发、额度或调用频率受限'}.get(code,f'Agent 或模型服务返回 HTTP {code}')
     if isinstance(exc,httpx.RequestError):return '无法连接模型服务，请检查 URL 和网络'
-    return '模型配置、响应结构或引用校验未通过；自动发现不可用时请填写 LLM_MODEL'
+    return '模型配置、响应结构或引用校验未通过；请在连接配置页核对服务地址与模型名称'

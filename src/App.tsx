@@ -1,6 +1,7 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useRef, useState } from "react";
 import IntegrationSettings from "./IntegrationSettings";
 import McpWorkbench from "./McpWorkbench";
+import BriefTemplateEditor from "./BriefTemplateEditor";
 import projectLabels from "../config/project-labels.json";
 import { panelEntryScope } from "./hostViewContext";
 import { useEmbedIdentity } from "./useEmbedIdentity";
@@ -29,21 +30,24 @@ import type {
   Answer,
   Asset,
   Brief,
+  BriefTemplate,
   Evidence,
   EvidencePage,
   Metric,
-  McpPublicConfig,
-  McpTool,
+  ExternalMcpRegistry,
+  MapEvidence,
+  PageSummary,
   Status,
   Workspace,
 } from "./types";
 import ReviewPanel from "./ReviewPanel";
 import MetricChart from "./MetricChart";
+import {canImportNews, reconcileNewsServer, titleTranslationLabel} from "./source_status";
 import MetricGuide from "./MetricGuide";
 import CollectorMonitor from "./CollectorMonitor";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { briefPresentation } from "./briefPresentation";
+import BriefViewer from "./BriefViewer";
 import { useHostViewContext } from "./useHostViewContext";
 
 const MapView = lazy(() => import("./MapView"));
@@ -82,17 +86,12 @@ const metricCategory = (m: Metric) => {
 };
 const movementClass = (m: Metric) =>
   m.delta == null || m.delta === 0 ? "flat" : m.delta > 0 ? "up" : "down";
+const modelSummaryTabs = new Set(["metrics", "scenarios", "assets"]);
 export default function App() {
   const [sourceMetric, setSourceMetric] = useState<Metric | null>(null);
   const [translating, setTranslating] = useState(false);
-  const [checkingModel, setCheckingModel] = useState(false),
-    [modelCheck, setModelCheck] = useState("");
-  const [mcpConfig, setMcpConfig] = useState<McpPublicConfig | null>(null),
-    [mcpName, setMcpName] = useState("haifutong"),
-    [mcpUrl, setMcpUrl] = useState(""),
-    [mcpAuthorization, setMcpAuthorization] = useState(""),
-    [mcpVerifyTls, setMcpVerifyTls] = useState(true),
-    [mcpTools, setMcpTools] = useState<McpTool[]>([]),
+  const [mcpRegistry, setMcpRegistry] = useState<ExternalMcpRegistry>({version:1,servers:[]}),
+    [mcpServerId, setMcpServerId] = useState(""),
     [mcpMessage, setMcpMessage] = useState(""),
     [mcpBusy, setMcpBusy] = useState(false),
     [mcpQuery, setMcpQuery] = useState("美伊局势 最新进展"),
@@ -111,10 +110,15 @@ export default function App() {
     [start, setStart] = useState(""),
     [end, setEnd] = useState("");
   const [work, setWork] = useState<Workspace | null>(null),
+    [mapRecords, setMapRecords] = useState<MapEvidence[]>([]),
+    [mapLoading, setMapLoading] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [loading, setLoading] = useState(false),
     [importing, setImporting] = useState(false);
+  const [pageSummary, setPageSummary] = useState<PageSummary | null>(null),
+    [pageSummaryLoading, setPageSummaryLoading] = useState(false),
+    [pageSummaryRefresh, setPageSummaryRefresh] = useState(0);
   const [selected, setSelected] = useState<Evidence | null>(null),
     [asset, setAsset] = useState<Asset | null>(null),
     [sourcesOpen, setSourcesOpen] = useState(false),
@@ -149,15 +153,22 @@ export default function App() {
     [generating, setGenerating] = useState(false),
     [compare, setCompare] = useState(""),
     [diff, setDiff] = useState("");
+  const [briefTemplates,setBriefTemplates]=useState<BriefTemplate[]>([]),
+    [briefTemplateId,setBriefTemplateId]=useState(""),
+    [briefTemplateOpen,setBriefTemplateOpen]=useState(false);
   const [resetKey, setResetKey] = useState(0);
   const queryVersion = useRef(0),
     selectionVersion = useRef(0),
     evidenceVersion = useRef(0),
-    detailRequestVersion = useRef(0);
+    detailRequestVersion = useRef(0),
+    pageSummaryVersion = useRef(0),
+    workingSidRef = useRef("");
   const lastTopic = useRef("usiran");
   const [settingsOpen,setSettingsOpen] = useState(false);
+  const [settingsSection,setSettingsSection] = useState<"embed"|"model">("embed");
   const [mcpWorkbenchOpen,setMcpWorkbenchOpen] = useState(false);
-  const [connection,setConnection] = useState({origin:"http://127.0.0.1:9172",agent_id:"geo-research-assistant",product_user_id:"geoagent-local"});
+  const [mcpWorkbenchView,setMcpWorkbenchView] = useState<"local"|"external">("local");
+  const [connection,setConnection] = useState({origin:"http://127.0.0.1:9172",agent_id:"geo-research-assistant",product_user_id:"geoagent-local",embed_configured:false});
   const [connectionLoaded,setConnectionLoaded] = useState(false);
   const [connectionVersion,setConnectionVersion] = useState(0);
   const [chatExpanded,setChatExpanded] = useState(false);
@@ -165,6 +176,7 @@ export default function App() {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const pichatOrigin = connection.origin;
   const pichatAgentId = connection.agent_id;
+  const pichatEmbedConfigured = connection.embed_configured;
   const reloadConnection = async () => {
     try {
       const response = await fetch("/api/integrations/public",{cache:"no-store"});
@@ -175,18 +187,26 @@ export default function App() {
     } catch(error){setPichatError(error instanceof Error?error.message:"连接配置读取失败")}
   };
   useEffect(()=>{void reloadConnection()},[]);
+  const acceptBriefTemplates=(rows:BriefTemplate[])=>{
+    setBriefTemplates(rows);
+    setBriefTemplateId(current=>rows.some(row=>row.id===current)?current:(rows.find(row=>row.is_default)?.id||rows[0]?.id||""));
+  };
+  useEffect(()=>{api<BriefTemplate[]>("/brief-templates").then(acceptBriefTemplates).catch(()=>{})},[]);
   if (page !== "briefs") lastTopic.current = page;
   const topic = lastTopic.current;
   const workspaceCache = useRef(
     new Map<string, { time: number; data: Workspace }>(),
   );
+  const mapCache = useRef(new Map<string, MapEvidence[]>());
+  const mapTranslationScope = useRef("");
+  mapTranslationScope.current = JSON.stringify([sid,topic,dimension,start,end]);
   const pichatFrameRef = useRef<HTMLIFrameElement | null>(null);
   const {ready:pichatReady,loading:pichatAuthRequired,error:pichatError,notice:pichatNotice,
     frameLoaded:pichatFrameLoaded,setError:setPichatError} = useEmbedIdentity(pichatFrameRef,
       pichatOrigin,pichatAgentId,connection.product_user_id,connectionVersion,
-      connectionLoaded && !!embedWorkspaceScope);
+      connectionLoaded && pichatEmbedConfigured && !!embedWorkspaceScope);
   const viewBridge = useHostViewContext(pichatFrameRef,pichatOrigin,pichatAgentId,connectionVersion,
-    connectionLoaded && !!embedWorkspaceScope, {version:'geoagent-view/v1',snapshot_id:workingSid,topic,dimension,start,end}, chatOpen);
+    connectionLoaded && pichatEmbedConfigured && !!embedWorkspaceScope, {version:'geoagent-view/v1',snapshot_id:workingSid,topic,dimension,start,end}, chatOpen);
   const pichatUrl = (() => {
     const url = new URL(
       `/work-embed/${encodeURIComponent(pichatAgentId)}`,
@@ -209,16 +229,32 @@ export default function App() {
     return url.toString();
   })();
   async function refreshStatus() {
-    const s = await api<Status>("/status");
+    const s = await api<Status>(sid ? `/status?snapshot_id=${encodeURIComponent(sid)}` : "/status");
     setStatus(s);
     return s;
   }
+  async function openBrief(item: Brief) {
+    setDiff("");
+    setCompare("");
+    if (item.markdown) {
+      setBrief(item);
+      return;
+    }
+    try {
+      setBrief(await api<Brief>(`/briefs/${item.id}`));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "简报正文加载失败");
+    }
+  }
   useEffect(() => {
-    if (!status?.translation?.running || !sid) return;
+    workingSidRef.current = workingSid;
+  }, [workingSid]);
+  useEffect(() => {
+    if (!status?.translation?.running || status.translation.snapshot_id !== sid || !sid) return;
     let cancelled = false;
     const timer = setInterval(async () => {
       try {
-        const s = await api<Status>("/status");
+        const s = await api<Status>(`/status?snapshot_id=${encodeURIComponent(sid)}`);
         const w = await api<Workspace>(
           "/workspace?" +
             new URLSearchParams({
@@ -227,10 +263,13 @@ export default function App() {
               dimension,
               start,
               end,
+              include_records: "false",
             }),
         );
         if (!cancelled) {
           setStatus(s);
+          const key = new URLSearchParams({ snapshot_id: sid, topic, dimension, start, end, include_records: "false" }).toString();
+          workspaceCache.current.set(key, { time: Date.now(), data: w });
           setWork(w);
         }
       } catch {}
@@ -239,27 +278,37 @@ export default function App() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [status?.translation?.running, sid, topic, dimension, start, end]);
+  }, [status?.translation?.running, status?.translation?.snapshot_id, sid, topic, dimension, start, end]);
   useEffect(() => {
     if (status?.crawler?.state !== "running") return;
     const timer = setInterval(() => {
       refreshStatus().then((next) => {
         if (next.crawler?.state === "completed") {
-          setNotice("后台爬虫已完成，请在快照列表中选择需要查看的版本；当前工作快照未切换");
+          const nextId = next.working_snapshot_id || next.snapshots[0]?.id || "";
+          if (nextId) {
+            workspaceCache.current.clear();
+            mapCache.current.clear();
+            setWorkingSid(nextId);
+            setSid(nextId);
+            setNotice(`后台采集与导入已完成，已切换至最新工作快照 ${nextId.slice(0, 8)}`);
+          } else {
+            setNotice("后台采集已完成，但尚未生成可用快照");
+          }
         }
       }).catch(() => {});
     }, 5000);
     return () => clearInterval(timer);
   }, [status?.crawler?.state]);
   useEffect(() => {
-    if (!sourcesOpen) return;
-    api<McpPublicConfig>("/mcp/config").then((config) => {
-      setMcpConfig(config);
-      setMcpName(config.name || "haifutong");
-      setMcpUrl(config.url || "");
-      setMcpVerifyTls(config.verify_tls);
-    }).catch((e) => setMcpMessage(e.message));
-  }, [sourcesOpen]);
+    if (!sourcesOpen || mcpWorkbenchOpen) return;
+    let cancelled = false;
+    api<ExternalMcpRegistry>("/integrations/external-mcp").then((registry) => {
+      if (cancelled) return;
+      setMcpRegistry(registry);
+      setMcpServerId(selected => reconcileNewsServer(selected, registry.servers));
+    }).catch((e) => { if (!cancelled) setMcpMessage(e.message); });
+    return () => {cancelled = true;};
+  }, [sourcesOpen, mcpWorkbenchOpen]);
   useEffect(() => {
     refreshStatus()
       .then((s) => {
@@ -273,21 +322,33 @@ export default function App() {
   }, []);
   useEffect(() => {
     let cancelled = false;
-    const timer = window.setInterval(() => {
-      api<Status>("/status")
+    function pollStatus() {
+      api<Status>(sid ? `/status?snapshot_id=${encodeURIComponent(sid)}` : "/status")
         .then((s) => {
           if (!cancelled) {
             setStatus(s);
-            setWorkingSid(s.working_snapshot_id || "");
+            const nextId = s.working_snapshot_id || "";
+            if (nextId && nextId !== workingSidRef.current) {
+              workspaceCache.current.clear();
+              mapCache.current.clear();
+              workingSidRef.current = nextId;
+              setWorkingSid(nextId);
+              setSid(nextId);
+              setNotice(`检测到新工作快照，已重新加载 ${nextId.slice(0, 8)}…`);
+            } else {
+              setWorkingSid(nextId);
+            }
           }
         })
         .catch(() => {});
-    }, 10000);
+    }
+    if (sid) pollStatus();
+    const timer = window.setInterval(pollStatus, 10000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [sid]);
   useEffect(() => {
     closeDetails();
     return () => { detailRequestVersion.current++; };
@@ -301,9 +362,14 @@ export default function App() {
       dimension,
       start,
       end,
+      include_records: "false",
     }).toString();
     const cached = workspaceCache.current.get(key);
     setError("");
+    // Snapshots are immutable. Reuse the structured workspace while it is
+    // current; the status poll clears this cache as soon as a new working
+    // snapshot is published. Page entry still invokes /page-summary, whose
+    // cache key covers the snapshot, filters, rules and review revision.
     if (cached && Date.now() - cached.time < 60000) {
       setWork(cached.data);
       setLoading(false);
@@ -327,6 +393,86 @@ export default function App() {
         if (queryVersion.current === version) setLoading(false);
       });
   }, [sid, topic, dimension, start, end]);
+
+  useEffect(() => {
+    if (!sid || tab !== "map") {
+      setMapLoading(false);
+      return;
+    }
+    const key = new URLSearchParams({ snapshot_id: sid, topic, dimension, start, end }).toString();
+    const cached = mapCache.current.get(key);
+    if (cached) {
+      setMapRecords(cached);
+      setMapLoading(false);
+      return;
+    }
+    // Invalidate every callback when the view changes, the map is hidden, or
+    // the component unmounts. A slow old request must never replace this scope.
+    let cancelled = false;
+    setMapLoading(true);
+    setMapRecords([]);
+    api<MapEvidence[]>("/map-records?" + key)
+      .then((records) => {
+        if (cancelled) return;
+        mapCache.current.set(key, records);
+        setMapRecords(records);
+      })
+      .catch((e) => {
+        if (!cancelled) setError((e as Error).message);
+      })
+      .finally(() => {
+        if (!cancelled) setMapLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [sid, topic, dimension, start, end, tab]);
+  useEffect(() => {
+    const version = ++pageSummaryVersion.current;
+    if (!modelSummaryTabs.has(tab)) {
+      setPageSummary(null);
+      setPageSummaryLoading(false);
+      return;
+    }
+    if (!sid || sid !== workingSid || work?.snapshot.id !== sid) {
+      setPageSummary(null);
+      setPageSummaryLoading(false);
+      return;
+    }
+    setPageSummary(null);
+    setPageSummaryLoading(true);
+    api<PageSummary>("/page-summary", {
+      snapshot_id: sid,
+      page: tab,
+      topic,
+      dimension,
+      start,
+      end,
+    })
+      .then((result) => {
+        if (pageSummaryVersion.current === version) setPageSummary(result);
+      })
+      .catch((e) => {
+        if (pageSummaryVersion.current === version) {
+          setPageSummary({
+            cache_key: "",
+            snapshot_id: sid,
+            page: tab as "metrics" | "scenarios" | "assets",
+            topic,
+            filters: { dimension, start, end },
+            rule_version: status?.rule_version || "",
+            created_at: new Date().toISOString(),
+            status: "failed",
+            mode: "模型总结失败",
+            text: null,
+            evidence_ids: [],
+            cached: false,
+            message: (e as Error).message,
+          });
+        }
+      })
+      .finally(() => {
+        if (pageSummaryVersion.current === version) setPageSummaryLoading(false);
+      });
+  }, [tab, sid, workingSid, topic, dimension, start, end, work?.snapshot.id, status?.rule_version, pageSummaryRefresh]);
   const deferredSearch = useDeferredValue(search.trim());
   async function loadEvidence(offset = 0) {
     if (!sid) return;
@@ -436,44 +582,13 @@ export default function App() {
       setError((e as Error).message);
     }
   }
-  async function saveMcpConfig() {
-    setMcpBusy(true);
-    setMcpMessage("");
-    try {
-      const config = await api<McpPublicConfig>("/mcp/config", {
-        name: mcpName,
-        url: mcpUrl,
-        authorization: mcpAuthorization,
-        verify_tls: mcpVerifyTls,
-      });
-      setMcpConfig(config);
-      setMcpAuthorization("");
-      setMcpMessage("MCP 配置已保存，Authorization 不会回传到页面");
-      await refreshStatus();
-    } catch (e) {
-      setMcpMessage((e as Error).message);
-    } finally {
-      setMcpBusy(false);
-    }
-  }
-  async function testMcp() {
-    setMcpBusy(true);
-    setMcpMessage("");
-    try {
-      const result = await api<{ok:boolean;message?:string;tools:McpTool[]}>("/mcp/test", {});
-      setMcpTools(result.tools || []);
-      setMcpMessage(result.ok ? `连接成功，发现 ${result.tools.length} 个工具` : result.message || "连接失败");
-    } catch (e) {
-      setMcpMessage((e as Error).message);
-    } finally {
-      setMcpBusy(false);
-    }
-  }
   async function fetchMcpNews() {
+    if (!canImportNews(mcpServerId,mcpRegistry.servers)) return;
     setMcpBusy(true);
     setMcpMessage("");
     try {
       const result = await api<{id:string;created:boolean;fetched:number;count:number}>("/mcp/fetch", {
+        server_id: mcpServerId,
         query: mcpQuery,
         topic: mcpTopic,
         dimension: mcpDimension,
@@ -513,6 +628,40 @@ export default function App() {
       if (version === detailRequestVersion.current) setError((e as Error).message);
     }
   }
+  async function translateMapTitles(ids: string[]) {
+    if (!sid || !status?.model.configured || !ids.length) return {};
+    const requestScope = mapTranslationScope.current;
+    const requestSid = sid;
+    try {
+      const result = await api<{ok:boolean;translated:number;failed:string[];titles:Record<string,string>;message:string}>(
+        "/translations/titles",
+        {snapshot_id:sid,record_ids:ids},
+      );
+      if (requestScope !== mapTranslationScope.current) return {};
+      if (!result.ok && result.message) setNotice(result.message);
+      if (Object.keys(result.titles).length) {
+        const applyTitles = (records: MapEvidence[]) => records.map(record =>
+          result.titles[record.id] ? {...record,title:result.titles[record.id],title_translation_state:"ready" as const} : record,
+        );
+        setMapRecords(current => applyTitles(current));
+        setEvidenceRows(current => current.map(record =>
+          result.titles[record.id] ? {...record,title:result.titles[record.id],title_translation_state:"ready" as const} : record,
+        ));
+        for (const [key,cached] of workspaceCache.current) {
+          if (new URLSearchParams(key).get("snapshot_id") === requestSid)
+            workspaceCache.current.set(key,{...cached,data:{...cached.data,records:applyTitles(cached.data.records)}});
+        }
+        for (const [key,cached] of mapCache.current) {
+          if (new URLSearchParams(key).get("snapshot_id") === requestSid)
+            mapCache.current.set(key, applyTitles(cached));
+        }
+      }
+      return result.titles;
+    } catch (e) {
+      if (requestScope === mapTranslationScope.current) setNotice(`中文标题生成失败：${(e as Error).message}`);
+      return {};
+    }
+  }
   async function ask(q = question) {
     if (!q.trim() || !workingSid) return;
     const previous_answer_id = answer?.id || "";
@@ -543,6 +692,7 @@ export default function App() {
               dimension,
               start,
               end,
+              include_records: "false",
             }),
         ).then((w) => {
           if (version === selectionVersion.current) setWork(w);
@@ -560,7 +710,7 @@ export default function App() {
     setError("");
     const version = selectionVersion.current;
     try {
-      const b = await api<Brief>("/briefs", { snapshot_id: workingSid });
+      const b = await api<Brief>("/briefs", { snapshot_id: workingSid, template_id: briefTemplateId });
       setBriefs((bs) => [b, ...bs]);
       if (version === selectionVersion.current) {
         setPage("briefs");
@@ -602,8 +752,9 @@ export default function App() {
   return (
     <div ref={shellRef} className={`prototype-shell research-layout${chatExpanded ? " research-expanded" : ""}`}
       style={{ "--research-dock-width": `${researchWidth}%` } as CSSProperties}>
-      {settingsOpen ? <IntegrationSettings onClose={()=>setSettingsOpen(false)} onSaved={()=>void reloadConnection()}/> : null}
-      {mcpWorkbenchOpen ? <McpWorkbench context={{snapshot_id:workingSid,topic,dimension,start,end}} onClose={()=>setMcpWorkbenchOpen(false)}/> : null}
+      {settingsOpen ? <IntegrationSettings initialSection={settingsSection} onClose={()=>{setSettingsOpen(false);void refreshStatus()}} onSaved={()=>void reloadConnection()}/> : null}
+      {mcpWorkbenchOpen ? <McpWorkbench initialView={mcpWorkbenchView} context={{snapshot_id:workingSid,topic,dimension,start,end}} onClose={()=>setMcpWorkbenchOpen(false)}/> : null}
+      {briefTemplateOpen ? <BriefTemplateEditor onClose={()=>setBriefTemplateOpen(false)} onChanged={acceptBriefTemplates}/> : null}
       <header className="prototype-header">
         <div className="prototype-brand">
           <b>地缘</b>
@@ -623,8 +774,8 @@ export default function App() {
           ))}
         </nav>
         <div className="header-actions">
-          <button onClick={()=>setSettingsOpen(true)}>连接配置</button>
-          <button onClick={()=>setMcpWorkbenchOpen(true)}>MCP 工作台</button>
+          <button onClick={()=>{setSettingsSection("embed");setSettingsOpen(true)}}>连接配置</button>
+          <button onClick={()=>{setMcpWorkbenchView("local");setMcpWorkbenchOpen(true)}}>MCP 工作台</button>
           <label className="snapshot-selector">
             <span>数据快照</span>
             <select
@@ -805,20 +956,54 @@ export default function App() {
                 "center-view " + (tab === "map" ? "map-view" : "scroll-view")
               }
             >
+              {modelSummaryTabs.has(tab) && (
+                <section className={`page-model-summary ${pageSummary?.status || "loading"}`}>
+                  <div className="page-model-summary-heading">
+                    <div>
+                      <span>模型综合判断</span>
+                      <small>
+                        快照 {sid.slice(0, 8)} · {pageSummary?.model || status?.model.model || "模型服务"}
+                        {pageSummary?.cached ? " · 已读取缓存" : ""}
+                      </small>
+                    </div>
+                    {(pageSummary?.status === "failed" || pageSummary?.status === "unavailable") && (
+                      <button onClick={() => setPageSummaryRefresh((value) => value + 1)}>重新生成</button>
+                    )}
+                  </div>
+                  {pageSummaryLoading ? (
+                    <p><RefreshCw className="spin" size={14} />正在结合当前快照的全部指标、证据与研究规则生成总结…</p>
+                  ) : pageSummary?.text ? (
+                    <p>{pageSummary.text}</p>
+                  ) : (
+                    <p>{pageSummary?.message || "等待当前快照的模型总结。"}</p>
+                  )}
+                  {pageSummary?.text && <small>{pageSummary.message} · 生成于 {dateText(pageSummary.created_at)}</small>}
+                  {!!pageSummary?.evidence_ids.length && (
+                    <div className="page-model-summary-evidence">
+                      {pageSummary.evidence_ids.slice(0, 8).map((id, index) => (
+                        <button key={id} onClick={() => openEvidence(id)}>引用 {index + 1}</button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
               {tab === "map" &&
                 <div
                   style={{ height: "100%", width: "100%", minWidth: 0, flex: 1 }}
                 >
                   <Suspense fallback={<div className="empty"><RefreshCw className="spin" />正在加载地图…</div>}>
                     <MapView
-                      records={work.records}
+                      records={mapRecords}
                       topic={topic}
                       resetKey={resetKey}
+                      onTranslateTitles={status?.model.configured ? translateMapTitles : undefined}
+                      translationStatus={status?.translation?.snapshot_id===sid ? status.translation : undefined}
                       onSelect={(r) => {
                         openEvidence(r.id);
                         setAsset(null);
                       }}
                     />
+                    {mapLoading && <div className="map-data-loading"><RefreshCw className="spin" size={14}/>正在加载地图动态…</div>}
                   </Suspense>
                 </div>
               }
@@ -856,6 +1041,7 @@ export default function App() {
                         </div>
                         <div className="evidence-main">
                           <strong>{r.title}</strong>
+                          <small className="translation-state">{titleTranslationLabel(r,status?.translation?.snapshot_id===sid ? status.translation : undefined)}</small>
                           <p>{r.text || "此记录没有正文摘要，请回源核验。"}</p>
                           <div>
                             <span>{r.source_name}</span>
@@ -924,9 +1110,9 @@ export default function App() {
                   {metricGroup === "民调" &&
                     !work.metrics.some((m) => metricCategory(m) === "民调") && (
                     <article className="metric-card">
-                      <h3>民调 · 调查口径待补全</h3>
+                      <h3>当前范围没有可用的民调指标</h3>
                       <p>
-                        已有新闻线索，尚缺调查起止日期、调查机构、样本量、完整题目和回答选项。不同问题的百分比不能连接成支持率趋势。
+                        请核对所选快照、主题、维度和日期。新闻中的百分比不等于可比较的支持率序列；不会借用其他快照的数据补图。
                       </p>
                       <button
                         onClick={() => {
@@ -1240,7 +1426,13 @@ export default function App() {
             <div className="brief-layout">
               <section className="panel brief-list">
                 <div className="section-heading">
-                  <h2>简报档案</h2>
+                  <div><h2>简报档案</h2><p>选择模板生成，历史观点按快照保留</p></div>
+                </div>
+                <div className="brief-template-picker">
+                  <label htmlFor="brief-template">生成模板</label>
+                  <select id="brief-template" aria-label="简报模板" value={briefTemplateId} onChange={event=>setBriefTemplateId(event.target.value)}>{briefTemplates.map(row=><option key={row.id} value={row.id}>{row.name}{row.is_default?" · 默认":""}</option>)}</select>
+                  <button onClick={()=>setBriefTemplateOpen(true)}>配置模板</button>
+                  <button className="primary" disabled={!workingSid||generating} onClick={generate}>{generating&&<RefreshCw size={13} className="spin"/>}{generating?"正在分析证据…":"生成新简报"}</button>
                 </div>
                 {briefs.map((b) => (
                   <button
@@ -1248,19 +1440,15 @@ export default function App() {
                     className={
                       brief?.id === b.id ? "brief-item selected" : "brief-item"
                     }
-                    onClick={() => {
-                      setBrief(b);
-                      setDiff("");
-                      setCompare("");
-                    }}
+                    onClick={() => void openBrief(b)}
                   >
                     <FileText size={17} />
-                    <div>
-                      <strong>{dateText(b.created_at)}</strong>
-                      <small>{b.mode}</small>
+                    <div className="brief-item-copy">
+                      <div className="brief-item-date"><strong>{dateText(b.created_at)}</strong>{b.snapshot_id===sid&&<span>当前快照</span>}</div>
+                      <small className={b.mode.includes("现场模型")?"mode-model":b.mode.includes("部分")?"mode-partial":"mode-local"}>{b.mode}</small>
+                      {b.template_id&&<small>模板 {briefTemplates.find(row=>row.id===b.template_id)?.name||b.template_id} v{b.template_version||1}</small>}
                       <small>
-                        快照 {b.snapshot_id.slice(0, 8)}{" "}
-                        {b.snapshot_id !== sid ? "· 其他版本" : ""}
+                        快照 {b.snapshot_id.slice(0, 8)}
                       </small>
                     </div>
                   </button>
@@ -1277,10 +1465,12 @@ export default function App() {
                     <div className="section-heading">
                       <div>
                         <h2>研究简报</h2>
-                        <p>
-                          历史档案 · {brief.mode} · 快照{" "}
-                          {brief.snapshot_id.slice(0, 8)}
-                        </p>
+                        <div className="brief-meta">
+                          <span className={`brief-mode ${brief.mode.includes("现场模型") ? "model" : brief.mode.includes("部分") ? "partial" : "local"}`}>{brief.mode}</span>
+                          <span>快照 {brief.snapshot_id.slice(0, 8)}</span>
+                          {brief.model ? <span>模型 {brief.model}</span> : <span>规则分析</span>}
+                          {brief.window_start && brief.window_end && <span>分析窗口 {dateText(brief.window_start)}—{dateText(brief.window_end)}</span>}
+                        </div>
                       </div>
                       <a
                         className="button"
@@ -1323,9 +1513,7 @@ export default function App() {
                       {diff ? (
                         <pre>{diff}</pre>
                       ) : (
-                        <Markdown remarkPlugins={[remarkGfm]}>
-                          {briefPresentation(brief.markdown)}
-                        </Markdown>
+                        <BriefViewer markdown={brief.markdown || ""} />
                       )}
                     </div>
                   </>
@@ -1366,8 +1554,8 @@ export default function App() {
                 <p className="muted">{status?.crawler_root}</p>
                 <div className="button-row source-jumps" aria-label="数据接入快捷入口">
                   <button onClick={() => document.getElementById("crawler-orchestration")?.scrollIntoView({ behavior: "smooth" })}>后台爬虫</button>
-                  <button onClick={() => document.getElementById("mcp-news-source")?.scrollIntoView({ behavior: "smooth" })}>MCP 新闻源配置</button>
-                  <button onClick={() => document.getElementById("model-connection")?.scrollIntoView({ behavior: "smooth" })}>大模型连接</button>
+                  <button onClick={() => document.getElementById("mcp-news-source")?.scrollIntoView({ behavior: "smooth" })}>MCP 新闻导入</button>
+                  <button onClick={() => {setSettingsSection("model");setSettingsOpen(true)}}>后台模型状态</button>
                 </div>
                 <div className="alert">
                   覆盖统计来自当前快照；后台爬虫运行状态会自动刷新。导入成功不代表每个外部来源都采集正常。
@@ -1473,22 +1661,22 @@ export default function App() {
                 <section className="integration-card mcp-card" id="mcp-news-source">
                   <div className="integration-heading">
                     <div>
-                      <h3>MCP 新闻源</h3>
-                      <p className="muted">新闻直接进入新快照，并统一标记为“MCP 导入，待核验”。</p>
+                      <h3>MCP 新闻导入</h3>
+                      <p className="muted">复用 MCP 工作台的外部服务配置。新闻进入新快照，标记为“MCP 导入，待核验”。</p>
                     </div>
-                    <span className="run-state">{mcpConfig?.configured ? "已配置" : "未配置"}</span>
                   </div>
                   <div className="config-grid">
-                    <label>MCP 名称<input value={mcpName} onChange={(e) => setMcpName(e.target.value)} placeholder="haifutong" /></label>
-                    <label className="wide-field">服务地址<input value={mcpUrl} onChange={(e) => setMcpUrl(e.target.value)} placeholder="https://example.com/mcp" /></label>
-                    <label className="wide-field">Authorization<input type="password" autoComplete="new-password" value={mcpAuthorization} onChange={(e) => setMcpAuthorization(e.target.value)} placeholder={mcpConfig?.configured ? "已保存；留空表示保持不变" : "Bearer ..."} /></label>
-                    <label className="check-field"><input type="checkbox" checked={mcpVerifyTls} onChange={(e) => setMcpVerifyTls(e.target.checked)} />验证 TLS 证书</label>
+                    <label className="wide-field">新闻服务<select value={mcpServerId} onChange={e=>setMcpServerId(e.target.value)}>
+                      <option value="">{mcpRegistry.servers.length ? "请选择外部 MCP 服务" : "尚未配置外部 MCP 服务"}</option>
+                      {mcpRegistry.servers.map(server=><option key={server.id} value={server.id}>{server.name}</option>)}
+                    </select></label>
                   </div>
                   <div className="button-row">
-                    <button disabled={mcpBusy} onClick={saveMcpConfig}>保存配置</button>
-                    <button disabled={mcpBusy || !mcpConfig?.configured} onClick={testMcp}>测试连接与发现工具</button>
+                    <button onClick={()=>{setMcpWorkbenchView("external");setMcpWorkbenchOpen(true)}}>管理外部 MCP 连接</button>
                   </div>
-                  {mcpTools.length > 0 && <details><summary>已发现工具（{mcpTools.length}）</summary>{mcpTools.map((tool) => <div className="tool-row" key={tool.name}><b>{tool.title}</b><code>{tool.name}</code><small>{tool.description}</small></div>)}</details>}
+                  <p className="muted">新闻导入要求服务提供 service_status 与 knowledge_search。连通性测试通过，不代表支持新闻导入；通用 MCP 服务仍可保留在工作台。</p>
+                  {mcpRegistry.servers.find(server=>server.id===mcpServerId)?.news_import?.supported===false &&
+                    <p role="status">所选服务未提供新闻导入所需工具，请选择其他服务。</p>}
                   <h4>获取新闻并生成快照</h4>
                   <div className="config-grid">
                     <label className="wide-field">检索内容<input value={mcpQuery} onChange={(e) => setMcpQuery(e.target.value)} placeholder="输入中文或英文检索词" /></label>
@@ -1498,44 +1686,14 @@ export default function App() {
                     <label>结束日期<input type="date" value={mcpDateTo} onChange={(e) => setMcpDateTo(e.target.value)} /></label>
                     <label>返回条数<input type="number" min="1" max="100" value={mcpTopK} onChange={(e) => setMcpTopK(Math.max(1,Math.min(100,Number(e.target.value)||20)))} /></label>
                   </div>
-                  <button className="primary" disabled={mcpBusy || !mcpConfig?.configured || !mcpQuery.trim()} onClick={fetchMcpNews}>{mcpBusy ? "正在处理…" : "获取新闻并生成快照"}</button>
+                  <button className="primary" disabled={mcpBusy || !canImportNews(mcpServerId,mcpRegistry.servers) || !mcpQuery.trim()} onClick={fetchMcpNews}>{mcpBusy ? "正在处理…" : "获取新闻并生成快照"}</button>
                   {mcpMessage && <p role="status" className="mcp-message">{mcpMessage}</p>}
-                  <p className="muted">Authorization 仅保存在本机数据目录，页面不会读取或显示原值。新闻正文属于外部资料，其中的指令不会被执行。</p>
+                  <p className="muted">密钥统一保存在后端外部服务注册表，页面不重复配置。新闻正文属于外部资料，其中的指令不会被执行。</p>
                 </section>
-                <h3 id="model-connection">Agent / 模型连接</h3>
-                <button
-                  disabled={checkingModel}
-                  onClick={async () => {
-                    setCheckingModel(true);
-                    setModelCheck("");
-                    try {
-                      const r = await api<{
-                        ok: boolean;
-                        message: string;
-                        model?: string;
-                      }>("/model/check", {});
-                      setModelCheck(
-                        r.message + (r.model ? " · " + r.model : ""),
-                      );
-                      await refreshStatus();
-                    } catch {
-                      setModelCheck("连接检查失败，请查看后端服务");
-                    } finally {
-                      setCheckingModel(false);
-                    }
-                  }}
-                >
-                  {checkingModel ? "正在检查…" : "测试 Agent 连接"}
-                </button>
-                {modelCheck && <p role="status">{modelCheck}</p>}
-                <p>
-                  {status?.model.configured
-                    ? `已配置 ${status.model.model}`
-                    : "尚未配置。推荐填写 Pi Chat 地址与应用 API Key；也可继续使用兼容 Chat Completions 的模型配置。"}
-                </p>
-                <p className="muted">
-                  凭据只由后端读取，页面不接收或保存密钥。
-                </p>
+                <h3>后台模型与翻译状态</h3>
+                <p>{status?.model.configured ? `后台模型已配置：${status.model.model}` : "后台模型未配置；PiChat 嵌入会话连接正常不代表后台翻译可用。"}</p>
+                <p className="muted">{status?.translation?.snapshot_id===sid ? status.translation.message : "正在核对当前快照翻译状态…"}</p>
+                <button onClick={()=>{setSettingsSection("model");setSettingsOpen(true)}}>查看后台模型配置说明</button>
               </aside>
             </div>
           )}
@@ -1554,23 +1712,23 @@ export default function App() {
             className={`research-pane research-chat-pane${chatOpen ? "" : " research-pane-parked"}`}
             inert={!chatOpen || !!asset || !!selected} aria-hidden={!chatOpen || !!asset || !!selected}>
           {embedWorkspaceScope ? (
-            <aside className="chat-panel" aria-label="GeoAgent 研究助手">
+            <aside className={`chat-panel${pichatEmbedConfigured ? "" : " chat-panel-local"}`} aria-label="GeoAgent 研究助手">
               <div className="drawer-heading chat-panel-heading">
                 <div className="chat-panel-caption">
                   <span className="chat-panel-scope">{names[topic]} · 快照 {workingSid.slice(0, 8) || "未确认"}</span>
                   <details className="chat-panel-context">
                     <summary>连接与范围</summary>
                     <div>
-                      <small>PiChat Agent · {pichatAgentId}</small>
+                      <small>{pichatEmbedConfigured ? `PiChat Agent · ${pichatAgentId}` : `${status?.model.model || "本地证据检索"} · 内置问答`}</small>
                       <small>跟踪维度：{topicInfo?.dimensions.find(item => item.id === dimension)?.name || "全部维度"}</small>
                       <small>报道日期：{start || "不限开始"} — {end || "不限结束"}</small>
-                      <small role="status" aria-label="看板范围同步状态">{viewBridge.status}。仅同步快照、主题、维度、日期。</small>
+                      {pichatEmbedConfigured && <small role="status" aria-label="看板范围同步状态">{viewBridge.status}。仅同步快照、主题、维度、日期。</small>}
                       <small>范围变化仅用于下一轮提问；已有回答与会话不重建。</small>
                     </div>
                   </details>
                 </div>
               </div>
-              <div className="pichat-embed-shell">
+              {pichatEmbedConfigured ? <div className="pichat-embed-shell">
                 {!pichatReady && !pichatAuthRequired && !pichatError && !pichatNotice && (
                   <div className="pichat-embed-status">
                     <RefreshCw className="spin" size={16} /> 正在连接 PiChat Agent…
@@ -1601,7 +1759,42 @@ export default function App() {
                   }}
                   allow="clipboard-read; clipboard-write"
                 /> : null}
-              </div>
+              </div> : <>
+                <div className="chat-body">
+                  <p className="chat-intro">
+                    使用当前工作快照中的结构化指标和新闻证据回答。数字由程序查询，模型负责归纳，并保留引用和数据缺口。
+                  </p>
+                  <div className="presets">
+                    {["本周哪些指标变化最大？", "哪些证据改变了当前判断？", "当前结论有哪些反证？", "还缺什么关键数据？"].map(item => (
+                      <button type="button" key={item} disabled={!workingSid || asking} onClick={() => { setQuestion(item); void ask(item); }}>{item}</button>
+                    ))}
+                  </div>
+                  {history.length > 0 && <select aria-label="历史问答" value={answer?.id || ""} onChange={event => setAnswer(history.find(item => item.id === event.target.value) || null)}>
+                    <option value="">历史问答</option>
+                    {history.map(item => <option key={item.id} value={item.id}>{item.query}</option>)}
+                  </select>}
+                  {!workingSid && <div className="empty"><p>请先在顶部快照版本中确认一个工作快照，再开始提问。</p></div>}
+                  {asking && <div className="empty"><RefreshCw className="spin" size={20}/><p>正在检索证据并生成回答…</p></div>}
+                  {answer && !asking && <div className="answer">
+                    <div className="question-bubble">{answer.query}</div>
+                    <div className="answer-mode">{answer.mode}<small>数据截至 {dateText(answer.as_of)} · 快照 {answer.snapshot_id.slice(0, 8)}</small></div>
+                    {answer.summary ? <div className="answer-summary"><span>总结回答</span><p>{answer.summary.text}</p><div className="citation-buttons">{answer.summary.evidence_ids.map(id => <button className="citation" key={id} onClick={() => openEvidence(id)}>查看依据</button>)}</div></div> : <Markdown remarkPlugins={[remarkGfm]}>{answer.message}</Markdown>}
+                    {answer.summary && <p className="answer-status">{answer.message}</p>}
+                    {(answer.facts.length > 0 || answer.inferences.length > 0 || answer.citations.length > 0 || answer.gaps.length > 0) && <details className="answer-evidence">
+                      <summary>研究依据与数据缺口</summary>
+                      {answer.facts.length > 0 && <><h3>事实与程序计算</h3>{answer.facts.map((item,index) => <div className="fact" key={`fact-${index}`}><label>{item.kind}</label><p>{item.text}</p><div className="citation-buttons">{item.evidence_ids.map(id => <button className="citation" key={id} onClick={() => openEvidence(id)}>查看证据</button>)}</div></div>)}</>}
+                      {answer.inferences.length > 0 && <><h3>模型推论</h3>{answer.inferences.map((item,index) => <div className="fact inference" key={`inference-${index}`}><label>{item.kind}</label><p>{item.text}</p><div className="citation-buttons">{item.evidence_ids.map(id => <button className="citation" key={id} onClick={() => openEvidence(id)}>查看依据</button>)}</div></div>)}</>}
+                      {answer.citations.length > 0 && <><h3>引用来源</h3>{answer.citations.map(item => <button className="reference" key={item.id} onClick={() => openEvidence(item.id)}><BookOpen size={14}/><span>{item.title}</span></button>)}</>}
+                      {answer.gaps.length > 0 && <><h3>数据缺口</h3><ul>{answer.gaps.map(item => <li key={item}>{item}</li>)}</ul></>}
+                      {answer.steps.length > 0 && <div className="steps">{answer.steps.join(" → ")}</div>}
+                    </details>}
+                  </div>}
+                </div>
+                <form className="chat-form" onSubmit={event => { event.preventDefault(); void ask(); }}>
+                  <textarea aria-label="研究问题" placeholder={workingSid ? "询问指标变化、证据、反证或资产影响…" : "请先确认工作快照"} value={question} disabled={!workingSid || asking} onChange={event => setQuestion(event.target.value)}/>
+                  <button className="primary" type="submit" aria-label="发送问题" disabled={!workingSid || asking || !question.trim()}><Send size={16}/></button>
+                </form>
+              </>}
             </aside>
           ) : <div className="empty" role="status">
             {status && !workingSid ? (sid ? <>
@@ -1650,8 +1843,7 @@ export default function App() {
                     >
                       <span>{label}</span>
                       <b>
-                        {work?.records.filter((r) => r.situation_signal === key)
-                          .length || 0}
+                        {work?.signal_counts?.[key] ?? 0}
                       </b>
                     </button>
                   ))}
@@ -1659,7 +1851,7 @@ export default function App() {
                 <small>报道线索数量，不代表整体冲突强度</small>
                 <div className="insight-stats">
                   <div>
-                    <b>{work?.records.length || 0}</b>
+                    <b>{work?.records_count ?? 0}</b>
                     <small>范围内记录</small>
                   </div>
                   <div>
@@ -1732,6 +1924,7 @@ export default function App() {
                     <small>发布时间：{dateText(r.published_at)}</small>
                     <small>采集时间：{dateText(r.fetched_at)}</small>
                     <span>{r.title}</span>
+                    <small className="translation-state">{titleTranslationLabel(r,status?.translation?.snapshot_id===sid ? status.translation : undefined)}</small>
                   </button>
                 ))}
                 {!evidenceRows.length && !evidenceLoading && (
@@ -1739,9 +1932,7 @@ export default function App() {
                 )}
               </section>
               <div className="insight-section model-state">
-                {status?.translation?.running
-                  ? `中文译文准备中：${status.translation.ready}/${status.translation.total}`
-                  : status?.model.mode || "连接服务中"}{" "}
+                {status?.translation?.snapshot_id===sid ? status.translation.message : "正在核对当前快照翻译状态…"}{" "}
                 · 公开来源
               </div>
             </div>
@@ -1855,6 +2046,7 @@ export default function App() {
               <span className="pill subdued">{selected.verification}</span>
             </div>
             <h2 className="record-title">{selected.title}</h2>
+            <p className="translation-state">{titleTranslationLabel(selected,status?.translation?.snapshot_id===sid ? status.translation : undefined)}</p>
             {!selected.supplemental && (
               <ReviewPanel
                 key={sid + selected.id}
@@ -1863,16 +2055,9 @@ export default function App() {
                 onSaved={(r) => {
                   setSelected(r);
                   workspaceCache.current.clear();
-                  setWork((w) =>
-                    w
-                      ? {
-                          ...w,
-                          records: w.records.map((x) =>
-                            x.id === r.id ? r : x,
-                          ),
-                        }
-                      : w,
-                  );
+                  mapCache.current.clear();
+                  setPageSummaryRefresh((value) => value + 1);
+                  setMapRecords((rows) => rows.map((x) => x.id === r.id ? r : x));
                 }}
               />
             )}
@@ -1910,7 +2095,8 @@ export default function App() {
               {dateText(selected.link_health?.checked_at)} ·
               可访问不等于事实已核验
             </small>
-            <h3>中文摘要</h3>
+            <h3>{selected.text_translation_state==="untranslated" ? "原文摘要（暂无中文译文）" : "中文摘要"}</h3>
+            {!status?.model.configured && <p className="muted">后台模型未配置，当前保留原文。可在“连接配置 → 后台模型”查看说明；嵌入 App Key 不用于后台翻译。</p>}
             <button
               disabled={translating || !status?.model.configured}
               onClick={async () => {

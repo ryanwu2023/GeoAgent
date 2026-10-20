@@ -135,7 +135,7 @@
   },
   {
    "id": "gn-talks",
-   "url": "https://news.google.com/rss/search?q=(Russia+OR+Ukraine)+(peace+talks+OR+negotiations+OR+ceasefire+OR+memorandum)&hl=en-US&gl=US&ceid=US:en",
+   "url": "https://news.google.com/rss/search?q=(Russia+OR+Ukraine)+(%22energy+ceasefire%22+OR+%22energy+truce%22+OR+%22ceasefire+violation%22+OR+%22truce+broken%22+OR+%22peace+talks%22+OR+%22security+guarantees%22)&hl=en-US&gl=US&ceid=US:en",
    "tier": "T3",
    "publisher": "Google News",
    "enabled": true,
@@ -151,7 +151,7 @@
   },
   {
    "id": "gn-eu-ua",
-   "url": "https://news.google.com/rss/search?q=(EU+OR+Europe)+(Ukraine)+(peace+OR+talks+OR+%22security+guarantees%22)&hl=en-US&gl=US&ceid=US:en",
+   "url": "https://news.google.com/rss/search?q=(EU+OR+Europe)+Ukraine+(%22energy+ceasefire%22+OR+peace+OR+talks+OR+%22security+guarantees%22+OR+%22monitoring+mechanism%22)&hl=en-US&gl=US&ceid=US:en",
    "tier": "T3",
    "publisher": "Google News",
    "enabled": true,
@@ -400,7 +400,29 @@
      "rx:\\bурегулир\\w*",
      "peace deal",
      "peace settlement",
-     "pact"
+     "pact",
+     "energy ceasefire",
+     "energy truce",
+     "energy moratorium",
+     "partial ceasefire",
+     "de-escalation",
+     "deescalation",
+     "security guarantee",
+     "coalition of the willing",
+     "monitoring mechanism",
+     "ceasefire violation",
+     "humanitarian exchange",
+     "prisoner exchange",
+     "pow swap",
+     "return of children",
+     "енергетичне перемир'я",
+     "энергетическое перемирие",
+     "припинення вогню",
+     "прекращение огня",
+     "energy ceasefire broken",
+     "energy truce broken",
+     "breach of ceasefire",
+     "ceasefire breach"
     ],
     [
      "russia",
@@ -447,7 +469,16 @@
      "mediat",
      "peace deal",
      "peace settlement",
-     "sanction"
+     "sanction",
+     "energy ceasefire",
+     "energy truce",
+     "de-escalation",
+     "deescalation",
+     "coalition of the willing",
+     "monitoring mechanism",
+     "frozen asset",
+     "immobilised asset",
+     "immobilized asset"
     ]
    ]
   },
@@ -485,7 +516,17 @@
      "rx:\\bconcess\\w*",
      "rx:\\bуступ\\w*",
      "peace deal",
-     "peace settlement"
+     "peace settlement",
+     "energy ceasefire",
+     "energy truce",
+     "de-escalation",
+     "deescalation",
+     "security guarantee",
+     "monitoring mechanism",
+     "ceasefire violation",
+     "energy infrastructure",
+     "prisoner exchange",
+     "return of children"
     ]
    ]
   },
@@ -620,6 +661,18 @@
    "humanitarian pause",
    "cessation of hostilities",
    "rx:\\bперемири\\w*"
+  ],
+  "ceasefire_breach": [
+   "ceasefire breach",
+   "ceasefire violation",
+   "violated the ceasefire",
+   "violates the ceasefire",
+   "truce broken",
+   "ceasefire broken",
+   "breached the ceasefire",
+   "violated the energy ceasefire",
+   "energy ceasefire violated",
+   "truce is broken"
   ]
  },
  "stance": {

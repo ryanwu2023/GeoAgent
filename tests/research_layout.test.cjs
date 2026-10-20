@@ -206,3 +206,22 @@ test('opening the dock uses captured scope state and does not request a new conn
   assert.ok(hasIdentifier(scopeCalls[0].arguments[1], 'embedWorkspaceScope'));
   assert.equal(calls(entries[0], 'setConnectionVersion').length, 0);
 });
+
+test('unconfigured embedded chat uses local QA without disabling a hidden configured session', () => {
+  const identity = calls(app, 'useEmbedIdentity');
+  const bridge = calls(app, 'useHostViewContext');
+  assert.equal(identity.length, 1);
+  assert.equal(bridge.length, 1);
+  for (const enabled of [identity[0].arguments[5], bridge[0].arguments[4]]) {
+    assert.ok(hasIdentifier(enabled, 'pichatEmbedConfigured'));
+    assert.ok(hasIdentifier(enabled, 'embedWorkspaceScope'));
+    assert.equal(hasIdentifier(enabled, 'chatOpen'), false);
+  }
+  assert.ok(hasIdentifier(bridge[0].arguments[6], 'chatOpen'));
+});
+
+test('local QA keeps a separate bottom composer row in the research dock', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../src/research-dock.css'), 'utf8');
+  assert.match(css, /\.research-chat-pane\s*>\s*\.chat-panel-local\s*\{[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto/s);
+  assert.match(css, /\.chat-panel-local\s*>\s*\.chat-body\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*auto/s);
+});

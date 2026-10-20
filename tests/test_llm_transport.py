@@ -5,6 +5,13 @@ import pytest
 from backend import llm
 from backend.translation_quality import language,quality,normalize_terms
 
+@pytest.fixture(autouse=True)
+def isolate_model_configuration(tmp_path, monkeypatch):
+    monkeypatch.setenv("GEO_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setattr(llm, "ROOT", tmp_path)
+    for key in llm.model_settings.ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
 def test_endpoint_full_and_base():
     assert llm.endpoint('https://provider.example/v1/')=='https://provider.example/v1/chat/completions'
     assert llm.endpoint('https://provider.example/v1/chat/completions')=='https://provider.example/v1/chat/completions'

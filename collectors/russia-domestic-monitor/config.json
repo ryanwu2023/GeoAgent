@@ -63,8 +63,8 @@
       "url": "https://iz.ru/xml/rss/all.xml",
       "tier": "T3",
       "publisher": "Izvestia (RU)",
-      "enabled": true,
-      "note": "消息报（2026-09-19 探测 200/rss 50 条；同日运行期 403——疑同主机限频，保留启用待下次运行自动回补；连续 403 再降级停用） | 2026-09-20 实测 /xml/rss/all.xml、/export/rss/index.xml、/rss、/arc/... 四个路径全部 403；无可用备用地址，保留启用待出口变化。 | 2026-09-20 终审：HTTP 403（站点侧风控，三个出口轮换均被拒）；保留启用待出口变化，已进「信源健康」告警。"
+      "enabled": false,
+      "note": "2026-10-18 时效审查：连续 6 轮 HTTP 403（最近成功 2026-09-30），为避免每日等待已停用；俄国内政由 Interfax/TASS/RIA/Vedomosti/Kommersant/Lenta 等同主题来源覆盖，路径恢复后再启用。"
     },
     {
       "id": "lenta",
@@ -119,7 +119,7 @@
     },
     {
       "id": "gn-oil",
-      "url": "https://news.google.com/rss/search?q=Russia+(oil+OR+crude+OR+%22oil+products%22+OR+diesel+OR+gasoline)+(export+OR+shipments+OR+ban+OR+discount+OR+%22shadow+fleet%22)&hl=en-US&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=Russia+(oil+OR+crude+OR+%22shadow+fleet%22+OR+%22Graham+Act%22+OR+%22secondary+tariffs%22)+(%22sanctions+circumvention%22+OR+waiver+OR+%22put+on+hold%22+OR+export+OR+shipments)&hl=en-US&gl=US&ceid=US:en",
       "tier": "T3",
       "publisher": "Google News",
       "enabled": true,
@@ -427,7 +427,28 @@
           "rx:\\bтоплив\\w*",
           "rx:\\bтанкер\\w*",
           "rx:\\bнефтепровод\\w*",
-          "rx:\\bэкспортн\\w* пошлин\\w*"
+          "rx:\\bэкспортн\\w* пошлин\\w*",
+          "sanctions circumvention",
+          "sanctions evasion",
+          "price cap evasion",
+          "oil intermediary",
+          "ship-to-ship transfer",
+          "dark fleet",
+          "irregular shipping",
+          "parallel import",
+          "санкционн",
+          "обход санкц",
+          "graham act",
+          "secondary tariff",
+          "secondary tariffs",
+          "500% tariff",
+          "tariff waiver",
+          "sanctions waiver",
+          "sanctions bill",
+          "sanctions legislation",
+          "put on hold",
+          "waiver",
+          "exemption"
         ],
         [
           "putin",
@@ -475,7 +496,12 @@
           "rx:\\bрезервн\\w* фонд\\w*",
           "national wealth fund",
           "rx:\\bфнб\\b",
-          "rx:\\bдефицит\\w* бюджет\\w*"
+          "rx:\\bдефицит\\w* бюджет\\w*",
+          "liquid national wealth fund",
+          "national welfare fund",
+          "domestic borrowing",
+          "ofz issuance",
+          "war financing"
         ],
         [
           "federal budget",
@@ -519,7 +545,14 @@
           "rx:\\bвоенн\\w* расход\\w*",
           "rx:\\bвоенн\\w* бюджет\\w*",
           "rx:\\bвоенн\\w* экономик\\w*",
-          "rx:\\bгособоронзаказ\\w*"
+          "rx:\\bгособоронзаказ\\w*",
+          "military-industrial complex",
+          "defence industrial base",
+          "defense industrial base",
+          "arms production",
+          "weapons production",
+          "mobilization economy",
+          "mobilisation economy"
         ],
         [
           "budget",
@@ -750,7 +783,14 @@
       "rx:\\bльгот\\w*",
       "rx:\\bотсрочк\\w*",
       "rx:\\bподдержк\\w*",
-      "rx:\\bиндексаци\\w*"
+      "rx:\\bиндексаци\\w*",
+      "waiver",
+      "waived",
+      "put on hold",
+      "placed on hold",
+      "pause sanctions",
+      "paused sanctions",
+      "tariff exemption"
     ],
     "restriction_measure": [
       "export ban",
@@ -766,7 +806,12 @@
       "rx:\\bпошлин\\w*",
       "rx:\\bквот\\w*",
       "rx:\\bмобилиз\\w*",
-      "rx:\\bнационализ\\w*"
+      "rx:\\bнационализ\\w*",
+      "secondary tariff",
+      "secondary tariffs",
+      "graham act",
+      "sanctions bill",
+      "sanctions legislation"
     ]
   },
   "stance": {

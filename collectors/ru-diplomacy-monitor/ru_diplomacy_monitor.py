@@ -854,7 +854,8 @@ STANCE_LABEL = {"escalation_signal": "和谈倒退/强硬", "deescalation_signal
                 "mixed_signal": "双向混存", "unclassified": "未分类"}
 FLAG_LABEL = {"envoy_travel": "特使出行/会面", "willingness_positive": "愿谈表态",
               "willingness_negative": "拒谈/退缩", "anchorage_return": "安克雷奇框架回摆",
-              "memorandum_draft": "备忘录/协议文本", "ceasefire_call": "停火呼吁"}
+              "memorandum_draft": "备忘录/协议文本", "ceasefire_call": "停火呼吁",
+              "ceasefire_breach": "停火破裂/违规"}
 BUCKET_ORDER = ["us_envoy", "talks_process", "eu_stance", "ua_stance", "anchorage", "china_xinhua"]
 
 def _row_link(r):

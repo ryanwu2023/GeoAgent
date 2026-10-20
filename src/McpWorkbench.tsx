@@ -1,63 +1,61 @@
-import {useEffect, useRef, useState} from "react";
+import {useEffect,useRef,useState} from "react";
 
-type Schema = {type?:string; description?:string; default?:unknown; enum?:unknown[]; properties?:Record<string,Schema>; required?:string[]};
-type Tool = {name:string; description?:string; inputSchema:Schema; outputSchema?:unknown; annotations?:Record<string,unknown>};
-type Call = {created_at:string; tool:string; status:string; duration_ms:number; audit_event_id:string};
-type Catalog = {tools:Tool[]; instructions:string; calls:Call[]; statistics_basis:string; model_view_basis:string};
-const json = (value:unknown)=>JSON.stringify(value,null,2);
-const tabs = ["模型视角","参数字段","试调用 / 返回","调用实况"];
-
-export default function McpWorkbench({onClose,context}:{onClose:()=>void;context:{snapshot_id:string;topic:string;dimension:string;start:string;end:string}}) {
-  const [catalog,setCatalog]=useState<Catalog|null>(null);
-  const [selected,setSelected]=useState("");
-  const [query,setQuery]=useState("");
-  const [tab,setTab]=useState(tabs[0]);
-  const [args,setArgs]=useState("{}");
-  const [result,setResult]=useState("");
-  const [businessResult,setBusinessResult]=useState("");
-  const [busy,setBusy]=useState(false);
-  const [error,setError]=useState("");
-  const abort=useRef<AbortController|null>(null);
-  const tool=catalog?.tools.find(item=>item.name===selected);
-  async function load(signal?:AbortSignal) {
-    const response=await fetch("/api/integrations/mcp-workbench",{cache:"no-store",signal});
-    const data=await response.json();
-    if(!response.ok)throw new Error(data.detail||"工作台加载失败");
-    setCatalog(data); setSelected(current=>current||data.tools[0]?.name||"");
-  }
-  useEffect(()=>{const controller=new AbortController(); void load(controller.signal).catch(e=>{if(e.name!=="AbortError")setError(e.message)});return()=>{controller.abort();abort.current?.abort()}},[]);
-  async function reload(){setError("");try{await load()}catch(e){setError(e instanceof Error?e.message:"加载失败")}}
-  function choose(item:Tool){abort.current?.abort();setBusy(false);setSelected(item.name);setResult("");setBusinessResult("");setError("");const properties=item.inputSchema.properties||{};setArgs(json({...Object.fromEntries(Object.entries(properties).filter(([,s])=>s.default!==undefined).map(([k,s])=>[k,s.default])),...Object.fromEntries(Object.entries(context).filter(([key])=>key in properties))}))}
-  async function run(){
-    setError("");setResult("");setBusinessResult("");let argumentsValue:unknown;
-    try{argumentsValue=JSON.parse(args);if(!argumentsValue||Array.isArray(argumentsValue)||typeof argumentsValue!=="object")throw new Error("参数必须是 JSON 对象")}catch(e){setError(e instanceof Error?e.message:"JSON无效");return}
-    setBusy(true);const controller=new AbortController();abort.current=controller;
-    try{
-      const response=await fetch("/api/integrations/mcp-workbench/call",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({tool:selected,arguments:argumentsValue}),signal:controller.signal});
-      const data=await response.json();if(controller.signal.aborted)return;setResult(json(data));
-      setBusinessResult((data.result?.content||[]).filter((c:{type:string})=>c.type==="text").map((c:{text:string})=>{try{return json(JSON.parse(c.text))}catch{return c.text}}).join("\n\n"));
-      if(!response.ok)setError(`HTTP ${response.status}：试调用失败，详见返回`);
-      else if(data.error||data.result?.isError)setError("MCP 返回工具错误，详见返回");
-      else {const content=data.result?.content;try{if(content?.some((c:{text?:string})=>c.text&&JSON.parse(c.text).ok===false))setError("业务返回失败，详见返回")}catch{/* Preserve the raw protocol result. */}}
-      await load();
-    }catch(e){if(e instanceof Error&&e.name!=="AbortError")setError(e.message)}finally{if(abort.current===controller)setBusy(false)}
-  }
-  const calls=catalog?.calls.filter(call=>call.tool===selected)||[];
-  const durations=calls.map(call=>call.duration_ms).sort((a,b)=>a-b);
-  const p95=durations.length?durations[Math.ceil(durations.length*.95)-1]:null;
-  return <div className="integration-overlay"><section className="mcp-workbench" role="dialog" aria-modal="true" aria-label="MCP 工作台">
-    <header><div><h2>MCP 工作台</h2><p>只读业务工具 · {window.location.origin}/mcp</p></div><button onClick={onClose} aria-label="关闭 MCP 工作台">×</button></header>
-    <div className="mcp-access"><button onClick={()=>void reload()}>刷新工具与记录</button></div>
-    {error?<p className="mcp-error" role="alert">{error}</p>:null}
-    <div className="mcp-workbench-grid"><aside className="mcp-tool-list"><input aria-label="搜索 MCP 工具" placeholder="按工具名称 / 业务说明搜索" value={query} onChange={e=>setQuery(e.target.value)}/><small>{catalog?.tools.length||0} 个工具 · 描述字数 / 调用数</small>
-      {catalog?.tools.filter(item=>(item.name+item.description).toLowerCase().includes(query.toLowerCase())).map(item=><button key={item.name} className={selected===item.name?"selected":""} disabled={busy} onClick={()=>choose(item)}><strong>{item.name}</strong><span>{item.description}</span><small>{item.description?.length||0} 字 · {catalog.calls.filter(c=>c.tool===item.name).length} 次</small></button>)}
-      {catalog&&!catalog.tools.some(item=>(item.name+item.description).toLowerCase().includes(query.toLowerCase()))?<p>没有匹配的工具</p>:null}
-    </aside><main className="mcp-tool-detail">{tool?<><h3>{tool.name}</h3><p>近7天可见记录：{calls.length} 次 · 错误 {calls.filter(call=>call.status!=="ok").length} · P95 {p95===null?"—":`${p95} ms`}</p>
-      <div className="mcp-tabs" role="tablist">{tabs.map(name=><button role="tab" aria-selected={tab===name} key={name} onClick={()=>setTab(name)}>{name}</button>)}</div>
-      <div role="tabpanel">{tab===tabs[0]?<><p className="mcp-note">{catalog?.model_view_basis}</p><h4>description · MCP 原样返回（{tool.description?.length||0} 字）</h4><pre>{tool.description}</pre><h4>inputSchema · JSON Schema 原样</h4><pre>{json(tool.inputSchema)}</pre><details><summary>服务 instructions</summary><pre>{catalog?.instructions}</pre></details><details><summary>annotations / outputSchema</summary><pre>{json({annotations:tool.annotations,outputSchema:tool.outputSchema})}</pre></details><p className="mcp-note">不推测 PiChat 的描述截断阈值或模型最终可见字段。请在 PiChat 侧核对实际适配结果。</p></>:null}
-      {tab===tabs[1]?<div className="mcp-table-scroll"><table><thead><tr><th>参数</th><th>类型 / 必填</th><th>默认值</th><th>业务说明</th></tr></thead><tbody>{Object.entries(tool.inputSchema.properties||{}).map(([name,schema])=><tr key={name}><td>{name}</td><td>{schema.type||"见 Schema"} / {tool.inputSchema.required?.includes(name)?"是":"否"}</td><td>{schema.default===undefined?"—":json(schema.default)}</td><td>{schema.description||"—"}{schema.enum?<pre>{json(schema.enum)}</pre>:null}</td></tr>)}</tbody></table>{!Object.keys(tool.inputSchema.properties||{}).length?<p>此工具无需业务参数。</p>:null}</div>:null}
-      {tab===tabs[2]?<><p className="mcp-note">工作台调试免填口令和 Key，通过隔离的进程内 MCP 协议调用同一套只读业务工具；对外 /mcp 仍需 Bearer Key。此处不验证外部 Agent 的 Key 或权限配置。</p><label>arguments · JSON<textarea aria-label="MCP 参数 JSON" spellCheck={false} value={args} onChange={e=>setArgs(e.target.value)}/></label><button className="primary" disabled={busy} onClick={()=>void run()}>{busy?"执行中…":"执行只读工具"}</button><h4>本次真实返回（非静态样例）</h4><pre aria-label="MCP 返回结果">{businessResult||result||"尚未执行"}</pre>{result?<details><summary>原始 MCP 协议回执</summary><pre>{result}</pre></details>:null}</>:null}
-      {tab===tabs[3]?<><p className="mcp-note">{catalog?.statistics_basis} 最多展示最近2000条全工具记录。</p><div className="mcp-table-scroll"><table><thead><tr><th>时间</th><th>状态</th><th>耗时</th><th>回执 ID</th></tr></thead><tbody>{calls.map((call,index)=><tr key={index}><td>{new Date(call.created_at).toLocaleString()}</td><td>{call.status}</td><td>{call.duration_ms} ms</td><td>{call.audit_event_id}</td></tr>)}</tbody></table></div>{!calls.length?<p>尚无可见调用记录，不代表历史上未调用。</p>:null}</>:null}</div>
-    </>:<p>加载配置后选择工具。</p>}</main></div>
-  </section></div>;
+type Schema={type?:string;description?:string;default?:unknown;enum?:unknown[];properties?:Record<string,Schema>;required?:string[]};
+type Tool={name:string;description?:string;inputSchema:Schema;outputSchema?:unknown;annotations?:Record<string,unknown>};
+type Call={created_at:string;tool:string;status:string;duration_ms:number;audit_event_id:string};
+type Catalog={tools:Tool[];instructions:string;calls:Call[];statistics_basis:string;model_view_basis:string};
+type NewsImport={supported:boolean|null;required_tools:string[];missing_tools:string[]};
+type Server={id:string;name:string;type:"http";url:string;configured:boolean;verify_tls?:boolean;news_import?:NewsImport;last_test?:{ok:boolean;tested_at:string;duration_ms:number;tool_count:number;tool_names:string[]}|null};
+type Registry={version:number;servers:Server[]};
+type Form={id?:string;name:string;type:"http";url:string;key:string;verify_tls:boolean};
+const blank:Form={name:"",type:"http",url:"",key:"",verify_tls:true};
+const tabs=["模型视角","参数字段","试调用 / 返回","调用实况"];
+const pretty=(v:unknown)=>JSON.stringify(v,null,2);
+function newsCapability(value?:NewsImport){
+  if(value?.supported===true)return "已发现新闻导入所需工具；实际获取仍需校验服务状态和返回数据。";
+  if(value?.supported===false)return `不支持当前新闻导入：缺少 ${value.missing_tools.join("、")||"所需工具"}。`;
+  return "新闻导入能力尚未验证，请重新测试并检查所需工具。";
 }
+async function body(response:Response){const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(typeof data.detail==="string"?data.detail:"请求失败");return data}
+
+export default function McpWorkbench({onClose,context,initialView="local"}:{onClose:()=>void;context:{snapshot_id:string;topic:string;dimension:string;start:string;end:string};initialView?:"local"|"external"}){
+  const [view,setView]=useState<"local"|"external">(initialView);
+  const [catalog,setCatalog]=useState<Catalog|null>(null),[selected,setSelected]=useState(""),[query,setQuery]=useState(""),[tab,setTab]=useState(tabs[0]);
+  const [args,setArgs]=useState("{}"),[result,setResult]=useState(""),[businessResult,setBusinessResult]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState("");
+  const [registry,setRegistry]=useState<Registry>({version:1,servers:[]}),[form,setForm]=useState<Form>(blank),[externalBusy,setExternalBusy]=useState(false),[externalError,setExternalError]=useState(""),[message,setMessage]=useState("");
+  const abort=useRef<AbortController|null>(null),tool=catalog?.tools.find(item=>item.name===selected);
+  async function load(signal?:AbortSignal){const data=await body(await fetch("/api/integrations/mcp-workbench",{cache:"no-store",signal})) as Catalog;setCatalog(data);setSelected(old=>old||data.tools[0]?.name||"")}
+  async function loadRegistry(signal?:AbortSignal){setRegistry(await body(await fetch("/api/integrations/external-mcp",{cache:"no-store",signal})) as Registry)}
+  useEffect(()=>{const c=new AbortController();void Promise.all([load(c.signal),loadRegistry(c.signal)]).catch(e=>{if(e.name!=="AbortError")setError(e.message)});return()=>{c.abort();abort.current?.abort()}},[]);
+  function choose(item:Tool){abort.current?.abort();setBusy(false);setSelected(item.name);setResult("");setBusinessResult("");setError("");const p=item.inputSchema.properties||{};setArgs(pretty({...Object.fromEntries(Object.entries(p).filter(([,s])=>s.default!==undefined).map(([k,s])=>[k,s.default])),...Object.fromEntries(Object.entries(context).filter(([k])=>k in p))}))}
+  async function run(){setError("");setResult("");setBusinessResult("");let value:unknown;try{value=JSON.parse(args);if(!value||Array.isArray(value)||typeof value!=="object")throw new Error("参数必须是 JSON 对象")}catch(e){setError(e instanceof Error?e.message:"JSON 无效");return}setBusy(true);const c=new AbortController();abort.current=c;try{const response=await fetch("/api/integrations/mcp-workbench/call",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({tool:selected,arguments:value}),signal:c.signal});const data=await response.json();if(c.signal.aborted)return;setResult(pretty(data));setBusinessResult((data.result?.content||[]).filter((x:{type:string})=>x.type==="text").map((x:{text:string})=>{try{return pretty(JSON.parse(x.text))}catch{return x.text}}).join("\n\n"));if(!response.ok)setError(`HTTP ${response.status}：试调用失败，详见返回`);else if(data.error||data.result?.isError)setError("MCP 返回工具错误，详见返回");await load()}catch(e){if(e instanceof Error&&e.name!=="AbortError")setError(e.message)}finally{if(abort.current===c)setBusy(false)}}
+  function create(){setForm(blank);setExternalError("");setMessage("")}
+  function edit(s:Server){setForm({id:s.id,name:s.name,type:s.type,url:s.url,key:"",verify_tls:s.verify_tls??true});setExternalError("");setMessage("")}
+  async function save(){setExternalError("");setMessage("");if(!form.name.trim()||!form.url.trim()){setExternalError("请填写服务名称和 URL");return}if(!form.id&&!form.key.trim()){setExternalError("新增服务必须填写 Key");return}setExternalBusy(true);try{const data=await body(await fetch("/api/integrations/external-mcp/test-and-save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)})) as {server:Server;tools:string[]};await loadRegistry();setForm({id:data.server.id,name:data.server.name,type:data.server.type,url:data.server.url,key:"",verify_tls:data.server.verify_tls??true});setMessage(`连通性测试成功，已保存配置；发现 ${data.tools.length} 个工具。${newsCapability(data.server.news_import)}`)}catch(e){setExternalError(e instanceof Error?e.message:"MCP 测试失败，配置未保存")}finally{setExternalBusy(false)}}
+  async function remove(s:Server){if(!window.confirm(`确认删除 MCP 服务“${s.name}”？已导入的数据不会删除。`))return;setExternalBusy(true);setExternalError("");setMessage("");try{setRegistry(await body(await fetch(`/api/integrations/external-mcp/${encodeURIComponent(s.id)}`,{method:"DELETE"})) as Registry);if(form.id===s.id)setForm(blank);setMessage(`已删除 MCP 服务“${s.name}”。`)}catch(e){setExternalError(e instanceof Error?e.message:"删除失败")}finally{setExternalBusy(false)}}
+  const calls=catalog?.calls.filter(x=>x.tool===selected)||[],durations=calls.map(x=>x.duration_ms).sort((a,b)=>a-b),p95=durations.length?durations[Math.ceil(durations.length*.95)-1]:null;
+  return <div className="integration-overlay"><section className="mcp-workbench" role="dialog" aria-modal="true" aria-label="MCP 工作台">
+    <header><div><h2>MCP 工作台</h2><p>{view==="local"?`只读业务工具 · ${window.location.origin}/mcp`:"外部 MCP 服务注册、连通性测试与密钥安全保存"}</p></div><button onClick={onClose} aria-label="关闭 MCP 工作台">×</button></header>
+    <div className="mcp-view-tabs" role="tablist"><button role="tab" aria-selected={view==="local"} onClick={()=>setView("local")}>本地工具</button><button role="tab" aria-selected={view==="external"} onClick={()=>setView("external")}>外部 MCP 服务 <span>{registry.servers.length}</span></button></div>
+    {view==="local"?<LocalTools catalog={catalog} selected={selected} query={query} tab={tab} args={args} result={result} businessResult={businessResult} busy={busy} error={error} tool={tool} calls={calls} p95={p95} setQuery={setQuery} setTab={setTab} setArgs={setArgs} choose={choose} run={run} reload={()=>void Promise.all([load(),loadRegistry()])}/>:<div className="external-mcp-layout">
+      <aside className="external-mcp-list"><div className="external-list-heading"><div><strong>已配置服务</strong><small>{registry.servers.length} 个</small></div><button className="primary" onClick={create} disabled={externalBusy}>新增服务</button></div>{registry.servers.map(s=><article key={s.id} className={form.id===s.id?"selected":""} onClick={()=>{if(!externalBusy)edit(s)}}><div><span className={s.last_test?.ok?"connection-dot ok":"connection-dot"}/><strong>{s.name}</strong><code>{s.type}</code></div><p>{s.url}</p><small>{s.last_test?.ok?`连通性已验证 · ${s.last_test.tool_count} 个工具 · ${new Date(s.last_test.tested_at).toLocaleString("zh-CN")}`:"已保存，等待重新测试"}</small><p>{newsCapability(s.news_import)}</p><div className="external-row-actions"><button onClick={e=>{e.stopPropagation();edit(s)}} disabled={externalBusy}>编辑</button><button className="danger" onClick={e=>{e.stopPropagation();void remove(s)}} disabled={externalBusy}>删除</button></div></article>)}{!registry.servers.length?<div className="external-empty"><p>尚未配置外部 MCP 服务</p><small>新增配置只有在真实协议测试成功后才会保存。</small></div>:null}</aside>
+      <main className="external-mcp-form">
+        <div className="external-form-title"><div><h3>{form.id?"编辑 MCP 服务":"新增 MCP 服务"}</h3><p>{form.id?"Key 留空将沿用原密钥；任何修改仍需重新测试。":"填写配置后执行 initialize 与 tools/list 测试。"}</p></div><span className={form.id?"pill":"pill subdued"}>{form.id?"已保存":"草稿"}</span></div>
+        <p className="mcp-note">连接测试通过不等于支持新闻导入。当前新闻导入需要 service_status、knowledge_search 两个工具；实际获取时还会校验服务状态和返回数据。</p>
+        <div className="external-fields">
+          <label>服务名称<input value={form.name} maxLength={80} autoComplete="off" placeholder="例如：haifutong" onChange={e=>setForm({...form,name:e.target.value})}/></label>
+          <label>类型<select value={form.type} onChange={e=>setForm({...form,type:e.target.value as "http"})}><option value="http">HTTP（Streamable HTTP）</option></select></label>
+          <label className="wide">服务 URL<input value={form.url} type="url" autoComplete="url" placeholder="https://example.com/mcp" onChange={e=>setForm({...form,url:e.target.value})}/></label>
+          <label className="wide">Key<input value={form.key} type="password" autoComplete="new-password" placeholder={form.id?"留空沿用已保存 Key":"输入 Key 或完整 Bearer 值"} onChange={e=>setForm({...form,key:e.target.value})}/><small>Key 仅由后端保存，不会回传到浏览器；纯 Key 会自动添加 Bearer 前缀。</small></label>
+          <label className="wide"><span><input type="checkbox" style={{width:"auto",marginRight:8}} checked={form.verify_tls} disabled={externalBusy} onChange={e=>setForm({...form,verify_tls:e.target.checked})}/>验证 TLS 证书</span><small>默认开启；此设置同时用于连接测试和新闻导入。关闭将跳过该外部服务的证书校验。</small></label>
+        </div>
+        {externalError?<p className="mcp-error" role="alert">{externalError}</p>:null}{message?<p className="mcp-success" role="status">{message}</p>:null}
+        <div className="external-submit"><button className="primary" disabled={externalBusy} onClick={()=>void save()}>{externalBusy?"正在测试 initialize 与 tools/list…":"测试连通性并保存"}</button><small>测试失败时不会覆盖原配置，也不会保存新草稿。</small></div>
+        {form.id?(()=>{const s=registry.servers.find(x=>x.id===form.id);return s?.last_test?<section className="test-summary"><h4>最近一次测试</h4><dl><dt>测试时间</dt><dd>{new Date(s.last_test.tested_at).toLocaleString("zh-CN")}</dd><dt>耗时</dt><dd>{s.last_test.duration_ms} ms</dd><dt>工具数量</dt><dd>{s.last_test.tool_count}</dd><dt>工具</dt><dd>{s.last_test.tool_names.join("、")||"服务未提供具名工具"}</dd><dt>新闻导入能力</dt><dd>{newsCapability(s.news_import)}</dd></dl></section>:null})():null}
+      </main>
+    </div>}
+  </section></div>
+}
+
+type LocalProps={catalog:Catalog|null;selected:string;query:string;tab:string;args:string;result:string;businessResult:string;busy:boolean;error:string;tool:Tool|undefined;calls:Call[];p95:number|null;setQuery:(v:string)=>void;setTab:(v:string)=>void;setArgs:(v:string)=>void;choose:(v:Tool)=>void;run:()=>Promise<void>;reload:()=>void};
+function LocalTools(p:LocalProps){return <><div className="mcp-access"><button onClick={p.reload}>刷新工具与记录</button></div>{p.error?<p className="mcp-error" role="alert">{p.error}</p>:null}<div className="mcp-workbench-grid"><aside className="mcp-tool-list"><input aria-label="搜索 MCP 工具" placeholder="按工具名称 / 业务说明搜索" value={p.query} onChange={e=>p.setQuery(e.target.value)}/><small>{p.catalog?.tools.length||0} 个工具 · 描述字数 / 调用数</small>{p.catalog?.tools.filter(x=>(x.name+x.description).toLowerCase().includes(p.query.toLowerCase())).map(x=><button key={x.name} className={p.selected===x.name?"selected":""} disabled={p.busy} onClick={()=>p.choose(x)}><strong>{x.name}</strong><span>{x.description}</span><small>{x.description?.length||0} 字 · {p.catalog?.calls.filter(c=>c.tool===x.name).length} 次</small></button>)}</aside><main className="mcp-tool-detail">{p.tool?<><h3>{p.tool.name}</h3><p>近7天可见记录：{p.calls.length} 次 · 错误 {p.calls.filter(x=>x.status!=="ok").length} · P95 {p.p95===null?"—":`${p.p95} ms`}</p><div className="mcp-tabs" role="tablist">{tabs.map(x=><button role="tab" aria-selected={p.tab===x} key={x} onClick={()=>p.setTab(x)}>{x}</button>)}</div><div role="tabpanel">{p.tab===tabs[0]?<><p className="mcp-note">{p.catalog?.model_view_basis}</p><h4>description · MCP 原样返回（{p.tool.description?.length||0} 字）</h4><pre>{p.tool.description}</pre><h4>inputSchema · JSON Schema 原样</h4><pre>{pretty(p.tool.inputSchema)}</pre><details><summary>服务 instructions</summary><pre>{p.catalog?.instructions}</pre></details></>:null}{p.tab===tabs[1]?<div className="mcp-table-scroll"><table><thead><tr><th>参数</th><th>类型 / 必填</th><th>默认值</th><th>业务说明</th></tr></thead><tbody>{Object.entries(p.tool.inputSchema.properties||{}).map(([n,s])=><tr key={n}><td>{n}</td><td>{s.type||"见 Schema"} / {p.tool?.inputSchema.required?.includes(n)?"是":"否"}</td><td>{s.default===undefined?"—":pretty(s.default)}</td><td>{s.description||"—"}</td></tr>)}</tbody></table></div>:null}{p.tab===tabs[2]?<><p className="mcp-note">工作台调试通过隔离的进程内 MCP 协议调用只读业务工具；对外 /mcp 仍需 Bearer Key。</p><label>arguments · JSON<textarea aria-label="MCP 参数 JSON" spellCheck={false} value={p.args} onChange={e=>p.setArgs(e.target.value)}/></label><button className="primary" disabled={p.busy} onClick={()=>void p.run()}>{p.busy?"执行中…":"执行只读工具"}</button><h4>本次真实返回</h4><pre>{p.businessResult||p.result||"尚未执行"}</pre></>:null}{p.tab===tabs[3]?<><p className="mcp-note">{p.catalog?.statistics_basis}</p><div className="mcp-table-scroll"><table><thead><tr><th>时间</th><th>状态</th><th>耗时</th><th>回执 ID</th></tr></thead><tbody>{p.calls.map((x,i)=><tr key={i}><td>{new Date(x.created_at).toLocaleString()}</td><td>{x.status}</td><td>{x.duration_ms} ms</td><td>{x.audit_event_id}</td></tr>)}</tbody></table></div></>:null}</div></>:<p>加载配置后选择工具。</p>}</main></div></>}

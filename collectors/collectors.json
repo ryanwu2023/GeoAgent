@@ -5,6 +5,8 @@
     {"id":"defense-spend-monitor","name_zh":"军费与补给监测","topics":["usiran"],"entrypoint":"spend_monitor.py","selftest_args":["--selftest"],"output_kind":"records-and-metrics","enabled":true},
     {"id":"diplomacy-monitor","name_zh":"美伊外交斡旋监测","topics":["usiran"],"entrypoint":"diplomacy_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
     {"id":"eu-domestic-monitor","name_zh":"欧盟内政监测","topics":["ukraine"],"entrypoint":"eu_domestic_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"eu-gas-storage-monitor","name_zh":"欧洲天然气库存监测","topics":["ukraine"],"entrypoint":"eu_gas_storage_monitor.py","selftest_args":["--selftest"],"output_kind":"geo-v6","enabled":true},
+    {"id":"eu-ukraine-flow-monitor","name_zh":"欧乌贸易与实际拨款监测","topics":["ukraine"],"entrypoint":"eu_ukraine_flow_monitor.py","selftest_args":["--selftest"],"output_kind":"geo-v6","enabled":true},
     {"id":"finance-front-monitor","name_zh":"金融战线监测","topics":["usiran"],"entrypoint":"finance_monitor.py","selftest_args":["--selftest"],"output_kind":"finance-series","enabled":true},
     {"id":"iran-domestic-monitor","name_zh":"伊朗内政监测","topics":["usiran"],"entrypoint":"iran_domestic_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
     {"id":"iran-escalation-monitor","name_zh":"伊朗升级线索监测","topics":["usiran"],"entrypoint":"iran_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
@@ -16,8 +18,12 @@
     {"id":"readiness-monitor","name_zh":"美伊战备表态监测","topics":["usiran"],"entrypoint":"readiness_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
     {"id":"ru-diplomacy-monitor","name_zh":"俄乌外交斡旋监测","topics":["ukraine"],"entrypoint":"ru_diplomacy_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
     {"id":"russia-domestic-monitor","name_zh":"俄罗斯内政监测","topics":["ukraine"],"entrypoint":"russia_domestic_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"russia-financial-pressure-monitor","name_zh":"俄罗斯金融压力监测","topics":["ukraine"],"entrypoint":"russia_financial_pressure_monitor.py","selftest_args":["--selftest"],"output_kind":"geo-v6","enabled":true},
+    {"id":"stcn-usiran-monitor","name_zh":"证券时报地缘冲突监测","topics":["usiran","ukraine"],"entrypoint":"stcn_usiran_monitor.py","selftest_args":["--selftest"],"output_kind":"geo-v6","enabled":true},
     {"id":"ua-front-monitor","name_zh":"俄乌军事战线监测","topics":["ukraine"],"entrypoint":"ua_front_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
     {"id":"ukraine-aid-monitor","name_zh":"乌克兰后援监测","topics":["ukraine"],"entrypoint":"ukraine_aid_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
+    {"id":"ukraine-external-sector-monitor","name_zh":"乌克兰外部收支监测","topics":["ukraine"],"entrypoint":"ukraine_external_sector_monitor.py","selftest_args":["--selftest"],"output_kind":"geo-v6","enabled":true},
+    {"id":"ukraine-grain-monitor","name_zh":"乌克兰粮食供需监测","topics":["ukraine"],"entrypoint":"ukraine_grain_monitor.py","selftest_args":["--selftest"],"output_kind":"geo-v6","enabled":true},
     {"id":"xinhua-monitor","name_zh":"新华社冲突动态监测","topics":["usiran","ukraine"],"entrypoint":"xinhua_monitor.py","selftest_args":["--selftest"],"output_kind":"geo-v6","enabled":true},
     {"id":"taco-monitor","name_zh":"TACO资产压力监测","topics":["usiran"],"entrypoint":"taco_monitor.py","selftest_args":["--selftest"],"output_kind":"taco","enabled":true}
   ]

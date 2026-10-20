@@ -236,6 +236,16 @@
   background: #101f33;
 }
 
+.research-layout .research-chat-pane > .chat-panel-local {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.research-chat-pane .chat-panel-local > .chat-body {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
 .research-chat-pane .chat-panel-caption {
   justify-content: space-between;
   gap: 6px 12px;

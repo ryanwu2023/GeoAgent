@@ -109,7 +109,7 @@ MCP 结果会先保存原始响应，再转换成统一记录并直接生成新�
 
 在任何子项目下输出 `output/geo-v6.json`，使用 `geo.v6/1` 协议。参见 [接入协议](docs/adapter-contract.md) 及 `examples/geo-v6.example.json`。示例是协议测试数据，默认不导入真实快照。
 
-项目内置 19 个采集器的统一注册表。常用命令：
+项目内置 25 个采集器的统一注册表。证券时报采集器固定读取要闻、新闻和 7×24 快讯，补充美伊冲突、胡塞武装、霍尔木兹海峡、俄乌冲突及资产传导报道；五个俄乌资产传导采集器使用俄罗斯央行与联邦国库局、GIE AGSI、USDA PS&D、乌克兰国家银行、Eurostat 与欧盟委员会等固定渠道。常用命令：
 
 ```powershell
 python scripts/collect.py --list
@@ -126,6 +126,16 @@ python scripts/collect.py --all
 python -m scripts.collector_service_config --platform windows --output data/service-config/GeoAgent-Collector.xml
 ```
 
+其中欧洲天然气库存和乌克兰粮食供需的官方接口需要免费 API Key。在 `.env` 设置 `GIE_API_KEY` 与 `USDA_API_KEY`；密钥缺失时采集器会返回“需要配置”，不会用零值或历史缓存冒充本次数据。其余新增来源无需密钥。可分别执行：
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.collect --id russia-financial-pressure-monitor
+.\.venv\Scripts\python.exe -m scripts.collect --id eu-gas-storage-monitor
+.\.venv\Scripts\python.exe -m scripts.collect --id ukraine-grain-monitor
+.\.venv\Scripts\python.exe -m scripts.collect --id ukraine-external-sector-monitor
+.\.venv\Scripts\python.exe -m scripts.collect --id eu-ukraine-flow-monitor
+```
+
 完整运行数据保存在 `data/collector-output` 并由 Git 忽略；`examples/demo-data` 是克隆仓库后的有限演示快照。公开发布前运行 `python scripts/audit_repository.py`，检查环境文件、疑似密钥、个人绝对路径和超大文件。本项目尚未选择开源许可证，公开仓库前需由仓库所有者确定。
 
 ## 验证
@@ -135,16 +145,16 @@ python -m pytest -q
 npm.cmd run build
 ```
 
-测试覆盖不可变快照、重复导入、修订、缺失/零值、错误舰位、适配器扩展、同源转载、日期范围、引用约束、Agent/模型失败与超时、资产结果隔离、简报下载、API 演练、本地启动入口契约及采集服务账本/锁/重试/staging/事件 API/手动运行/自动导入门禁/跨平台后台配置与控制/项目私有虚拟环境/日志尾部/来源状态投影。当前全量 130 项测试通过；Pi Chat 契约测试使用模拟接口，真实联调仍需要有效的应用 API Key。
+测试覆盖不可变快照、重复导入、修订、缺失/零值、错误舰位、适配器扩展、同源转载、日期范围、引用约束、Agent/模型失败与超时、资产结果隔离、简报下载、MCP 契约、API 演练、本地启动入口契约及采集服务账本/锁/重试/staging/事件 API/手动运行/自动导入门禁/跨平台后台配置与控制/项目私有虚拟环境/日志尾部/来源状态投影。当前全量超过 250 项自动化检查；另可运行 `python scripts/acceptance_browser.py` 完成桌面与窄屏浏览器验收。Pi Chat 契约测试使用模拟接口，真实联调仍需要有效的应用 API Key。
 
 ## 研究边界
 
 - 现有材料按关键词归入主题候选，分类不等同语义核验；只在来源确实提供时保留信息。
-- 俄乌材料来自现有爬虫中的相关报道，不能替代专门的战线、援助及外交采集。
+- 俄乌已接入战线、援助、外交及五个固定渠道量化采集器；数据频率和来源覆盖仍需在页面逐项核对。
 - 来源等级沿用爬虫口径；T1 并非所有陈述均已证实。
 - 报道日期筛选是检索条件，不是历史可知性重建；可重现研究使用真实冻结快照。
 - 月度财政指标是美国整体背景，不能直接归因于美伊或俄乌。
-- 原油、黄金等价格及市场验证未接入，不提供收益预测或配置权重。
+- 已接入原油、黄金、利率、信用、外汇等市场背景序列；它们用于同期市场验证，不单独证明地缘事件的因果关系，也不提供收益预测或配置权重。
 - URL 相同的重复记录归并；明确提供 `original_url` 的转述共享原始出处，未知转述关系不推测成已完成的同源识别。
 
 ## 地理数据
@@ -185,7 +195,7 @@ python -m scripts.translate_snapshot
 
 ## 市场补充与规则研判（V6.2）
 
-运行 `python scripts/supplement_market.py` 下载 FRED 的高收益债及投资级债期权调整利差、十年期盈亏平衡通胀率、欧元兑美元历史观测，写入爬虫目录 `market-context-monitor/output/geo-v6.json`。随后点击“更新快照”。这是手动刷新任务，尚未设置自动定时更新；请求失败不会替换上一份成功数据包。原始 CSV 保留在该目录，冻结快照归档包含完整数列的 JSON。
+`market-context-monitor` 下载 FRED 的高收益债及投资级债期权调整利差、十年期盈亏平衡通胀率、欧元兑美元历史观测，写入 `output/geo-v6.json`。它已注册为启用的采集器，可随统一采集任务运行，也可单独执行 `python scripts/supplement_market.py`；请求失败不会替换上一份成功数据包。原始 CSV 保留在该目录，冻结快照归档包含完整数列的 JSON。
 
 利差从百分比换算为基点。不同序列最新日期不同，分析逐条保留比较日期。ICE 信用指数仅限内部研究，公开分发前需核对来源授权。民调新闻不直接转成可比支持率；还需要调查日期、机构、样本、题目和选项。
 

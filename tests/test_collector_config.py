@@ -25,6 +25,16 @@ def test_save_and_load_project_owned_config(tmp_path, monkeypatch):
     assert config_path.is_file()
 
 
+def test_default_schedule_includes_every_enabled_collector(tmp_path, monkeypatch):
+    monkeypatch.setattr(collector_config, "CONFIG_PATH", tmp_path / "missing.json")
+    monkeypatch.setattr(collector_config, "project_root", lambda: tmp_path)
+
+    loaded = collector_config.load_config()
+
+    assert loaded["source"] == "defaults"
+    assert loaded["exclude_ids"] == []
+
+
 def test_save_rejects_unknown_collector_and_invalid_interval(tmp_path, monkeypatch):
     monkeypatch.setattr(collector_config, "CONFIG_PATH", tmp_path / "settings.json")
 

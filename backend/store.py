@@ -32,8 +32,12 @@ def db():
     CREATE TABLE IF NOT EXISTS snapshots(id TEXT PRIMARY KEY, created_at TEXT NOT NULL, payload TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS records(id TEXT NOT NULL, version TEXT NOT NULL, first_imported_at TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(id,version));
     CREATE TABLE IF NOT EXISTS briefs(id TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL REFERENCES snapshots(id), created_at TEXT NOT NULL, mode TEXT NOT NULL, markdown TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS brief_templates(id TEXT PRIMARY KEY, name TEXT NOT NULL, version INTEGER NOT NULL, is_default INTEGER NOT NULL DEFAULT 0, is_system INTEGER NOT NULL DEFAULT 0, config TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS brief_metadata(brief_id TEXT PRIMARY KEY REFERENCES briefs(id), template_id TEXT NOT NULL, template_version INTEGER NOT NULL, template_config TEXT NOT NULL, model TEXT, window_start TEXT, window_end TEXT, payload TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS answers(id TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL, query TEXT NOT NULL, created_at TEXT NOT NULL, payload TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS analyses(id TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL, scope TEXT NOT NULL, created_at TEXT NOT NULL, payload TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS page_summaries(cache_key TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL REFERENCES snapshots(id), page TEXT NOT NULL, scope TEXT NOT NULL, created_at TEXT NOT NULL, model TEXT NOT NULL, payload TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS snapshot_stats(snapshot_id TEXT PRIMARY KEY REFERENCES snapshots(id), records INTEGER NOT NULL, observations INTEGER NOT NULL, sources INTEGER NOT NULL, errors INTEGER NOT NULL, cleaning TEXT NOT NULL, import_stats TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS workspace_state(key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
     """)
     try:
@@ -74,27 +78,37 @@ def snapshot_summaries():
     immutable payload.  Keep this projection derived from the stored payload;
     it is not a second source of truth.
     """
-    summaries = []
     with db() as c:
-        rows = c.execute("SELECT id,created_at,payload FROM snapshots ORDER BY created_at DESC").fetchall()
-    for row in rows:
-        try:
-            payload = json.loads(row["payload"])
-        except (TypeError, ValueError):
-            payload = {}
-        cleaning = payload.get("cleaning") if isinstance(payload.get("cleaning"), dict) else {}
-        import_stats = payload.get("import_stats") if isinstance(payload.get("import_stats"), dict) else {}
-        summaries.append({
-            "id": row["id"],
-            "created_at": row["created_at"],
-            "records": len(payload.get("records", [])) if isinstance(payload.get("records"), list) else 0,
-            "observations": len(payload.get("observations", [])) if isinstance(payload.get("observations"), list) else 0,
-            "sources": len(payload.get("sources", [])) if isinstance(payload.get("sources"), list) else 0,
-            "errors": len(payload.get("errors", [])) if isinstance(payload.get("errors"), list) else 0,
-            "cleaning": cleaning,
-            "import_stats": import_stats,
-        })
-    return summaries
+        # Backfill legacy snapshots inside SQLite so Python never materializes
+        # every immutable archive at once. Production archives can be hundreds
+        # of megabytes and previously caused MemoryError here.
+        c.execute("""
+            INSERT OR IGNORE INTO snapshot_stats
+            SELECT id,
+                   COALESCE(json_array_length(payload, '$.records'), 0),
+                   COALESCE(json_array_length(payload, '$.observations'), 0),
+                   COALESCE(json_array_length(payload, '$.sources'), 0),
+                   COALESCE(json_array_length(payload, '$.errors'), 0),
+                   COALESCE(json_extract(payload, '$.cleaning'), '{}'),
+                   COALESCE(json_extract(payload, '$.import_stats'), '{}')
+            FROM snapshots s
+            WHERE NOT EXISTS (
+                SELECT 1 FROM snapshot_stats x WHERE x.snapshot_id=s.id
+            )
+        """)
+        rows = c.execute("""
+            SELECT s.id,s.created_at,x.records,x.observations,x.sources,x.errors,
+                   x.cleaning,x.import_stats
+            FROM snapshots s JOIN snapshot_stats x ON x.snapshot_id=s.id
+            ORDER BY s.created_at DESC
+        """).fetchall()
+    return [{
+        "id": row["id"], "created_at": row["created_at"],
+        "records": row["records"], "observations": row["observations"],
+        "sources": row["sources"], "errors": row["errors"],
+        "cleaning": json.loads(row["cleaning"] or "{}"),
+        "import_stats": json.loads(row["import_stats"] or "{}"),
+    } for row in rows]
 
 @lru_cache(maxsize=2)
 def get_snapshot(sid):
@@ -125,4 +139,12 @@ def save_snapshot(payload):
             c.execute("INSERT OR IGNORE INTO records VALUES (?,?,?,?)", (record["id"], version, timestamp, canonical(record)))
         payload = {**payload, "import_stats": {"new": new_count, "revised": revised_count, "total": len(payload["records"])}}
         c.execute("INSERT INTO snapshots VALUES (?,?,?)", (sid, timestamp, canonical(payload)))
+        c.execute(
+            "INSERT INTO snapshot_stats VALUES (?,?,?,?,?,?,?)",
+            (
+                sid, len(payload.get("records", [])), len(payload.get("observations", [])),
+                len(payload.get("sources", [])), len(payload.get("errors", [])),
+                canonical(payload.get("cleaning", {})), canonical(payload.get("import_stats", {})),
+            ),
+        )
     return sid, True

@@ -6,9 +6,13 @@ from backend.mcp_news import public_config, save_config, store_news
 def test_mcp_config_is_persistent_but_secret_is_never_returned(tmp_path, monkeypatch):
     monkeypatch.setenv("GEO_DATA_DIR", str(tmp_path / "data"))
     result = save_config("news", "https://example.org/mcp", "Bearer secret", True)
-    assert result == {"name": "news", "url": "https://example.org/mcp", "configured": True, "verify_tls": True}
+    assert result == {
+        "name": "news", "url": "https://example.org/mcp", "configured": True,
+        "verify_tls": True, "server_id": "news", "selection_required": False,
+    }
     assert "authorization" not in result
-    saved = json.loads((tmp_path / "data" / "mcp-config.json").read_text(encoding="utf-8"))
+    saved = json.loads((tmp_path / "data" / "mcp-servers.json").read_text(encoding="utf-8"))["servers"][0]
+    assert not (tmp_path / "data" / "mcp-config.json").exists()
     assert saved["authorization"] == "Bearer secret"
     assert "secret" not in json.dumps(public_config(saved))
 

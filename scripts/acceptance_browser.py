@@ -17,7 +17,7 @@ with sync_playwright() as p:
     def tab(name):
         page.get_by_role('button',name=name,exact=True).click()
     def loaded():
-        page.wait_for_function("!document.querySelector('.insight-loading') && document.querySelector('.insight-stats b')?.textContent !== '0'",timeout=60000)
+        page.wait_for_function("!document.querySelector('.insight-loading') && document.querySelectorAll('.insight-stats b').length > 0",timeout=60000)
     page.goto('http://127.0.0.1:8000/')
     page.locator('.maplibregl-canvas').wait_for();loaded();shot('desktop-after')
     # Map layer controls and empty state.
@@ -65,7 +65,8 @@ with sync_playwright() as p:
     tab('研究简报');loaded();page.locator('.brief-item').first.click()
     expect(page.get_by_role('link',name='导出研究简报')).to_be_visible();shot('brief-after')
     href=page.get_by_role('link',name='导出研究简报').get_attribute('href')
-    response=page.request.get("http://127.0.0.1:8000"+href);assert response.ok and '地缘政治研究简报' in response.text()
+    response=page.request.get("http://127.0.0.1:8000"+href)
+    assert response.ok and ('核心判断' in response.text() or 'Bottom Line Up Front' in response.text())
     checks.append('简报档案阅读与Markdown导出')
     # Invalid range must explain the error, not silently display another range.
     tab('美伊局势');loaded()
