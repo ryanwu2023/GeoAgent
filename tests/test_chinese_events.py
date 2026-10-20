@@ -21,7 +21,8 @@ def test_untranslated_is_not_fake_chinese(tmp_path,monkeypatch):
     monkeypatch.setenv('GEO_DATA_DIR',str(tmp_path))
     record=normalize({'title':'New report','summary':'Details not translated'},'new')
     result=present_record(record)
-    assert '准备中' in result['title']
+    assert result['title']=='New report'
+    assert result['translation_state']=='untranslated'
     assert result['original_title']=='New report'
 
 def test_non_naval_news_gets_regional_anchor():
@@ -78,8 +79,10 @@ def test_post_import_translation_starts_complete_pipeline(tmp_path, monkeypatch)
             return None
 
     monkeypatch.setattr(chinese, '_worker', None)
+    monkeypatch.setattr(chinese, '_worker_snapshot_id', None)
     monkeypatch.setattr(chinese, 'translation_running', lambda: False)
-    monkeypatch.setattr(chinese, 'translation_status', lambda: {'pending': 2})
+    monkeypatch.setattr(chinese, 'snapshots', lambda: [{'id': 'latest'}])
+    monkeypatch.setattr(chinese, 'translation_status', lambda _sid: {'pending': 2, 'available': True})
     monkeypatch.setattr(chinese, 'data_dir', lambda: tmp_path)
     monkeypatch.setattr(
         chinese.subprocess,
@@ -92,13 +95,15 @@ def test_post_import_translation_starts_complete_pipeline(tmp_path, monkeypatch)
     assert calls
     assert calls[0][0][-1].endswith('translate_pipeline.py')
     assert (tmp_path / 'translation.request').is_file()
+    assert chinese._worker_snapshot_id == 'latest'
 
 
 def test_import_during_translation_queues_another_pass(tmp_path, monkeypatch):
     from backend import chinese
 
     monkeypatch.setattr(chinese, 'translation_running', lambda: True)
-    monkeypatch.setattr(chinese, 'translation_status', lambda: {'pending': 2})
+    monkeypatch.setattr(chinese, 'snapshots', lambda: [{'id': 'latest'}])
+    monkeypatch.setattr(chinese, 'translation_status', lambda _sid: {'pending': 2, 'available': True})
     monkeypatch.setattr(chinese, 'data_dir', lambda: tmp_path)
 
     chinese.start_translation()

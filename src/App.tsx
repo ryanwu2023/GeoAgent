@@ -34,8 +34,7 @@ import type {
   Evidence,
   EvidencePage,
   Metric,
-  McpPublicConfig,
-  McpTool,
+  ExternalMcpRegistry,
   MapEvidence,
   PageSummary,
   Status,
@@ -43,6 +42,7 @@ import type {
 } from "./types";
 import ReviewPanel from "./ReviewPanel";
 import MetricChart from "./MetricChart";
+import {canImportNews, reconcileNewsServer, titleTranslationLabel} from "./source_status";
 import MetricGuide from "./MetricGuide";
 import CollectorMonitor from "./CollectorMonitor";
 import Markdown from "react-markdown";
@@ -90,14 +90,8 @@ const modelSummaryTabs = new Set(["metrics", "scenarios", "assets"]);
 export default function App() {
   const [sourceMetric, setSourceMetric] = useState<Metric | null>(null);
   const [translating, setTranslating] = useState(false);
-  const [checkingModel, setCheckingModel] = useState(false),
-    [modelCheck, setModelCheck] = useState("");
-  const [mcpConfig, setMcpConfig] = useState<McpPublicConfig | null>(null),
-    [mcpName, setMcpName] = useState("haifutong"),
-    [mcpUrl, setMcpUrl] = useState(""),
-    [mcpAuthorization, setMcpAuthorization] = useState(""),
-    [mcpVerifyTls, setMcpVerifyTls] = useState(true),
-    [mcpTools, setMcpTools] = useState<McpTool[]>([]),
+  const [mcpRegistry, setMcpRegistry] = useState<ExternalMcpRegistry>({version:1,servers:[]}),
+    [mcpServerId, setMcpServerId] = useState(""),
     [mcpMessage, setMcpMessage] = useState(""),
     [mcpBusy, setMcpBusy] = useState(false),
     [mcpQuery, setMcpQuery] = useState("美伊局势 最新进展"),
@@ -171,7 +165,9 @@ export default function App() {
     workingSidRef = useRef("");
   const lastTopic = useRef("usiran");
   const [settingsOpen,setSettingsOpen] = useState(false);
+  const [settingsSection,setSettingsSection] = useState<"embed"|"model">("embed");
   const [mcpWorkbenchOpen,setMcpWorkbenchOpen] = useState(false);
+  const [mcpWorkbenchView,setMcpWorkbenchView] = useState<"local"|"external">("local");
   const [connection,setConnection] = useState({origin:"http://127.0.0.1:9172",agent_id:"geo-research-assistant",product_user_id:"geoagent-local",embed_configured:false});
   const [connectionLoaded,setConnectionLoaded] = useState(false);
   const [connectionVersion,setConnectionVersion] = useState(0);
@@ -202,6 +198,8 @@ export default function App() {
     new Map<string, { time: number; data: Workspace }>(),
   );
   const mapCache = useRef(new Map<string, MapEvidence[]>());
+  const mapTranslationScope = useRef("");
+  mapTranslationScope.current = JSON.stringify([sid,topic,dimension,start,end]);
   const pichatFrameRef = useRef<HTMLIFrameElement | null>(null);
   const {ready:pichatReady,loading:pichatAuthRequired,error:pichatError,notice:pichatNotice,
     frameLoaded:pichatFrameLoaded,setError:setPichatError} = useEmbedIdentity(pichatFrameRef,
@@ -231,7 +229,7 @@ export default function App() {
     return url.toString();
   })();
   async function refreshStatus() {
-    const s = await api<Status>("/status");
+    const s = await api<Status>(sid ? `/status?snapshot_id=${encodeURIComponent(sid)}` : "/status");
     setStatus(s);
     return s;
   }
@@ -252,11 +250,11 @@ export default function App() {
     workingSidRef.current = workingSid;
   }, [workingSid]);
   useEffect(() => {
-    if (!status?.translation?.running || !sid) return;
+    if (!status?.translation?.running || status.translation.snapshot_id !== sid || !sid) return;
     let cancelled = false;
     const timer = setInterval(async () => {
       try {
-        const s = await api<Status>("/status");
+        const s = await api<Status>(`/status?snapshot_id=${encodeURIComponent(sid)}`);
         const w = await api<Workspace>(
           "/workspace?" +
             new URLSearchParams({
@@ -280,7 +278,7 @@ export default function App() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [status?.translation?.running, sid, topic, dimension, start, end]);
+  }, [status?.translation?.running, status?.translation?.snapshot_id, sid, topic, dimension, start, end]);
   useEffect(() => {
     if (status?.crawler?.state !== "running") return;
     const timer = setInterval(() => {
@@ -302,14 +300,15 @@ export default function App() {
     return () => clearInterval(timer);
   }, [status?.crawler?.state]);
   useEffect(() => {
-    if (!sourcesOpen) return;
-    api<McpPublicConfig>("/mcp/config").then((config) => {
-      setMcpConfig(config);
-      setMcpName(config.name || "haifutong");
-      setMcpUrl(config.url || "");
-      setMcpVerifyTls(config.verify_tls);
-    }).catch((e) => setMcpMessage(e.message));
-  }, [sourcesOpen]);
+    if (!sourcesOpen || mcpWorkbenchOpen) return;
+    let cancelled = false;
+    api<ExternalMcpRegistry>("/integrations/external-mcp").then((registry) => {
+      if (cancelled) return;
+      setMcpRegistry(registry);
+      setMcpServerId(selected => reconcileNewsServer(selected, registry.servers));
+    }).catch((e) => { if (!cancelled) setMcpMessage(e.message); });
+    return () => {cancelled = true;};
+  }, [sourcesOpen, mcpWorkbenchOpen]);
   useEffect(() => {
     refreshStatus()
       .then((s) => {
@@ -323,8 +322,8 @@ export default function App() {
   }, []);
   useEffect(() => {
     let cancelled = false;
-    const timer = window.setInterval(() => {
-      api<Status>("/status")
+    function pollStatus() {
+      api<Status>(sid ? `/status?snapshot_id=${encodeURIComponent(sid)}` : "/status")
         .then((s) => {
           if (!cancelled) {
             setStatus(s);
@@ -342,12 +341,14 @@ export default function App() {
           }
         })
         .catch(() => {});
-    }, 10000);
+    }
+    if (sid) pollStatus();
+    const timer = window.setInterval(pollStatus, 10000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [sid]);
   useEffect(() => {
     closeDetails();
     return () => { detailRequestVersion.current++; };
@@ -581,44 +582,13 @@ export default function App() {
       setError((e as Error).message);
     }
   }
-  async function saveMcpConfig() {
-    setMcpBusy(true);
-    setMcpMessage("");
-    try {
-      const config = await api<McpPublicConfig>("/mcp/config", {
-        name: mcpName,
-        url: mcpUrl,
-        authorization: mcpAuthorization,
-        verify_tls: mcpVerifyTls,
-      });
-      setMcpConfig(config);
-      setMcpAuthorization("");
-      setMcpMessage("MCP 配置已保存，Authorization 不会回传到页面");
-      await refreshStatus();
-    } catch (e) {
-      setMcpMessage((e as Error).message);
-    } finally {
-      setMcpBusy(false);
-    }
-  }
-  async function testMcp() {
-    setMcpBusy(true);
-    setMcpMessage("");
-    try {
-      const result = await api<{ok:boolean;message?:string;tools:McpTool[]}>("/mcp/test", {});
-      setMcpTools(result.tools || []);
-      setMcpMessage(result.ok ? `连接成功，发现 ${result.tools.length} 个工具` : result.message || "连接失败");
-    } catch (e) {
-      setMcpMessage((e as Error).message);
-    } finally {
-      setMcpBusy(false);
-    }
-  }
   async function fetchMcpNews() {
+    if (!canImportNews(mcpServerId,mcpRegistry.servers)) return;
     setMcpBusy(true);
     setMcpMessage("");
     try {
       const result = await api<{id:string;created:boolean;fetched:number;count:number}>("/mcp/fetch", {
+        server_id: mcpServerId,
         query: mcpQuery,
         topic: mcpTopic,
         dimension: mcpDimension,
@@ -660,28 +630,35 @@ export default function App() {
   }
   async function translateMapTitles(ids: string[]) {
     if (!sid || !status?.model.configured || !ids.length) return {};
+    const requestScope = mapTranslationScope.current;
+    const requestSid = sid;
     try {
       const result = await api<{ok:boolean;translated:number;failed:string[];titles:Record<string,string>;message:string}>(
         "/translations/titles",
         {snapshot_id:sid,record_ids:ids},
       );
+      if (requestScope !== mapTranslationScope.current) return {};
       if (!result.ok && result.message) setNotice(result.message);
       if (Object.keys(result.titles).length) {
         const applyTitles = (records: MapEvidence[]) => records.map(record =>
-          result.titles[record.id] ? {...record,title:result.titles[record.id]} : record,
+          result.titles[record.id] ? {...record,title:result.titles[record.id],title_translation_state:"ready" as const} : record,
         );
         setMapRecords(current => applyTitles(current));
         setEvidenceRows(current => current.map(record =>
-          result.titles[record.id] ? {...record,title:result.titles[record.id]} : record,
+          result.titles[record.id] ? {...record,title:result.titles[record.id],title_translation_state:"ready" as const} : record,
         ));
         for (const [key,cached] of workspaceCache.current) {
-          workspaceCache.current.set(key,{...cached,data:{...cached.data,records:applyTitles(cached.data.records)}});
+          if (new URLSearchParams(key).get("snapshot_id") === requestSid)
+            workspaceCache.current.set(key,{...cached,data:{...cached.data,records:applyTitles(cached.data.records)}});
         }
-        for (const [key,cached] of mapCache.current) mapCache.current.set(key, applyTitles(cached));
+        for (const [key,cached] of mapCache.current) {
+          if (new URLSearchParams(key).get("snapshot_id") === requestSid)
+            mapCache.current.set(key, applyTitles(cached));
+        }
       }
       return result.titles;
     } catch (e) {
-      setNotice(`中文标题生成失败：${(e as Error).message}`);
+      if (requestScope === mapTranslationScope.current) setNotice(`中文标题生成失败：${(e as Error).message}`);
       return {};
     }
   }
@@ -775,8 +752,8 @@ export default function App() {
   return (
     <div ref={shellRef} className={`prototype-shell research-layout${chatExpanded ? " research-expanded" : ""}`}
       style={{ "--research-dock-width": `${researchWidth}%` } as CSSProperties}>
-      {settingsOpen ? <IntegrationSettings onClose={()=>setSettingsOpen(false)} onSaved={()=>void reloadConnection()}/> : null}
-      {mcpWorkbenchOpen ? <McpWorkbench context={{snapshot_id:workingSid,topic,dimension,start,end}} onClose={()=>setMcpWorkbenchOpen(false)}/> : null}
+      {settingsOpen ? <IntegrationSettings initialSection={settingsSection} onClose={()=>{setSettingsOpen(false);void refreshStatus()}} onSaved={()=>void reloadConnection()}/> : null}
+      {mcpWorkbenchOpen ? <McpWorkbench initialView={mcpWorkbenchView} context={{snapshot_id:workingSid,topic,dimension,start,end}} onClose={()=>setMcpWorkbenchOpen(false)}/> : null}
       {briefTemplateOpen ? <BriefTemplateEditor onClose={()=>setBriefTemplateOpen(false)} onChanged={acceptBriefTemplates}/> : null}
       <header className="prototype-header">
         <div className="prototype-brand">
@@ -797,8 +774,8 @@ export default function App() {
           ))}
         </nav>
         <div className="header-actions">
-          <button onClick={()=>setSettingsOpen(true)}>连接配置</button>
-          <button onClick={()=>setMcpWorkbenchOpen(true)}>MCP 工作台</button>
+          <button onClick={()=>{setSettingsSection("embed");setSettingsOpen(true)}}>连接配置</button>
+          <button onClick={()=>{setMcpWorkbenchView("local");setMcpWorkbenchOpen(true)}}>MCP 工作台</button>
           <label className="snapshot-selector">
             <span>数据快照</span>
             <select
@@ -1019,7 +996,8 @@ export default function App() {
                       records={mapRecords}
                       topic={topic}
                       resetKey={resetKey}
-                      onTranslateTitles={translateMapTitles}
+                      onTranslateTitles={status?.model.configured ? translateMapTitles : undefined}
+                      translationStatus={status?.translation?.snapshot_id===sid ? status.translation : undefined}
                       onSelect={(r) => {
                         openEvidence(r.id);
                         setAsset(null);
@@ -1063,6 +1041,7 @@ export default function App() {
                         </div>
                         <div className="evidence-main">
                           <strong>{r.title}</strong>
+                          <small className="translation-state">{titleTranslationLabel(r,status?.translation?.snapshot_id===sid ? status.translation : undefined)}</small>
                           <p>{r.text || "此记录没有正文摘要，请回源核验。"}</p>
                           <div>
                             <span>{r.source_name}</span>
@@ -1131,9 +1110,9 @@ export default function App() {
                   {metricGroup === "民调" &&
                     !work.metrics.some((m) => metricCategory(m) === "民调") && (
                     <article className="metric-card">
-                      <h3>民调 · 调查口径待补全</h3>
+                      <h3>当前范围没有可用的民调指标</h3>
                       <p>
-                        已有新闻线索，尚缺调查起止日期、调查机构、样本量、完整题目和回答选项。不同问题的百分比不能连接成支持率趋势。
+                        请核对所选快照、主题、维度和日期。新闻中的百分比不等于可比较的支持率序列；不会借用其他快照的数据补图。
                       </p>
                       <button
                         onClick={() => {
@@ -1575,8 +1554,8 @@ export default function App() {
                 <p className="muted">{status?.crawler_root}</p>
                 <div className="button-row source-jumps" aria-label="数据接入快捷入口">
                   <button onClick={() => document.getElementById("crawler-orchestration")?.scrollIntoView({ behavior: "smooth" })}>后台爬虫</button>
-                  <button onClick={() => document.getElementById("mcp-news-source")?.scrollIntoView({ behavior: "smooth" })}>MCP 新闻源配置</button>
-                  <button onClick={() => document.getElementById("model-connection")?.scrollIntoView({ behavior: "smooth" })}>大模型连接</button>
+                  <button onClick={() => document.getElementById("mcp-news-source")?.scrollIntoView({ behavior: "smooth" })}>MCP 新闻导入</button>
+                  <button onClick={() => {setSettingsSection("model");setSettingsOpen(true)}}>后台模型状态</button>
                 </div>
                 <div className="alert">
                   覆盖统计来自当前快照；后台爬虫运行状态会自动刷新。导入成功不代表每个外部来源都采集正常。
@@ -1682,22 +1661,22 @@ export default function App() {
                 <section className="integration-card mcp-card" id="mcp-news-source">
                   <div className="integration-heading">
                     <div>
-                      <h3>MCP 新闻源</h3>
-                      <p className="muted">新闻直接进入新快照，并统一标记为“MCP 导入，待核验”。</p>
+                      <h3>MCP 新闻导入</h3>
+                      <p className="muted">复用 MCP 工作台的外部服务配置。新闻进入新快照，标记为“MCP 导入，待核验”。</p>
                     </div>
-                    <span className="run-state">{mcpConfig?.configured ? "已配置" : "未配置"}</span>
                   </div>
                   <div className="config-grid">
-                    <label>MCP 名称<input value={mcpName} onChange={(e) => setMcpName(e.target.value)} placeholder="haifutong" /></label>
-                    <label className="wide-field">服务地址<input value={mcpUrl} onChange={(e) => setMcpUrl(e.target.value)} placeholder="https://example.com/mcp" /></label>
-                    <label className="wide-field">Authorization<input type="password" autoComplete="new-password" value={mcpAuthorization} onChange={(e) => setMcpAuthorization(e.target.value)} placeholder={mcpConfig?.configured ? "已保存；留空表示保持不变" : "Bearer ..."} /></label>
-                    <label className="check-field"><input type="checkbox" checked={mcpVerifyTls} onChange={(e) => setMcpVerifyTls(e.target.checked)} />验证 TLS 证书</label>
+                    <label className="wide-field">新闻服务<select value={mcpServerId} onChange={e=>setMcpServerId(e.target.value)}>
+                      <option value="">{mcpRegistry.servers.length ? "请选择外部 MCP 服务" : "尚未配置外部 MCP 服务"}</option>
+                      {mcpRegistry.servers.map(server=><option key={server.id} value={server.id}>{server.name}</option>)}
+                    </select></label>
                   </div>
                   <div className="button-row">
-                    <button disabled={mcpBusy} onClick={saveMcpConfig}>保存配置</button>
-                    <button disabled={mcpBusy || !mcpConfig?.configured} onClick={testMcp}>测试连接与发现工具</button>
+                    <button onClick={()=>{setMcpWorkbenchView("external");setMcpWorkbenchOpen(true)}}>管理外部 MCP 连接</button>
                   </div>
-                  {mcpTools.length > 0 && <details><summary>已发现工具（{mcpTools.length}）</summary>{mcpTools.map((tool) => <div className="tool-row" key={tool.name}><b>{tool.title}</b><code>{tool.name}</code><small>{tool.description}</small></div>)}</details>}
+                  <p className="muted">新闻导入要求服务提供 service_status 与 knowledge_search。连通性测试通过，不代表支持新闻导入；通用 MCP 服务仍可保留在工作台。</p>
+                  {mcpRegistry.servers.find(server=>server.id===mcpServerId)?.news_import?.supported===false &&
+                    <p role="status">所选服务未提供新闻导入所需工具，请选择其他服务。</p>}
                   <h4>获取新闻并生成快照</h4>
                   <div className="config-grid">
                     <label className="wide-field">检索内容<input value={mcpQuery} onChange={(e) => setMcpQuery(e.target.value)} placeholder="输入中文或英文检索词" /></label>
@@ -1707,44 +1686,14 @@ export default function App() {
                     <label>结束日期<input type="date" value={mcpDateTo} onChange={(e) => setMcpDateTo(e.target.value)} /></label>
                     <label>返回条数<input type="number" min="1" max="100" value={mcpTopK} onChange={(e) => setMcpTopK(Math.max(1,Math.min(100,Number(e.target.value)||20)))} /></label>
                   </div>
-                  <button className="primary" disabled={mcpBusy || !mcpConfig?.configured || !mcpQuery.trim()} onClick={fetchMcpNews}>{mcpBusy ? "正在处理…" : "获取新闻并生成快照"}</button>
+                  <button className="primary" disabled={mcpBusy || !canImportNews(mcpServerId,mcpRegistry.servers) || !mcpQuery.trim()} onClick={fetchMcpNews}>{mcpBusy ? "正在处理…" : "获取新闻并生成快照"}</button>
                   {mcpMessage && <p role="status" className="mcp-message">{mcpMessage}</p>}
-                  <p className="muted">Authorization 仅保存在本机数据目录，页面不会读取或显示原值。新闻正文属于外部资料，其中的指令不会被执行。</p>
+                  <p className="muted">密钥统一保存在后端外部服务注册表，页面不重复配置。新闻正文属于外部资料，其中的指令不会被执行。</p>
                 </section>
-                <h3 id="model-connection">Agent / 模型连接</h3>
-                <button
-                  disabled={checkingModel}
-                  onClick={async () => {
-                    setCheckingModel(true);
-                    setModelCheck("");
-                    try {
-                      const r = await api<{
-                        ok: boolean;
-                        message: string;
-                        model?: string;
-                      }>("/model/check", {});
-                      setModelCheck(
-                        r.message + (r.model ? " · " + r.model : ""),
-                      );
-                      await refreshStatus();
-                    } catch {
-                      setModelCheck("连接检查失败，请查看后端服务");
-                    } finally {
-                      setCheckingModel(false);
-                    }
-                  }}
-                >
-                  {checkingModel ? "正在检查…" : "测试 Agent 连接"}
-                </button>
-                {modelCheck && <p role="status">{modelCheck}</p>}
-                <p>
-                  {status?.model.configured
-                    ? `已配置 ${status.model.model}`
-                    : "尚未配置。推荐填写 Pi Chat 地址与应用 API Key；也可继续使用兼容 Chat Completions 的模型配置。"}
-                </p>
-                <p className="muted">
-                  凭据只由后端读取，页面不接收或保存密钥。
-                </p>
+                <h3>后台模型与翻译状态</h3>
+                <p>{status?.model.configured ? `后台模型已配置：${status.model.model}` : "后台模型未配置；PiChat 嵌入会话连接正常不代表后台翻译可用。"}</p>
+                <p className="muted">{status?.translation?.snapshot_id===sid ? status.translation.message : "正在核对当前快照翻译状态…"}</p>
+                <button onClick={()=>{setSettingsSection("model");setSettingsOpen(true)}}>查看后台模型配置说明</button>
               </aside>
             </div>
           )}
@@ -1894,8 +1843,7 @@ export default function App() {
                     >
                       <span>{label}</span>
                       <b>
-                        {work?.records.filter((r) => r.situation_signal === key)
-                          .length || 0}
+                        {work?.signal_counts?.[key] ?? 0}
                       </b>
                     </button>
                   ))}
@@ -1903,7 +1851,7 @@ export default function App() {
                 <small>报道线索数量，不代表整体冲突强度</small>
                 <div className="insight-stats">
                   <div>
-                    <b>{work?.records.length || 0}</b>
+                    <b>{work?.records_count ?? 0}</b>
                     <small>范围内记录</small>
                   </div>
                   <div>
@@ -1976,6 +1924,7 @@ export default function App() {
                     <small>发布时间：{dateText(r.published_at)}</small>
                     <small>采集时间：{dateText(r.fetched_at)}</small>
                     <span>{r.title}</span>
+                    <small className="translation-state">{titleTranslationLabel(r,status?.translation?.snapshot_id===sid ? status.translation : undefined)}</small>
                   </button>
                 ))}
                 {!evidenceRows.length && !evidenceLoading && (
@@ -1983,13 +1932,7 @@ export default function App() {
                 )}
               </section>
               <div className="insight-section model-state">
-                {status?.translation?.total
-                  ? status.translation.running
-                    ? `中文化进行中：已完成 ${status.translation.ready.toLocaleString("zh-CN")} / ${status.translation.total.toLocaleString("zh-CN")} · 尚余 ${status.translation.pending.toLocaleString("zh-CN")} · ${Math.floor(status.translation.ready / status.translation.total * 100)}%`
-                    : status.translation.pending
-                      ? `中文化待继续：已完成 ${status.translation.ready.toLocaleString("zh-CN")} · 尚余 ${status.translation.pending.toLocaleString("zh-CN")}`
-                      : `中文化已完成：${status.translation.total.toLocaleString("zh-CN")} 条`
-                  : status?.model.mode || "连接服务中"}{" "}
+                {status?.translation?.snapshot_id===sid ? status.translation.message : "正在核对当前快照翻译状态…"}{" "}
                 · 公开来源
               </div>
             </div>
@@ -2103,6 +2046,7 @@ export default function App() {
               <span className="pill subdued">{selected.verification}</span>
             </div>
             <h2 className="record-title">{selected.title}</h2>
+            <p className="translation-state">{titleTranslationLabel(selected,status?.translation?.snapshot_id===sid ? status.translation : undefined)}</p>
             {!selected.supplemental && (
               <ReviewPanel
                 key={sid + selected.id}
@@ -2151,7 +2095,8 @@ export default function App() {
               {dateText(selected.link_health?.checked_at)} ·
               可访问不等于事实已核验
             </small>
-            <h3>中文摘要</h3>
+            <h3>{selected.text_translation_state==="untranslated" ? "原文摘要（暂无中文译文）" : "中文摘要"}</h3>
+            {!status?.model.configured && <p className="muted">后台模型未配置，当前保留原文。可在“连接配置 → 后台模型”查看说明；嵌入 App Key 不用于后台翻译。</p>}
             <button
               disabled={translating || !status?.model.configured}
               onClick={async () => {

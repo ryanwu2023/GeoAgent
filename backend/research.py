@@ -23,6 +23,16 @@ def filtered_records(snapshot, topic="all", dimension="", start="", end=""):
             and (not end or bool(r["published_at"]) and str(r["published_at"])[:10] <= end)]
 
 def metric_view(obs, start="", end=""):
+    # Old finance imports used the same market boilerplate for every series.
+    # Correct only known approval aliases with that exact default, in the
+    # read projection; detailed source methods and frozen snapshots stay intact.
+    if (obs.get("series") in {"taco_trump_approval", "RCPPTAPP_approve"}
+            and obs.get("method") == "来源公开观测；市场行情为已收盘值，非实时价格"):
+        obs = {**obs, "method": "来源公开支持率观测；日频更新不等于每天开展独立调查"}
+        if obs.get("scope") == "共享市场背景":
+            obs["scope"] = "共享民意背景"
+        if obs.get("boundary") == "同期变动不等于冲突因果；行情与官方统计存在发布滞后":
+            obs["boundary"] = "须核对调查机构、调查期、样本与汇总方法；支持率变化不证明冲突因果"
     history = sorted([p for p in obs["history"] if (not start or p["date"] >= start) and (not end or p["date"] <= end)], key=lambda p: p["date"])
     current = history[-1] if history else None
     step=max(1,int(obs.get("comparison_step",1)))
@@ -44,7 +54,10 @@ def metric_view(obs, start="", end=""):
 
 def metrics(snapshot, topic="all", dimension="", start="", end=""):
     topic_series={
-        "usiran":{"brent","wti","gold","dxy","djia","hormuz_total","hormuz_tanker","hormuz_capacity_tanker","hormuz_ma7","hormuz_tanker_share","babelmandeb_total","babelmandeb_tanker","mab_ma7","spr","crude_stocks","xle","ita","ta125","vix","breakeven10","breakeven10_fred","dgs10","real10y_treasury","hy_oas"},
+        # Approval can arrive through the shared finance feed even when TACO's
+        # composite output gate fails. Keep both imported aliases eligible;
+        # the deduplication below still prefers a theme-bound TACO observation.
+        "usiran":{"brent","wti","gold","dxy","djia","hormuz_total","hormuz_tanker","hormuz_capacity_tanker","hormuz_ma7","hormuz_tanker_share","babelmandeb_total","babelmandeb_tanker","mab_ma7","spr","crude_stocks","xle","ita","ta125","vix","breakeven10","breakeven10_fred","dgs10","real10y_treasury","hy_oas","taco_trump_approval","RCPPTAPP_approve"},
         "ukraine":{"ttf_gas","natgas","brent","wheat","corn","gold","djia","eurusd","usdrub","usduah","suez_total","cape_total","cape_vs_suez","bdi","sp500","vix","hy_oas","ig_oas","dgs10",
                    "ru_usdrub_cbr","ru_cbr_key_rate","brent_russia_context","ru_brent_rub_proxy",
                    "eu_gas_storage_twh","eu_gas_storage_full","eu_gas_injection","eu_gas_withdrawal",

@@ -459,8 +459,8 @@ def test_map_cluster_titles_are_batch_translated_and_cached(monkeypatch):
 
     async def fake_complete(messages):
         request = json.loads(messages[-1]['content'])
-        assert request['items'] == [{'id': record['id'], 'title': record['title']}]
-        return json.dumps({'items': [{'id': record['id'], 'title': '伊朗军事补给报告'}]}, ensure_ascii=False), 'test-model'
+        assert request['items'] == [{'id': record['id'], 'text': record['title']}]
+        return json.dumps({'items': [{'id': record['id'], 'text': '伊朗军事补给报告'}]}, ensure_ascii=False), 'test-model'
 
     monkeypatch.setattr('backend.app.llm.complete', fake_complete)
     client = TestClient(app)

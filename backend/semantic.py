@@ -6,7 +6,7 @@ from functools import lru_cache
 from .paths import project_root
 from . import store
 from .chinese import translation_cache, source_name, chinese_text
-from .events import event_metadata
+from .events import SIGNALS, event_metadata
 
 
 @lru_cache(maxsize=1)
@@ -86,6 +86,27 @@ def evidence_semantics(record, review=None, cache=None):
     cache = translation_cache() if cache is None else cache
     fields['points'] = [{**p, 'label': chinese_text(p['label'], cache, '相关地区')} for p in fields['points']]
     return apply_review(fields, review)
+
+
+def risk_panel_counts(records, reviews, *, classify=None):
+    """Count the entire research scope, independent of map or list payloads."""
+    classify = classify or event_metadata
+    signals = {signal: 0 for signal in SIGNALS}
+    categories = {}
+    for record in records:
+        metadata = classify(record)
+        category = metadata['event_category']
+        categories[category] = categories.get(category, 0) + 1
+        review = reviews.get(record['id'])
+        signal = review['signal'] if review is not None else None
+        if signal is None:
+            signal = metadata['situation_signal']
+        signals[signal if signal in signals else 'unknown'] += 1
+    return {
+        'records_count': len(records),
+        'signal_counts': signals,
+        'event_category_counts': dict(sorted(categories.items())),
+    }
 
 
 def search_evidence(records, query):

@@ -4,7 +4,8 @@ import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import {MapboxOverlay} from '@deck.gl/mapbox';
 import {ScatterplotLayer,TextLayer,LineLayer} from '@deck.gl/layers';
 import {Focus,Globe2,Layers,X} from 'lucide-react';
-import type {MapEvidence,Point} from './types';
+import type {MapEvidence,Point,TranslationStatus} from './types';
+import {titleTranslationLabel} from './source_status';
 import 'maplibre-gl/dist/maplibre-gl.css';
 // MapLibre 6 ships its worker as a separate module.  Give Vite an explicit
 // asset URL so production builds do not rely on a blob worker that browsers
@@ -27,7 +28,7 @@ const signals:Record<string,string>={all:'全部动态',escalation:'升级相关
 const majorCountries=new Set(['USA','CAN','BRA','RUS','CHN','IND','AUS','ZAF','EGY','IRN','SAU','TUR','UKR','FRA','DEU','GBR','JPN','MEX','ARG','KAZ']);
 const places=[{label:'霍尔木兹海峡',position:[56.25,26.57]},{label:'曼德海峡',position:[43.33,12.58]},{label:'红海',position:[38,20]},{label:'阿拉伯海',position:[64,15]}];
 const ukrainePlaces=[{label:'黑海',position:[34,43]},{label:'亚速海',position:[36.7,46]}];
-export default function MapView({records,topic,onSelect,onTranslateTitles,resetKey=0}:{records:MapEvidence[];topic:string;onSelect:(r:MapEvidence)=>void;onTranslateTitles?:(ids:string[])=>Promise<Record<string,string>>;resetKey?:number}){
+export default function MapView({records,topic,onSelect,onTranslateTitles,translationStatus,resetKey=0}:{records:MapEvidence[];topic:string;onSelect:(r:MapEvidence)=>void;onTranslateTitles?:(ids:string[])=>Promise<Record<string,string>>;translationStatus?:TranslationStatus;resetKey?:number}){
   const host=useRef<HTMLDivElement>(null),map=useRef<maplibregl.Map|null>(null),overlay=useRef<MapboxOverlay|null>(null);
   const [legendOpen,setLegendOpen]=useState(()=>window.innerWidth>900);
   const [error,setError]=useState(''),[layers,setLayers]=useState<Record<string,boolean>>(Object.fromEntries(Object.keys(categories).map(k=>[k,true]))),[signal,setSignal]=useState('all');
@@ -61,11 +62,11 @@ export default function MapView({records,topic,onSelect,onTranslateTitles,resetK
   useEffect(()=>setCluster([]),[layers,signal]);
   useEffect(()=>{
     const updated=new Map(records.map(record=>[record.id,record]));
-    setCluster(current=>current.map(marker=>updated.has(marker.record.id)?{...marker,record:updated.get(marker.record.id)!}:marker));
+    setCluster(current=>current.filter(marker=>updated.has(marker.record.id)).map(marker=>({...marker,record:updated.get(marker.record.id)!})));
   },[records]);
   async function openCluster(items:Marker[]){
     setCluster(items);
-    const ids=[...new Set(items.filter(item=>item.record.title.includes('中文译文准备中')).map(item=>item.record.id))].slice(0,12);
+    const ids=[...new Set(items.filter(item=>item.record.title_translation_state==='untranslated').map(item=>item.record.id))].slice(0,12);
     const key=ids.slice().sort().join('|');
     if(!ids.length||!translateTitles.current||translationRequests.current.has(key))return;
     translationRequests.current.add(key);setTranslatingCluster(true);
@@ -73,7 +74,7 @@ export default function MapView({records,topic,onSelect,onTranslateTitles,resetK
     try{
       const titles=await translateTitles.current(ids);
       completed=Object.keys(titles).length>0;
-      if(completed)setCluster(current=>current.map(marker=>titles[marker.record.id]?{...marker,record:{...marker.record,title:titles[marker.record.id]}}:marker));
+      if(completed)setCluster(current=>current.map(marker=>titles[marker.record.id]?{...marker,record:{...marker.record,title:titles[marker.record.id],title_translation_state:'ready'}}:marker));
     }finally{if(!completed)translationRequests.current.delete(key);setTranslatingCluster(false)}
   }
   useEffect(()=>{
@@ -112,7 +113,7 @@ export default function MapView({records,topic,onSelect,onTranslateTitles,resetK
     <div className="map-signal-tabs">{Object.entries(signals).map(([key,label])=><button key={key} className={signal===key?'selected':''} onClick={()=>setSignal(key)}>{label}{key!=='all'&&<i style={{background:`rgb(${colors[key].slice(0,3).join(',')})`}}/>}</button>)}</div>
     <div className="map-badge"><b>{topic==='ukraine'?'俄乌冲突':topic==='all'?'双主题':'美伊局势'} · 综合动态</b><p>军事、外交、政策、能源与社会动态</p><small>地图展示 {count} 条动态 · 当前分类 {filtered.length} 条 · 点位大小固定</small></div>
     <div className="map-legend"><button className="legend-heading" aria-expanded={legendOpen} aria-label="事件图层" onClick={()=>setLegendOpen(v=>!v)}><Layers size={13}/>事件类型 · {legendOpen?'收起':'展开'}</button>{legendOpen&&<>{Object.entries(categories).map(([key,label])=><label key={key}><input type="checkbox" checked={layers[key]} onChange={e=>setLayers({...layers,[key]:e.target.checked})}/>{label}<span>{records.filter(r=>r.event_category===key).length}</span></label>)}<small>点位大小固定；数字为报道数，同地点错开展示</small></>}</div>
-    {cluster.length>1&&<div className="map-cluster"><div><b>{placeLabel(cluster)} · 关联报道{translatingCluster?' · 正在生成中文标题':''}</b><button aria-label="关闭地点列表" onClick={()=>setCluster([])}><X size={14}/></button></div>{Array.from(new Map(cluster.map(p=>[p.record.id,p])).values()).map(p=><button key={p.record.id} onClick={()=>onSelect(p.record)}>{p.record.title}<small style={{display:'block',marginTop:6,color:'#9eb4c7'}}>{placeLabel(cluster.filter(x=>x.record.id===p.record.id))} · {placeNote(cluster.find(x=>x.record.id===p.record.id&&x.label==='岩国')||p)}</small></button>)}</div>}
+    {cluster.length>1&&<div className="map-cluster"><div><b>{placeLabel(cluster)} · 关联报道{translatingCluster?' · 正在生成中文标题':''}</b><button aria-label="关闭地点列表" onClick={()=>setCluster([])}><X size={14}/></button></div>{Array.from(new Map(cluster.map(p=>[p.record.id,p])).values()).map(p=><button key={p.record.id} onClick={()=>onSelect(p.record)}>{p.record.title}<small className="translation-state">{titleTranslationLabel(p.record,translationStatus)}</small><small style={{display:'block',marginTop:6,color:'#9eb4c7'}}>{placeLabel(cluster.filter(x=>x.record.id===p.record.id))} · {placeNote(cluster.find(x=>x.record.id===p.record.id&&x.label==='岩国')||p)}</small></button>)}</div>}
     {error&&<div className="map-error">{error}</div>}
     {!count&&<div className="map-no-points">当前分类暂无可定位动态，可在证据台账查看全部报道</div>}
   </div>

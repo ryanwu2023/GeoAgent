@@ -16,6 +16,21 @@ from .mcp_news import McpClient
 from .store import data_dir
 
 REGISTRY_VERSION = 1
+NEWS_REQUIRED_TOOLS = ("service_status", "knowledge_search")
+
+
+def news_import_capability(tools: list | None) -> dict:
+    """Tool discovery proves the news contract, not source freshness/availability."""
+    names = {
+        str(item.get("name", "")) if isinstance(item, dict) else str(item)
+        for item in tools or []
+    }
+    missing = [name for name in NEWS_REQUIRED_TOOLS if name not in names]
+    return {
+        "supported": None if tools is None else not missing,
+        "required_tools": list(NEWS_REQUIRED_TOOLS),
+        "missing_tools": [] if tools is None else missing,
+    }
 
 
 def _registry_path() -> Path:
@@ -50,7 +65,9 @@ def _safe_error(exc: Exception, authorization: str) -> str:
     if response is not None and getattr(response, "status_code", None):
         reason = getattr(response, "reason_phrase", "")
         return f"目标服务返回 HTTP {response.status_code}{f' {reason}' if reason else ''}"
-    message = str(exc).replace(authorization, "***")
+    message = str(exc)
+    if authorization:
+        message = message.replace(authorization, "***")
     token = authorization.removeprefix("Bearer ")
     if token:
         message = message.replace(token, "***")
@@ -80,6 +97,12 @@ def _public(server: dict) -> dict:
         "type": server.get("type", "http"),
         "url": server.get("url", ""),
         "configured": bool(server.get("url") and server.get("authorization")),
+        "verify_tls": bool(server.get("verify_tls", True)),
+        "news_import": (
+            last_test["news_import"]
+            if last_test and isinstance(last_test.get("news_import"), dict)
+            else news_import_capability(None)
+        ),
         "created_at": server.get("created_at"),
         "updated_at": server.get("updated_at"),
         "last_test": last_test,
@@ -95,15 +118,23 @@ def _write_registry(registry: dict) -> None:
 
 
 def _migrate_legacy() -> dict:
+    # Persist even an empty registry, so a deleted connection is never resurrected
+    # by a later read of the old file. The legacy file is a retained backup only.
+    registry = {"version": REGISTRY_VERSION, "servers": []}
     legacy_path = _legacy_path()
     if not legacy_path.is_file():
-        return {"version": REGISTRY_VERSION, "servers": []}
+        _write_registry(registry)
+        return registry
     try:
         legacy = json.loads(legacy_path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError):
-        return {"version": REGISTRY_VERSION, "servers": []}
-    if not legacy.get("url") or not legacy.get("authorization"):
-        return {"version": REGISTRY_VERSION, "servers": []}
+        _write_registry(registry)
+        return registry
+    if not isinstance(legacy, dict) or not legacy.get("url") or not legacy.get("authorization"):
+        _write_registry(registry)
+        return registry
+    # Do not migrate unsafe URLs (credentials/query strings must never be public).
+    _validate_url(str(legacy["url"]))
     stamp = _now()
     server = {
         "id": _slug(str(legacy.get("name") or "mcp-news")),
@@ -129,6 +160,8 @@ def load_registry() -> dict:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError) as exc:
         raise ValueError("外部 MCP 服务注册表无法读取") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("外部 MCP 服务注册表格式无效")
     servers = payload.get("servers")
     if not isinstance(servers, list):
         raise ValueError("外部 MCP 服务注册表格式无效")
@@ -146,7 +179,23 @@ def _existing_server(registry: dict, server_id: str | None) -> dict | None:
     return next((item for item in registry["servers"] if item.get("id") == server_id), None)
 
 
-def prepare_draft(server_id: str | None, name: str, transport: str, url: str, key: str) -> tuple[dict, dict]:
+def resolve_server(server_id: str | None = None) -> dict | None:
+    """Resolve explicitly, or retain the former single-connection default."""
+    registry = load_registry()
+    if server_id:
+        server = _existing_server(registry, server_id)
+        if server is None:
+            raise ValueError("所选外部 MCP 服务不存在，请重新选择")
+        return dict(server)
+    if len(registry["servers"]) > 1:
+        raise ValueError("已配置多个外部 MCP 服务，请明确选择 server_id")
+    return dict(registry["servers"][0]) if registry["servers"] else None
+
+
+def prepare_draft(
+    server_id: str | None, name: str, transport: str, url: str, key: str,
+    verify_tls: bool | None = None,
+) -> tuple[dict, dict]:
     registry = load_registry()
     existing = _existing_server(registry, server_id)
     if server_id and existing is None:
@@ -178,15 +227,21 @@ def prepare_draft(server_id: str | None, name: str, transport: str, url: str, ke
         "type": transport,
         "url": _validate_url(url),
         "authorization": authorization,
-        "verify_tls": True,
+        "verify_tls": (
+            bool(verify_tls) if verify_tls is not None
+            else bool(existing.get("verify_tls", True)) if existing else True
+        ),
         "created_at": existing.get("created_at") if existing else stamp,
         "updated_at": stamp,
     }
     return registry, draft
 
 
-async def test_and_save(server_id: str | None, name: str, transport: str, url: str, key: str) -> dict:
-    registry, draft = prepare_draft(server_id, name, transport, url, key)
+async def test_and_save(
+    server_id: str | None, name: str, transport: str, url: str, key: str,
+    verify_tls: bool | None = None,
+) -> dict:
+    registry, draft = prepare_draft(server_id, name, transport, url, key, verify_tls)
     started = perf_counter()
     client = McpClient(draft)
     try:
@@ -207,6 +262,7 @@ async def test_and_save(server_id: str | None, name: str, transport: str, url: s
         "duration_ms": duration_ms,
         "tool_count": len(tools),
         "tool_names": names[:20],
+        "news_import": news_import_capability(names),
     }
     if server_id:
         registry["servers"] = [draft if item.get("id") == server_id else item for item in registry["servers"]]

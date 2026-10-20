@@ -5,12 +5,10 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlsplit
 
 import httpx
 
 from .paths import collector_data_root
-from .store import data_dir
 
 PROTOCOL_VERSION = "2025-03-26"
 DEFAULT_CONFIG = {
@@ -21,50 +19,57 @@ DEFAULT_CONFIG = {
 }
 
 
-def _config_path() -> Path:
-    return data_dir() / "mcp-config.json"
+def load_config(server_id: str | None = None) -> dict:
+    # Local imports avoid a cycle: the registry uses this module's MCP transport,
+    # while the old single-connection API is now only a facade over that registry.
+    from .external_mcp import resolve_server
+    return resolve_server(server_id) or dict(DEFAULT_CONFIG)
 
 
-def load_config() -> dict:
-    path = _config_path()
-    if not path.is_file():
-        return dict(DEFAULT_CONFIG)
-    try:
-        saved = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, TypeError):
-        return dict(DEFAULT_CONFIG)
-    return {**DEFAULT_CONFIG, **{k: saved.get(k, v) for k, v in DEFAULT_CONFIG.items()}}
-
-
-def public_config(config: dict | None = None) -> dict:
-    config = config or load_config()
+def public_config(config: dict | None = None, server_id: str | None = None) -> dict:
+    from .external_mcp import load_registry
+    if config is None and server_id is None:
+        servers = load_registry()["servers"]
+        if len(servers) > 1:
+            return {
+                "name": "", "url": "", "configured": False, "verify_tls": True,
+                "server_id": None, "selection_required": True,
+            }
+    config = config if config is not None else load_config(server_id)
     return {
         "name": config.get("name", ""),
         "url": config.get("url", ""),
         "configured": bool(config.get("url") and config.get("authorization")),
         "verify_tls": bool(config.get("verify_tls", True)),
+        "server_id": config.get("id"),
+        "selection_required": False,
     }
 
 
-def save_config(name: str, url: str, authorization: str, verify_tls: bool) -> dict:
-    parsed = urlsplit(url.strip())
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
-        raise ValueError("MCP 地址必须是有效的 HTTP 或 HTTPS URL")
-    previous = load_config()
+def save_config(
+    name: str, url: str, authorization: str, verify_tls: bool,
+    server_id: str | None = None,
+) -> dict:
+    from .external_mcp import prepare_draft, _write_registry
+    previous = load_config(server_id)
     secret = authorization.strip() or previous.get("authorization", "")
     if not secret:
         raise ValueError("请填写 Authorization")
-    config = {
-        "name": (name.strip() or "mcp-news")[:80],
-        "url": url.strip(),
-        "authorization": secret,
-        "verify_tls": bool(verify_tls),
-    }
-    path = _config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporary.replace(path)
+    selected_id = previous.get("id")
+    registry, config = prepare_draft(
+        selected_id, name.strip() or "mcp-news", "http", url, secret, verify_tls
+    )
+    # Compatibility API accepts a full Authorization header, as before. It saves
+    # but does not assert connectivity; never retain a prior successful test.
+    config["authorization"] = secret
+    config["last_test"] = None
+    if selected_id:
+        registry["servers"] = [
+            config if item.get("id") == selected_id else item for item in registry["servers"]
+        ]
+    else:
+        registry["servers"].append(config)
+    _write_registry(registry)
     return public_config(config)
 
 

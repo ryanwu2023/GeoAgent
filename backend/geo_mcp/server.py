@@ -23,7 +23,7 @@ from starlette.concurrency import run_in_threadpool
 
 from backend import research, store
 from backend.geo_mcp.provenance import collection_snapshot_boundary
-from backend.semantic import metric_semantics, interval_change, validate_dates, search_evidence, evidence_semantics, review_index, map_projection, collector_comparison
+from backend.semantic import metric_semantics, interval_change, validate_dates, search_evidence, evidence_semantics, review_index, map_projection, collector_comparison, risk_panel_counts
 from backend.link_health import link_health
 from backend.chinese import localize_brief_markdown, compare_brief_markdown
 from backend.semantic import project_labels
@@ -108,27 +108,15 @@ def _workspace_counts(snapshot: dict[str, Any], topic: str, dimension: str, star
             "SELECT record_id, signal, version, created_at FROM reviews WHERE snapshot_id=? ORDER BY version",
             (snapshot["id"],),
         ).fetchall()
-    reviews = {row["record_id"]: row["signal"] for row in rows}
     latest_reviews = {row["record_id"]: row for row in rows}
     applied_reviews = [latest_reviews[item["id"]] for item in records if item["id"] in latest_reviews]
-    counts = {signal: 0 for signal in SIGNALS}
-    category_counts: dict[str, int] = {}
-    for item in records:
-        metadata = event_metadata(item)
-        category = metadata['event_category']
-        category_counts[category] = category_counts.get(category, 0) + 1
-        signal = reviews.get(item["id"])
-        if signal is None:
-            signal = metadata["situation_signal"]
-        counts[signal if signal in counts else "unknown"] += 1
+    counts = risk_panel_counts(records, latest_reviews, classify=event_metadata)
     coverage = research.coverage(snapshot, start=start, end=end)
     dimensions = [item for row in coverage for item in row["dimensions"]]
     return {
         "analysis_evidence_boundary": _analysis_evidence_boundary(),
-        "records_count": len(records),
+        **counts,
         "supplemental_records_count": sum(bool(item.get("supplemental")) for item in records),
-        "signal_counts": counts,
-        "event_category_counts": dict(sorted(category_counts.items())),
         "event_category_basis": "当前topic/dimension/日期范围全部记录的自动事件分类，可能含地图图例未展示类别；不应用地图图层、信号或地理点位筛选，不能冒充地图可见点数。",
         "signal_labels": SIGNALS,
         "counting_projection_version": "risk-panel-signals/v2",
