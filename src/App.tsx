@@ -15,6 +15,8 @@ import {
   Globe2,
   Layers,
   MessageSquare,
+  Maximize2,
+  Minimize2,
   RefreshCw,
   Search,
   Send,
@@ -149,6 +151,7 @@ export default function App() {
   const [connection,setConnection] = useState({origin:"http://127.0.0.1:9172",agent_id:"geo-research-assistant",product_user_id:"geoagent-local"});
   const [connectionLoaded,setConnectionLoaded] = useState(false);
   const [connectionVersion,setConnectionVersion] = useState(0);
+  const [chatExpanded,setChatExpanded] = useState(false);
   const pichatOrigin = connection.origin;
   const pichatAgentId = connection.agent_id;
   const reloadConnection = async () => {
@@ -659,7 +662,7 @@ export default function App() {
         </div>
       )}
       <div className={`prototype-grid ${tab === "pipeline" ? "pipeline-mode" : ""}`}>
-        <main className="monitor-panel">
+        <main className={`monitor-panel${chatOpen ? " monitor-panel-chat" : ""}`}>
           <div className="monitor-tabs">
             {[
               ["map", "风险监测"],
@@ -1525,27 +1528,39 @@ export default function App() {
             </div>
           )}
           {chatOpen && (
-            <aside className="chat-panel">
-              <div className="drawer-heading">
-                <div>
+            <aside className={`chat-panel${chatExpanded ? " chat-panel-expanded" : ""}`} aria-label="GeoAgent 研究助手">
+              <div className="drawer-heading chat-panel-heading">
+                <div className="chat-panel-caption">
                   <h2>
                     <MessageSquare size={18} />
                     GeoAgent 研究助手
                   </h2>
-                  <small>
-                    PiChat Agent · {pichatAgentId} · {names[topic]} · 工作快照 {workingSid.slice(0, 8) || "未确认"}
-                  </small>
-                  <small role="status" aria-label="看板范围同步状态">{viewBridge.status}。仅同步快照、主题、维度、日期。</small>
+                  <span className="chat-panel-scope">{names[topic]} · 快照 {workingSid.slice(0, 8) || "未确认"}</span>
+                  <details className="chat-panel-context">
+                    <summary>连接与范围</summary>
+                    <div>
+                      <small>PiChat Agent · {pichatAgentId}</small>
+                      <small role="status" aria-label="看板范围同步状态">{viewBridge.status}。仅同步快照、主题、维度、日期。</small>
+                    </div>
+                  </details>
                 </div>
-                <button
-                  aria-label="关闭研究助手"
-                  onClick={() => {
-                    setChatOpen(false);
-                    setTab("map");
-                  }}
-                >
-                  <X />
-                </button>
+                <div className="chat-panel-actions">
+                  <button type="button" aria-label={chatExpanded ? "还原对话面板" : "放大对话面板"}
+                    aria-pressed={chatExpanded} title={chatExpanded ? "还原对话面板" : "放大对话面板"}
+                    onClick={()=>setChatExpanded(value=>!value)}>
+                    {chatExpanded ? <Minimize2 size={18}/> : <Maximize2 size={18}/>}
+                  </button>
+                  <button
+                    aria-label="关闭研究助手"
+                    onClick={() => {
+                      setChatOpen(false);
+                      setChatExpanded(false);
+                      setTab("map");
+                    }}
+                  >
+                    <X />
+                  </button>
+                </div>
               </div>
               <div className="pichat-embed-shell">
                 {!pichatReady && !pichatAuthRequired && !pichatError && (
