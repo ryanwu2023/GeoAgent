@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import type {RefObject} from 'react';
-import {EmbedIdentity, EmbedIdentityFailure} from './embedIdentity';
+import {EmbedIdentity, EmbedIdentityFailure, identityResponseFailure} from './embedIdentity';
 import {trustedViewSource} from './hostViewContext';
 import {embedAuthPayload} from './embedAuthPayload';
 
@@ -22,8 +22,7 @@ export function useEmbedIdentity(frame: RefObject<HTMLIFrameElement|null>, origi
       fetchToken:async signal=>{
         const response=await fetch(`/api/pichat/embed-identity?agent_id=${encodeURIComponent(agentId)}`,
           {signal,cache:'no-store'});
-        if (!response.ok) throw new EmbedIdentityFailure('Identity rejected',
-          [408,429,500,502,504].includes(response.status));
+        if (!response.ok) throw identityResponseFailure(response.status, await response.json().catch(()=>null));
         const body=await response.json().catch(()=>{throw new EmbedIdentityFailure('Invalid identity response');});
         let issued: ReturnType<typeof embedAuthPayload>;
         try {issued = embedAuthPayload(body);}

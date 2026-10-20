@@ -112,6 +112,11 @@ async def pichat_embed_identity(agent_id: str = "geo-research-assistant"):
             )
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"PiChat 身份服务不可用: {exc}") from exc
+    if response.status_code in (401, 403):
+        # Credential/policy failures are not transient transport failures.
+        # Never forward the upstream body (which can contain private details).
+        code = "PICHAT_APP_KEY_REJECTED" if response.status_code == 401 else "PICHAT_EMBED_FORBIDDEN"
+        raise HTTPException(status_code=502, detail={"code": code, "upstream_status": response.status_code})
     if response.status_code >= 400:
         raise HTTPException(status_code=502, detail=f"PiChat 身份签发失败: HTTP {response.status_code}")
     try:

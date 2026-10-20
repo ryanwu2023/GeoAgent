@@ -198,6 +198,20 @@ def test_identity_uses_saved_config_without_restart(client, monkeypatch):
     assert "pk-private" not in result.text
 
 
+@pytest.mark.parametrize('status,code', [(401, 'PICHAT_APP_KEY_REJECTED'), (403, 'PICHAT_EMBED_FORBIDDEN')])
+def test_identity_rejection_is_classified_without_upstream_private_body(client, monkeypatch, status, code):
+    original_client = httpx.AsyncClient
+    transport = httpx.MockTransport(lambda request: httpx.Response(status, json={'private': 'secret-body'}))
+    monkeypatch.setattr('backend.app.httpx.AsyncClient', lambda **kwargs: original_client(transport=transport, **kwargs))
+    client.put('/api/integrations/pichat', json=dict(origin='https://pichat.example.com', agent_id='geo',
+               app_key='pk-private', phone='13000000000', entry='geo', product_user_id='geo-test'))
+    result = client.get('/api/pichat/embed-identity')
+    assert result.status_code == 502
+    assert result.json()['detail'] == {'code': code, 'upstream_status': status}
+    assert 'secret-body' not in result.text and 'pk-private' not in result.text
+    assert result.headers['cache-control'] == 'no-store'
+
+
 def test_gateway_headers_not_required_but_cross_site_still_rejected(client, monkeypatch):
     monkeypatch.delenv("GEOAGENT_SETTINGS_TOKEN")
     with TestClient(app, base_url="https://geo.example.com", client=("127.0.0.1", 8080)) as proxy:

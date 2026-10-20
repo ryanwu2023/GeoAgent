@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {EmbedIdentity,EmbedIdentityFailure,EMBED_IDENTITY_TIMEOUT_MS,EMBED_READY_TIMEOUT_MS,EMBED_SLOW_NOTICE_MS}=process.env.GEO_IDENTITY_JS ? require(process.env.GEO_IDENTITY_JS) : require('./load_ts.cjs')('src/embedIdentity.ts');
+const {EmbedIdentity,EmbedIdentityFailure,identityResponseFailure,EMBED_IDENTITY_TIMEOUT_MS,EMBED_READY_TIMEOUT_MS,EMBED_SLOW_NOTICE_MS}=process.env.GEO_IDENTITY_JS ? require(process.env.GEO_IDENTITY_JS) : require('./load_ts.cjs')('src/embedIdentity.ts');
 const token=(exp,tag='a')=>`header.${Buffer.from(JSON.stringify({exp,tag})).toString('base64url')}.signature`;
 function harness(onDeliver){
   let now=100000,calls=0;const deliveries=[],states=[],timers=new Map(),queue=[];let id=0;
@@ -10,6 +10,21 @@ function harness(onDeliver){
     schedule:(fn,ms)=>{timers.set(++id,{fn,ms});return id;},cancel:i=>timers.delete(i)});
   return {machine,deliveries,states,timers,queue,get calls(){return calls;},time:n=>now=n};
 }
+test('rejected app key is actionable and never automatically retried or delivered',async()=>{
+ const h=harness(),p=h.machine.request();
+ const failure=identityResponseFailure(502,{detail:{code:'PICHAT_APP_KEY_REJECTED',private:'never render'}});
+ h.queue[0].reject(failure);await p;
+ assert.equal(failure.retryable,false);assert.match(h.states.at(-1)[1],/Key 无效、已到期或已撤销/);
+ assert.ok(!h.states.at(-1)[1].includes('never render'));
+ await h.machine.request(true);await h.machine.frameLoaded();
+ assert.equal(h.calls,1);assert.equal(h.deliveries.length,0);assert.equal(h.timers.size,0);
+});
+test('policy rejection differs from transient service errors and ignores untrusted messages',()=>{
+ const failure=identityResponseFailure(502,{detail:{code:'PICHAT_EMBED_FORBIDDEN'}});
+ assert.equal(failure.retryable,false);assert.match(failure.publicMessage,/入口、Agent 和来源/);
+ assert.equal(identityResponseFailure(503,{detail:'secret text'}).retryable,true);
+ assert.equal(identityResponseFailure(401,{detail:'secret text'}).publicMessage,undefined);
+});
 test('first load coalesces ordinary requests; valid cache reused',async()=>{
  const h=harness(),a=h.machine.request(),b=h.machine.request();
  assert.equal(h.calls,1);h.queue[0].resolve(token(1000));await Promise.all([a,b]);
