@@ -810,3 +810,13 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 最终隔离回归：后端 **473 passed、2 skipped**（22.77秒），前端 **82/82**，独立简报 **2/2**，TypeScript/Vite 构建、仓库审计（`ok=true`、无发现）、diff 检查均通过。测试禁用真实供应商网络和翻译子进程，未重启本地服务。临时证据 `/tmp/geoagent-release-final-uhpPjP/` 不入 Git。
 - 本机 `.env`、运行数据、`model-settings.json`、密钥和临时截图不提交或打包；不自动把本地 DeepSeek Key 迁移到生产。生产模型是否配置、实际调用与 Agent 嵌入验收需单独记录，不能用本地小样本成功代替线上验证。
 - **当前交付阻断**：代码提交 `d3cae03`，分支 `codex/backend-model-and-source-config`；执行创建 MR 的 SSH push 时，`192.168.100.208:22` 建连超时。随后有界复核 SSH `ls-remote` 及 GitLab HTTPS 的 IPv4/IPv6 均超时，已登录 GitLab 浏览器刷新也未完成。该证据只能确认当前到 GitLab 的网络不可达，不能断言是服务故障或 VPN 根因；未修改 VPN/TUN、路由、DNS 或认证。未成功 push、未创建 MR/版本标签、未触发部署，生产尚未接收本轮修复；待 GitLab 可达后继续既定门禁。
+
+### 2026-10-20：v1.0.24 生产发布、DeepSeek 配置与试译路径补验
+
+- 网络恢复后已 push 并建立 [MR !15](https://gitlab.lz.internal/yujunjun/GeoAgent/-/merge_requests/15)，MR 流水线5713通过；用户在 GitLab 合并为 `8658cc0599c1f74ad50bbb5edec40184ac94d7ab`。main流水线5714通过，保护标签 `geoagent-prod-v1.0.24` 的[流水线5715](https://gitlab.lz.internal/yujunjun/GeoAgent/-/pipelines/5715)验证29412、生产部署29413均通过。部署完成于 `2026-10-20T13:47:27Z`，镜像摘要 `sha256:383628c3757eaf9ecd3d511c3a15b205b5c5768cdb32bb98781ea6d07fc8430c`。未触发回滚。
+- 双公网域名的发布探针均通过：匿名401、initialize200、initialized202、tools/list200（17工具）、真实快照tools/call200。一次性 release-live Key 已撤销，PiChat 原应用 Key、公开地址及绑定身份保持；这不替代浏览器内真实问答验收。
+- 用户单独授权“同步本地 DeepSeek 配置并试译”后，通过生产后台 API 保存已验证的本地 DeepSeek 配置：`https://api.deepseek.com`、`deepseek-flash`、90秒。密钥只从已忽略的本地0600文件在内存中传至授权生产配置接口，不回显、不加入 Git。生产重读公开配置为 `source=saved / configured=true / api_key_configured=true`。
+- **保存配置试译通过**：生产 `POST /api/model/check` 经共享 `translation_service → llm.complete` 实际返回“报告列出了10月20日的12艘船只。”，原文为“The report lists 12 ships on 20 October.”，基础校验无问题。前后工作快照均 `a1a2233be7bb14fec9cf0396`、快照数5、批量翻译running=false；没有因本次保存/试译主动启动批量或重启。页面按需标题翻译属于另一条调用路径，不把全站模型调用数描述为只有一次。
+- **UI 504 单独保留**：随后外置 Chrome 的“测试草稿”页面出现“后台模型服务返回非 JSON 响应（HTTP 504）”。不能以 `/api/model/check` 的成功关闭该问题：UI 调用 `/api/integrations/model/test`，生产网关该 location 未设置读超时，落入 Nginx 默认60秒；已保存配置试译走另一个显式300秒 location。DeepSeek默认允许90秒，两个路径存在确定的不一致。未取得当次生产gateway错误日志，因此不将此推断写成该次日志已证实的根因。
+- **最小修复及可重复证据**：仅为 `/api/integrations` 配齐 `proxy_read_timeout 300s`，不改认证、凭据、TLS或供应商超时。生产同版 Nginx 1.28.0 对同一65秒本地模拟上游，旧配置 **60.052秒 → 504 text/html**（日志 `upstream timed out ... while reading response header`），新配置 **65.033秒 → 200 application/json**。两组匿名401、可信身份头覆盖伪造输入、MCP清空身份头均通过；26项局部回归通过。CI仅挂载gateway单个公开配置文件供回归测试，不将运行数据/密钥或整个仓库带入镜像。模拟容器及虚构凭据已清理，不产生供应商费用。此补丁待后续MR/发布与真实UI路径验收，不将本地A/B当作生产已修复。
+- 外置 Chrome 接管后观察到嵌入从“正在获取身份”自动恢复为ready、范围r2已接收、底部输入区可用，历史4轮保留；已发送第5轮 `v1.0.24 acceptance` 只读取数问题，最终工具回执与回答仍待核对。原生浏览器控制曾被人工操作/窗口不可用打断，未将仅看到历史回答当作本轮通过。证据和配置试译公开回执位于本机 `/tmp/geoagent-v124-live-awacyL/`，不进入Git。

@@ -28,6 +28,7 @@ case ${1:-} in
       --env COLLECTOR_DATA_ROOT=/tmp/geoagent-ci-data/collector-output --env HOME=/tmp \
       --mount "type=bind,source=$PWD/release,target=/reports" \
       --mount "type=bind,source=$PWD/tests,target=/app/tests,readonly" \
+      --mount "type=bind,source=$PWD/deploy/gateway.conf,target=/app/deploy/gateway.conf,readonly" \
       --entrypoint python "$candidate" -m scripts.ci.verify
     # Export the image that passed tests. Deploy never rebuilds it.
     if [[ -n ${CI_COMMIT_TAG:-} ]]; then
