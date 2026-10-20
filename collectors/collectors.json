@@ -24,6 +24,7 @@
     {"id":"ukraine-aid-monitor","name_zh":"乌克兰后援监测","topics":["ukraine"],"entrypoint":"ukraine_aid_monitor.py","selftest_args":["--selftest"],"output_kind":"records-jsonl","enabled":true},
     {"id":"ukraine-external-sector-monitor","name_zh":"乌克兰外部收支监测","topics":["ukraine"],"entrypoint":"ukraine_external_sector_monitor.py","selftest_args":["--selftest"],"output_kind":"geo-v6","enabled":true},
     {"id":"ukraine-grain-monitor","name_zh":"乌克兰粮食供需监测","topics":["ukraine"],"entrypoint":"ukraine_grain_monitor.py","selftest_args":["--selftest"],"output_kind":"geo-v6","enabled":true},
+    {"id":"ukraine-opinion-monitor","name_zh":"俄乌相关民调（俄罗斯受访者）","topics":["ukraine"],"entrypoint":"ukraine_opinion_monitor.py","selftest_args":["--selftest"],"output_kind":"geo-v6","enabled":true},
     {"id":"xinhua-monitor","name_zh":"新华社冲突动态监测","topics":["usiran","ukraine"],"entrypoint":"xinhua_monitor.py","selftest_args":["--selftest"],"output_kind":"geo-v6","enabled":true},
     {"id":"taco-monitor","name_zh":"TACO资产压力监测","topics":["usiran"],"entrypoint":"taco_monitor.py","selftest_args":["--selftest"],"output_kind":"taco","enabled":true}
   ]

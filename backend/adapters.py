@@ -342,6 +342,25 @@ def load_bundle(root: Path):
                 raise ValueError("同一适配器内记录 ID 不可重复")
             local_ids[raw["id"]] = record["id"]
             merge(record, archive)
+            # Optional source documents stay inside this collector's raw folder.
+            # Archive them alongside the normalized extension for frozen audit.
+            raw_files = raw.get("raw_files", [])
+            if not isinstance(raw_files, list) or len(raw_files) > 10:
+                raise ValueError("扩展原始证据必须是至多 10 个相对路径")
+            for relative in raw_files:
+                if not isinstance(relative, str):
+                    raise ValueError("扩展原始证据路径必须为字符串")
+                raw_path = (file.parent / relative).resolve()
+                raw_root = (file.parent / "raw").resolve()
+                if (not raw_root.is_relative_to(file.parent.resolve())
+                        or not raw_path.is_relative_to(raw_root) or not raw_path.is_file()
+                        or raw_path.suffix not in {".html", ".json", ".xml", ".csv", ".txt"}
+                        or raw_path.stat().st_size > 2 * 1024 * 1024):
+                    raise ValueError("扩展原始证据必须为本采集器 raw 目录内不超过 2 MiB 的文本文件")
+                read(raw_path, False)
+                refs = records[record["id"]]["raw_refs"]
+                if manifests[-1]["archive"] not in refs:
+                    refs.append(manifests[-1]["archive"])
         for obs in extension.get("observations", []):
             for field in ("id", "name", "unit", "frequency", "scope", "method", "history", "source_ids"):
                 if field not in obs:

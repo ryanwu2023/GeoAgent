@@ -959,12 +959,14 @@ def link_audit(snapshot_id:str):
 
 @app.get("/api/archive/{name}")
 def archive(name: str):
-    if not __import__('re').fullmatch(r"[a-f0-9]{24}\.(json|jsonl|csv|md)", name):
+    if not __import__('re').fullmatch(r"[a-f0-9]{24}\.(json|jsonl|csv|md|html|xml|txt)", name):
         raise HTTPException(404)
     file = data_dir() / "archive" / name
     if not file.exists():
         raise HTTPException(404)
-    return FileResponse(file, filename=name, media_type="text/plain; charset=utf-8" if file.suffix==".md" else "text/csv" if file.suffix==".csv" else "application/json")
+    return FileResponse(file, filename=name,
+                        media_type="text/plain; charset=utf-8" if file.suffix in {".md", ".html", ".xml", ".txt"} else "text/csv" if file.suffix==".csv" else "application/json",
+                        headers={"X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox; default-src 'none'"})
 
 class Ask(BaseModel):
     previous_answer_id: str = Field(default="",max_length=64)

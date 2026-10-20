@@ -49,6 +49,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import BriefViewer from "./BriefViewer";
 import { useHostViewContext } from "./useHostViewContext";
+import { metricCategory } from "./metric_category";
 
 const MapView = lazy(() => import("./MapView"));
 
@@ -68,22 +69,6 @@ const names: Record<string, string> = {
   briefs: "研究简报",
 };
 
-const metricCategory = (m: Metric) => {
-  if (
-    ["RCPPTAPP_approve", "taco_trump_approval"].includes(m.series || "") ||
-    /特朗普.*支持率|总统支持率/.test(m.name)
-  )
-    return "民调";
-  if (m.bucket === "shipping") return "动态";
-  if (
-    m.shared_market ||
-    ["market", "equity", "rates", "credit", "commodity", "fx"].includes(
-      m.bucket || "",
-    )
-  )
-    return "经济";
-  return "军事";
-};
 const movementClass = (m: Metric) =>
   m.delta == null || m.delta === 0 ? "flat" : m.delta > 0 ? "up" : "down";
 const modelSummaryTabs = new Set(["metrics", "scenarios", "assets"]);
