@@ -1,0 +1,672 @@
+/* Independent research workspace. Keep both panes mounted at the same size so
+   changing tabs never navigates or resizes the embedded conversation. */
+.prototype-shell.research-layout {
+  --research-dock-width: 42%;
+  --research-workspace-padding: 12px;
+  --research-divider-width: 12px;
+  height: 100dvh;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.research-layout > .prototype-header {
+  height: auto;
+  min-height: 64px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.research-layout .header-actions {
+  min-width: 0;
+}
+
+.research-layout .prototype-grid.research-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    var(--research-divider-width)
+    minmax(0, clamp(36%, var(--research-dock-width), 54%));
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--research-workspace-padding);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.research-grid > .monitor-panel {
+  container: monitor-workspace / inline-size;
+  grid-column: 1;
+  grid-row: 1;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.research-layout .compact-filters {
+  flex-wrap: wrap;
+}
+
+.research-layout .compact-filters .reset-map {
+  flex: none;
+}
+
+.research-grid > .research-divider {
+  position: relative;
+  grid-column: 2;
+  grid-row: 1;
+  display: block;
+  width: var(--research-divider-width);
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.research-divider::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 42px;
+  border-radius: 3px;
+  background: #36516f;
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
+.research-grid > .research-divider:hover,
+.research-grid > .research-divider:focus-visible,
+.research-resizing .research-grid > .research-divider {
+  background: #12243a;
+}
+
+.research-divider:hover::before,
+.research-divider:focus-visible::before,
+.research-resizing .research-divider::before {
+  background: #79b9ef;
+}
+
+.research-grid > .research-divider:focus-visible {
+  outline: 1px solid #79b9ef;
+  outline-offset: -3px;
+}
+
+.research-grid > .research-dock {
+  position: relative;
+  grid-column: 3;
+  grid-row: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #273a59;
+  border-radius: 10px;
+  background: #101b2e;
+}
+
+.research-dock-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  min-height: 54px;
+  min-width: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid #273a59;
+  background: #0f1e32;
+}
+
+.research-dock-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.research-dock-tabs > button {
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #96abc5;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.research-dock-tabs > button:hover:not(:disabled) {
+  background: #20374f;
+  color: #d7e9fa;
+}
+
+.research-dock-tabs > button.selected {
+  background: #1d405c;
+  color: #b9e1ff;
+}
+
+.research-dock-tabs > button:focus-visible {
+  outline-offset: 2px;
+}
+
+.research-dock-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.research-dock-actions > button {
+  width: auto;
+  min-width: 30px;
+  height: 30px;
+  gap: 4px;
+  padding: 6px 8px;
+  border-color: transparent;
+  background: transparent;
+  color: #9bb4ce;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.research-dock-actions > button:hover:not(:disabled) {
+  border-color: #36516f;
+  background: #1a304b;
+  color: #d7e9fa;
+}
+
+.research-dock-body {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.research-dock-body > .research-pane {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.research-dock-body > .research-pane-parked {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.research-layout .research-chat-pane > .chat-panel {
+  position: absolute;
+  inset: 0;
+  z-index: auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #0c182a;
+}
+
+.research-layout .research-chat-pane .chat-panel-heading {
+  align-items: center;
+  min-height: 36px;
+  margin: 0;
+  padding: 7px 12px;
+  border-bottom: 1px solid #243850;
+  background: #101f33;
+}
+
+.research-chat-pane .chat-panel-caption {
+  justify-content: space-between;
+  gap: 6px 12px;
+  min-width: 0;
+}
+
+.research-chat-pane .chat-panel-scope {
+  display: inline;
+  font-size: 10px;
+  line-height: 1.6;
+  color: #91abc4;
+}
+
+.research-chat-pane .chat-panel-context {
+  margin-left: auto;
+  font-size: 10px;
+}
+
+.research-chat-pane .chat-panel-context[open] {
+  flex-basis: 100%;
+  margin-left: 0;
+}
+
+.research-chat-pane .chat-panel-context > div {
+  max-height: 100px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.research-layout .research-chat-pane .pichat-embed-shell {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.research-layout .research-chat-pane .pichat-embed-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+}
+
+.research-layout .research-chat-pane .pichat-embed-status {
+  align-items: flex-start;
+  max-width: calc(100% - 24px);
+  width: max-content;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.research-chat-pane .pichat-embed-status > svg {
+  flex: none;
+}
+
+.research-layout .research-insight-pane > .insight-panel {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.research-insight-pane .insight-scroll {
+  min-width: 0;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.research-insight-pane .insight-heading {
+  min-width: 0;
+  height: auto;
+  min-height: 44px;
+  gap: 8px;
+  padding: 10px 16px;
+}
+
+.research-insight-pane .insight-heading h2 {
+  font-size: 12px;
+}
+
+.research-layout.research-resizing,
+.research-layout.research-resizing * {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.research-resizing .pichat-embed-frame {
+  pointer-events: none;
+}
+
+/* Expansion covers only the workspace, preserving the header and the map's
+   original grid cell and DOM state underneath. */
+.research-expanded .research-grid > .monitor-panel,
+.research-expanded .research-grid > .research-divider {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.research-expanded .research-grid > .research-dock {
+  position: absolute;
+  grid-column: auto;
+  grid-row: auto;
+  inset: var(--research-workspace-padding);
+  z-index: 20;
+}
+
+/* Source settings belong to the business pane and follow the actual, possibly
+   wrapped toolbar height rather than a fixed offset from the page. */
+.research-layout .monitor-panel:has(> .source-backdrop) > .center-view {
+  display: none;
+}
+
+.research-layout .monitor-panel > .source-backdrop {
+  position: relative;
+  inset: auto;
+  flex: 1;
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0;
+}
+
+.research-layout .monitor-panel > .source-backdrop .drawer {
+  min-width: 0;
+  padding: 16px;
+  overflow-wrap: anywhere;
+}
+
+/* Detail drawers placed inside the dock share its width and stay below tabs. */
+.research-layout .research-dock .drawer-backdrop.asset-backdrop,
+.research-layout .research-dock .drawer-backdrop.evidence-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.research-layout .research-dock .drawer-backdrop .drawer {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  padding: 16px;
+  border: 0;
+  border-radius: 0;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+}
+
+.research-layout .research-dock .asset-view {
+  min-width: 0;
+  max-width: none;
+}
+
+/* Each source has four children. Keep its timestamp on the text row so it
+   cannot enlarge the icon column and squeeze the source name out of view. */
+.research-layout .batch-source-list button {
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+}
+
+.research-layout .batch-source-list button > small {
+  grid-column: 2 / -1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.research-layout .batch-source-list button > span > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Business views respond to their available pane width while the research dock
+   remains open, including on a wide monitor with a widened conversation. */
+@container monitor-workspace (max-width: 1100px) {
+  .collector-command-bar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .collector-command-actions {
+    max-width: none;
+    justify-content: flex-start;
+  }
+
+  .batch-log-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .batch-detail-panel {
+    grid-column: 1 / -1;
+    height: 360px;
+  }
+
+  .fetched-data-layout {
+    display: block;
+    min-height: 0;
+  }
+
+  .fetched-data-layout > .fetched-data-detail {
+    min-height: 0;
+    max-height: none;
+    margin-top: 12px;
+  }
+
+  .pipeline-audit-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container monitor-workspace (max-width: 760px) {
+  .batch-log-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    min-height: 0;
+  }
+
+  .batch-list-panel,
+  .batch-source-panel {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+    max-height: 340px;
+    margin-bottom: 0;
+  }
+
+  .batch-list {
+    max-height: 260px;
+  }
+
+  .batch-source-panel > .batch-source-list {
+    max-height: 300px;
+  }
+
+  .batch-detail-panel {
+    grid-column: 1;
+    height: auto;
+    min-height: 0;
+  }
+
+  .batch-detail-panel > .batch-event-list {
+    flex: none;
+    max-height: 240px;
+  }
+
+  .compact-filters {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .compact-filters small {
+    display: none;
+  }
+
+  .pipeline-stage-track {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pipeline-stage-card:nth-child(2n)::after {
+    display: none;
+  }
+
+  .collector-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .collector-summary-strip > div:nth-child(3) {
+    padding-left: 3px;
+    border-left: 0;
+  }
+
+  .collector-pool-strip {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .collector-pool-actions {
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+
+  .fetched-data-heading,
+  .pipeline-view-heading {
+    display: block;
+  }
+
+  .fetched-data-filters {
+    min-width: 0;
+    margin-top: 10px;
+  }
+
+  .pipeline-heading-actions {
+    justify-content: flex-start;
+    margin-top: 10px;
+  }
+
+  .research-layout .brief-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .research-layout .brief-list {
+    flex: none;
+    max-height: 180px;
+    border-right: 0;
+    border-bottom: 1px solid #273a59;
+  }
+
+  .brief-content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+}
+
+@media (min-width: 761px) and (max-height: 900px) {
+  .prototype-shell.research-layout {
+    --research-workspace-padding: 8px;
+    --research-divider-width: 10px;
+  }
+
+  .research-layout > .prototype-header {
+    min-height: 52px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  .research-dock-heading {
+    min-height: 42px;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 900px) {
+  .research-layout .monitor-tabs {
+    height: 46px;
+  }
+
+  .research-layout .collector-monitor {
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
+  }
+
+}
+
+@media (max-width: 760px) {
+  .prototype-shell.research-layout {
+    --research-workspace-padding: 10px;
+  }
+
+  .research-layout > .prototype-header {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .research-layout .header-actions {
+    flex-wrap: wrap;
+  }
+
+  .research-layout .prototype-grid.research-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(460px, 64dvh) minmax(480px, 70dvh);
+    align-content: start;
+    gap: 10px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .research-grid > .monitor-panel {
+    grid-column: 1;
+    grid-row: 1;
+    height: auto;
+  }
+
+  .research-grid > .research-divider {
+    display: none;
+  }
+
+  .research-grid > .research-dock {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 0;
+  }
+
+  .research-dock-heading {
+    min-height: 48px;
+  }
+
+  .research-layout .collector-monitor {
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .research-expanded .prototype-grid.research-grid {
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .research-expanded .research-grid > .research-dock {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .research-layout .global-notice {
+    top: 10px;
+    width: max-content;
+    max-width: calc(100vw - 20px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .research-divider,
+  .research-dock,
+  .research-pane {
+    scroll-behavior: auto;
+  }
+}
