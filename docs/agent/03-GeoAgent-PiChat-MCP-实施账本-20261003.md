@@ -651,3 +651,26 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - live操作展开/收起连接范围、放大/还原，未发送的“布局验收草稿（不发送）”始终保留；结束清除测试草稿，未发送新问题、触发语音或改变工作快照0b18ddf4。恢复浏览器默认尺寸并保留右侧本地页。截图/tmp/geoagent-chat-1920x1200-20261020.png、/tmp/geoagent-chat-live-20261020.png，仅作本机证据，不提交。
 - 验证：前端15项通过、tsc/Vite生产构建通过；后端集成配置/MCP服务/工作台针对性回归37 passed（8.04s），git diff --check通过。前端测试非几何断言，实际布局结论以本轮浏览器测量和截图为准。此轮未提交/push/MR或公网部署，生产仍需后续发布才能获得布局修复；客户实体机最终验收尚未执行。
 - 用户随后授权push/MR：再次复跑前端15项、tsc/Vite构建及后端37项（7.80s）均通过；基线main与origin/main同为149c7e6。整理到codex/chat-panel-viewport-height，仅提交布局源码和本账本；不提交本地CA、密钥、截图、构建产物或运行数据。MR/CI交付状态以GitLab实际回执为准，此授权不包含合并main或公网发布。
+
+### 2026-10-20：MR !11 合并后的公网核对（新布局尚未生效，验收未通过）
+
+- 用户称已发布并授权站点登录/验证。实际GitLab MR !11已合并为31a24ed，MR流水线5688及main流水线5689均通过；5689列表只有verify阶段，当前可见最近含deploy成功的生产流水线仍为5579、geoagent-prod-v1.0.20。仅核对，没有触发新标签、部署、重试生产任务或改连接配置。
+- 使用授权凭据做独立HTTPS只读检查，首页与/healthz均200，认证凭据可用；首页加载index-C032W5lc.js、index-CRDUkFYF.css，CSS没有chat-panel-expanded/chat-panel-heading。健康200不代表PiChat握手或业务取数通过，更不是本轮布局发布证明。
+- 右侧IAB因浏览器级Basic认证无法进入，用户追加明确授权Chrome CDP；按此切换既有本机Chrome CDP9333，在独立内存Context中仅对该GeoAgent origin提供HTTP凭据，不改其他标签页/权限，不落盘凭据、不忽略TLS。真实1920×1200页面加载后仍为旧的多行标题，没有“放大对话面板”和chat-panel-heading；iframe实测y294、高893px，与本地新版y227、高960px不同。实测与静态资源、CI层证据相互印证：当前入口尚未提供此次布局修复。
+- 同次冷启动页面选择a1a2233b，快照列表可见，但业务区域持续加载，iframe尚未完成加载，随后显示“PiChat身份获取失败或超时”；未发送业务问题，不能宣称嵌入/MCP真实问答验收通过，也不能将此直接归因为PiChat服务。浏览器观测尚无对应失败响应码，进一步需要关联业务API及身份请求日志。一次重试的自动化调用自身超时，不能将工具超时当作服务端根因证据。
+- Chrome截图/tmp/geoagent-prod-layout-20261020.png保留旧标题与身份超时的实际状态，仅本机证据，不入库。需先正式部署包含31a24ed的版本，再重复1920×1200/低高度、放大/还原及身份连接验收；客户实体机结果仍未验证。本轮仅核对与本地补账本，没有擅自发布或扩大权限。
+
+### 2026-10-20：连接超时采证与宿主恢复修复（本地通过，待正式发布）
+
+- 按用户要求继续定位，不以自动恢复代替修复完成。公网认证API实测：status 200/5.17s、public配置200/0.51s、embed-identity 200/3.87s。Chrome另一轮身份200/4.49s；workspace首部约4.91s、完整910116字节约26.23s。区分身份签发、静态资源/数据传输和PiChat会话就绪，不将整个加载耗时归因为Key失效。
+- 206节点实际Nginx日志：14:35:52身份签发200、14:35:53嵌入/auth/me 200、14:35:54及14:36:04 ws-ticket 200；平台日志14:36:06对应GeoAgent嵌入用户WebSocket connected。宿主期间曾先显示“未确认身份”，随后收到ready并加载原会话。日志未发现本次对应的身份401；不引用其他管理用户或其他Agent的日志作为本轮证据。
+- 确认宿主缺陷1：`.pichat-embed-status`继承`pointer-events:none`，错误层里的“重试连接”按钮不能接受真实鼠标点击。Chrome actionability明确报告iframe intercepts pointer events。修复错误层为可交互、窄屏可换行，不使用force click伪装验收。
+- 确认宿主缺陷2：iframe onLoad原来通过默认force=true无条件再签发身份，并清空范围桥；load晚于认证/会话ready时会重新轮换Token、重置就绪状态。改独立frameLoaded事件：复用pending或有效已签发身份；已ready时幂等，不重置已确认范围。显式auth-required、过期或用户重建frame仍正常重新签发，未放宽来源/当前frame/服务端user校验。
+- 补齐竞态：ready在本次有效Token递送期间到达，不再被未settle的Promise误丢弃；无Token或正在取得新身份时的旧ready仍拒绝；同步ready后不遗留超时定时器。10s未收到chat-ready的提示明确为“身份已签发，但会话尚未就绪”，不是宣称身份失败。15s签发/10s就绪预算均未增加。
+- 自动回归18/18前端、tsc/Vite构建、23/23后端集成配置与工作台回归、diff检查通过。新增覆盖pending与已就绪frame-load、有效Token重复递送、显式失效仍更新、同步ready不留定时器、无身份ready拒绝。
+- 本地Chrome CDP9334、1920×1200：仅拦截本地身份接口注入一次503（隔离的负向测试，不算公网故障），真实点击“重试连接”后移除注入，真实本地BFF与chat.test身份/me/ws-ticket均200；范围r1已接收、错误消失、无pageerror。就绪后模拟迟到load，身份请求计数保持2（1次注入失败+1次真实成功），范围状态不丢失。截图/tmp/geoagent-session-recovery-local-20261020.png，仅本机。
+- 公网旧版在独立Chrome CDP9334中冷启动与重进两次均出现真实chat-ready与范围回执；两次身份至ready分别约3.12s/2.23s。此为当前可恢复性的证据，不是新版已部署证明。原共享CDP9333中的后续跨域文档曾持续pending且未收到HTTP响应，独立实例未复现；尚不能断言其具体浏览器/网络根因。
+- 本轮未改PiChat服务/应用Key、未重启生产、未改变工作快照或扩大权限。生产仍是旧资源；新增修复及已合并的高度布局需要正式发布后再做线上闭环。保留此前失败证据，不把后续成功覆盖为首次通过。
+- 本地真实短问答第5轮：输入“连接验收：请只回复‘会话已连接’，不要调用工具，也不要生成语音。”，2秒完成并显示“会话已连接”；不是只看历史对话就判通过。1920×1200收起连接详情后iframe960px，输入区完整，alert=0，console error/warn与pageerror均空。此短问答只验收会话，不代表MCP业务分析重新验收。代码位于codex/embed-session-recovery。
+- 用户随后明确授权“提交 MR、合并并发布验证”：本轮按完整测试→GitLab MR→通过后合并main→受保护生产标签/人工部署→公网live执行，包含已合并的高度修复。保留现有PiChat Key/身份/权限和工作快照；部署探针沿用此前授权的一次性release-live Key签发/撤销流程。发布结果与验收证据在后续条目另记，不将此授权或本地成功视为公网已修复。
+- 提交前复跑：前端18/18、tsc/Vite构建通过；完整后端在独立临时GEO_DATA_DIR/COLLECTOR_DATA_ROOT并导入demo快照后237 passed、2 skipped（66.13s），未读写真实运行数据。仅暂存本轮5个源码/测试文件及账本，不含密钥、环境配置、CA、截图或临时数据。
