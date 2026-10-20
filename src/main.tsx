@@ -5,3 +5,4 @@ import './style.css';
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
 import './prototype.css';
 import './events.css';
+import './research-dock.css';

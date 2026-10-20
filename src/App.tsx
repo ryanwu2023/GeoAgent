@@ -4,6 +4,9 @@ import McpWorkbench from "./McpWorkbench";
 import projectLabels from "../config/project-labels.json";
 import { panelEntryScope } from "./hostViewContext";
 import { useEmbedIdentity } from "./useEmbedIdentity";
+import { ResearchDivider, ResearchDockHeading } from "./ResearchDockControls";
+import { DEFAULT_RESEARCH_WIDTH } from "./researchLayout";
+import type { CSSProperties } from "react";
 import {
   Activity,
   ArrowUpRight,
@@ -15,8 +18,6 @@ import {
   Globe2,
   Layers,
   MessageSquare,
-  Maximize2,
-  Minimize2,
   RefreshCw,
   Search,
   Send,
@@ -123,7 +124,7 @@ export default function App() {
     [evidenceTotal, setEvidenceTotal] = useState(0),
     [evidenceMore, setEvidenceMore] = useState(false),
     [evidenceLoading, setEvidenceLoading] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false),
+  const [chatOpen, setChatOpen] = useState(true),
     [question, setQuestion] = useState(""),
     [answer, setAnswer] = useState<Answer | null>(null),
     [asking, setAsking] = useState(false),
@@ -131,13 +132,18 @@ export default function App() {
     [history, setHistory] = useState<Answer[]>([]);
   const [embedWorkspaceScope, setEmbedWorkspaceScope] = useState("");
   const openResearchAssistant = () => {
-    const scope = panelEntryScope(embedWorkspaceScope, chatOpen, workingSid);
-    if (!scope) return;
-    if (scope !== embedWorkspaceScope) setConnectionVersion(value=>value+1);
-    setEmbedWorkspaceScope(scope);
-    setChatExpanded(false);
     setChatOpen(true);
+    // Right-hand tabs only change visibility. Once captured, the workspace
+    // stays stable even when a snapshot changes while the insight tab is open.
+    const scope = panelEntryScope(embedWorkspaceScope, !!embedWorkspaceScope, workingSid);
+    if (!scope) return;
+    setEmbedWorkspaceScope(scope);
   };
+  useEffect(() => {
+    // Start the default dock after the first working snapshot arrives, never
+    // from an empty/transient snapshot and never recapture it on tab changes.
+    setEmbedWorkspaceScope(current => panelEntryScope(current, !!current, workingSid));
+  }, [workingSid]);
   const [briefs, setBriefs] = useState<Brief[]>([]),
     [brief, setBrief] = useState<Brief | null>(null),
     [generating, setGenerating] = useState(false),
@@ -146,7 +152,8 @@ export default function App() {
   const [resetKey, setResetKey] = useState(0);
   const queryVersion = useRef(0),
     selectionVersion = useRef(0),
-    evidenceVersion = useRef(0);
+    evidenceVersion = useRef(0),
+    detailRequestVersion = useRef(0);
   const lastTopic = useRef("usiran");
   const [settingsOpen,setSettingsOpen] = useState(false);
   const [mcpWorkbenchOpen,setMcpWorkbenchOpen] = useState(false);
@@ -154,6 +161,8 @@ export default function App() {
   const [connectionLoaded,setConnectionLoaded] = useState(false);
   const [connectionVersion,setConnectionVersion] = useState(0);
   const [chatExpanded,setChatExpanded] = useState(false);
+  const [researchWidth, setResearchWidth] = useState(DEFAULT_RESEARCH_WIDTH);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const pichatOrigin = connection.origin;
   const pichatAgentId = connection.agent_id;
   const reloadConnection = async () => {
@@ -280,6 +289,10 @@ export default function App() {
     };
   }, []);
   useEffect(() => {
+    closeDetails();
+    return () => { detailRequestVersion.current++; };
+  }, [sid, workingSid, topic, dimension, start, end]);
+  useEffect(() => {
     if (!sid) return;
     const version = ++queryVersion.current;
     const key = new URLSearchParams({
@@ -291,8 +304,6 @@ export default function App() {
     }).toString();
     const cached = workspaceCache.current.get(key);
     setError("");
-    setSelected(null);
-    setAsset(null);
     if (cached && Date.now() - cached.time < 60000) {
       setWork(cached.data);
       setLoading(false);
@@ -381,8 +392,7 @@ export default function App() {
   useEffect(() => {
     const close = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setSelected(null);
-        setAsset(null);
+        closeDetails();
       }
     };
     window.addEventListener("keydown", close);
@@ -480,18 +490,27 @@ export default function App() {
       setMcpBusy(false);
     }
   }
+  function closeDetails() {
+    detailRequestVersion.current++;
+    setSelected(null);
+    setAsset(null);
+    setSourceMetric(null);
+  }
+  function openAsset(nextAsset: Asset) {
+    closeDetails();
+    setAsset(nextAsset);
+  }
   async function openEvidence(id: string, metric: Metric | null = null) {
     if (!sid) return;
-    const version = selectionVersion.current;
+    const version = ++detailRequestVersion.current;
     try {
       const r = await api<Evidence>(`/evidence/${id}?snapshot_id=${sid}`);
-      if (version === selectionVersion.current) {
-        setSelected(r);
-        setSourceMetric(metric);
-      }
+      if (version !== detailRequestVersion.current) return;
+      setSelected(r);
+      setSourceMetric(metric);
       setAsset(null);
     } catch (e) {
-      setError((e as Error).message);
+      if (version === detailRequestVersion.current) setError((e as Error).message);
     }
   }
   async function ask(q = question) {
@@ -503,7 +522,6 @@ export default function App() {
     setReplay(false);
     openResearchAssistant();
     setSourcesOpen(false);
-    setTab("chat");
     try {
       const a = await api<Answer>("/ask", {
         snapshot_id: workingSid,
@@ -546,7 +564,6 @@ export default function App() {
       setBriefs((bs) => [b, ...bs]);
       if (version === selectionVersion.current) {
         setPage("briefs");
-        setChatOpen(false);
         setSourcesOpen(false);
         setDimension("");
         setStart("");
@@ -564,10 +581,8 @@ export default function App() {
     setPage(id);
     setDimension("");
     setSearch("");
-    setSelected(null);
-    setAsset(null);
+    closeDetails();
     setTab(id === "all" ? "assets" : "map");
-    setChatOpen(false);
     setSourcesOpen(false);
   }
   const topicInfo = work?.topics.find((t) => t.id === topic);
@@ -585,7 +600,8 @@ export default function App() {
     "fail-http": "采集失败",
   };
   return (
-    <div className={`prototype-shell${chatOpen ? " chat-mode" : ""}`}>
+    <div ref={shellRef} className={`prototype-shell research-layout${chatExpanded ? " research-expanded" : ""}`}
+      style={{ "--research-dock-width": `${researchWidth}%` } as CSSProperties}>
       {settingsOpen ? <IntegrationSettings onClose={()=>setSettingsOpen(false)} onSaved={()=>void reloadConnection()}/> : null}
       {mcpWorkbenchOpen ? <McpWorkbench context={{snapshot_id:workingSid,topic,dimension,start,end}} onClose={()=>setMcpWorkbenchOpen(false)}/> : null}
       <header className="prototype-header">
@@ -663,8 +679,8 @@ export default function App() {
           </button>
         </div>
       )}
-      <div className={`prototype-grid ${tab === "pipeline" ? "pipeline-mode" : ""}`}>
-        <main className={`monitor-panel${chatOpen ? " monitor-panel-chat" : ""}`}>
+      <div className="prototype-grid research-grid">
+        <main className="monitor-panel" inert={chatExpanded} aria-hidden={chatExpanded || undefined}>
           <div className="monitor-tabs">
             {[
               ["map", "风险监测"],
@@ -672,30 +688,25 @@ export default function App() {
               ["scenarios", "情景推演"],
               ["sources", "数据源"],
               ["pipeline", "采集管线监控"],
-              ["chat", "智能问答"],
               ["metrics", "量化指标"],
               ["assets", "资产关联"],
               ["briefs", "研究简报"],
             ].map(([id, label]) => (
               <button
                 key={id}
-                disabled={id === "chat" && !workingSid}
-                title={id === "chat" && !workingSid ? "请等待工作快照加载完成" : undefined}
                 className={
                   (page === "briefs" ? id === "briefs" : tab === id)
                     ? "selected"
                     : ""
                 }
                 onClick={() => {
+                  closeDetails();
                   if (id === "briefs") {
                     setPage("briefs");
-                    setChatOpen(false);
                     setSourcesOpen(false);
                   } else {
                     if (page === "briefs") setPage(lastTopic.current);
                     setTab(id);
-                    if (id === "chat") openResearchAssistant();
-                    else setChatOpen(false);
                     setSourcesOpen(id === "sources");
                   }
                 }}
@@ -1177,12 +1188,9 @@ export default function App() {
                         {work.assets.map((a) => (
                           <tr
                             key={a.id}
-                            onClick={() => {
-                              setAsset(a);
-                              setSelected(null);
-                            }}
+                            onClick={() => openAsset(a)}
                             tabIndex={0}
-                            onKeyDown={(e) => e.key === "Enter" && setAsset(a)}
+                            onKeyDown={(e) => e.key === "Enter" && openAsset(a)}
                           >
                             <td data-label="资产" className="asset-name">
                               {a.name}
@@ -1531,40 +1539,35 @@ export default function App() {
               </aside>
             </div>
           )}
-          {!!embedWorkspaceScope && (
-            <div className={`chat-slot${chatOpen ? "" : " chat-slot-parked"}`} inert={!chatOpen} aria-hidden={!chatOpen}>
-            <aside className={`chat-panel${chatOpen && chatExpanded ? " chat-panel-expanded" : ""}`} aria-label="GeoAgent 研究助手">
+        </main>
+        <ResearchDivider shellRef={shellRef} width={researchWidth} onChange={setResearchWidth} />
+        <aside className="research-dock" id="research-dock" aria-label="研究工作区">
+          <ResearchDockHeading chatOpen={chatOpen} expanded={chatExpanded}
+            onTabChange={next => {
+              closeDetails();
+              if (next) openResearchAssistant();
+              else setChatOpen(false);
+            }}
+            onExpand={() => setChatExpanded(value => !value)} />
+          <div className="research-dock-body">
+          <section id="research-chat-pane" role="tabpanel" aria-labelledby="research-chat-tab"
+            className={`research-pane research-chat-pane${chatOpen ? "" : " research-pane-parked"}`}
+            inert={!chatOpen || !!asset || !!selected} aria-hidden={!chatOpen || !!asset || !!selected}>
+          {embedWorkspaceScope ? (
+            <aside className="chat-panel" aria-label="GeoAgent 研究助手">
               <div className="drawer-heading chat-panel-heading">
                 <div className="chat-panel-caption">
-                  <h2>
-                    <MessageSquare size={18} />
-                    GeoAgent 研究助手
-                  </h2>
                   <span className="chat-panel-scope">{names[topic]} · 快照 {workingSid.slice(0, 8) || "未确认"}</span>
                   <details className="chat-panel-context">
                     <summary>连接与范围</summary>
                     <div>
                       <small>PiChat Agent · {pichatAgentId}</small>
+                      <small>跟踪维度：{topicInfo?.dimensions.find(item => item.id === dimension)?.name || "全部维度"}</small>
+                      <small>报道日期：{start || "不限开始"} — {end || "不限结束"}</small>
                       <small role="status" aria-label="看板范围同步状态">{viewBridge.status}。仅同步快照、主题、维度、日期。</small>
+                      <small>范围变化仅用于下一轮提问；已有回答与会话不重建。</small>
                     </div>
                   </details>
-                </div>
-                <div className="chat-panel-actions">
-                  <button type="button" aria-label={chatExpanded ? "还原对话面板" : "放大对话面板"}
-                    aria-pressed={chatExpanded} title={chatExpanded ? "还原对话面板" : "放大对话面板"}
-                    onClick={()=>setChatExpanded(value=>!value)}>
-                    {chatExpanded ? <Minimize2 size={18}/> : <Maximize2 size={18}/>}
-                  </button>
-                  <button
-                    aria-label="关闭研究助手"
-                    onClick={() => {
-                      setChatOpen(false);
-                      setChatExpanded(false);
-                      setTab("map");
-                    }}
-                  >
-                    <X />
-                  </button>
                 </div>
               </div>
               <div className="pichat-embed-shell">
@@ -1600,9 +1603,18 @@ export default function App() {
                 /> : null}
               </div>
             </aside>
-            </div>
-          )}
-        </main>
+          ) : <div className="empty" role="status">
+            {status && !workingSid ? (sid ? <>
+              <p>请先确认工作快照，再开始研究问答。</p>
+              <button type="button" className="primary" onClick={() => void selectSnapshot(sid)}>
+                将当前快照设为工作快照
+              </button>
+            </> : "请先导入并选择工作快照，再开始研究问答。") : "正在加载工作快照，研究助手即将就绪…"}
+          </div>}
+          </section>
+          <section id="research-insight-pane" role="tabpanel" aria-labelledby="research-insight-tab"
+            className={`research-pane research-insight-pane${chatOpen ? " research-pane-parked" : ""}`}
+            inert={chatOpen || !!asset || !!selected} aria-hidden={chatOpen || !!asset || !!selected}>
         <aside className="insight-panel">
           <div className="insight-heading">
             <h2>{names[topic]} · 研判</h2>
@@ -1633,7 +1645,6 @@ export default function App() {
                         if (page === "briefs") setPage("all");
                         setTab("evidence");
                         setSearch(label);
-                        setChatOpen(false);
                         setSourcesOpen(false);
                       }}
                     >
@@ -1686,7 +1697,6 @@ export default function App() {
                   <button
                     onClick={() => {
                       setTab("assets");
-                      setChatOpen(false);
                       setSourcesOpen(false);
                       if (page === "briefs") setPage("all");
                     }}
@@ -1698,10 +1708,7 @@ export default function App() {
                   {work?.assets.map((a) => (
                     <button
                       key={a.id}
-                      onClick={() => {
-                        setAsset(a);
-                        setSelected(null);
-                      }}
+                      onClick={() => openAsset(a)}
                     >
                       <b>{a.name}</b>
                       <span>{a.direction}</span>
@@ -1740,16 +1747,16 @@ export default function App() {
             </div>
           </div>
         </aside>
-      </div>
+          </section>
       {asset && (
         <div
           className="drawer-backdrop asset-backdrop"
-          onClick={() => setAsset(null)}
+          onClick={closeDetails}
         >
           <aside className="drawer" onClick={(e) => e.stopPropagation()}>
             <div className="drawer-heading">
               <h2>{asset.name} · 条件传导</h2>
-              <button aria-label="关闭资产详情" onClick={() => setAsset(null)}>
+              <button aria-label="关闭资产详情" onClick={closeDetails}>
                 <X />
               </button>
             </div>
@@ -1809,10 +1816,9 @@ export default function App() {
               className="primary"
               onClick={() => {
                 setQuestion(`分析${asset.name}的关联证据、条件及反证`);
-                setAsset(null);
+                closeDetails();
                 openResearchAssistant();
                 setSourcesOpen(false);
-                setTab("chat");
               }}
             >
               向研究助手追问
@@ -1823,7 +1829,7 @@ export default function App() {
       {selected && (
         <div
           className="drawer-backdrop evidence-backdrop"
-          onClick={() => setSelected(null)}
+          onClick={closeDetails}
         >
           <aside className="drawer" onClick={(e) => e.stopPropagation()}>
             <div className="drawer-heading">
@@ -1834,7 +1840,7 @@ export default function App() {
               </h2>
               <button
                 aria-label="关闭证据详情"
-                onClick={() => setSelected(null)}
+                onClick={closeDetails}
               >
                 <X />
               </button>
@@ -1908,16 +1914,18 @@ export default function App() {
             <button
               disabled={translating || !status?.model.configured}
               onClick={async () => {
+                const version = detailRequestVersion.current;
                 setTranslating(true);
                 try {
                   const r = await api<{ ok: boolean; message: string }>(
                     `/evidence/${selected.id}/translate?snapshot_id=${sid}`,
                     {},
                   );
+                  if (version !== detailRequestVersion.current) return;
                   setNotice(r.message);
                   if (r.ok) await openEvidence(selected.id, sourceMetric);
                 } catch {
-                  setError("翻译请求失败，原文保留");
+                  if (version === detailRequestVersion.current) setError("翻译请求失败，原文保留");
                 } finally {
                   setTranslating(false);
                 }
@@ -1971,6 +1979,9 @@ export default function App() {
           </aside>
         </div>
       )}
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
