@@ -740,3 +740,15 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 截图采证中，`fullPage:true`在模拟大视口曾出现跨域frame合成错绘，而DOM外框/内部视口一致；改用不改变尺寸的视口截图再次核对，完整对话与输入区正常，放大还原后截图也正常。保留这一采集边界，不仅凭几何断言关闭历史客户绘制问题。最终视口截图：`/tmp/geoagent-right-dock-1920x1200-20261020.jpg`、`/tmp/geoagent-right-dock-restored-20261020.jpg`、`/tmp/geoagent-right-dock-1280x720-20261020.jpg`，仅本机留证不入Git。当前宿主alert=0，所取console error/warn为空。
 - 交付状态：本轮仅本地源码、测试与账本；未提交/push/MR、未合并或发布公网。线上仍需后续正式发布和客户窗口复验，不能把本地完成称为公网生效。
 - 用户随后授权“push mr”：提交前重新fetch确认本地main与origin/main同为`10e3c90`，创建`codex/right-research-dock`，目标main。复跑前端47/47、TypeScript/Vite构建、完整后端238 passed/1 skipped（29.86秒）和diff检查均通过。仅提交本节账本、App/main、右栏布局组件/样式/纯函数及两份回归测试，共8个文件；不带密钥、运行数据、截图、临时证书或构建产物。MR和流水线结果以GitLab实际回执为准，本次授权不包含合并或生产发布。
+
+### 2026-10-20：v1.0.23 已发布，右侧工作区公网正常路径验收
+
+- 用户确认发布包含 !14 的 v1.0.23。已核对 main `8f86e6c0aadf3be397e6757af769a984cb0816e1` 包含 !14 的实现提交 `143f0e4431b41fc630383970cf53077e1550cc16`，创建并推送生产标签 `geoagent-prod-v1.0.23`，未移动旧生产标签。此前 !14 合并/main 验证通过并不等于生产发布；本节记录的是实际生产发布结果。
+- 生产流水线 [5706](https://gitlab.lz.internal/yujunjun/GeoAgent/-/pipelines/5706) 已通过；[verify 29401](https://gitlab.lz.internal/yujunjun/GeoAgent/-/jobs/29401) 与人工执行的 [deploy 29402](https://gitlab.lz.internal/yujunjun/GeoAgent/-/jobs/29402) 均成功。部署日志确认 `geoagent-release-5706`、Deployment rollout 完成、站点 status HTTP 200 和 `Job succeeded`；rollback 29403 保持手动未执行。没有绕过既有 GitLab 生产标签/人工部署流程直接修改集群。
+- Runner 双公网 `geoagent.lhotsetech.com/mcp`、`geoagentd40d.sealosgzg.site/mcp` 探针均通过：匿名 401/GEO_AUTH_REQUIRED，initialize 200、initialized 202、tools/list 200（17 工具、19830 字节）、snapshot-call 200（2608 字节，分别 2561/2177ms）。日志明确 `Release live key revoked`。沿用授权的一次性 release-live Key 流程，没有替换 PiChat 长期 Key、签发身份或扩大权限。
+- 本次公网 live 使用外置原生 Chrome，站点登录采用用户授权的现有凭据，不保存到代码、账本或截图。IAB 首次受浏览器级站点认证限制未打开，不将该入口失败归为应用故障；随后外置 Chrome 正常登录、刷新实际公网域名后看到新版：左侧八个业务菜单，右侧独立“智能问答/研判”工作区，聊天从右栏顶部开始。真实嵌入地址仍为公网 `chat.lhotsetech.com/work-embed/geo-research-assistant`。
+- 在公网嵌入面板真实发送第4轮：“v1.0.23 右侧工作区验收：请只回复‘右侧会话正常’，不要调用工具，也不要生成语音。”收到新答复“右侧会话正常”，界面显示约1秒完成、06:35（本机 America/New_York 时区）。不是只看历史消息判断连接正常；本短问答只验收连接，未重新执行 Agent→MCP 业务分析或 TTS。历史第3轮的业务数字和已知 PiChat 补充报告措辞问题不作为本轮新验收或已修复证据。
+- 交互检查：切换左侧量化指标、右侧研判/智能问答，以及放大/还原后，未发送验收草稿仍保留、历史会话仍可见。1920×1200 受控 CSS 视口初轮截图与还原截图中输入框、发送区域和底部工具栏完整可见；这是外置 Chrome 的设备模拟视口，不冒充客户实体机或所有 OS/浏览器缩放比例。未采集 iframe 文档标识及身份请求计数，不声称本轮已证明 DOM 恒等或身份请求 1→1。
+- 补测 1280×720 时，原生浏览器尺寸字段、键盘输入与截图出现不同步：AX 一度显示目标尺寸，画面仍停在 1920×1200，后续字段又出现数字追加。因此本次低高度公网补验不计通过，也不能据此归因产品布局失败。相关 `/tmp/geoagent-v123-public-1280x720.png` 仅保留为不可信尺寸控制的诊断记录，不作为该尺寸通过截图。临时设备模拟和 DevTools 已关闭，重新加载正常窗口后，右栏恢复默认42%，新第4轮回答、完整输入区和底部工具栏正常。
+- 验收草稿已清空；结束保持美伊、全部维度、空日期、原工作快照 `a1a2233be7bb14fec9cf0396`。未启动采集、导入快照、生成简报，未改 PiChat 配置、VPN/TUN、DNS、TLS 或浏览器安全权限。未在本轮重新验收日期/主题范围传递、长期闲置恢复或全部业务问题。
+- 可信截图仅存本机，不进入 Git：`/tmp/geoagent-v123-public-1920x1200-restored.png`（受控视口还原后）、`/tmp/geoagent-v123-public-default-final.png`（关闭模拟并刷新后的常规窗口，含新答复和完整输入区）。本轮结论：包含 !14 的 v1.0.23 正式发布、双公网 MCP 探针、外置 Chrome 公网新问答和右侧工作区正常路径已通过；低高度公网独立补验与客户实体机分辨率/缩放复验仍保留，不将恢复正常画面代替所有历史显示问题已关闭。
