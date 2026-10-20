@@ -3,7 +3,7 @@ import difflib
 import json
 import os
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import datetime, timezone, timedelta
 import httpx
 from . import llm
@@ -33,6 +33,10 @@ def metric_view(obs, start="", end=""):
             obs["scope"] = "共享民意背景"
         if obs.get("boundary") == "同期变动不等于冲突因果；行情与官方统计存在发布滞后":
             obs["boundary"] = "须核对调查机构、调查期、样本与汇总方法；支持率变化不证明冲突因果"
+    if (obs.get("series") in {"taco_trump_approval", "RCPPTAPP_approve"}
+            and not any(point.get("value") is not None for point in obs["history"])):
+        obs = {**obs, "boundary": obs.get("boundary", "") +
+               "；本冻结快照未收录有效支持率观测，不代表支持率为零。采集恢复后须重新采集并导入新快照，不会自动补齐本快照；不得借用其他快照的数值。"}
     history = sorted([p for p in obs["history"] if (not start or p["date"] >= start) and (not end or p["date"] <= end)], key=lambda p: p["date"])
     current = history[-1] if history else None
     step=max(1,int(obs.get("comparison_step",1)))
@@ -249,10 +253,60 @@ PAGE_SUMMARY_LABELS = {
     "scenarios": ("情景推演", "比较持续消耗、升级扩散和缓和收束，说明判断变化、成立条件、反证和下一观察项。"),
     "assets": ("资产关联", "概括对权益、利率债、信用债、商品和外汇的条件影响、传导机制、期限、反证和下一触发条件。"),
 }
-PAGE_SUMMARY_PROMPT_VERSION = "2026-10-16.2"
+PAGE_SUMMARY_PROMPT_VERSION = "2026-10-20.2"
 _page_summary_locks: dict[str, asyncio.Lock] = {}
 BRIEF_PROMPT_VERSION = "2026-10-17.2"
 _brief_generation_locks: dict[str, asyncio.Lock] = {}
+
+
+def _summary_quantity(value, unit, *, change=False):
+    """Publish exact, bounded display conversions instead of fuzzy validation."""
+    amount = Decimal(str(value))
+    if not amount.is_finite():
+        raise ValueError("指标数值无效")
+    if unit == "USD":
+        amount /= Decimal("100000000")
+        unit = "亿美元"
+    precision = [2, 1, 4] if abs(amount) < 10 and unit != "%" else [2, 1]
+    displays = []
+    for digits in precision:
+        rounded = amount.quantize(Decimal(1).scaleb(-digits), rounding=ROUND_HALF_UP)
+        if not rounded:
+            rounded = abs(rounded)
+        number = format(rounded, "f").rstrip("0").rstrip(".") if digits else str(rounded)
+        display = f"{number}{unit}"
+        if change:
+            direction = "增加" if amount > 0 else "减少" if amount < 0 else "持平"
+            display += f"（{direction}，幅度{abs(rounded):f}{unit}）"
+        if display not in displays:
+            displays.append(display)
+    return displays
+
+
+def _page_metric_material(item):
+    compact = {key: item.get(key) for key in (
+        "series", "name", "unit", "frequency", "scope", "method", "boundary",
+        "current", "previous", "delta", "delta_unit", "pct", "freshness", "source_ids",
+    )}
+    display = {}
+    for key in ("current", "previous"):
+        point = item.get(key)
+        if point and point.get("value") is not None:
+            display[key] = {"date": point["date"], "values": _summary_quantity(point["value"], item["unit"])}
+    if item.get("delta") is not None:
+        display["delta"] = _summary_quantity(item["delta"], item.get("delta_unit") or item["unit"], change=True)
+    if item.get("pct") is not None:
+        display["pct"] = _summary_quantity(item["pct"], "%", change=True)
+    compact["display"] = display
+    # This is the same structured material sent to the model. Only a metric's
+    # cited source IDs can authorize its exact or display-form numbers.
+    fact = {
+        "text": canonical({key: compact[key] for key in (
+            "name", "unit", "current", "previous", "delta", "delta_unit", "pct", "display",
+        )}),
+        "evidence_ids": item.get("source_ids", []),
+    }
+    return compact, fact
 
 
 def _page_summary_cache(cache_key: str):
@@ -313,17 +367,9 @@ async def page_summary(snapshot, page, topic="all", dimension="", start="", end=
         for item in metric_rows:
             if not item.get("current") or item["current"].get("value") is None:
                 continue
-            compact = {key: item.get(key) for key in (
-                "series", "name", "unit", "frequency", "scope", "method", "boundary",
-                "current", "previous", "delta", "delta_unit", "pct", "freshness", "source_ids",
-            )}
+            compact, fact = _page_metric_material(item)
             metric_context.append(compact)
-            fact = f'{item["name"]}：{item["current"]["date"]}为{item["current"]["value"]}{item["unit"]}'
-            if item.get("previous") and item["previous"].get("value") is not None:
-                fact += f'，前值为{item["previous"]["value"]}{item["unit"]}（{item["previous"]["date"]}）'
-            if item.get("delta") is not None:
-                fact += f'，较{item["previous"]["date"]}变化{item["delta"]}{item.get("delta_unit") or item["unit"]}'
-            facts.append({"text": fact, "evidence_ids": item.get("source_ids", [])})
+            facts.append(fact)
         records = filtered_records(snapshot, topic, dimension, start, end)
         referenced = {
             rid
@@ -374,6 +420,9 @@ async def page_summary(snapshot, page, topic="all", dimension="", start="", end=
             "仅依据提供的冻结快照，用简体中文生成一段三至六句话、约二百至六百字的完整总结。"
             + focus +
             "必须区分事实、程序计算和模型推论；同步变化不能写成已证实因果。"
+            "指标金额、前值、变化额及涨跌幅优先直接引用metrics.display给出的程序计算展示值及单位；"
+            "USD的display已经折算为亿美元，不再二次换算。减少的幅度可写为下降或减少加正数，保留变化方向。"
+            "指标引用须包含该项source_ids；缺少前值或变化率时明确缺失，不自行补算。"
             "只可使用上下文已有数字，不生成概率、评分、价格目标或收益预测。"
             "引用只能使用上下文中的证据ID。只输出JSON："
             '{"text":"完整中文总结","evidence_ids":["已有证据ID"]}。'
@@ -391,7 +440,10 @@ async def page_summary(snapshot, page, topic="all", dimension="", start="", end=
                 raise ValueError("模型未生成有效中文总结")
             if not isinstance(evidence_ids, list) or not evidence_ids or not set(evidence_ids).issubset(allowed_ids):
                 raise ValueError("模型总结缺少有效的当前快照引用")
-            record_by_id = {record["id"]: record for record in snapshot["records"]}
+            record_by_id = {
+                item["id"]: {**item, "text": item["excerpt"], "source_name": item["source"]}
+                for item in evidence
+            }
             unsupported = unsupported_numbers(text, evidence_ids, record_by_id, facts)
             if unsupported:
                 raise ValueError("模型总结包含引用材料中不存在的数值：" + "、".join(sorted(unsupported)))

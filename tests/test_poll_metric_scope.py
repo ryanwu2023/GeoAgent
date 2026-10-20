@@ -138,6 +138,20 @@ def test_poll_without_points_in_date_window_does_not_leak_latest_value():
     assert result["freshness"] == "无有效值"
 
 
+def test_frozen_missing_poll_explains_recollection_without_borrowing_history():
+    observation = poll()
+    observation.update(history=[], upstream_state="missing")
+    data = snapshot(observation)
+    original = deepcopy(data)
+
+    result = metrics(data, "usiran")[0]
+
+    assert result["current"] is None
+    assert "不代表支持率为零" in result["boundary"]
+    assert "重新采集并导入新快照" in result["boundary"]
+    assert data == original
+
+
 @pytest.mark.parametrize("series", POLL_SERIES)
 def test_poll_projection_replaces_only_generic_market_metadata(series):
     observation = poll(series)
