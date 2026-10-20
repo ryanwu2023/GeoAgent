@@ -297,7 +297,7 @@ async def _run_tool(*, ctx: Context, tool: str, handler: Callable) -> str:
 
 def _analysis_metric_projection(metric: dict[str, Any]) -> dict[str, Any]:
     """Overview facts, not a repeated unbounded time-series archive."""
-    fields = ('id', 'series', 'name', 'unit', 'frequency', 'scope', 'topic', 'dimension',
+    fields = ('id', 'series', 'name', 'unit', 'frequency', 'scope', 'topic', 'dimension', 'bucket',
               'current', 'previous', 'delta', 'delta_unit', 'pct', 'freshness',
               'quality_issue', 'comparison_step', 'method', 'boundary', 'selection_reason')
     result = {key: metric.get(key) for key in fields}
