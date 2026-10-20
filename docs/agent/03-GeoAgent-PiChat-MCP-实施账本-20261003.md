@@ -674,3 +674,42 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 本地真实短问答第5轮：输入“连接验收：请只回复‘会话已连接’，不要调用工具，也不要生成语音。”，2秒完成并显示“会话已连接”；不是只看历史对话就判通过。1920×1200收起连接详情后iframe960px，输入区完整，alert=0，console error/warn与pageerror均空。此短问答只验收会话，不代表MCP业务分析重新验收。代码位于codex/embed-session-recovery。
 - 用户随后明确授权“提交 MR、合并并发布验证”：本轮按完整测试→GitLab MR→通过后合并main→受保护生产标签/人工部署→公网live执行，包含已合并的高度修复。保留现有PiChat Key/身份/权限和工作快照；部署探针沿用此前授权的一次性release-live Key签发/撤销流程。发布结果与验收证据在后续条目另记，不将此授权或本地成功视为公网已修复。
 - 提交前复跑：前端18/18、tsc/Vite构建通过；完整后端在独立临时GEO_DATA_DIR/COLLECTOR_DATA_ROOT并导入demo快照后237 passed、2 skipped（66.13s），未读写真实运行数据。仅暂存本轮5个源码/测试文件及账本，不含密钥、环境配置、CA、截图或临时数据。
+
+### 2026-10-20：v1.0.21 已发布；普通布局可用，重绘与间歇连接问题仍开放
+
+- 修复提交bf7a7d4、MR !12、MR流水线5691通过后合并main 7a4f3d3，main流水线5692通过。生产标签geoagent-prod-v1.0.21、流水线5693，验证29361及部署29362均成功；07:09:38 UTC rollout完成，07:09:57 Job succeeded。容器后端237 passed、2 skipped。没有将main验证流水线5692误认为生产部署。
+- Runner双公网域名首轮匿名401、initialize200、initialized202、tools/list200（19830字节）、snapshot-call200（2608字节），两次实际工具调用2888/2370ms；07:09:56一次性release-live Key撤销，PiChat原Key/身份/工作快照未变。生产前端确认index-CyVhLxeB.js、index-BBHofx85.css及新版紧凑标题/放大按钮已生效，不只是健康检查成功。
+- 根据用户授权使用Chrome CDP独立测试上下文，站点认证仅在内存中；Browser插件不可用，IAB浏览器级认证不可操作，未绕过TLS或关闭浏览器安全检查。冷启动真实身份200发生07:10:28.627，chat-ready发生07:10:45.952，相差17.325秒，超过宿主10秒就绪预算，随后恢复不能算此问题已修复。Chrome实际记录WebSocket `net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS`，另一次菜单重进iframe文档也曾延迟约一分钟才加载；不能将两个阶段直接归为同一根因。
+- 同机只读解析chat.lhotsetech.com得到fc00::3ed及198.18.5.156，chat.test为192.168.100.206。Chrome155中嵌入文档local-network-access/local-network/loopback-network策略均不允许、权限状态denied；这是当前测试环境证据，不是客户设备证据。未确定代理产品、故障连接最终地址或所有延迟原因，未擅改DNS、代理、权限策略。206 Nginx同窗identity/auth/ws-ticket存在200及embed-ws101；WebSocket访问日志时间是连接结束时间，不能误当建连开始，也不能用不同调用者的200证明当前frame就绪。
+- 07:12真实自然问答要求按当前范围调用geo_workspace_summary，不切快照、不生成语音。调用call_00_pAEUGPJX2UV1J8vf3yWF7557、会话s-677fa5bc1f0d，审计03:12:43.879→03:12:46.509（浏览器本地时间），2.63秒；新read_at=2026-10-20T07:12:46.412957+00:00，audit geo-audit-670f3fd1d28744d985be32e0e6dc369d。参数a1a2233be7bb14fec9cf0396/usiran、dimension/start/end为空、compact=true；范围3980、升级250/持续65/缓和122/待研判3543与同屏看板一致，整轮约8秒。审计源complete/succeeded、13199字符/17173字节，但详情展示是首尾8000字符机械预览，未宣称逐字核对全部正文。
+- 答复仍有独立语义问题：将3980后的“补充报告22条另行统计、不并入”描述含混；实际3980含22条supplemental，而coverage美伊3958排除22条。已补PiChat移交，不把数值匹配等同全部分析措辞通过。此问题不属于聊天高度或身份故障，未为其盲改MCP口径。
+- 用户再次报告就绪超时提示及底部输入框消失，要求自行截图。分别检查历史对话页和欢迎页，未仅凭已连接路径得出结论。真实就绪页1920×1200下iframe y227/h960、输入框绝对y1032/h32；1920×1080、1536×824、1280×720、900×650均可见。生产“放大→还原”草稿保留、身份请求计数1→1，结束已清除未发送草稿；放大时iframe h1133，没有重载frame。
+- 欢迎页负向测试仅在独立测试标签暂缓/embed-ws连接，不改服务端：重现相同“身份已签发，但会话尚未就绪”提示，1920×1200输入区仍完整；1920×1080/1536×824/1280×720/900×650的composer高度161/151/151/151px，均位于iframe底部内。低高度正文独立滚动，输入框未被裁切。本测试是故障注入，不冒称复现客户原始网络故障。期间另遇一次自然身份请求超时，正常点击宿主“重试连接”有效；不是force click。此前一次重试定位因提示自行消失未真正点击，不算恢复验收。
+- 故障注入标签已关闭，另开无拦截页面复核：07:24:22.287身份200→07:24:29.219 chat-ready（约6.93秒），原两轮对话保留，alert=0，相关console error/warn=0；未重新发送业务问题。此后续成功只作恢复证据，不消除前述首次失败。1920×1200为受控CSS视口、visualViewport.scale=1，不冒充已验证客户实体机100%缩放或完整浏览器工具栏。
+- 截图仅本机/tmp：geoagent-v21-clean-live-1920x1200-20261020.png（无拦截实际公网对话/完整输入区）、geoagent-v21-welcome-connection-pending-20261020.png及geoagent-v21-welcome-pending-720-20261020.png（明确标注故障注入欢迎页）、geoagent-v21-identity-timeout-20261020.png（保留真实身份超时）。不入库凭据、截图、临时文件或运行数据。
+- 补充视觉边界：独立Chrome CDP模拟视口的一次放大/还原后，DOM与命中测试已恢复1492px宽，但截图仍残留跨域frame的放大绘制范围；1px视口高度变动后重新绘制恢复。不能只凭boundingBox正确宣称放大/还原视觉完全通过，尚未确定是Chrome/CDP合成采集问题还是客户同类绘制问题，未归因VPN。恢复后的正常整页截图为/tmp/geoagent-v21-public-normal-full-20261020.png。
+- 本轮状态：MR/发布/MCP探针已通过，正常路径真实问答及普通布局限定验收通过；放大/还原重绘、间歇身份/WS慢连接未关闭，客户输入框消失尚未复现，不宣称再次修好了未定位的问题。08移交补充同frame时序、LNA/DNS证据及欢迎页/历史页分开验收要求。本轮后续未改生产配置或PiChat源码，未通过延长预算、删除提示、扩大权限伪造成功。
+
+### 2026-10-20：参照 StockLink 连接修复，核查 VPN/代理路径（只读）
+
+- 用户指定参照/Users/yujunjun/luozi/stocklink-product。只读检查其AGENTS.md、当前源码及提交，确认0147021f、da9c73c0、527a71f7、09284447均包含在当前检出00b81a97中；没有切分支、改其文件、启动/发布StockLink或读取应用密钥。结论基于当前源码，未把历史部署记录当作当前实例验收。
+- StockLink的useEmbedStartup统一identity/waiting/ready/failed：身份请求连同body有截止时间；取消/owner/generation隔离过期结果；auth request/required合并、强制失效可替换在途请求；只接受当前frame/origin的chat-ready；健康frame续期与scope切换不重建。Dock收起也不卸载iframe。09284447额外以opt-in embed-startup/v1串联attemptId/frameId及identity/frame/auth/ready/visible事件，不输出凭据。
+- GeoAgent v1.0.21已有身份连body截止、当前frame/origin校验、真实签发user、迟到load幂等和显式重试重建；不把sessions更新当ready。但切业务菜单仍会卸载iframe，重新进入会再次签发/建连；缺少StockLink同级的跨端启动关联轨迹，当前request(force)遇到pending仍返回原Promise。后者是生命周期差异，尚无本次现场证据证明它触发此次超时。常驻frame须保留本项目“显式重进时按快照捕获scope、面板内筛选只同步view”的会话契约，不能直接复制StockLink的scope实现。
+- 本机网络只读证据：v2rayN/Xray/sing-box和wireguard-go同时运行。v2rayN的sing-box配置明确tun interface_name=utun81，Fake-IP范围198.18.0.0/15、fc00::/18。chat.lhotsetech.com解析198.18.5.156/fc00::3ed，两地址均路由utun81；chat.test的192.168.100.206路由utun4。系统HTTP代理设置为空不代表没经过TUN。
+- DNS-over-HTTPS公开查询chat.lhotsetech.com返回A=139.224.61.228、AAAA为空；本机合成IPv6不是该域的公网AAAA。相同/chat无凭据探针：IPv4经Fake-IP返回HTTP200，TLS0.127秒/总0.186秒；IPv6连续两次在10.007秒、8.003秒超时且TLS尚未完成。指定真实公网IPv4的单请求也8.005秒超时，该IP路由仍为utun81，不能称其为“已断VPN直连测试”，也不能断言只排除Fake-DNS即可解决。
+- 结论：VPN/代理路径确实参与，已确认本机合成IPv6路径不可用，与Chrome LNA拦截形成明确排查方向；尚未完成同页面关闭TUN前后A/B，未证明所有冷启动、身份超时及客户设备问题同因。未关闭VPN、改分流/DNS、开浏览器本地网络权限或关闭TLS。下一步若用户授权，短暂只停v2rayN TUN、保留公司WireGuard，做同版本/同账号/同scope的冷启动、重进与WS事件对照后恢复原状态；代码生命周期改进与网络验证分别验收。
+
+### 2026-10-20：保留 TUN，宿主有限自动恢复与聊天布局修订（本地验收，未发布）
+
+- 用户明确要求不暂停 v2rayN TUN；撤销上一条中的网络 A/B 下一步。本轮没有改代理、VPN、DNS、浏览器权限、TLS、PiChat 配置或 Key，只修改 GeoAgent 宿主。Browser 插件不可用，沿用已授权的 Chrome/CDP 进行本地真实嵌入验收。
+- 身份 fetch+body 的单次总预算由 15 秒调为 30 秒；会话就绪由 10 秒调为 60 秒。第 10 秒显示中性的慢连接状态，不提前报失败；第 60 秒仍未收到可信的 chat-ready 才报超时，保留 iframe 和可操作的重试按钮，允许迟到的真实回执清除提示。后端上游单次 10 秒预算未修改，不将前端预算冒称上游预算。
+- 网络/408/429/500/502/504 类失败最多自动重试两次，分别退避 2/5 秒；子面板 auth 轮询不能跳过退避或重启已耗尽预算。GeoAgent 接口直接返回的配置缺失 503、401/403，以及非法 JSON/JWT/签发用户不自动重试；后端仍将上游错误折叠为 502，因此这些 502 也最多重试两次，不宣称已区分所有上游拒绝原因。online/页面恢复可恢复已失败连接；健康连接不重置。显式 auth-required 可取消普通在途签发，重复失效合并到同一恢复请求，旧请求即便迟到也不能覆盖新身份。
+- 同一快照切菜单/收起助手不再卸载 iframe，隐藏面板 inert 且不可聚焦；范围桥保留绑定，隐藏期间不推送新的看板范围，重新打开后同步最新范围。保持旧契约：面板已打开时修改筛选不导航，显式重进且工作快照变更才重建对应 scope；只有用户明确“重试连接”会重载当前 iframe。不为自动恢复清空草稿或创建新会话。
+- 布局改为“稳定占位容器 + 标题自动行高 + minmax(0,1fr) 内容区”，iframe 绝对填满真实内容区，局部 layout/paint containment 防止放大画面残留。窄屏聊天模式取消 480px 固定最小高度，以 100dvh 和实际顶栏剩余空间为准；窄屏研判栏暂不占聊天高度。没有缩小 PiChat 字体、强行缩放 iframe 或变更跨域 PiChat DOM/CSS。
+- 最终状态机前端 26/26 测试、tsc/Vite build、git diff --check 通过；完整后端 238 passed、1 skipped（62.91 秒）。覆盖有限退避/耗尽停止、失效取消在途请求、迟到结果拒绝、重复事件不延长就绪截止、慢连接提示、迟到 ready、卸载清理。未增加依赖。
+- 本地 http://127.0.0.1:8010 → https://chat.test 真实会话：1920×1200、1920×1080、1536×824、1280×720、900×650、390×640 共六种 CSS 视口，输入框全部在视口内，页面无横/纵向外溢。其中 1920×1200 iframe y227/h960；1536×824 y193/h622；1280×720 y193/h518；390×640 y305.59/h323.41。输入框及底部操作栏截图逐项检查；这不是客户实体机或所有浏览器缩放比例的验证。
+- 真实交互：“证据台账→智能问答”“量化指标→智能问答”“风险监测→智能问答”保留同一 iframe 文档和未发送草稿，身份请求 1→1；连续三次放大/还原后完整截图没有此前越界残影，未靠额外 1px 调整强制修复。验收后清空草稿。真实输入“本地恢复验收：请只回复‘本地连接正常’，不要调用工具，也不要生成语音。”，收到新答复“本地连接正常”，无宿主错误提示。此为连接验收，不冒称重新验收 MCP 业务分析或 TTS。
+- 独立测试标签页注入一次身份 502：2.14 秒后自动重试真实接口 200，随后真实 PiChat 就绪，无需点击重试。另一个独立标签暂缓 iframe 文档约 25.5 秒：第 10 秒仅慢连接提示、无 error；释放后在身份 200 后约 28.02 秒收到真实 chat-ready，提示消失，只有一次身份签发。这些是明确的故障注入验收，不是本机 VPN 根因已被消除的证据。
+- 截图仅存 /tmp，不进入 Git：geoagent-recovery-1920x1200.png、geoagent-recovery-1536x824.png、geoagent-recovery-1280x720.png、geoagent-recovery-390x640.png、geoagent-restored-2.png、geoagent-slow-recovered.png、geoagent-recovery-live-1920x1080.png。剩余边界：硬网络阻断无法靠宿主代码保证成功；PiChat 自身的 WebSocket 运行期恢复仍由 PiChat 负责；公网尚未发布本轮改动，客户机器需发布后再复验，不宣称公网/客户问题已关闭。
+- 另外修复初始化窗口：工作快照未加载时，“智能问答”禁用并提示等待，防止先选中 chat 菜单、却因 scope 为空而无面板/输入框。独立标签暂缓 /api/status 时按钮 disabled=true、iframe=0，释放真实响应后自动 enabled=true。最终无拦截干净页面 URL/title 正确、非空、无框架覆盖层，身份 200、真实 chat-ready、console error/warn 与 pageerror 均空；完整截图 /tmp/geoagent-recovery-final-1920x1200.png。
+- 用户随后要求“push mr 生效”：提交前再次执行前端 26/26、完整后端 238 passed/1 skipped（61.25 秒）、tsc/Vite build 和 diff 检查，均通过。仅提交上述源码/测试及两份账本文档；新增行的常见凭据模式扫描无命中，不包含环境文件、运行数据或截图。沿用 GitLab MR→main→受保护生产标签→人工部署及一次性 MCP 探针流程，实际交付结果另记。

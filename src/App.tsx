@@ -133,7 +133,9 @@ export default function App() {
   const openResearchAssistant = () => {
     const scope = panelEntryScope(embedWorkspaceScope, chatOpen, workingSid);
     if (!scope) return;
+    if (scope !== embedWorkspaceScope) setConnectionVersion(value=>value+1);
     setEmbedWorkspaceScope(scope);
+    setChatExpanded(false);
     setChatOpen(true);
   };
   const [briefs, setBriefs] = useState<Brief[]>([]),
@@ -170,12 +172,12 @@ export default function App() {
     new Map<string, { time: number; data: Workspace }>(),
   );
   const pichatFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const {ready:pichatReady,loading:pichatAuthRequired,error:pichatError,
+  const {ready:pichatReady,loading:pichatAuthRequired,error:pichatError,notice:pichatNotice,
     frameLoaded:pichatFrameLoaded,setError:setPichatError} = useEmbedIdentity(pichatFrameRef,
       pichatOrigin,pichatAgentId,connection.product_user_id,connectionVersion,
-      chatOpen && connectionLoaded && !!embedWorkspaceScope);
+      connectionLoaded && !!embedWorkspaceScope);
   const viewBridge = useHostViewContext(pichatFrameRef,pichatOrigin,pichatAgentId,connectionVersion,
-    chatOpen && connectionLoaded, {version:'geoagent-view/v1',snapshot_id:workingSid,topic,dimension,start,end});
+    connectionLoaded && !!embedWorkspaceScope, {version:'geoagent-view/v1',snapshot_id:workingSid,topic,dimension,start,end}, chatOpen);
   const pichatUrl = (() => {
     const url = new URL(
       `/work-embed/${encodeURIComponent(pichatAgentId)}`,
@@ -583,7 +585,7 @@ export default function App() {
     "fail-http": "采集失败",
   };
   return (
-    <div className="prototype-shell">
+    <div className={`prototype-shell${chatOpen ? " chat-mode" : ""}`}>
       {settingsOpen ? <IntegrationSettings onClose={()=>setSettingsOpen(false)} onSaved={()=>void reloadConnection()}/> : null}
       {mcpWorkbenchOpen ? <McpWorkbench context={{snapshot_id:workingSid,topic,dimension,start,end}} onClose={()=>setMcpWorkbenchOpen(false)}/> : null}
       <header className="prototype-header">
@@ -677,6 +679,8 @@ export default function App() {
             ].map(([id, label]) => (
               <button
                 key={id}
+                disabled={id === "chat" && !workingSid}
+                title={id === "chat" && !workingSid ? "请等待工作快照加载完成" : undefined}
                 className={
                   (page === "briefs" ? id === "briefs" : tab === id)
                     ? "selected"
@@ -1527,8 +1531,9 @@ export default function App() {
               </aside>
             </div>
           )}
-          {chatOpen && (
-            <aside className={`chat-panel${chatExpanded ? " chat-panel-expanded" : ""}`} aria-label="GeoAgent 研究助手">
+          {!!embedWorkspaceScope && (
+            <div className={`chat-slot${chatOpen ? "" : " chat-slot-parked"}`} inert={!chatOpen} aria-hidden={!chatOpen}>
+            <aside className={`chat-panel${chatOpen && chatExpanded ? " chat-panel-expanded" : ""}`} aria-label="GeoAgent 研究助手">
               <div className="drawer-heading chat-panel-heading">
                 <div className="chat-panel-caption">
                   <h2>
@@ -1563,7 +1568,7 @@ export default function App() {
                 </div>
               </div>
               <div className="pichat-embed-shell">
-                {!pichatReady && !pichatAuthRequired && !pichatError && (
+                {!pichatReady && !pichatAuthRequired && !pichatError && !pichatNotice && (
                   <div className="pichat-embed-status">
                     <RefreshCw className="spin" size={16} /> 正在连接 PiChat Agent…
                   </div>
@@ -1573,6 +1578,7 @@ export default function App() {
                     正在获取 PiChat 嵌入身份…
                   </div>
                 )}
+                {pichatNotice && <div className="pichat-embed-status" role="status">{pichatNotice}</div>}
                 {pichatError && (
                   <div className="pichat-embed-status error" role="alert">{pichatError}
                     <button type="button" onClick={()=>setConnectionVersion(value=>value+1)}>重试连接</button>
@@ -1594,6 +1600,7 @@ export default function App() {
                 /> : null}
               </div>
             </aside>
+            </div>
           )}
         </main>
         <aside className="insight-panel">

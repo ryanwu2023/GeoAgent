@@ -12,7 +12,9 @@ body{overflow:hidden}button.primary,a.primary{background:#285d94;color:#edf6ff;b
 
 /* Size chat from the real remaining height, including wrapped filters/zoom.
    Never navigate/remount the cross-origin frame to change presentation. */
-.prototype-shell .monitor-panel-chat>.chat-panel{position:relative;inset:auto;flex:1;min-height:0;overflow:hidden}
+.chat-slot{position:relative;flex:1;min-height:0;min-width:0}
+.chat-slot.chat-slot-parked{position:absolute;inset:100px 0 0;visibility:hidden;pointer-events:none}
+.prototype-shell .chat-slot>.chat-panel{position:absolute;inset:0;width:100%;height:100%;min-height:0;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr)}
 .monitor-panel-chat>.center-view,.monitor-panel-chat>.empty{display:none}
 .prototype-shell .chat-panel>.chat-panel-heading{position:relative;flex:none;margin:0;padding:8px 12px;gap:10px;min-height:46px}
 .chat-panel-caption{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;min-width:0;flex:1}
@@ -24,12 +26,13 @@ body{overflow:hidden}button.primary,a.primary{background:#285d94;color:#edf6ff;b
 .chat-panel-context[open]{flex-basis:100%}
 .chat-panel-context>div{max-height:100px;overflow:auto;padding:6px 0}
 .prototype-shell .chat-panel .chat-panel-context small{margin:0}
-.prototype-shell .pichat-embed-shell{overflow:hidden}
+.prototype-shell .pichat-embed-shell{display:block;min-height:0;min-width:0;overflow:hidden;contain:layout paint}
 /* Error actions must be clickable above the cross-origin frame. */
-.prototype-shell .pichat-embed-status.error{pointer-events:auto;max-width:calc(100% - 24px);white-space:normal;overflow-wrap:anywhere}
+.prototype-shell .pichat-embed-status{max-width:calc(100% - 24px);white-space:normal;overflow-wrap:anywhere}
+.prototype-shell .pichat-embed-status.error{pointer-events:auto}
 .prototype-shell .pichat-embed-status.error button{flex:none}
-.prototype-shell .pichat-embed-frame{flex:1;height:100%;min-width:0}
-.prototype-shell .monitor-panel-chat>.chat-panel.chat-panel-expanded{position:fixed;inset:8px;z-index:100;flex:none;border:1px solid #365571;border-radius:10px;box-shadow:0 0 0 100vmax #030a16cc}
+.prototype-shell .pichat-embed-frame{position:absolute;inset:0;width:100%;height:100%;min-width:0}
+.prototype-shell .chat-slot>.chat-panel.chat-panel-expanded{position:fixed;inset:8px;width:auto;height:auto;z-index:100;border:1px solid #365571;border-radius:10px;box-shadow:0 0 0 100vmax #030a16cc}
 @media(min-width:901px) and (max-height:900px){
  .prototype-header{height:52px}
  .prototype-grid{padding:8px;gap:8px}
@@ -37,9 +40,12 @@ body{overflow:hidden}button.primary,a.primary{background:#285d94;color:#edf6ff;b
  .compact-filters{padding:6px 10px}
 }
 @media(max-width:900px){
- .monitor-panel-chat{height:calc(100dvh - 160px);min-height:480px}
+ .prototype-shell.chat-mode{height:100dvh;min-height:0;overflow:hidden}
+ .chat-mode .prototype-grid{grid-template-rows:minmax(0,1fr)}
+ .chat-mode .monitor-panel-chat{height:auto;min-height:0}
+ .chat-mode .insight-panel{display:none}
  .chat-panel-scope{display:none}
- .prototype-shell .monitor-panel-chat>.chat-panel.chat-panel-expanded{inset:4px}
+ .prototype-shell .chat-slot>.chat-panel.chat-panel-expanded{inset:4px}
 }
 
 :root{color-scheme:dark}*{scrollbar-color:#31445e #101b2e;scrollbar-width:thin}.brief-text h1{font-size:22px;margin:14px 0}.brief-text h2{font-size:17px;margin:24px 0 10px}.brief-text h3{font-size:14px;margin:20px 0 10px}.brief-text p{margin:10px 0}.brief-text table{font-size:11px;display:block;overflow:auto}.brief-text th,.brief-text td{min-width:110px;padding:9px!important}.brief-text pre{white-space:pre-wrap;overflow-wrap:anywhere}.brief-text{white-space:normal}.prototype-shell .brief-text li{margin:8px 0}

@@ -2,10 +2,12 @@ import {useEffect, useRef, useState, type RefObject} from 'react';
 import {HostViewBridge, trustedViewSource, type GeoView} from './hostViewContext';
 
 export function useHostViewContext(frame: RefObject<HTMLIFrameElement | null>, origin: string,
-  agentId: string, connectionVersion: number, active: boolean, view: GeoView) {
+  agentId: string, connectionVersion: number, active: boolean, view: GeoView, visible = true) {
   const [status,setStatus] = useState('未同步：等待面板就绪');
   const latest = useRef(view);
   latest.current = view;
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
   const sendRef = useRef<()=>void>(()=>{});
   const resetRef = useRef<()=>void>(()=>{});
   useEffect(()=>{
@@ -15,6 +17,7 @@ export function useHostViewContext(frame: RefObject<HTMLIFrameElement | null>, o
     const reset = () => {clear(); bridge.reset(); setStatus('未同步：等待面板就绪');};
     const send = () => {
       clear();
+      if(!visibleRef.current) return;
       const message=bridge.send(latest.current);
       if(!message) {setStatus('未同步：等待有效范围与面板绑定'); return;}
       setStatus(`范围版本 ${message.revision}：等待接收（仅供下一轮）`);
@@ -38,6 +41,6 @@ export function useHostViewContext(frame: RefObject<HTMLIFrameElement | null>, o
     window.addEventListener('message',receive);
     return ()=>{clear();bridge.reset();window.removeEventListener('message',receive);sendRef.current=()=>{};resetRef.current=()=>{};};
   },[frame,origin,agentId,connectionVersion,active]);
-  useEffect(()=>{if(active)sendRef.current();},[active,view.snapshot_id,view.topic,view.dimension,view.start,view.end]);
+  useEffect(()=>{if(active)sendRef.current();},[active,visible,view.snapshot_id,view.topic,view.dimension,view.start,view.end]);
   return {status,reset:()=>resetRef.current()};
 }

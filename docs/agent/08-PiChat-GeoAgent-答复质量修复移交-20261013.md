@@ -77,3 +77,22 @@ GeoAgent已通过MR !9修订发布探针的初始化生命周期和首错脱敏�
 本次生产复现签发200但frame持续“恢复投研工作台”。GeoAgent原finance:auth:token.user.id使用产品外部绑定ID而非签发返回user.id；重复投递在PiChat的/auth/me已写入真实用户后会覆盖已验证身份，触发auth epoch/sameIdentity保护。GeoAgent已在MR !10改为同次签发的token+user、校验userId=user.id，不更换Key或扩大权限。PiChat无需为兼容伪用户关闭身份保护；建议其后续也按同token去重、限制宿主user对已验证主体的覆盖，作为防御性增强。生产冷启动/重进/真实问答结果见03账本，发布前不宣称故障关闭。
 
 该修订已随v1.0.20/生产流水线5579上线（部署28758成功），冷启动、两次菜单重进及第35轮真实MCP调用均通过，原会话/Key保留；PiChat进程未重启。本项目本次缺陷已关闭。尚未证明所有历史身份超时同因；长期续期、故障注入与语音仍按原边界。新回答仍写“无覆盖差异（query_scope未回显）”，请继续改成“按当前看板参数调用，工具未独立回显完整范围”，不要将宿主参数、工具回显及模型推断混为一层。
+
+### 2026-10-20：v1.0.21 后仍存在的慢连接与欢迎页专项
+
+请结合03账本本节的新证据核查，不沿用10-16的身份覆盖缺陷作为所有故障的解释。GeoAgent的MR !12已随v1.0.21/5693/29362部署：已修正错误层按钮不能点击、迟到iframe load强制轮换身份及ready与签发Promise竞态；未改变15秒签发/10秒就绪预算、Key、身份或PiChat服务。
+
+1. **真实冷启动仍慢**：07:10:28.627 UTC宿主身份200，07:10:45.952才收到finance:chat:ready，间隔17.325秒；ws-ticket多次200。Chrome155实际报`net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS`，随后恢复。另一轮iframe文档本身曾延迟约一分钟，必须与认证后WS慢连接分开。Nginx `/embed-ws` 的101访问日志结束时间不能当建连开始时间；请关联同一frame/浏览器tab、鉴权epoch、WS尝试、stateLoading和ready，不拿其他调用者的状态码代替。
+2. **网络/权限证据尚非全因果**：当前测试机chat.lhotsetech.com解析fc00::3ed与198.18.5.156，chat.test解析192.168.100.206；跨域frame的local-network-access/local-network/loopback-network均policy=false、permission=denied。请联合网络维护者核对Fake-IP/IPv6分流与实际握手远端地址，区分浏览器拦截、未发出请求和服务端拒绝。不能直接归因Key失效；也不能仅因为同机后一轮成功就排除地址族/路由差异。不要求关闭安全检查、跳过TLS或给所有iframe放开本地网络。若确需权限委派或网络配置变更，应先说明目标origin、访问范围及安全影响并取得用户批准。
+3. **输入框可见性分状态验收**：用户截图为欢迎页+未就绪提示，不是历史ChatPanel。GeoAgent在受控1920×1200及低高度视口对两种路径分别测量，均未复现裁切；欢迎页仅通过测试标签的WS暂缓制造，不能替代客户真实故障。请在PiChat核对AgentEmbedPage→AgentChatReady/ChatPanel的父级height/min-height/overflow、连接条与范围条占用、composer底部几何及未就绪可输入/发送状态。不要只把欢迎页换成历史页后就宣称布局修复。故障注入已清理，没有留下服务端或浏览器安全设置改动。
+4. **限定成功与未关闭问题**：同一公网会话s-677fa5bc1f0d真实新问答调用call_00_pAEUGPJX2UV1J8vf3yWF7557，07:12:43.879→07:12:46.509 UTC、2.63秒、source complete/succeeded；3980及250/65/122/3543与面板一致。最后无拦截冷启动07:24:22.287身份200→07:24:29.219 ready、原会话保留。两项均不是“间歇故障已修复”的证据。保留初次失败并给出修复前后同路径/同浏览器的重复验证结果。
+5. **独立答复语义**：本轮说“3980（补充报告22条另行统计、不并入）”含混。实际records_count=3980包含22条supplemental，coverage美伊3958排除22条；不要把coverage_basis的排除规则套到records_count。请按字段各自统计口径表述，避免数值正确但解释错。
+
+参考Chrome官方权限策略说明（只用于解释浏览器行为，不是关闭保护的授权）：https://developer.chrome.com/docs/privacy-security/permissions-policy 。本轮不直接改PiChat生产代码或网络策略；需要额外变更时先明确方案与授权范围。
+
+#### 同日 StockLink 与网络补证
+
+- StockLink当前源码包含0147021f/527a71f7的启动生命周期修复及09284447的opt-in `embed-startup/v1`轨迹。请优先复用既有attemptId/frameId协议核对PiChat端阶段，而不是再造另一种ready/ack语义。GeoAgent后续可补相同诊断，当前没有将该跟踪改动发布。
+- 已只读确认本机v2rayN的sing-box TUN=utun81，Fake-IP IPv4/IPv6范围为198.18.0.0/15及fc00::/18。PiChat公网域实际公开DNS只有A=139.224.61.228、无AAAA；本机却返回198.18.5.156/fc00::3ed，均走utun81。内部chat.test走公司WireGuard的utun4，不能以内部成功替代公网路径。
+- 同机IPv4普通HTTPS探针0.186秒200；IPv6两次10.007/8.003秒超时；指定真实IPv4也8.005秒超时，且仍走TUN。因此存在代理地址族/分流问题，但未做停TUN A/B，不将全部问题归因VPN。没有修改用户网络设置；需要联合网络维护者继续核查，不能在PiChat里放宽鉴权作为“修复”。
+- 另有一次CDP模拟视口放大/还原后的绘制残留：DOM尺寸/命中区域已恢复，截图跨域绘制范围未立即恢复，改变视口1px后恢复。尚未证明与客户输入框消失同因；欢迎页、历史页、放大/还原应分别保留截图与几何证据。
