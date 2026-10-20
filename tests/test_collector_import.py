@@ -3,6 +3,7 @@ import json
 import pytest
 
 from backend.collector_import import import_collector_output
+from backend.store import get_working_snapshot_id
 
 
 def test_import_collector_output_rejects_missing_published_tree(tmp_path):
@@ -33,5 +34,6 @@ def test_import_collector_output_creates_snapshot_from_published_tree(tmp_path, 
     assert result["created"] is True
     assert result["snapshot_id"]
     assert result["records"] == 1
+    assert get_working_snapshot_id() == result["snapshot_id"]
     assert (tmp_path / "data" / "research.sqlite3").is_file()
     assert (tmp_path / "data" / "archive").is_dir()

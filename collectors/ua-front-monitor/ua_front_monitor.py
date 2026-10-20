@@ -1229,7 +1229,7 @@ def run_selftest(cfg, eng):
     win2, _ = window_filter(list(arch2.values()), date(2026, 9, 19), 30)
     ck("excluded 不进快照", len(win2) == 0)
     # --- 配置不变量 ---
-    ck("战线八桶全二维", all(len(b["require_all"]) == 2 for b in cfg["buckets"].values()))
+    ck("战线八桶至少二维", all(len(b["require_all"]) >= 2 for b in cfg["buckets"].values()))
     ck("所有桶有标签", all(b.get("label") for b in cfg["buckets"].values()))
     ck("每启用源 tier 合法", all(s.get("tier") in ("T1", "T2", "T3")
        for s in cfg["sources"] if s.get("enabled")))

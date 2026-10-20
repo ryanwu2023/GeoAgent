@@ -1,4 +1,5 @@
 """Agent/model transports, hot-readable local configuration, no browser secrets."""
+import hashlib
 import os
 from urllib.parse import urlsplit
 import httpx
@@ -19,8 +20,8 @@ def config():
     values['PICHAT_BASE_URL']=values['PICHAT_BASE_URL'] or 'http://127.0.0.1:9172'
     values['LLM_BASE_URL']=values['LLM_BASE_URL'] or 'https://api.openai.com/v1'
     timeout_value=values['PICHAT_TIMEOUT'] if values['PICHAT_API_KEY'] else values['LLM_TIMEOUT']
-    try:values['timeout']=max(5,min(300,float(timeout_value or (90 if values['PICHAT_API_KEY'] else 45))))
-    except ValueError:values['timeout']=45
+    try:values['timeout']=max(5,min(300,float(timeout_value or 90)))
+    except ValueError:values['timeout']=90
     return values
 
 def endpoint(url):
@@ -42,6 +43,19 @@ def status():
     if c['PICHAT_API_KEY']:
         return {'configured':True,'model':'Pi Chat Agent','mode':'Agent 增强分析','provider':'pichat','protocol':'Pi Chat /api/v1/chat','auto_model':False}
     return {'configured':bool(c['LLM_API_KEY']),'model':c['LLM_MODEL'] or '自动发现','mode':'模型分析' if c['LLM_API_KEY'] else '本地证据检索','provider':'openai-compatible' if c['LLM_API_KEY'] else 'local','protocol':'兼容 Chat Completions','auto_model':not bool(c['LLM_MODEL'])}
+
+def cache_identity():
+    """Return a non-secret identity used to invalidate persisted model output."""
+    c = config()
+    if c['PICHAT_API_KEY']:
+        provider, model, target = 'pichat', 'Pi Chat Agent', pichat_endpoint(c['PICHAT_BASE_URL'])
+    else:
+        provider, model, target = 'openai-compatible', c['LLM_MODEL'] or '自动发现', endpoint(c['LLM_BASE_URL'])
+    return {
+        'provider': provider,
+        'model': model,
+        'endpoint_hash': hashlib.sha256(target.encode('utf-8')).hexdigest()[:16],
+    }
 
 async def resolve_model(client,c):
     if c['LLM_MODEL']:return c['LLM_MODEL']

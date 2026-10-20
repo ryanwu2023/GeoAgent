@@ -34,6 +34,8 @@ def test_registered_collector_selftest(item, tmp_path):
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=240,
     )
 

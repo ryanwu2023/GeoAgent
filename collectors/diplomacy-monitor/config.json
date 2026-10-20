@@ -288,7 +288,14 @@
           "backchannel",
           "back-channel",
           "indirect talks",
-          "direct talks"
+          "direct talks",
+          "counterproposal",
+          "counter-proposal",
+          "response to proposal",
+          "reply to proposal",
+          "waiting for response",
+          "waiting to hear",
+          "framework proposal"
         ],
         [
           "iran",
@@ -319,6 +326,33 @@
           "tehran",
           "delegation",
           "visa"
+        ]
+      ]
+    },
+    "sanctions_policy": {
+      "label": "美国制裁、豁免与次级关税",
+      "require_all": [
+        [
+          "iran",
+          "iranian",
+          "tehran",
+          "irgc",
+          "graham act",
+          "graham russia and iran act"
+        ],
+        [
+          "sanction",
+          "secondary sanction",
+          "tariff",
+          "secondary tariff",
+          "waiver",
+          "waive",
+          "exemption",
+          "exempt",
+          "executive order",
+          "extend",
+          "extension",
+          "enforcement"
         ]
       ]
     }
@@ -1021,6 +1055,30 @@
       "publisher": "CGTN 中国环球电视网",
       "enabled": true,
       "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）"
+    },
+    {
+      "id": "gn-counterproposal",
+      "url": "https://news.google.com/rss/search?q=(US+OR+Washington)+Iran+(counterproposal+OR+%22counter-proposal%22+OR+%22waiting+for+a+response%22)+Qatar&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "美方反提案、卡塔尔转递与伊方答复状态"
+    },
+    {
+      "id": "gn-hormuz-conditions",
+      "url": "https://news.google.com/rss/search?q=Iran+Hormuz+(conditions+OR+framework+OR+%22safe+passage%22+OR+proposal)+talks&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "海峡重开条件与安全通行框架"
+    },
+    {
+      "id": "gn-iran-sanctions-waiver",
+      "url": "https://news.google.com/rss/search?q=Iran+(%22Graham+Act%22+OR+%22Graham+Russia+and+Iran+Act%22+OR+waiver+OR+%22secondary+sanctions%22+OR+%22secondary+tariffs%22)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "美国对伊制裁执行令、豁免、次级制裁/关税与延长"
     }
   ],
   "mediator_baseline": [

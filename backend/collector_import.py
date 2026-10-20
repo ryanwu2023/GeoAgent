@@ -12,7 +12,7 @@ from pathlib import Path
 from .adapters import load_bundle
 from .chinese import start_translation
 from .paths import collector_data_root
-from .store import save_snapshot
+from .store import save_snapshot, set_working_snapshot_id
 
 
 def _has_published_output(root: Path) -> bool:
@@ -34,6 +34,10 @@ def import_collector_output(root: Path | None = None) -> dict:
     if not bundle["records"] and not bundle.get("observations"):
         raise ValueError("采集输出为空，未生成快照")
     snapshot_id, created = save_snapshot(bundle)
+    # A successful managed collection is the new live research context.  The
+    # immutable snapshot remains selectable for historical replay, while the
+    # default workspace advances with the newly imported data.
+    set_working_snapshot_id(snapshot_id)
     start_translation()
     return {
         "snapshot_id": snapshot_id,

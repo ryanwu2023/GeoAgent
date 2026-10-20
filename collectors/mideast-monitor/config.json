@@ -419,6 +419,54 @@
       "publisher": "CGTN 中国环球电视网",
       "enabled": true,
       "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）"
+    },
+    {
+      "id": "gn-yemen-offensive",
+      "url": "https://news.google.com/rss/search?q=(%22Operation+Dawn+of+Yemen%22+OR+Turbah+OR+Taiz)+(Houthi+OR+Saudi)+when%3A14d&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "也门政府/沙特反攻与控制线变化，2026-10 关键词补强"
+    },
+    {
+      "id": "gn-houthi-saudi-infra",
+      "url": "https://news.google.com/rss/search?q=Houthi+(Riyadh+OR+Abha+OR+Dammam+OR+Aramco+OR+airport+OR+%22oil+facility%22)+when%3A14d&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "胡塞袭击沙特机场与能源设施"
+    },
+    {
+      "id": "gn-hormuz-transfer",
+      "url": "https://news.google.com/rss/search?q=Hormuz+(%22ship-to-ship%22+OR+%22oil+transfer%22+OR+shuttle+OR+escort+OR+mine)+when%3A14d&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "霍尔木兹海上过驳、护航与水雷风险"
+    },
+    {
+      "id": "gn-iran-proxy-finance",
+      "url": "https://news.google.com/rss/search?q=(%22Iran-backed%22+OR+%22Iranian-backed%22)+(militia+OR+Hezbollah+OR+Houthi)+(funding+OR+money+OR+IRGC)+when%3A30d&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "代理网络资金回流与补给能力"
+    },
+    {
+      "id": "gn-imo-hormuz",
+      "url": "https://news.google.com/rss/search?q=site%3Aimo.org+Hormuz+(attack+OR+incident+OR+shipping)+when%3A30d&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "IMO 经 Google News",
+      "enabled": true,
+      "note": "IMO 商船确认事件与海员安全更新；聚合标题层，页面原文需回链核验"
+    },
+    {
+      "id": "gn-un-houthi-saudi",
+      "url": "https://news.google.com/rss/search?q=site%3Aun.org+Houthi+Saudi+(airport+OR+attack)+when%3A30d&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "United Nations 经 Google News",
+      "enabled": true,
+      "note": "联合国对胡塞-沙特袭击的官方声明；聚合标题层"
     }
   ],
   "anchor_note": "锚定词表在主脚本（中东全域专名）；gulf 单词可撞墨西哥湾，靠 gnews 查询自带中东词+人工复核兜底",
@@ -481,7 +529,9 @@
         [
           "houthi",
           "ansar allah",
-          "sanaa"
+          "sanaa",
+          "ansarallah",
+          "ansar allah movement"
         ],
         [
           "strike",
@@ -510,7 +560,22 @@
           "port",
           "withdraw",
           "advance",
-          "gains"
+          "gains",
+          "operation dawn of yemen",
+          "dawn of yemen",
+          "turbah",
+          "taiz",
+          "mocha",
+          "airport",
+          "riyadh",
+          "abha",
+          "dammam",
+          "aramco",
+          "oil facility",
+          "energy infrastructure",
+          "presidential palace",
+          "war room",
+          "evacuat"
         ]
       ]
     },
@@ -600,7 +665,15 @@
           "cargo ship",
           "vessel",
           "merchant ship",
-          "shipping"
+          "shipping",
+          "sea of oman",
+          "arabian sea",
+          "mocha",
+          "mokha",
+          "perim",
+          "zubab",
+          "hodeidah",
+          "hodeida"
         ],
         [
           "attack",
@@ -617,7 +690,21 @@
           "port",
           "boarding",
           "blockade",
-          "safe"
+          "safe",
+          "projectile",
+          "mine",
+          "mining",
+          "ship-to-ship",
+          "sts transfer",
+          "oil transfer",
+          "escort",
+          "convoy",
+          "reroute",
+          "dark mode",
+          "ais",
+          "safe passage",
+          "passage authority",
+          "toll"
         ]
       ]
     },
@@ -671,6 +758,41 @@
           "rallied against",
           "rallies in",
           "rallies against"
+        ]
+      ]
+    },
+    "proxy_finance": {
+      "label": "伊朗代理网络资金与补给",
+      "require_all": [
+        [
+          "iran-backed militia",
+          "iranian-backed militia",
+          "iran proxy",
+          "iranian proxy",
+          "hezbollah",
+          "hamas",
+          "kataib",
+          "popular mobilization",
+          "pmf",
+          "houthi",
+          "ansarallah"
+        ],
+        [
+          "funding",
+          "funds",
+          "finance",
+          "financing",
+          "money",
+          "cash",
+          "remit",
+          "remittance",
+          "transfer funds",
+          "send money",
+          "irgc",
+          "revolutionary guard",
+          "weapons transfer",
+          "arms transfer",
+          "smuggling"
         ]
       ]
     }

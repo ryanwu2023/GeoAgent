@@ -21,20 +21,28 @@ def save_translation(original, chinese, method='本地机器翻译（术语校�
 
 _translation_memory = None
 
+def _translation_marker():
+    """Cheap cross-process cache version for the persisted translation table."""
+    with db() as c:
+        table(c)
+        row = c.execute("SELECT COUNT(*) AS count,COALESCE(MAX(created_at),'') AS latest FROM translations").fetchone()
+    overrides = ROOT / 'backend' / 'zh_overrides.json'
+    return (int(row['count']), str(row['latest']), overrides.stat().st_mtime_ns)
+
 def translation_cache():
     global _translation_memory
-    from time import monotonic
     key=str(data_dir().resolve())
-    if _translation_memory and _translation_memory[0]==key and monotonic()-_translation_memory[1]<5:
+    marker = _translation_marker()
+    if _translation_memory and _translation_memory[0]==key and _translation_memory[1]==marker:
         return _translation_memory[2]
     result=_read_translation_cache()
-    _translation_memory=(key,monotonic(),result)
+    _translation_memory=(key,marker,result)
     return result
 
 def _read_translation_cache():
     with db() as c:
         table(c)
-        cache={r['hash']:r['chinese'] for r in c.execute("SELECT hash,chinese,original,method FROM translations WHERE method != '本地机器翻译'") if is_chinese(r['chinese']) and (r['method'].startswith('模型翻译') or language(r['original']) not in ('cyrillic','hebrew','arabic_unknown'))}
+        cache={r['hash']:r['chinese'] for r in c.execute("SELECT hash,chinese,original,method FROM translations WHERE method != '本地机器翻译'") if is_chinese(r['chinese']) and (r['method'].startswith(('模型翻译','模型批量翻译')) or language(r['original']) not in ('cyrillic','hebrew','arabic_unknown'))}
     overrides=json.loads((ROOT/'backend'/'zh_overrides.json').read_text(encoding='utf-8'))
     cache.update({digest(k):v for k,v in overrides.items()})
     return cache
@@ -141,20 +149,36 @@ def translation_running():
 
 def start_translation():
     global _worker
-    if translation_running():return
-    if not (data_dir()/'models'/'opus-mt-en-zh'/'pytorch_model.bin').exists():return
-    if translation_status()['pending']==0:return
     folder=data_dir();folder.mkdir(parents=True,exist_ok=True)
+    if translation_status()['pending']==0:return
+    # Coalesce imports that arrive while a worker is active.  The pipeline
+    # removes this marker before each pass and repeats when a later import
+    # creates it again, so newly collected records are not stranded.
+    (folder/'translation.request').write_text(now(),encoding='utf-8')
+    if translation_running():return
     with (folder/'translation.log').open('a',encoding='utf-8') as log:
-        _worker=subprocess.Popen([sys.executable,'-u',str(ROOT/'scripts'/'translate_snapshot.py')],cwd=ROOT,stdout=log,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+        # Run the complete incremental pipeline after every successful import:
+        # the bundled model handles ordinary English/Persian first, then the
+        # configured model fills Cyrillic, Arabic and mixed-language gaps.
+        # Both stages write through the same persistent translation cache.
+        _worker=subprocess.Popen([sys.executable,'-u',str(ROOT/'scripts'/'translate_pipeline.py')],cwd=ROOT,stdout=log,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+
+_translation_status_memory = None
 
 def translation_status():
+    global _translation_status_memory
     available=snapshots()
     if not available:return {'pending':0,'ready':0,'total':0,'running':False}
+    running = translation_running()
+    status_key = (str(data_dir().resolve()), available[0]['id'], _translation_marker(), running)
+    if _translation_status_memory and _translation_status_memory[0] == status_key:
+        return _translation_status_memory[1]
     records=get_snapshot(available[0]['id'])['records']
     cache=translation_cache()
     ready=sum(all(not r[f] or is_chinese(r[f]) or digest(r[f]) in cache for f in ('title','text')) for r in records)
-    return {'pending':len(records)-ready,'ready':ready,'total':len(records),'running':translation_running()}
+    result = {'pending':len(records)-ready,'ready':ready,'total':len(records),'running':running}
+    _translation_status_memory = (status_key, result)
+    return result
 
 def localize_brief_markdown(markdown):
     cache=translation_cache()

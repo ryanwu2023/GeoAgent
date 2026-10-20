@@ -1,10 +1,15 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import {MapboxOverlay} from '@deck.gl/mapbox';
 import {ScatterplotLayer,TextLayer,LineLayer} from '@deck.gl/layers';
 import {Focus,Globe2,Layers,X} from 'lucide-react';
 import type {MapEvidence,Point} from './types';
 import 'maplibre-gl/dist/maplibre-gl.css';
+// MapLibre 6 ships its worker as a separate module.  Give Vite an explicit
+// asset URL so production builds do not rely on a blob worker that browsers
+// can reject or fail to resolve.
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 type Marker=Point & {record:MapEvidence};
 function placeLabel(items:Marker[]){
   const labels=[...new Set(items.map(p=>p.label==='岩国'?'日本岩国':p.label))];
@@ -22,13 +27,15 @@ const signals:Record<string,string>={all:'全部动态',escalation:'升级相关
 const majorCountries=new Set(['USA','CAN','BRA','RUS','CHN','IND','AUS','ZAF','EGY','IRN','SAU','TUR','UKR','FRA','DEU','GBR','JPN','MEX','ARG','KAZ']);
 const places=[{label:'霍尔木兹海峡',position:[56.25,26.57]},{label:'曼德海峡',position:[43.33,12.58]},{label:'红海',position:[38,20]},{label:'阿拉伯海',position:[64,15]}];
 const ukrainePlaces=[{label:'黑海',position:[34,43]},{label:'亚速海',position:[36.7,46]}];
-export default function MapView({records,topic,onSelect,resetKey=0}:{records:MapEvidence[];topic:string;onSelect:(r:MapEvidence)=>void;resetKey?:number}){
+export default function MapView({records,topic,onSelect,onTranslateTitles,resetKey=0}:{records:MapEvidence[];topic:string;onSelect:(r:MapEvidence)=>void;onTranslateTitles?:(ids:string[])=>Promise<Record<string,string>>;resetKey?:number}){
   const host=useRef<HTMLDivElement>(null),map=useRef<maplibregl.Map|null>(null),overlay=useRef<MapboxOverlay|null>(null);
   const [legendOpen,setLegendOpen]=useState(()=>window.innerWidth>900);
   const [error,setError]=useState(''),[layers,setLayers]=useState<Record<string,boolean>>(Object.fromEntries(Object.keys(categories).map(k=>[k,true]))),[signal,setSignal]=useState('all');
   const [layoutVersion,setLayoutVersion]=useState(0);
-  const [zoom,setZoom]=useState(1.5),[ready,setReady]=useState(false),[countryLabels,setCountryLabels]=useState<CountryLabel[]>([]),[cluster,setCluster]=useState<Marker[]>([]);
+  const [zoom,setZoom]=useState(1.5),[ready,setReady]=useState(false),[countryLabels,setCountryLabels]=useState<CountryLabel[]>([]),[cluster,setCluster]=useState<Marker[]>([]),[translatingCluster,setTranslatingCluster]=useState(false);
   const onClick=useRef(onSelect);onClick.current=onSelect;
+  const translateTitles=useRef(onTranslateTitles);translateTitles.current=onTranslateTitles;
+  const translationRequests=useRef(new Set<string>());
   const filtered=useMemo(()=>records.filter(r=>layers[r.event_category]&&(signal==='all'||r.situation_signal===signal)),[records,layers,signal]);
   const pts=useMemo(()=>filtered.flatMap(record=>record.points.map(p=>({...p,record}))),[filtered]);
   function globalView(){map.current?.flyTo({center:[30,27],zoom:1.5,duration:600});setCluster([])}
@@ -52,6 +59,23 @@ export default function MapView({records,topic,onSelect,resetKey=0}:{records:Map
   useEffect(()=>{if(ready){map.current?.setFilter('focus',['in','ADM0_A3',...(topic==='ukraine'?['RUS','UKR']:topic==='all'?['IRN','USA','RUS','UKR']:['IRN','USA'])]);setCluster([])}},[topic,ready]);
   useEffect(()=>{if(resetKey){globalView();setSignal('all')}},[resetKey]);
   useEffect(()=>setCluster([]),[layers,signal]);
+  useEffect(()=>{
+    const updated=new Map(records.map(record=>[record.id,record]));
+    setCluster(current=>current.map(marker=>updated.has(marker.record.id)?{...marker,record:updated.get(marker.record.id)!}:marker));
+  },[records]);
+  async function openCluster(items:Marker[]){
+    setCluster(items);
+    const ids=[...new Set(items.filter(item=>item.record.title.includes('中文译文准备中')).map(item=>item.record.id))].slice(0,12);
+    const key=ids.slice().sort().join('|');
+    if(!ids.length||!translateTitles.current||translationRequests.current.has(key))return;
+    translationRequests.current.add(key);setTranslatingCluster(true);
+    let completed=false;
+    try{
+      const titles=await translateTitles.current(ids);
+      completed=Object.keys(titles).length>0;
+      if(completed)setCluster(current=>current.map(marker=>titles[marker.record.id]?{...marker,record:{...marker.record,title:titles[marker.record.id]}}:marker));
+    }finally{if(!completed)translationRequests.current.delete(key);setTranslatingCluster(false)}
+  }
   useEffect(()=>{
     if(!overlay.current||!ready)return;
     const size=zoom<2.7?5:zoom<4?1.6:0;
@@ -77,7 +101,7 @@ export default function MapView({records,topic,onSelect,resetKey=0}:{records:Map
     overlay.current.setProps({layers:[
       new TextLayer({id:'country-labels',data:labels,getPosition:d=>d.position,getText:d=>d.name,getSize:zoom>2.7?12:10,getColor:[128,158,181,210],fontFamily:'Microsoft YaHei',fontWeight:400,characterSet:'auto',getTextAnchor:'middle',pickable:false}),
       new LineLayer({id:'location-connectors',data:data.filter(d=>d.offset),getSourcePosition:d=>[d.lon,d.lat],getTargetPosition:d=>d.position,getColor:[119,158,185,95],getWidth:1,pickable:false}),
-      new ScatterplotLayer({id:'evidence',data,pickable:true,getPosition:d=>d.position,getFillColor:d=>colors[d.signalKey]||colors.unknown,getLineColor:[220,238,247,180],stroked:true,getLineWidth:1,lineWidthUnits:'pixels',getRadius:d=>d.radius,radiusUnits:'pixels',onClick:({object})=>{if(object){setCluster(object.items);onClick.current(object.record)}}}),
+      new ScatterplotLayer({id:'evidence',data,pickable:true,getPosition:d=>d.position,getFillColor:d=>colors[d.signalKey]||colors.unknown,getLineColor:[220,238,247,180],stroked:true,getLineWidth:1,lineWidthUnits:'pixels',getRadius:d=>d.radius,radiusUnits:'pixels',onClick:({object})=>{if(object){void openCluster(object.items);onClick.current(object.record)}}}),
       new TextLayer({id:'bubble-counts',data,getPosition:d=>d.position,getText:d=>String(d.count),getSize:11,getColor:[10,25,40,255],fontFamily:'Microsoft YaHei',fontWeight:700,characterSet:'auto',pickable:false}),
       new TextLayer({id:'sea-labels',data:topic==='ukraine'?ukrainePlaces:places,getPosition:d=>d.position as [number,number],getText:d=>d.label,getSize:11,getColor:[114,182,208,220],getPixelOffset:[0,20],fontFamily:'Microsoft YaHei',characterSet:'auto',outlineWidth:2,outlineColor:[9,21,35],fontSettings:{sdf:true},visible:zoom>2.3}),
     ],getTooltip:({object})=>object?.record?`${object.label} · ${signals[object.signalKey]} · ${object.count} 篇关联报道\n${object.categories}\n${new Set(object.items.map((p:Marker)=>p.label)).size>1?'附近多个地点的报道汇总，请展开查看各地点':placeNote(object.items[0])}`:null});
@@ -88,7 +112,7 @@ export default function MapView({records,topic,onSelect,resetKey=0}:{records:Map
     <div className="map-signal-tabs">{Object.entries(signals).map(([key,label])=><button key={key} className={signal===key?'selected':''} onClick={()=>setSignal(key)}>{label}{key!=='all'&&<i style={{background:`rgb(${colors[key].slice(0,3).join(',')})`}}/>}</button>)}</div>
     <div className="map-badge"><b>{topic==='ukraine'?'俄乌冲突':topic==='all'?'双主题':'美伊局势'} · 综合动态</b><p>军事、外交、政策、能源与社会动态</p><small>地图展示 {count} 条动态 · 当前分类 {filtered.length} 条 · 点位大小固定</small></div>
     <div className="map-legend"><button className="legend-heading" aria-expanded={legendOpen} aria-label="事件图层" onClick={()=>setLegendOpen(v=>!v)}><Layers size={13}/>事件类型 · {legendOpen?'收起':'展开'}</button>{legendOpen&&<>{Object.entries(categories).map(([key,label])=><label key={key}><input type="checkbox" checked={layers[key]} onChange={e=>setLayers({...layers,[key]:e.target.checked})}/>{label}<span>{records.filter(r=>r.event_category===key).length}</span></label>)}<small>点位大小固定；数字为报道数，同地点错开展示</small></>}</div>
-    {cluster.length>1&&<div className="map-cluster"><div><b>{placeLabel(cluster)} · 关联报道</b><button aria-label="关闭地点列表" onClick={()=>setCluster([])}><X size={14}/></button></div>{Array.from(new Map(cluster.map(p=>[p.record.id,p])).values()).map(p=><button key={p.record.id} onClick={()=>onSelect(p.record)}>{p.record.title}<small style={{display:'block',marginTop:6,color:'#9eb4c7'}}>{placeLabel(cluster.filter(x=>x.record.id===p.record.id))} · {placeNote(cluster.find(x=>x.record.id===p.record.id&&x.label==='岩国')||p)}</small></button>)}</div>}
+    {cluster.length>1&&<div className="map-cluster"><div><b>{placeLabel(cluster)} · 关联报道{translatingCluster?' · 正在生成中文标题':''}</b><button aria-label="关闭地点列表" onClick={()=>setCluster([])}><X size={14}/></button></div>{Array.from(new Map(cluster.map(p=>[p.record.id,p])).values()).map(p=><button key={p.record.id} onClick={()=>onSelect(p.record)}>{p.record.title}<small style={{display:'block',marginTop:6,color:'#9eb4c7'}}>{placeLabel(cluster.filter(x=>x.record.id===p.record.id))} · {placeNote(cluster.find(x=>x.record.id===p.record.id&&x.label==='岩国')||p)}</small></button>)}</div>}
     {error&&<div className="map-error">{error}</div>}
     {!count&&<div className="map-no-points">当前分类暂无可定位动态，可在证据台账查看全部报道</div>}
   </div>

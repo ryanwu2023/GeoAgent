@@ -119,7 +119,7 @@
   },
   {
    "id": "gn-aid-eu",
-   "url": "https://news.google.com/rss/search?q=(EU+OR+%22European+Union%22+OR+Brussels+OR+%22von+der+Leyen%22)+Ukraine+(aid+OR+funding+OR+%22reparations+loan%22)&hl=en-US&gl=US&ceid=US:en",
+   "url": "https://news.google.com/rss/search?q=(EU+OR+%22European+Union%22+OR+Brussels)+Ukraine+(%22Ukraine+Support+Loan%22+OR+%22Ukraine+Facility%22+OR+funding+OR+disbursement)&hl=en-US&gl=US&ceid=US:en",
    "tier": "T3",
    "publisher": "Google News",
    "enabled": true,
@@ -127,7 +127,7 @@
   },
   {
    "id": "gn-loans",
-   "url": "https://news.google.com/rss/search?q=Ukraine+(IMF+OR+loan+OR+G7+OR+ERA+OR+debt+OR+%22reparations+loan%22)+(billion+OR+finance+OR+disburs+OR+tranche)&hl=en-US&gl=US&ceid=US:en",
+   "url": "https://news.google.com/rss/search?q=Ukraine+(%22Ukraine+Support+Loan%22+OR+%22Ukraine+Facility%22+OR+IMF+OR+G7+OR+ERA+OR+%22frozen+Russian+assets%22)+(disbursement+OR+tranche+OR+finance)&hl=en-US&gl=US&ceid=US:en",
    "tier": "T3",
    "publisher": "Google News",
    "enabled": true,
@@ -135,7 +135,7 @@
   },
   {
    "id": "gn-weapons",
-   "url": "https://news.google.com/rss/search?q=Ukraine+(weapons+OR+ammunition+OR+Patriot+OR+HIMARS+OR+F-16+OR+%22artillery+shells%22+OR+missiles)+(deliver+OR+supply+OR+transfer+OR+pledge)&hl=en-US&gl=US&ceid=US:en",
+   "url": "https://news.google.com/rss/search?q=Ukraine+(PURL+OR+%22air+defence+interceptor%22+OR+%22air+defense+interceptor%22+OR+%22interceptor+drone%22+OR+Patriot+OR+F-16+OR+ammunition)+(deliver+OR+supply+OR+procure+OR+pledge)&hl=en-US&gl=US&ceid=US:en",
    "tier": "T3",
    "publisher": "Google News",
    "enabled": true,
@@ -396,7 +396,20 @@
      "commitment",
      "contribution",
      "disbursement",
-     "package worth"
+     "package worth",
+     "ukraine support loan",
+     "ukraine facility",
+     "macro-financial assistance",
+     "defence industrial capacity",
+     "defense industrial capacity",
+     "immobilised russian assets",
+     "immobilized russian assets",
+     "frozen russian assets",
+     "extraordinary revenue acceleration",
+     "purl",
+     "prioritised ukraine requirements list",
+     "prioritized ukraine requirements list",
+     "cap trust fund"
     ],
     [
      "ukraine",
@@ -430,7 +443,17 @@
      "financing",
      "refinanc",
      "special drawing rights",
-     "financial assistance"
+     "financial assistance",
+     "ukraine support loan",
+     "ukraine facility",
+     "macro-financial assistance",
+     "immobilised russian assets",
+     "immobilized russian assets",
+     "frozen russian assets",
+     "extraordinary revenue acceleration",
+     "budget support loan",
+     "pillar i",
+     "pillar 1"
     ],
     [
      "ukraine",
@@ -467,7 +490,18 @@
      "military aid",
      "military assistance",
      "lethal aid",
-     "drone"
+     "drone",
+     "air defense interceptor",
+     "air defence interceptor",
+     "interceptor drone",
+     "drone interceptor",
+     "counter-uas",
+     "electronic warfare",
+     "unmanned ground system",
+     "uncrewed ground system",
+     "ground drone",
+     "fighter jet",
+     "f-16 munition"
     ],
     [
      "aid",
@@ -511,7 +545,18 @@
      "ramstein",
      "ministry of defence",
      "defense ministry",
-     "transferr"
+     "transferr",
+     "accelerate",
+     "procure",
+     "procurement",
+     "contract",
+     "co-produce",
+     "joint production",
+     "purl",
+     "udcg",
+     "ukraine defence contact group",
+     "ukraine defense contact group",
+     "nato-ukraine council"
     ],
     [
      "ukraine",
@@ -535,7 +580,11 @@
      "signals intelligence",
      "imagery",
      "targeting support",
-     "targeting information"
+     "targeting information",
+     "early warning",
+     "missile warning",
+     "launch warning",
+     "geospatial intelligence"
     ],
     [
      "sharing",
@@ -746,7 +795,15 @@
     "house of representatives"
    ],
    "Rammstein Group": [
-    "ramstein"
+    "ramstein",
+    "ukraine defence contact group",
+    "ukraine defense contact group",
+    "udcg"
+   ],
+   "PURL": [
+    "purl",
+    "prioritised ukraine requirements list",
+    "prioritized ukraine requirements list"
    ]
   },
   "people": {

@@ -102,6 +102,7 @@ def test_load_runs_uses_ledger_terminal_status_when_state_file_is_stale(tmp_path
             "started_at": "2026-10-02T09:00:00+00:00",
             "finished_at": None,
             "import_status": "pending",
+            "results": [{"id": "demo", "status": "running", "started_at": "2026-10-02T09:00:00+00:00"}],
         }),
         encoding="utf-8",
     )
@@ -121,6 +122,9 @@ def test_load_runs_uses_ledger_terminal_status_when_state_file_is_stale(tmp_path
     assert result["finished_at"] == "2026-10-02T09:05:00+00:00"
     assert result["updated_at"] == "2026-10-02T09:05:00+00:00"
     assert result["import_status"] == "not_attempted_interrupted"
+    assert result["collectors"][0]["status"] == "failed"
+    assert result["collectors"][0]["stage"] == "运行中断"
+    assert result["collectors"][0]["error_type"] == "SERVICE_INTERRUPTED"
 
 
 def test_load_runs_sorts_by_batch_start_time_not_live_file_mtime(tmp_path):

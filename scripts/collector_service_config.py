@@ -41,7 +41,10 @@ def render_launch_agent(
     label: str = "com.geoagent.collector",
 ) -> str:
     log_dir = root / "data" / "service-logs"
-    arguments = [str(python), *service_args(
+    # A macOS LaunchAgent always consumes POSIX paths, including when the
+    # configuration is reviewed/generated from a Windows checkout.
+    posix = lambda value: str(value).replace("\\", "/")
+    arguments = [posix(python), *service_args(
         interval_sec=interval_sec,
         auto_import=auto_import,
         allow_partial_import=allow_partial_import,
@@ -59,12 +62,12 @@ def render_launch_agent(
     <array>
 {argument_xml}
     </array>
-    <key>WorkingDirectory</key><string>{text(str(root))}</string>
+    <key>WorkingDirectory</key><string>{text(posix(root))}</string>
     <key>RunAtLoad</key><true/>
     <key>KeepAlive</key><true/>
     <key>ThrottleInterval</key><integer>30</integer>
-    <key>StandardOutPath</key><string>{text(str(log_dir / "collector.stdout.log"))}</string>
-    <key>StandardErrorPath</key><string>{text(str(log_dir / "collector.stderr.log"))}</string>
+    <key>StandardOutPath</key><string>{text(posix(log_dir / "collector.stdout.log"))}</string>
+    <key>StandardErrorPath</key><string>{text(posix(log_dir / "collector.stderr.log"))}</string>
 </dict>
 </plist>
 '''

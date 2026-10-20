@@ -79,7 +79,8 @@ def admin(request: Request):
 
 def public_settings():
     cfg = settings()
-    return {"origin": cfg["origin"], "agent_id": cfg["agent_id"], "product_user_id": cfg["product_user_id"]}
+    return {"origin": cfg["origin"], "agent_id": cfg["agent_id"], "product_user_id": cfg["product_user_id"],
+            "embed_configured": bool(cfg["app_key"] and cfg["phone"])}
 
 
 @router.get("/public")

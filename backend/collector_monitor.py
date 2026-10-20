@@ -200,6 +200,17 @@ def load_runs(runs_root: Path, registry_path: Path, limit: int = 20, *, run_id: 
                 parsed["updated_at"] = parsed.get("finished_at") or parsed.get("updated_at")
                 parsed["import_status"] = ledger_run.get("import_status") or parsed.get("import_status")
                 parsed["snapshot_id"] = ledger_run.get("snapshot_id") or parsed.get("snapshot_id")
+                if ledger_run.get("status") == "abandoned":
+                    for collector in parsed.get("collectors", []):
+                        if collector.get("status") == "running":
+                            collector.update(
+                                status="failed",
+                                stage="运行中断",
+                                source_health="服务进程已中断",
+                                error_type="SERVICE_INTERRUPTED",
+                                error_message="项目或采集服务在该采集器完成前停止",
+                            )
+                    parsed["failed_count"] = sum(item.get("status") == "failed" for item in parsed.get("collectors", []))
             runs.append(parsed)
     return runs
 

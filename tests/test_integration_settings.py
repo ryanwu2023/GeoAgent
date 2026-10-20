@@ -64,7 +64,7 @@ def test_settings_save_redaction_and_normalize(client):
         saved = json.loads(conn.execute("SELECT value FROM workspace_state WHERE key='integrations.pichat'").fetchone()[0])
     assert saved["app_key"] == "pk-test-secret"
     public = client.get("/api/integrations/public").json()
-    assert public == {"origin": "https://chat.example.com", "agent_id": "geo-test", "product_user_id": "researcher"}
+    assert public == {"origin": "https://chat.example.com", "agent_id": "geo-test", "product_user_id": "researcher", "embed_configured": True}
 
 
 @pytest.mark.parametrize("origin", ["file:///tmp", "https://user:password@example.com", "https://example.com/admin", "https://example.com?key=bad", "https://[broken", "https://example.com:bad", "https://exam ple.com"])
