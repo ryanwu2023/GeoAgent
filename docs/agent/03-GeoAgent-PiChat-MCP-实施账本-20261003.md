@@ -809,3 +809,4 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 发布前独立复核补齐可选模型配置故障隔离：损坏 JSON、符号链接及不可读配置返回安全的未配置状态和 `config_error`，不回显文件内容；模型配置页可用完整新配置或禁用恢复。正常公开合同仍为8字段。Web 启动、健康状态和非执行缓存身份不受该可选配置故障拖累；真实模型调用仍拒绝执行，不回退环境凭据或继承损坏文件内的 Key。
 - 最终隔离回归：后端 **473 passed、2 skipped**（22.77秒），前端 **82/82**，独立简报 **2/2**，TypeScript/Vite 构建、仓库审计（`ok=true`、无发现）、diff 检查均通过。测试禁用真实供应商网络和翻译子进程，未重启本地服务。临时证据 `/tmp/geoagent-release-final-uhpPjP/` 不入 Git。
 - 本机 `.env`、运行数据、`model-settings.json`、密钥和临时截图不提交或打包；不自动把本地 DeepSeek Key 迁移到生产。生产模型是否配置、实际调用与 Agent 嵌入验收需单独记录，不能用本地小样本成功代替线上验证。
+- **当前交付阻断**：代码提交 `d3cae03`，分支 `codex/backend-model-and-source-config`；执行创建 MR 的 SSH push 时，`192.168.100.208:22` 建连超时。随后有界复核 SSH `ls-remote` 及 GitLab HTTPS 的 IPv4/IPv6 均超时，已登录 GitLab 浏览器刷新也未完成。该证据只能确认当前到 GitLab 的网络不可达，不能断言是服务故障或 VPN 根因；未修改 VPN/TUN、路由、DNS 或认证。未成功 push、未创建 MR/版本标签、未触发部署，生产尚未接收本轮修复；待 GitLab 可达后继续既定门禁。
