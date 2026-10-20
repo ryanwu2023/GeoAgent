@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import type {RefObject} from 'react';
-import {EmbedIdentity} from './embedIdentity';
+import {EmbedIdentity, EmbedIdentityFailure} from './embedIdentity';
 import {trustedViewSource} from './hostViewContext';
 import {embedAuthPayload} from './embedAuthPayload';
 
@@ -10,9 +10,10 @@ export function useEmbedIdentity(frame: RefObject<HTMLIFrameElement|null>, origi
   const [ready,setReady] = useState(false);
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState('');
+  const [notice,setNotice] = useState('');
   const frameLoaded = useCallback(() => machine.current?.frameLoaded(),[]);
   useEffect(() => {
-    setReady(false);setLoading(false);setError('');
+    setReady(false);setLoading(false);setError('');setNotice('');
     const target = frame.current?.contentWindow;
     if (!active || !target) return;
     let identity: ReturnType<typeof embedAuthPayload> | null = null;
@@ -21,9 +22,12 @@ export function useEmbedIdentity(frame: RefObject<HTMLIFrameElement|null>, origi
       fetchToken:async signal=>{
         const response=await fetch(`/api/pichat/embed-identity?agent_id=${encodeURIComponent(agentId)}`,
           {signal,cache:'no-store'});
-        const body=await response.json();
-        if (!response.ok) throw new Error('Identity rejected');
-        const issued = embedAuthPayload(body);
+        if (!response.ok) throw new EmbedIdentityFailure('Identity rejected',
+          [408,429,500,502,504].includes(response.status));
+        const body=await response.json().catch(()=>{throw new EmbedIdentityFailure('Invalid identity response');});
+        let issued: ReturnType<typeof embedAuthPayload>;
+        try {issued = embedAuthPayload(body);}
+        catch {throw new EmbedIdentityFailure('Invalid issued identity');}
         if (signal.aborted) throw new Error('Identity cancelled');
         identity = issued;
         return issued.token;
@@ -34,7 +38,9 @@ export function useEmbedIdentity(frame: RefObject<HTMLIFrameElement|null>, origi
         target.postMessage({type:'finance:auth:token',token,user:identity.user},origin);
       },
       status:(state,message)=>{
-        setReady(state==='ready');setLoading(state==='fetching');setError(message||'');
+        setReady(state==='ready');setLoading(state==='fetching');
+        setError(state==='error' ? message||'' : '');
+        setNotice(state==='waiting' || state==='retrying' ? message||'' : '');
       },
     });
     machine.current=current;
@@ -48,11 +54,16 @@ export function useEmbedIdentity(frame: RefObject<HTMLIFrameElement|null>, origi
       else if (data.type==='finance:chat:ready') current.ready();
     };
     window.addEventListener('message',onMessage);
+    const resume=()=>{if(document.visibilityState==='visible')current.recover();};
+    window.addEventListener('online',resume);
+    document.addEventListener('visibilitychange',resume);
     void current.request();
     return ()=>{
-      window.removeEventListener('message',onMessage);current.dispose();
+      window.removeEventListener('message',onMessage);
+      window.removeEventListener('online',resume);
+      document.removeEventListener('visibilitychange',resume);current.dispose();
       if (machine.current===current) machine.current=null;
     };
   },[frame,origin,agentId,userId,connectionVersion,active]);
-  return {ready,loading,error,frameLoaded,setError};
+  return {ready,loading,error,notice,frameLoaded,setError};
 }
