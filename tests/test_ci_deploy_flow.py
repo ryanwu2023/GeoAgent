@@ -13,6 +13,40 @@ REPO = "crpi-pkfixdfs4f7qepax.cn-shanghai.personal.cr.aliyuncs.com/stocklink-bas
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="Linux release flow")
 
 
+def test_verify_mounts_only_gateway_policy_read_only(tmp_path):
+    """The runtime image omits deploy/; policy tests need this one public file."""
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "deploy").mkdir()
+    (tmp_path / "deploy/gateway.conf").write_text("# fixture gateway policy\n")
+    log = tmp_path / "commands.jsonl"
+    docker = tmp_path / "docker"
+    docker.write_text(f'''#!{sys.executable}
+import json,sys
+from pathlib import Path
+args=sys.argv[1:]
+with open({str(log)!r},"a") as f: f.write(json.dumps(args)+"\\n")
+if args[0]=="run":
+ for i,arg in enumerate(args):
+  if arg=="--mount" and "target=/app/deploy/gateway.conf" in args[i+1]:
+   options=dict(part.split("=",1) for part in args[i+1].split(",") if "=" in part)
+   assert Path(options["source"]).is_file()
+''')
+    docker.chmod(0o755)
+    result = subprocess.run(["bash", str(SCRIPT), "verify"], cwd=tmp_path, capture_output=True,
+        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}",
+             "CI_COMMIT_SHA": "f" * 40, "CI_PIPELINE_ID": "123",
+             "CI_COMMIT_TAG": "", "CI_COMMIT_REF_PROTECTED": "false"})
+    assert result.returncode == 0, result.stderr.decode()
+    commands = [json.loads(line) for line in log.read_text().splitlines()]
+    run = next(command for command in commands if command[0] == "run")
+    mounts = [run[index + 1] for index, value in enumerate(run) if value == "--mount"]
+    assert mounts == [
+        f"type=bind,source={tmp_path}/release,target=/reports",
+        f"type=bind,source={tmp_path}/tests,target=/app/tests,readonly",
+        f"type=bind,source={tmp_path}/deploy/gateway.conf,target=/app/deploy/gateway.conf,readonly",
+    ]
+
+
 @pytest.mark.parametrize("action,rollout_ok", [("deploy", True), ("deploy", False), ("rollback", True)])
 def test_release_record_patch_and_health_check(tmp_path, action, rollout_ok):
     release = tmp_path / "release"
