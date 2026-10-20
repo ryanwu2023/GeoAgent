@@ -873,3 +873,21 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 本地隔离完整后端 **492 passed / 2 skipped**（25.47秒）；前端 **82 passed**，TypeScript/Vite构建通过，`git diff --check`通过。目标回归43项覆盖精确一位展示、错误小数、引用来源、十倍转换、空民调投影及运行时curl。
 - 本地真实DeepSeek总结于 `2026-10-20T17:42:44Z` 返回ready、cached=false，包括679.23、97.79、48.4、3.1、0.81、4213.4等当前指标/程序展示值；工作快照仍0b18ddf4，总快照10个。单独调用实际finance抓取链及按列名解析器获取Datawrapper支持率CSV成功，证明源与解析链在有curl的本机可用；不替代生产容器采集验收。
 - **尚待生产闭环**：MR、候选镜像流水线、正式发布、生产重新采集及新快照入库、总结和民调页面live对账。上述本地通过不等同生产已修复。诊断与模型证据仅存 `/tmp/geoagent-v124-live-awacyL/`、`/tmp/geoagent-summary-fix-gh6XY9/`，不提交密钥、临时文件或数据目录。
+
+### 2026-10-20：v1.0.26 发布与公网原故障总结复验
+
+- [MR !17](https://gitlab.lz.internal/yujunjun/GeoAgent/-/merge_requests/17)源码提交 `992d41f596af0a5eaf2c639ad885aae64b399286`，MR流水线5723/verify29425通过：实际候选镜像中curl 7.88.1支持HTTPS，后端492通过/2跳过、1条warning。合并提交 `77d827d75ee51428c05649acf0f88abde4b4733d`，main流水线5724通过；没有跳过测试或强制合并。
+- 正式标签 `geoagent-prod-v1.0.26`，[流水线5725](https://gitlab.lz.internal/yujunjun/GeoAgent/-/pipelines/5725) verify29427、deploy29428均通过，18:00:47Z结束；rollback29429未运行。实际应用镜像摘要 `sha256:8adedec3a3f3e7b83bf910cd958bdc9268746c52f9893c4b042d61c37ce46b33`。日志确认rollout、内部status200、两个公网域名匿名401/认证initialize/list/snapshot-call200、17个工具及一次性release-live Key撤销。没有替换PiChat现有Key或修改凭据/网络配置。
+- 发布后仍用用户截图的工作快照 `e6f55aa20d3fdc1d0f1a1dae` 请求实际生产总结：18:02:21Z生成，HTTP200、8.216秒、`ready / cached=false / deepseek-flash`。内容包含679.23/860.49亿美元、-181.26亿美元/-21.06%、97.79亿美元/-56.37%、105.57美元/桶/+0.81%等；另读同快照workspace原始指标，金额、涨跌幅和来源ID一致。缺失的民调仍如实说明，不拿新模型响应改写历史数据。
+- 18:02:28Z仅提交 `finance-front-monitor` 补采，`manual-20261020T180228Z-1c47421f`、请求ID `36226b227b954717b9b391d34ec92c93`，1200秒上限、单次尝试、自动导入、不允许部分失败绕过门禁；不是全量25源重跑。此时任务running、import pending；新快照和支持率恢复仍待实际结果。
+- 外置Chrome基线仍复现用户截图，保留 `v126-before.png`。发布后准备点击原页重新生成时Mac锁屏，UI操作被中止；已请求解锁，未绕过锁屏或用API成功冒称页面验收通过。生产流水线截图 `v126-pipeline-passed.png`、原故障总结API结果及指标对账文件均只存临时证据目录。
+
+### 2026-10-20：v1.0.26 支持率生产补采及冻结原文对账完成，页面验收仍受锁屏阻断
+
+- 上节金融补采实际135.984秒完成，18:04:44Z通过输出门禁，18:05:02Z任务结束；`collection_status=success / import_status=succeeded`，未重试、未放宽部分失败门禁。新快照 `aa0669c263891e848c742c53` 于18:04:57Z创建并按正常导入流程设为工作快照，7191条记录、79项观测、适配导入errors=0。导入同时读取其他采集器各自已发布的产物，**不代表这次重抓了全部来源，亦不代表所有外部来源都正常**；这次仅执行金融采集器。
+- **支持率根因修复得到生产实证**：冻结JSONL中本次Datawrapper请求 `transport=curl / http=200 / bytes=41003 / err=null / ok=true / rows=638`，不再是缺curl异常。来源仍为Silver Bulletin/Datawrapper的approve聚合序列，不拼接其他民调或把新闻百分比当支持率。有效历史从2025-01-21至2026-10-20，638点。
+- 新快照看板/MCP共用指标投影：当前 `2026-10-20 / 37.13194%`，前值 `2026-10-19 / 37.50148%`，差值 `-0.36954 个百分点`、pct=null，`upstream_state=fresh / freshness=可用 / lag_days=0`，来源ID `finance-ad507e251d47ea4c394de7f5`。没有用零代替缺失，也没有把采集恢复说成补齐旧快照。
+- 独立从生产归档 `2e45988b4cf9496a5014a727.csv` 用标准CSV按列名modeldate/approve与显式月/日/年日期格式复读，638点、最后两点与上述指标逐项一致；原始请求回执归档 `f0a0f68874b82a7f8b3b35a3.jsonl` 同时保留成功传输证据。未靠程序自身的派生结果独自证明抓取成功，也未另抓一份新源替代冻结原文。
+- 新快照量化总结已于18:05:35Z由生产DeepSeek生成ready；本轮随后读取HTTP200、0.539秒、cached=true，因此不将缓存读取耗时冒称模型生成耗时。内容含9月军事项目合计842.21亿美元/+23.99%、军事人员168.3亿美元/+72.11%等新快照程序展示值，不再触发原先小数/换算误判。原截图旧快照的18:02:21Z实际新生成ready回执是本次模型路径修复的独立证明；两版本不混读。
+- **当前交付边界**：MR/main/正式标签流水线、生产发布、双域MCP探针、原故障快照真实总结、新快照支持率抓取/导入/归档与接口对账均完成。外置Chrome第二次读取仍明确Mac锁屏；已发异步解锁请求但未取得可操作页面，故公网量化页“总结和民调曲线最终实际显示”、控制台及页面来源按钮交互仍待解锁后补验，不记录为页面live通过。未改PiChat、VPN/TUN或任何生产Key。
+- 临时证据 `v126-job-*.json / v126-poll-*.json / v126-summary-*.json / v126-metrics-*.json` 位于 `/tmp/geoagent-v124-live-awacyL/`；完整638点、原始成功回执与独立CSV对账均保留本机，不提交数据或凭据。旧 `e6f55aa2` 缺失支持率的冻结事实保留；查看恢复后的支持率须使用新工作快照 `aa0669c2`。
