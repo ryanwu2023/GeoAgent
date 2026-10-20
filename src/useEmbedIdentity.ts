@@ -10,7 +10,7 @@ export function useEmbedIdentity(frame: RefObject<HTMLIFrameElement|null>, origi
   const [ready,setReady] = useState(false);
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState('');
-  const request = useCallback((force = true) => machine.current?.request(force),[]);
+  const frameLoaded = useCallback(() => machine.current?.frameLoaded(),[]);
   useEffect(() => {
     setReady(false);setLoading(false);setError('');
     const target = frame.current?.contentWindow;
@@ -54,5 +54,5 @@ export function useEmbedIdentity(frame: RefObject<HTMLIFrameElement|null>, origi
       if (machine.current===current) machine.current=null;
     };
   },[frame,origin,agentId,userId,connectionVersion,active]);
-  return {ready,loading,error,request,setError};
+  return {ready,loading,error,frameLoaded,setError};
 }

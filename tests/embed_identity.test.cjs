@@ -2,11 +2,11 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {EmbedIdentity}=process.env.GEO_IDENTITY_JS ? require(process.env.GEO_IDENTITY_JS) : require('./load_ts.cjs')('src/embedIdentity.ts');
 const token=(exp,tag='a')=>`header.${Buffer.from(JSON.stringify({exp,tag})).toString('base64url')}.signature`;
-function harness(){
+function harness(onDeliver){
   let now=100000,calls=0;const deliveries=[],states=[],timers=new Map(),queue=[];let id=0;
   const machine=new EmbedIdentity({now:()=>now,
     fetchToken:signal=>{calls++;return new Promise((resolve,reject)=>queue.push({resolve,reject,signal}));},
-    deliver:t=>deliveries.push(t),status:(s,e)=>states.push([s,e]),
+    deliver:t=>{deliveries.push(t);onDeliver?.(machine);},status:(s,e)=>states.push([s,e]),
     schedule:(fn,ms)=>{timers.set(++id,{fn,ms});return id;},cancel:i=>timers.delete(i)});
   return {machine,deliveries,states,timers,queue,get calls(){return calls;},time:n=>now=n};
 }
@@ -57,4 +57,26 @@ test('near expiry renews and rejected expiry never delivers; old ready ignored d
  h.time(171000);p=h.machine.request();assert.equal(h.calls,2);
  h.machine.ready();assert.equal(h.states.at(-1)[0],'fetching');
  h.queue[1].resolve(token(100));await p;assert.equal(h.states.at(-1)[0],'error');assert.equal(h.deliveries.length,1);
+});
+test('iframe load reuses pending/issued identity rather than rotating credentials',async()=>{
+ const h=harness(),p=h.machine.request(),load=h.machine.frameLoaded();
+ assert.equal(h.calls,1);h.queue[0].resolve(token(500));await Promise.all([p,load]);
+ await h.machine.frameLoaded();assert.equal(h.calls,1);
+ assert.ok(h.deliveries.every(t=>t===token(500)));
+ h.machine.ready();const states=h.states.length,deliveries=h.deliveries.length;
+ await h.machine.frameLoaded();await h.machine.frameLoaded();
+ assert.equal(h.calls,1);assert.equal(h.states.length,states);
+ assert.equal(h.deliveries.length,deliveries);assert.equal(h.timers.size,0);
+ // An explicit auth rejection still renews and is not suppressed by ready.
+ const refresh=h.machine.request(true);assert.equal(h.calls,2);
+ h.queue[1].resolve(token(600,'renewed'));await refresh;
+});
+test('ready during delivery survives promise settlement and has no timeout left behind',async()=>{
+ const h=harness(machine=>machine.ready()),p=h.machine.request();
+ h.queue[0].resolve(token(500));await p;
+ assert.equal(h.states.at(-1)[0],'ready');assert.equal(h.timers.size,0);
+ await h.machine.frameLoaded();assert.equal(h.calls,1);
+});
+test('ready without an issued token cannot authenticate an unbound frame',()=>{
+ const h=harness();h.machine.ready();assert.equal(h.states.length,0);
 });

@@ -171,7 +171,7 @@ export default function App() {
   );
   const pichatFrameRef = useRef<HTMLIFrameElement | null>(null);
   const {ready:pichatReady,loading:pichatAuthRequired,error:pichatError,
-    request:requestPichatIdentity,setError:setPichatError} = useEmbedIdentity(pichatFrameRef,
+    frameLoaded:pichatFrameLoaded,setError:setPichatError} = useEmbedIdentity(pichatFrameRef,
       pichatOrigin,pichatAgentId,connection.product_user_id,connectionVersion,
       chatOpen && connectionLoaded && !!embedWorkspaceScope);
   const viewBridge = useHostViewContext(pichatFrameRef,pichatOrigin,pichatAgentId,connectionVersion,
@@ -1569,12 +1569,12 @@ export default function App() {
                   </div>
                 )}
                 {pichatAuthRequired && (
-                  <div className="pichat-embed-status error">
+                  <div className="pichat-embed-status" role="status">
                     正在获取 PiChat 嵌入身份…
                   </div>
                 )}
                 {pichatError && (
-                  <div className="pichat-embed-status error">{pichatError}
+                  <div className="pichat-embed-status error" role="alert">{pichatError}
                     <button type="button" onClick={()=>setConnectionVersion(value=>value+1)}>重试连接</button>
                   </div>
                 )}
@@ -1588,9 +1588,7 @@ export default function App() {
                     setPichatError("PiChat 面板加载失败，请在连接配置中检查服务地址。")
                   }
                   onLoad={() => {
-                    viewBridge.reset();
-                    setPichatError("");
-                    void requestPichatIdentity();
+                    void pichatFrameLoaded();
                   }}
                   allow="clipboard-read; clipboard-write"
                 /> : null}

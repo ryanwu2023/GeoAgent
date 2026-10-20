@@ -12,6 +12,7 @@ type Options = {
 export class EmbedIdentity {
   private token = '';
   private expires = 0;
+  private confirmed = false;
   private active = true;
   private generation = 0;
   private pending: Promise<void> | null = null;
@@ -25,6 +26,7 @@ export class EmbedIdentity {
   }
   private send() {
     this.clearDeliveries();
+    this.confirmed = false;
     const generation = this.generation, token = this.token;
     const deliver = () => {
       if (this.active && generation === this.generation && this.token === token
@@ -32,13 +34,21 @@ export class EmbedIdentity {
     };
     this.options.status('sent');
     deliver();
+    // A synchronous receipt can arrive while the token promise is settling.
+    if (!this.active || generation !== this.generation) return;
     for (const ms of [250,750,1500]) this.timers.push(this.options.schedule(deliver, ms));
     this.timers.push(this.options.schedule(() => {
       if (this.active && generation === this.generation) {
         this.clearDeliveries();
-        this.options.status('error', 'PiChat 未确认身份，请重试连接。');
+        this.options.status('error', 'PiChat 身份已签发，但会话尚未就绪。可继续等待或重试连接。');
       }
     },10000));
+  }
+  frameLoaded(): Promise<void> {
+    // load fires after child scripts/auth/WS may already have become ready.
+    // It is not an auth rejection: never rotate a valid credential here.
+    if (this.confirmed && this.expires > this.options.now() + 30000) return Promise.resolve();
+    return this.request();
   }
   request(force = false): Promise<void> {
     if (!this.active) return Promise.resolve();
@@ -46,7 +56,7 @@ export class EmbedIdentity {
     if (!force && this.token && this.expires > this.options.now() + 30000) {
       this.send();return Promise.resolve();
     }
-    this.clearDeliveries();this.token = '';this.expires = 0;
+    this.clearDeliveries();this.token = '';this.expires = 0;this.confirmed = false;
     this.options.status('fetching');
     const abort = new AbortController();this.abort = abort;
     const cancelled = new Promise<never>((_,reject) => {
@@ -75,7 +85,8 @@ export class EmbedIdentity {
   }
   ready() {
     // A receipt from the previous identity must not end the new fetch's spinner.
-    if (!this.active || this.pending) return;
+    if (!this.active || !this.token || this.expires <= this.options.now() + 30000) return;
+    this.confirmed = true;
     this.clearDeliveries();this.options.status('ready');
   }
   dispose() {
