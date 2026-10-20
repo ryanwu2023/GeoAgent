@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .collector_ledger import service_lock
+from .collector_ledger import CollectorLedger, service_lock
 from .paths import project_root
 from .store import data_dir
 from scripts.collector_service import execute_once
@@ -23,6 +23,24 @@ from scripts.collector_service import execute_once
 
 class CollectorBusyError(RuntimeError):
     """Raised when another scheduled or manual collector run owns the lock."""
+
+
+def recover_interrupted_runs(*, report_root: Path | None = None, finished_at: str | None = None) -> list[str]:
+    """Reconcile runs orphaned by an API/service restart.
+
+    Acquiring the same service lock used by collectors proves that no live
+    collector owns the pipeline. A live owner leaves the ledger untouched.
+    """
+    root = report_root or data_dir() / "collection-runs"
+    ledger_path = root / "ledger.sqlite3"
+    if not ledger_path.is_file():
+        return []
+    try:
+        with service_lock(root / ".collector-service.lock"):
+            timestamp = finished_at or datetime.now(timezone.utc).isoformat()
+            return CollectorLedger(ledger_path).recover_unfinished(finished_at=timestamp)
+    except RuntimeError:
+        return []
 
 
 @dataclass

@@ -79,7 +79,13 @@
       "آزمایش هسته‌ای",
       "پالایشگاه",
       "کابل زیردریایی",
-      "رزمایش"
+      "رزمایش",
+      "ship-to-ship transfer",
+      "sts transfer",
+      "oil shuttle",
+      "persian gulf strait authority",
+      "safe passage corridor",
+      "merchant shipping attack"
     ],
     "medium": [
       "iran",
@@ -155,7 +161,17 @@
       "هسته‌ای",
       "مذاکره",
       "تحریم",
-      "نفتی"
+      "نفتی",
+      "escort window",
+      "naval escort",
+      "convoy",
+      "dark mode",
+      "ais transponder",
+      "projectile",
+      "merchant vessel",
+      "container ship",
+      "saudi airport",
+      "aramco"
     ],
     "anchor": [
       "iran",
@@ -1177,6 +1193,41 @@
         "مرحله جدید",
         "تقابل"
       ]
+    },
+    "shipping_transfer_disruption": {
+      "zone": "chokepoint",
+      "label": "海上过驳/商船通行受袭",
+      "weight": 5,
+      "require_all": [
+        [
+          "attack",
+          "strike",
+          "hit",
+          "target",
+          "projectile",
+          "mine",
+          "seize",
+          "interdict",
+          "disrupt",
+          "block",
+          "damage",
+          "threaten"
+        ],
+        [
+          "ship-to-ship",
+          "sts transfer",
+          "oil transfer",
+          "oil shuttle",
+          "shuttle tanker",
+          "merchant vessel",
+          "merchant ship",
+          "cargo ship",
+          "container ship",
+          "tanker",
+          "safe passage corridor"
+        ]
+      ],
+      "note": "跟踪霍尔木兹商船及海上过驳体系受袭，区别于仅提及海峡。"
     }
   },
   "claims": {
@@ -4432,6 +4483,69 @@
       },
       "stale_days": 30,
       "note": "中国官媒英文 RSS，2026-09-19 实测 200/rss 50 条、最新 2026-09-18（略慢于 GT）（多域通稿源）"
+    },
+    {
+      "id": "gnews-hormuz-transfer",
+      "party": "third",
+      "zone": "chokepoint",
+      "tier": "T3",
+      "publisher": "霍尔木兹过驳/护航专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Hormuz+(%22ship-to-ship%22+OR+%22oil+transfer%22+OR+shuttle+OR+escort+OR+mine)+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "2026-10 重要新增：海上过驳、护航窗口与水雷风险",
+      "probe": {
+        "date": "2026-10-18",
+        "http": null,
+        "items": 0,
+        "server": "",
+        "latest": null
+      },
+      "stale_days": 14,
+      "zone_name": "霍尔木兹 / 曼德海峡双线施压"
+    },
+    {
+      "id": "gnews-houthi-saudi",
+      "party": "third",
+      "zone": "energy",
+      "tier": "T3",
+      "publisher": "胡塞-沙特基础设施专题（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=Houthi+(Saudi+OR+Riyadh+OR+Abha+OR+Dammam+OR+Aramco+OR+airport)+when%3A14d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "2026-10 重要新增：沙特机场/能源设施与也门战线外溢",
+      "probe": {
+        "date": "2026-10-18",
+        "http": null,
+        "items": 0,
+        "server": "",
+        "latest": null
+      },
+      "stale_days": 14,
+      "zone_name": "能源基础设施 / 胡塞-沙特外溢"
+    },
+    {
+      "id": "gnews-imo-hormuz",
+      "party": "third",
+      "zone": "chokepoint",
+      "tier": "T3",
+      "publisher": "IMO 海事事件（Google News 聚合）",
+      "url": "https://news.google.com/rss/search?q=site%3Aimo.org+Hormuz+(attack+OR+incident+OR+shipping)+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+      "enabled": true,
+      "topic_anchored": true,
+      "aggregator": true,
+      "note": "IMO 确认商船事件清单；这里只取标题层，原文回链核验",
+      "probe": {
+        "date": "2026-10-18",
+        "http": null,
+        "items": 0,
+        "server": "",
+        "latest": null
+      },
+      "stale_days": 30,
+      "zone_name": "霍尔木兹商船安全"
     }
   ],
   "glossary": {

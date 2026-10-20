@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -119,19 +120,50 @@ def run_all(import_url: str, timeout: int) -> int:
         response.raise_for_status()
         state["snapshot"] = response.json()
     except Exception as exc:
-        state["import_error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
+        detail = ""
+        if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None:
+            detail = f"；响应：{exc.response.text[:500]}"
+        state["import_error"] = f"{type(exc).__name__}: {str(exc)[:300]}{detail}"
     state["state"] = "completed"
     state["finished_at"] = now()
     write_state(state)
     return 0 if all(item["status"] in {"succeeded", "skipped"} for item in state["results"]) else 1
 
 
+def run_loop(import_url: str, timeout: int, interval_sec: int, *, once: bool = False) -> int:
+    """Run immediately, then stay alive so collection continues each day."""
+    last_returncode = 0
+    while True:
+        last_returncode = run_all(import_url, timeout)
+        if once:
+            return last_returncode
+        state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        state.update(
+            # Keep the existing UI contract: the latest batch is completed,
+            # while next_run_at shows that the manager remains scheduled.
+            state="completed",
+            next_run_at=datetime.fromtimestamp(
+                datetime.now(timezone.utc).timestamp() + interval_sec,
+                timezone.utc,
+            ).isoformat(),
+            last_returncode=last_returncode,
+        )
+        write_state(state)
+        # A transient source failure is persisted above but must not disable
+        # all later refreshes until somebody restarts the web application.
+        time.sleep(max(60, interval_sec))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--import-url", default="http://127.0.0.1:8000/api/import")
     parser.add_argument("--timeout", type=int, default=int(os.getenv("CRAWLER_TASK_TIMEOUT", "1800")))
+    parser.add_argument("--interval-sec", type=int, default=int(os.getenv("CRAWLER_INTERVAL_SEC", "86400")))
+    parser.add_argument("--once", action="store_true", help="只执行一轮；默认每 24 小时自动执行")
     args = parser.parse_args()
-    return run_all(args.import_url, args.timeout)
+    if args.interval_sec < 60:
+        parser.error("--interval-sec 必须至少为 60 秒")
+    return run_loop(args.import_url, args.timeout, args.interval_sec, once=args.once)
 
 
 if __name__ == "__main__":

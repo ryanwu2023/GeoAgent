@@ -5,7 +5,7 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from backend.adapters import load_bundle, normalize, safe_url, classify
+from backend.adapters import load_bundle, normalize, safe_url, classify, clean_record_topics
 from backend.store import save_snapshot, get_snapshot, snapshots, db, set_working_snapshot_id
 from backend.research import metric_view, answer, analysis, create_brief, retrieve, candidates
 from backend.app import app
@@ -51,6 +51,36 @@ def test_mentions_and_source_tier_do_not_establish_deployment():
     assert r["points"][0]["precision"]=="mention"
     assert "非部署" in r["points"][0]["role"]
 
+def test_topic_relevance_cleaning_quarantines_noise_but_keeps_raw_record():
+    cases = [
+        ("ukraine", "俄罗斯堪察加半岛发生6.9级地震", "自然灾害资讯"),
+        ("ukraine", "俄罗斯报告新增猴痘病例", "公共卫生资讯"),
+        ("ukraine", "EU calls for measures amid trade deficit with China", "与俄乌无直接关联的一般贸易资讯"),
+        ("usiran", "Iran wins U23 wrestling world championship", "体育资讯"),
+        ("usiran", "Jafari nominated for AFC Awards Bangkok 2026", "体育资讯"),
+    ]
+    for index, (topic, title, reason) in enumerate(cases):
+        record = normalize({"title": title, "summary": "", "link": f"https://example.org/noise/{index}"}, "new")
+        record["topics"] = [topic]
+        record["dimensions"] = {topic: "frontline" if topic == "ukraine" else "iran_readiness"}
+        record["dimension_candidates"] = {topic: list(record["dimensions"].values())}
+        removed = clean_record_topics(record)
+        assert removed[0]["reason"] == reason
+        assert record["topics"] == []
+        assert record["classification"] == "相关性清洗排除"
+        assert record["title"] == title
+
+def test_topic_relevance_cleaning_preserves_conflict_and_asset_transmission_news():
+    titles = [
+        "Iran nuclear talks resume despite World Cup security concerns",
+        "Russia-Ukraine energy ceasefire lifts European markets after EU-China deal",
+        "Russian budget deficit widens as sanctions and war spending increase",
+    ]
+    for index, title in enumerate(titles):
+        record = normalize({"title": title, "summary": "", "link": f"https://example.org/relevant/{index}"}, "new")
+        record["topics"] = ["ukraine" if "Russia" in title else "usiran"]
+        assert clean_record_topics(record) == []
+
 def test_ukraine_publisher_suffix_not_topic_anchor():
     topics,_=classify({"title":"Iran oil | Ukraine news - #Mezha", "summary":"Hormuz report"})
     assert topics==["usiran"]
@@ -77,9 +107,12 @@ def test_extension_contract_enters_topic_metrics_and_evidence(tmp_path):
     d=tmp_path/"new-crawler"/"output";d.mkdir(parents=True)
     data={"schema_version":"geo.v6/1","records":[{"id":"a","title":"Aid delivery","summary":"Actual public record","link":"https://example.org/aid","topics":["ukraine"],"dimensions":{"ukraine":"aid"}}],"observations":[{"id":"aid","name":"援助交付","unit":"USD","frequency":"月度","scope":"指定项目","topic":"ukraine","dimension":"aid","method":"actual delivery","history":[{"date":"2026-09-01","value":10}],"source_ids":["a"]}]}
     (d/"geo-v6.json").write_text(json.dumps(data),encoding="utf-8")
+    (d/"_source_status.json").write_text(json.dumps({"run_at":"2026-10-18T00:00:00Z","sources":[{"id":"official-api","publisher":"官方接口","state":"configuration_required","error":"缺少测试凭据"}]}),encoding="utf-8")
     s=load_bundle(tmp_path)
     assert s["records"][0]["dimensions"]=={"ukraine":"aid"}
     assert s["observations"][0]["source_ids"]==[s["records"][0]["id"]]
+    assert next(source for source in s["sources"] if source["monitor"]=="new-crawler")["state"]=="configuration_required"
+    assert s["projects"][0]["failed_sources"]==1
     data["observations"][0]["source_ids"]=["missing"]
     (d/"geo-v6.json").write_text(json.dumps(data),encoding="utf-8")
     with pytest.raises(ValueError):load_bundle(tmp_path)
@@ -112,17 +145,21 @@ def test_api_filters_and_snapshot_bound_citations(tmp_path, monkeypatch):
     assert len(client.get("/api/workspace",params={"snapshot_id":s["id"],"start":"2026-09-18"}).json()["records"])==0
     assert client.get("/api/workspace",params={"snapshot_id":"missing"}).status_code==404
     assert client.get("/api/workspace",params={"snapshot_id":s["id"],"start":"2026-09-20","end":"2026-09-01"}).status_code==422
+    light_workspace=client.get("/api/workspace",params={"snapshot_id":s["id"],"include_records":False}).json()
+    assert light_workspace["records"]==[] and light_workspace["metrics"]
+    mapped=client.get("/api/map-records",params={"snapshot_id":s["id"],"topic":"usiran"}).json()
+    assert mapped and mapped[0]["id"]==s["records"][0]["id"] and mapped[0]["points"]
     assert client.post("/api/import",headers={"Origin":"https://untrusted.test"}).status_code==403
     page=client.get("/api/evidence",params={"snapshot_id":s["id"],"q":"Iran","limit":1}).json()
     assert page["total"]==1 and len(page["records"])==1 and page["has_more"] is False
     assert client.get("/api/evidence",params={"snapshot_id":s["id"],"q":"missing"}).json()["records"]==[]
     assert "text" not in client.get("/api/workspace",params={"snapshot_id":s["id"]}).json()["records"][0]
-    result=client.post("/api/ask",json={"snapshot_id":s["id"],"question":"采购指标变化","topic":"usiran"}).json()
+    result=client.post("/api/ask",json={"snapshot_id":s["id"],"question":"采购指标变化","topic":"usiran","use_model":False}).json()
     assert result["mode"]=="本地证据检索"
     assert "10.00%" in result["facts"][0]["text"]
     assert result["snapshot_id"]==s["id"]
     assert all(r["id"] in {x["id"] for x in s["records"]} for r in result["citations"])
-    assert "尚未配置" in " ".join(result["gaps"])
+    assert "因果验证" in " ".join(result["gaps"])
 
 
 def test_collector_run_actions_validate_and_queue(monkeypatch):
@@ -190,10 +227,14 @@ def test_collector_retry_action_only_queues_failed_items(tmp_path, monkeypatch):
     monkeypatch.setattr("backend.app.collector_jobs.submit", lambda **kwargs: captured.append(kwargs) or Job())
     response = client.post("/api/collector/runs/run-failed/retry")
     assert response.status_code == 202
-    assert captured == [{"ids": ["xinhua-monitor"], "auto_import": True, "allow_partial_import": False, "exclude_ids": ["taco-monitor"]}]
+    assert captured == [{"ids": ["xinhua-monitor"], "auto_import": True, "allow_partial_import": False, "exclude_ids": []}]
 
 
-def test_manual_run_rejects_explicitly_excluded_collector():
+def test_manual_run_rejects_explicitly_excluded_collector(monkeypatch):
+    monkeypatch.setattr(
+        "backend.app.load_config",
+        lambda: {"exclude_ids": ["taco-monitor"], "allow_partial_import": False},
+    )
     client = TestClient(app)
     response = client.post("/api/collector/runs", json={"ids": ["taco-monitor"]})
     assert response.status_code == 409
@@ -259,6 +300,7 @@ def test_collector_log_tail_reads_and_redacts_report_output(tmp_path, monkeypatc
 def test_no_evidence_does_not_invent_answer():
     result=asyncio.run(answer(stored(),"火星土壤",topic="ukraine"))
     assert result["citations"]==[] and result["facts"]==[]
+    assert result["summary"] is None
     assert "没有足够证据" in result["message"]
 
 def fake_model(monkeypatch, payload=None, error=False):
@@ -271,7 +313,11 @@ def fake_model(monkeypatch, payload=None, error=False):
         async def post(self,*args,**kw):
             assert kw["json"]["messages"][0]["role"]=="system"
             if error:raise httpx.ReadTimeout("simulated")
-            return httpx.Response(200,request=httpx.Request("POST","https://example.org"),json={"choices":[{"message":{"content":json.dumps(payload)}}]})
+            body=dict(payload or {})
+            if "summary" not in body:
+                context=json.loads(kw["json"]["messages"][1]["content"])["context"]
+                body["summary"]={"text":"根据当前材料，局势存在新的进展，但相关陈述仍需交叉核验，后续走向具有不确定性。","evidence_ids":[context["evidence"][0]["id"]]}
+            return httpx.Response(200,request=httpx.Request("POST","https://example.org"),json={"choices":[{"message":{"content":json.dumps(body)}}]})
     monkeypatch.setattr("backend.research.httpx.AsyncClient",Client)
 
 def test_model_rejects_invented_citations_and_falls_back(monkeypatch):
@@ -291,6 +337,7 @@ def test_valid_model_assets_are_versioned_and_scoped(monkeypatch):
     fake_model(monkeypatch,payload)
     r=asyncio.run(answer(s,"Iran supply 资产影响",topic="usiran"))
     assert r["mode"]=="现场模型分析"
+    assert r["summary"]["text"].startswith("根据当前材料")
     assert analysis(s,"usiran")["assets"][3]["direction"]=="双向作用"
     assert analysis(s,"ukraine")["assets"][3]["direction"]=="证据不足"
 
@@ -298,6 +345,46 @@ def test_model_new_numbers_rejected(monkeypatch):
     s=stored();rid=s["records"][0]["id"]
     fake_model(monkeypatch,{"inferences":[{"text":"上涨50%","evidence_ids":[rid]}]})
     assert "模型失败" in asyncio.run(answer(s,"Iran supply"))["mode"]
+
+def test_model_summary_new_numbers_rejected(monkeypatch):
+    s=stored();rid=s["records"][0]["id"]
+    fake_model(monkeypatch,{"summary":{"text":"综合材料判断，局势升级概率达到99%，但仍需核验。","evidence_ids":[rid]},"inferences":[]})
+    result=asyncio.run(answer(s,"Iran supply"))
+    assert "模型失败" in result["mode"] and result["summary"] is None
+
+def test_model_summary_ignores_structured_evidence_id_digits(monkeypatch):
+    s=stored();rid=s["records"][0]["id"]
+    text=f"根据当前材料，局势存在新的进展，但仍需交叉核验（证据 {rid}）。"
+    fake_model(monkeypatch,{"summary":{"text":text,"evidence_ids":[rid]},"inferences":[]})
+    result=asyncio.run(answer(s,"Iran supply"))
+    assert result["mode"]=="现场模型分析"
+    assert rid not in result["summary"]["text"] and "根据当前材料" in result["summary"]["text"]
+
+def test_model_allows_numbers_present_in_cited_evidence(monkeypatch):
+    data=bundle();data["records"][0]["text"] += " Public reporting states 50% of the route reopened on 2026-09-16."
+    sid,_=save_snapshot(data);s=get_snapshot(sid);rid=s["records"][0]["id"]
+    fake_model(monkeypatch,{"inferences":[{"text":"材料称2026年9月16日已有50%的航线恢复，但仍需核验。","evidence_ids":[rid]}]})
+    result=asyncio.run(answer(s,"Iran supply"))
+    assert result["mode"]=="现场模型分析"
+
+def test_model_allows_dates_from_cited_evidence_metadata(monkeypatch):
+    s=stored();rid=s["records"][0]["id"]
+    fake_model(monkeypatch,{"inferences":[{"text":"该材料发布于2026年9月17日，结论仍需核验。","evidence_ids":[rid]}]})
+    result=asyncio.run(answer(s,"Iran supply"))
+    assert result["mode"]=="现场模型分析"
+
+def test_general_model_question_does_not_send_full_rule_histories(monkeypatch):
+    s=stored();rid=s["records"][0]["id"]
+    async def compact_complete(messages):
+        user=json.loads(messages[1]["content"])
+        assert len(messages[1]["content"]) < 20_000
+        assert user["context"]["rules"] == {"rule_version": "v6.3"}
+        return json.dumps({"summary":{"text":"根据当前材料，近期局势仍在变化，现有信息需要继续核验后再形成方向判断。","evidence_ids":[rid]},"inferences":[{"text":"材料显示局势仍需持续核验。","evidence_ids":[rid]}]}),"mock"
+    monkeypatch.setattr("backend.research.llm.complete",compact_complete)
+    monkeypatch.setenv("LLM_API_KEY","unit-test-not-a-real-key")
+    result=asyncio.run(answer(s,"近期伊朗局势有什么进展",topic="usiran"))
+    assert result["mode"]=="现场模型分析"
+    assert result["summary"]["evidence_ids"]==[rid]
 
 def test_three_rehearsals_brief_download_and_comparison():
     client=TestClient(app);s=stored();set_working_snapshot_id(s["id"]);ids=[]
@@ -313,9 +400,15 @@ def test_three_rehearsals_brief_download_and_comparison():
         ids.append(b.json()["id"])
         md=client.get(f'/api/briefs/{ids[-1]}/download')
         assert "美伊局势" in md.text and "俄乌冲突" in md.text and "反证" in md.text
-        assert "| 引用 |\n|---|" in md.text
+        assert "## 核心判断" in md.text and "### 俄乌冲突" in md.text
+        assert "战线和远程打击变化、援助实际交付与停火执行" in md.text
+        assert "## 大类资产影响" in md.text and "## 证据与信源" in md.text
     assert client.get("/api/brief-diff",params={"before":ids[0],"after":ids[1]}).status_code==200
-    assert len(client.get("/api/briefs").json())==3
+    brief_rows = client.get("/api/briefs").json()
+    assert len(brief_rows)==3
+    assert "markdown" not in brief_rows[0]
+    detail = client.get(f'/api/briefs/{ids[-1]}')
+    assert detail.status_code == 200 and detail.json()["markdown"]
 
 def test_known_reprints_count_as_one_retrieval_origin():
     original = normalize({"title":"Iran oil report","link":"https://example.org/original"}, "one")
@@ -354,6 +447,36 @@ def test_research_review_history_conflict_and_snapshot_isolation():
     changed=bundle();changed['records'][0]['text']='new';sid2,_=save_snapshot(changed)
     assert client.get(f'/api/reviews/{rid}?snapshot_id={sid2}').json()==[]
     assert client.get('/api/workspace',params={'snapshot_id':sid,'topic':'all'}).json()['records'][0]['situation_signal']=='easing'
+
+
+def test_map_cluster_titles_are_batch_translated_and_cached(monkeypatch):
+    s = stored()
+    record = s['records'][0]
+
+    async def fake_complete(messages):
+        request = json.loads(messages[-1]['content'])
+        assert request['items'] == [{'id': record['id'], 'title': record['title']}]
+        return json.dumps({'items': [{'id': record['id'], 'title': '伊朗军事补给报告'}]}, ensure_ascii=False), 'test-model'
+
+    monkeypatch.setattr('backend.app.llm.complete', fake_complete)
+    client = TestClient(app)
+    response = client.post('/api/translations/titles', json={
+        'snapshot_id': s['id'],
+        'record_ids': [record['id']],
+    })
+    assert response.status_code == 200
+    assert response.json()['titles'] == {record['id']: '伊朗军事补给报告'}
+    shown = client.get('/api/workspace', params={'snapshot_id': s['id'], 'topic': 'all'}).json()
+    assert shown['records'][0]['title'] == '伊朗军事补给报告'
+
+
+def test_map_title_translation_rejects_records_outside_snapshot():
+    s = stored()
+    response = TestClient(app).post('/api/translations/titles', json={
+        'snapshot_id': s['id'],
+        'record_ids': ['missing-record'],
+    })
+    assert response.status_code == 404
 
 
 def test_takeaway_uses_recent_sources_and_excludes_future():

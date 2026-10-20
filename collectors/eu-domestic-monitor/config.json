@@ -167,7 +167,7 @@
     },
     {
       "id": "gn-eu-ua",
-      "url": "https://news.google.com/rss/search?q=(EU+OR+Europe+OR+France+OR+Italy+OR+Germany)+Ukraine+(military+aid+OR+weapons+OR+support+OR+assistance)&hl=en-US&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=(EU+OR+Europe)+Ukraine+(%22Ukraine+Support+Loan%22+OR+%22Ukraine+Facility%22+OR+PURL+OR+%22air+defence%22+OR+%22military+aid%22)&hl=en-US&gl=US&ceid=US:en",
       "tier": "T3",
       "publisher": "Google News",
       "enabled": true,
@@ -175,7 +175,7 @@
     },
     {
       "id": "gn-eu-ru",
-      "url": "https://news.google.com/rss/search?q=(EU+OR+France+OR+Italy+OR+Germany+OR+Europe)+Russia+(sanctions+OR+talks+OR+peace+OR+deterrence)&hl=en-US&gl=US&ceid=US:en",
+      "url": "https://news.google.com/rss/search?q=(EU+OR+Europe)+Russia+(%22sanctions+circumvention%22+OR+%22shadow+fleet%22+OR+%22oil+price+cap%22+OR+%22energy+ceasefire%22+OR+sanctions)&hl=en-US&gl=US&ceid=US:en",
       "tier": "T3",
       "publisher": "Google News",
       "enabled": true,
@@ -497,7 +497,16 @@
           "rx:\\barmement\\w*",
           "rx:\\barmes\\b",
           "rx:\\bsostegn\\w*",
-          "rx:\\baiut\\w* militare\\b"
+          "rx:\\baiut\\w* militare\\b",
+          "ukraine support loan",
+          "ukraine facility",
+          "purl",
+          "prioritised ukraine requirements list",
+          "prioritized ukraine requirements list",
+          "air defense interceptor",
+          "air defence interceptor",
+          "defence industrial capacity",
+          "defense industrial capacity"
         ],
         [
           "ukraine",
@@ -571,7 +580,17 @@
           "rx:\\bdialogue\\b",
           "rx:\\bdialogo\\b",
           "rx:\\bnormalis\\w*",
-          "rx:\\bnormaliz\\w*"
+          "rx:\\bnormaliz\\w*",
+          "sanctions circumvention",
+          "sanctions evasion",
+          "shadow fleet",
+          "oil price cap",
+          "secondary sanctions",
+          "hybrid threat",
+          "immobilised russian asset",
+          "immobilized russian asset",
+          "reparations loan",
+          "energy ceasefire"
         ]
       ]
     },
@@ -620,7 +639,15 @@
           "rx:\\bveto\\b",
           "rx:\\bunanimité\\b",
           "rx:\\bgoverno\\b",
-          "rx:\\bcapo di governo\\b"
+          "rx:\\bcapo di governo\\b",
+          "ukraine support loan",
+          "ukraine facility",
+          "reparations loan",
+          "frozen russian asset",
+          "immobilised russian asset",
+          "immobilized russian asset",
+          "defence industrial capacity",
+          "defense industrial capacity"
         ]
       ]
     },

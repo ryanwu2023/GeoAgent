@@ -2,7 +2,7 @@ import subprocess
 
 import pytest
 
-from scripts.crawler_manager import choose_launcher
+from scripts.crawler_manager import choose_launcher, run_loop
 
 
 def test_launcher_prefers_run_new_and_falls_back_to_run(tmp_path):
@@ -29,3 +29,10 @@ def test_windows_cmd_can_execute_selected_launcher(tmp_path):
         check=False,
     )
     assert result.returncode == 0
+
+
+def test_once_loop_runs_exactly_once(monkeypatch):
+    calls = []
+    monkeypatch.setattr("scripts.crawler_manager.run_all", lambda url, timeout: calls.append((url, timeout)) or 7)
+    assert run_loop("http://127.0.0.1:8000/api/import", 30, 60, once=True) == 7
+    assert calls == [("http://127.0.0.1:8000/api/import", 30)]

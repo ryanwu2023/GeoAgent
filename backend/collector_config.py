@@ -36,7 +36,9 @@ def platform_name() -> str:
 def _defaults() -> dict[str, Any]:
     return {
         "interval_sec": 86400,
-        "exclude_ids": ["taco-monitor"],
+        # Every enabled collector participates in the unified daily run by
+        # default.  Operators can still opt out explicitly in the workbench.
+        "exclude_ids": [],
         "auto_import": True,
         "allow_partial_import": False,
     }

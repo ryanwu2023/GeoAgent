@@ -175,7 +175,7 @@
   },
   {
    "id": "gn-ttf-gas",
-   "url": "https://news.google.com/rss/search?q=TTF+gas+price+Europe&hl=en-US&gl=US&ceid=US:en",
+   "url": "https://news.google.com/rss/search?q=Europe+(TTF+OR+%22gas+storage%22+OR+%22daily+withdrawal%22+OR+%22daily+injection%22+OR+LNG)+(price+OR+inventory+OR+flows)&hl=en-US&gl=US&ceid=US:en",
    "tier": "T3",
    "publisher": "Google News（TTF 气价）",
    "enabled": true,
@@ -191,7 +191,7 @@
   },
   {
    "id": "gn-blacksea-grain",
-   "url": "https://news.google.com/rss/search?q=Black+Sea+grain+corridor&hl=en-US&gl=US&ceid=US:en",
+   "url": "https://news.google.com/rss/search?q=Ukraine+(grain+OR+wheat+OR+corn)+(%22Black+Sea+corridor%22+OR+%22Ukrainian+sea+corridor%22+OR+Odesa+OR+Pivdennyi+OR+Izmail)+(export+OR+shipment+OR+production)&hl=en-US&gl=US&ceid=US:en",
    "tier": "T3",
    "publisher": "Google News（黑海粮食）",
    "enabled": true,
@@ -207,7 +207,7 @@
   },
   {
    "id": "gn-oil-supply",
-   "url": "https://news.google.com/rss/search?q=oil+supply+disruption+refinery+attack&hl=en-US&gl=US&ceid=US:en",
+   "url": "https://news.google.com/rss/search?q=(Russia+OR+Ukraine)+(Ryazan+OR+refinery+OR+oil+depot)+(strike+OR+attack+OR+outage+OR+%22supply+disruption%22)&hl=en-US&gl=US&ceid=US:en",
    "tier": "T3",
    "publisher": "Google News（供应中断）",
    "enabled": true,
@@ -264,7 +264,12 @@
      "export restrictions",
      "restrict",
      "curtail",
-     "reduce output"
+     "reduce output",
+     "refinery strike",
+     "refinery attack",
+     "ryazan refinery",
+     "ryazan oil refinery",
+     "рязань refinery"
     ],
     [
      "oil",
@@ -353,7 +358,21 @@
      "price cap",
      "supply security",
      "storage target",
-     "winter gas"
+     "winter gas",
+     "gas storage",
+     "storage fullness",
+     "storage filling",
+     "storage inventory",
+     "gas inventory",
+     "net injection",
+     "net withdrawal",
+     "daily injection",
+     "daily withdrawal",
+     "lng sendout",
+     "regasification sendout",
+     "turkstream",
+     "yamal-europe",
+     "ukraine gas transit"
     ],
     [
      "europe",
@@ -393,7 +412,18 @@
      "silk route",
      "blockade",
      "shipments of grain",
-     "agricultural export"
+     "agricultural export",
+     "black sea corridor",
+     "ukrainian sea corridor",
+     "ukraine sea corridor",
+     "maritime corridor",
+     "danube port",
+     "export volume",
+     "export estimate",
+     "production estimate",
+     "crop estimate",
+     "ending stocks",
+     "port shipment"
     ],
     [
      "ukraine",
@@ -407,7 +437,15 @@
      "fertilizer",
      "odessa",
      "danube",
-     "constanta"
+     "constanta",
+     "odesa",
+     "chornomorsk",
+     "pivdennyi",
+     "izmail",
+     "reni",
+     "ukrainian sea corridor",
+     "black sea corridor",
+     "danube port"
     ]
    ]
   },
@@ -574,7 +612,12 @@
     "black sea",
     "kerch",
     "bosphorus",
-    "danube"
+    "danube",
+    "ukrainian sea corridor",
+    "ukraine sea corridor",
+    "izmail",
+    "reni",
+    "pivdennyi"
    ],
    "Hormuz": [
     "hormuz",

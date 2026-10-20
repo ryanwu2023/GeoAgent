@@ -20,6 +20,19 @@ def terminology(text,original):
     if re.search(r'\bdestroyer',original,re.I):text=text.replace('破坏者','驱逐舰').replace('摧毁者','驱逐舰')
     return text
 
+def locally_supported(text):
+    """Accept short Latin-script headlines that keyword detection cannot label.
+
+    News headlines such as "Live show" or proper-name-heavy headlines often do
+    not contain the stop words used by the conservative language detector. They
+    are still valid input for the bundled English-to-Chinese model. Scripts
+    that require a different model remain excluded here.
+    """
+    detected = language(text)
+    return detected in ('en', 'fa') or (
+        detected == 'unknown' and bool(re.search(r'[A-Za-z]{2,}', text))
+    )
+
 def run():
     data_dir().mkdir(parents=True,exist_ok=True)
     lock=(data_dir()/'translation.lock').open('a+b')
@@ -55,7 +68,7 @@ def run():
     records=sorted(snapshot['records'],key=lambda r:(bool(r['topics']),r['published_at'] or ''),reverse=True)
     cache=translation_cache()
     texts=list(dict.fromkeys([r['title'] for r in records]+[r['source_name'] for r in records]+[r['text'] for r in records if r['text']]))
-    texts=[t for t in texts if not is_chinese(t) and digest(t) not in cache and language(t) in ('en','fa')]
+    texts=[t for t in texts if not is_chinese(t) and digest(t) not in cache and locally_supported(t)]
     print(f'Pending texts: {len(texts)}',flush=True)
     started=time.time()
     for offset in range(0,len(texts),8):

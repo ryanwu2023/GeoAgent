@@ -756,7 +756,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const overallHealth = dataSource === "runtime" ? (runtimeFailedCount ? "需关注" : "正常") : dataSource === "demo" ? "演示" : "不可用";
   const overallHealthNote = dataSource === "runtime" ? `${runtimeFailedCount} 个失败 · 以最近报告为准` : dataSource === "demo" ? "显式演示模式" : "未读取到持久化运行报告";
   const runtimeStatusLabel = runStatusLabel(runtimeRunStatus);
-  const importStatusLabel = ({ succeeded: "已导入", failed: "导入失败", skipped_collection_status: "因采集状态跳过", skipped_output_gate: "输出门禁跳过", skipped_no_results: "无产物跳过", pending: "等待导入", not_requested: "未请求" } as Record<string, string>)[runtimeImportStatus] || "待确认";
+  const importStatusLabel = ({ succeeded: "已导入", failed: "导入失败", skipped_collection_status: "因采集状态跳过", skipped_output_gate: "输出门禁跳过", skipped_no_results: "无产物跳过", pending: "等待导入", not_requested: "未请求", not_attempted_interrupted: "因中断未导入" } as Record<string, string>)[runtimeImportStatus] || "待确认";
   const runtimeTriggerLabel = dataSource === "runtime" ? "运行报告" : dataSource === "demo" ? "显式演示" : "不可用";
   const serviceHealthLabel = dataSource === "runtime" ? "报告可读" : dataSource === "demo" ? "演示模式" : apiState === "empty" ? "服务在线 · 无报告" : "API 不可用";
   const statusCounts = useMemo(

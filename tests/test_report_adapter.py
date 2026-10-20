@@ -1,4 +1,6 @@
-from backend.adapters import load_bundle
+from datetime import datetime, timezone
+
+from backend.adapters import clear_future_published_at, load_bundle
 from backend.research import retrieve, candidates, coverage
 from backend.events import event_metadata
 
@@ -15,3 +17,15 @@ def test_supplement_is_searchable_not_event(tmp_path,monkeypatch):
     assert candidates(s['records'],['原油'])==[]
     assert all(t['count']==0 for t in coverage(s))
     assert found[0]['url'].startswith('/api/archive/')
+
+
+def test_future_published_at_is_removed_from_freshness_ordering():
+    record = {"published_at": "2027-02-28T00:00:00Z"}
+    changed = clear_future_published_at(
+        record,
+        now_utc=datetime(2026, 10, 18, tzinfo=timezone.utc),
+    )
+    assert changed is True
+    assert record["published_at"] is None
+    assert record["published_at_original"] == "2027-02-28T00:00:00Z"
+    assert record["timestamp_issues"][0]["field"] == "published_at"

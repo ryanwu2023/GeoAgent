@@ -41,7 +41,10 @@ def require_project_python(root: Path, platform_name: str, configured: Path | No
 
 def command_for(action: str, platform_name: str, path: Path) -> list[str]:
     if platform_name == "macos":
-        domain = f"gui/{os.getuid()}"
+        # Keep dry-run/configuration inspection portable. os.getuid is absent
+        # on Windows, where no launchctl command will actually be executed.
+        uid = os.getuid() if hasattr(os, "getuid") else int(os.getenv("UID", "501"))
+        domain = f"gui/{uid}"
         if action == "install":
             return ["launchctl", "bootstrap", domain, str(path)]
         if action == "uninstall":

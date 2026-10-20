@@ -1,6 +1,7 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useRef, useState } from "react";
 import IntegrationSettings from "./IntegrationSettings";
 import McpWorkbench from "./McpWorkbench";
+import BriefTemplateEditor from "./BriefTemplateEditor";
 import projectLabels from "../config/project-labels.json";
 import { panelEntryScope } from "./hostViewContext";
 import { useEmbedIdentity } from "./useEmbedIdentity";
@@ -26,11 +27,14 @@ import type {
   Answer,
   Asset,
   Brief,
+  BriefTemplate,
   Evidence,
   EvidencePage,
   Metric,
   McpPublicConfig,
   McpTool,
+  MapEvidence,
+  PageSummary,
   Status,
   Workspace,
 } from "./types";
@@ -40,7 +44,7 @@ import MetricGuide from "./MetricGuide";
 import CollectorMonitor from "./CollectorMonitor";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { briefPresentation } from "./briefPresentation";
+import BriefViewer from "./BriefViewer";
 import { useHostViewContext } from "./useHostViewContext";
 
 const MapView = lazy(() => import("./MapView"));
@@ -79,6 +83,7 @@ const metricCategory = (m: Metric) => {
 };
 const movementClass = (m: Metric) =>
   m.delta == null || m.delta === 0 ? "flat" : m.delta > 0 ? "up" : "down";
+const modelSummaryTabs = new Set(["metrics", "scenarios", "assets"]);
 export default function App() {
   const [sourceMetric, setSourceMetric] = useState<Metric | null>(null);
   const [translating, setTranslating] = useState(false);
@@ -108,10 +113,15 @@ export default function App() {
     [start, setStart] = useState(""),
     [end, setEnd] = useState("");
   const [work, setWork] = useState<Workspace | null>(null),
+    [mapRecords, setMapRecords] = useState<MapEvidence[]>([]),
+    [mapLoading, setMapLoading] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [loading, setLoading] = useState(false),
     [importing, setImporting] = useState(false);
+  const [pageSummary, setPageSummary] = useState<PageSummary | null>(null),
+    [pageSummaryLoading, setPageSummaryLoading] = useState(false),
+    [pageSummaryRefresh, setPageSummaryRefresh] = useState(0);
   const [selected, setSelected] = useState<Evidence | null>(null),
     [asset, setAsset] = useState<Asset | null>(null),
     [sourcesOpen, setSourcesOpen] = useState(false),
@@ -139,18 +149,24 @@ export default function App() {
     [generating, setGenerating] = useState(false),
     [compare, setCompare] = useState(""),
     [diff, setDiff] = useState("");
+  const [briefTemplates,setBriefTemplates]=useState<BriefTemplate[]>([]),
+    [briefTemplateId,setBriefTemplateId]=useState(""),
+    [briefTemplateOpen,setBriefTemplateOpen]=useState(false);
   const [resetKey, setResetKey] = useState(0);
   const queryVersion = useRef(0),
     selectionVersion = useRef(0),
-    evidenceVersion = useRef(0);
+    evidenceVersion = useRef(0),
+    pageSummaryVersion = useRef(0),
+    workingSidRef = useRef("");
   const lastTopic = useRef("usiran");
   const [settingsOpen,setSettingsOpen] = useState(false);
   const [mcpWorkbenchOpen,setMcpWorkbenchOpen] = useState(false);
-  const [connection,setConnection] = useState({origin:"http://127.0.0.1:9172",agent_id:"geo-research-assistant",product_user_id:"geoagent-local"});
+  const [connection,setConnection] = useState({origin:"http://127.0.0.1:9172",agent_id:"geo-research-assistant",product_user_id:"geoagent-local",embed_configured:false});
   const [connectionLoaded,setConnectionLoaded] = useState(false);
   const [connectionVersion,setConnectionVersion] = useState(0);
   const pichatOrigin = connection.origin;
   const pichatAgentId = connection.agent_id;
+  const pichatEmbedConfigured = connection.embed_configured;
   const reloadConnection = async () => {
     try {
       const response = await fetch("/api/integrations/public",{cache:"no-store"});
@@ -161,18 +177,24 @@ export default function App() {
     } catch(error){setPichatError(error instanceof Error?error.message:"连接配置读取失败")}
   };
   useEffect(()=>{void reloadConnection()},[]);
+  const acceptBriefTemplates=(rows:BriefTemplate[])=>{
+    setBriefTemplates(rows);
+    setBriefTemplateId(current=>rows.some(row=>row.id===current)?current:(rows.find(row=>row.is_default)?.id||rows[0]?.id||""));
+  };
+  useEffect(()=>{api<BriefTemplate[]>("/brief-templates").then(acceptBriefTemplates).catch(()=>{})},[]);
   if (page !== "briefs") lastTopic.current = page;
   const topic = lastTopic.current;
   const workspaceCache = useRef(
     new Map<string, { time: number; data: Workspace }>(),
   );
+  const mapCache = useRef(new Map<string, MapEvidence[]>());
   const pichatFrameRef = useRef<HTMLIFrameElement | null>(null);
   const {ready:pichatReady,loading:pichatAuthRequired,error:pichatError,
     request:requestPichatIdentity,setError:setPichatError} = useEmbedIdentity(pichatFrameRef,
       pichatOrigin,pichatAgentId,connection.product_user_id,connectionVersion,
-      chatOpen && connectionLoaded && !!embedWorkspaceScope);
+      chatOpen && connectionLoaded && pichatEmbedConfigured && !!embedWorkspaceScope);
   const viewBridge = useHostViewContext(pichatFrameRef,pichatOrigin,pichatAgentId,connectionVersion,
-    chatOpen && connectionLoaded, {version:'geoagent-view/v1',snapshot_id:workingSid,topic,dimension,start,end});
+    chatOpen && connectionLoaded && pichatEmbedConfigured, {version:'geoagent-view/v1',snapshot_id:workingSid,topic,dimension,start,end});
   const pichatUrl = (() => {
     const url = new URL(
       `/work-embed/${encodeURIComponent(pichatAgentId)}`,
@@ -199,6 +221,22 @@ export default function App() {
     setStatus(s);
     return s;
   }
+  async function openBrief(item: Brief) {
+    setDiff("");
+    setCompare("");
+    if (item.markdown) {
+      setBrief(item);
+      return;
+    }
+    try {
+      setBrief(await api<Brief>(`/briefs/${item.id}`));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "简报正文加载失败");
+    }
+  }
+  useEffect(() => {
+    workingSidRef.current = workingSid;
+  }, [workingSid]);
   useEffect(() => {
     if (!status?.translation?.running || !sid) return;
     let cancelled = false;
@@ -213,10 +251,13 @@ export default function App() {
               dimension,
               start,
               end,
+              include_records: "false",
             }),
         );
         if (!cancelled) {
           setStatus(s);
+          const key = new URLSearchParams({ snapshot_id: sid, topic, dimension, start, end, include_records: "false" }).toString();
+          workspaceCache.current.set(key, { time: Date.now(), data: w });
           setWork(w);
         }
       } catch {}
@@ -231,7 +272,16 @@ export default function App() {
     const timer = setInterval(() => {
       refreshStatus().then((next) => {
         if (next.crawler?.state === "completed") {
-          setNotice("后台爬虫已完成，请在快照列表中选择需要查看的版本；当前工作快照未切换");
+          const nextId = next.working_snapshot_id || next.snapshots[0]?.id || "";
+          if (nextId) {
+            workspaceCache.current.clear();
+            mapCache.current.clear();
+            setWorkingSid(nextId);
+            setSid(nextId);
+            setNotice(`后台采集与导入已完成，已切换至最新工作快照 ${nextId.slice(0, 8)}`);
+          } else {
+            setNotice("后台采集已完成，但尚未生成可用快照");
+          }
         }
       }).catch(() => {});
     }, 5000);
@@ -264,7 +314,17 @@ export default function App() {
         .then((s) => {
           if (!cancelled) {
             setStatus(s);
-            setWorkingSid(s.working_snapshot_id || "");
+            const nextId = s.working_snapshot_id || "";
+            if (nextId && nextId !== workingSidRef.current) {
+              workspaceCache.current.clear();
+              mapCache.current.clear();
+              workingSidRef.current = nextId;
+              setWorkingSid(nextId);
+              setSid(nextId);
+              setNotice(`检测到新工作快照，已重新加载 ${nextId.slice(0, 8)}…`);
+            } else {
+              setWorkingSid(nextId);
+            }
           }
         })
         .catch(() => {});
@@ -283,11 +343,16 @@ export default function App() {
       dimension,
       start,
       end,
+      include_records: "false",
     }).toString();
     const cached = workspaceCache.current.get(key);
     setError("");
     setSelected(null);
     setAsset(null);
+    // Snapshots are immutable. Reuse the structured workspace while it is
+    // current; the status poll clears this cache as soon as a new working
+    // snapshot is published. Page entry still invokes /page-summary, whose
+    // cache key covers the snapshot, filters, rules and review revision.
     if (cached && Date.now() - cached.time < 60000) {
       setWork(cached.data);
       setLoading(false);
@@ -311,6 +376,73 @@ export default function App() {
         if (queryVersion.current === version) setLoading(false);
       });
   }, [sid, topic, dimension, start, end]);
+
+  useEffect(() => {
+    if (!sid || tab !== "map") return;
+    const key = new URLSearchParams({ snapshot_id: sid, topic, dimension, start, end }).toString();
+    const cached = mapCache.current.get(key);
+    if (cached) {
+      setMapRecords(cached);
+      return;
+    }
+    setMapLoading(true);
+    setMapRecords([]);
+    api<MapEvidence[]>("/map-records?" + key)
+      .then((records) => {
+        mapCache.current.set(key, records);
+        setMapRecords(records);
+      })
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setMapLoading(false));
+  }, [sid, topic, dimension, start, end, tab]);
+  useEffect(() => {
+    const version = ++pageSummaryVersion.current;
+    if (!modelSummaryTabs.has(tab)) {
+      setPageSummary(null);
+      setPageSummaryLoading(false);
+      return;
+    }
+    if (!sid || sid !== workingSid || work?.snapshot.id !== sid) {
+      setPageSummary(null);
+      setPageSummaryLoading(false);
+      return;
+    }
+    setPageSummary(null);
+    setPageSummaryLoading(true);
+    api<PageSummary>("/page-summary", {
+      snapshot_id: sid,
+      page: tab,
+      topic,
+      dimension,
+      start,
+      end,
+    })
+      .then((result) => {
+        if (pageSummaryVersion.current === version) setPageSummary(result);
+      })
+      .catch((e) => {
+        if (pageSummaryVersion.current === version) {
+          setPageSummary({
+            cache_key: "",
+            snapshot_id: sid,
+            page: tab as "metrics" | "scenarios" | "assets",
+            topic,
+            filters: { dimension, start, end },
+            rule_version: status?.rule_version || "",
+            created_at: new Date().toISOString(),
+            status: "failed",
+            mode: "模型总结失败",
+            text: null,
+            evidence_ids: [],
+            cached: false,
+            message: (e as Error).message,
+          });
+        }
+      })
+      .finally(() => {
+        if (pageSummaryVersion.current === version) setPageSummaryLoading(false);
+      });
+  }, [tab, sid, workingSid, topic, dimension, start, end, work?.snapshot.id, status?.rule_version, pageSummaryRefresh]);
   const deferredSearch = useDeferredValue(search.trim());
   async function loadEvidence(offset = 0) {
     if (!sid) return;
@@ -489,6 +621,33 @@ export default function App() {
       setError((e as Error).message);
     }
   }
+  async function translateMapTitles(ids: string[]) {
+    if (!sid || !status?.model.configured || !ids.length) return {};
+    try {
+      const result = await api<{ok:boolean;translated:number;failed:string[];titles:Record<string,string>;message:string}>(
+        "/translations/titles",
+        {snapshot_id:sid,record_ids:ids},
+      );
+      if (!result.ok && result.message) setNotice(result.message);
+      if (Object.keys(result.titles).length) {
+        const applyTitles = (records: MapEvidence[]) => records.map(record =>
+          result.titles[record.id] ? {...record,title:result.titles[record.id]} : record,
+        );
+        setMapRecords(current => applyTitles(current));
+        setEvidenceRows(current => current.map(record =>
+          result.titles[record.id] ? {...record,title:result.titles[record.id]} : record,
+        ));
+        for (const [key,cached] of workspaceCache.current) {
+          workspaceCache.current.set(key,{...cached,data:{...cached.data,records:applyTitles(cached.data.records)}});
+        }
+        for (const [key,cached] of mapCache.current) mapCache.current.set(key, applyTitles(cached));
+      }
+      return result.titles;
+    } catch (e) {
+      setNotice(`中文标题生成失败：${(e as Error).message}`);
+      return {};
+    }
+  }
   async function ask(q = question) {
     if (!q.trim() || !workingSid) return;
     const previous_answer_id = answer?.id || "";
@@ -520,6 +679,7 @@ export default function App() {
               dimension,
               start,
               end,
+              include_records: "false",
             }),
         ).then((w) => {
           if (version === selectionVersion.current) setWork(w);
@@ -537,7 +697,7 @@ export default function App() {
     setError("");
     const version = selectionVersion.current;
     try {
-      const b = await api<Brief>("/briefs", { snapshot_id: workingSid });
+      const b = await api<Brief>("/briefs", { snapshot_id: workingSid, template_id: briefTemplateId });
       setBriefs((bs) => [b, ...bs]);
       if (version === selectionVersion.current) {
         setPage("briefs");
@@ -583,6 +743,7 @@ export default function App() {
     <div className="prototype-shell">
       {settingsOpen ? <IntegrationSettings onClose={()=>setSettingsOpen(false)} onSaved={()=>void reloadConnection()}/> : null}
       {mcpWorkbenchOpen ? <McpWorkbench context={{snapshot_id:workingSid,topic,dimension,start,end}} onClose={()=>setMcpWorkbenchOpen(false)}/> : null}
+      {briefTemplateOpen ? <BriefTemplateEditor onClose={()=>setBriefTemplateOpen(false)} onChanged={acceptBriefTemplates}/> : null}
       <header className="prototype-header">
         <div className="prototype-brand">
           <b>地缘</b>
@@ -787,20 +948,53 @@ export default function App() {
                 "center-view " + (tab === "map" ? "map-view" : "scroll-view")
               }
             >
+              {modelSummaryTabs.has(tab) && (
+                <section className={`page-model-summary ${pageSummary?.status || "loading"}`}>
+                  <div className="page-model-summary-heading">
+                    <div>
+                      <span>模型综合判断</span>
+                      <small>
+                        快照 {sid.slice(0, 8)} · {pageSummary?.model || status?.model.model || "模型服务"}
+                        {pageSummary?.cached ? " · 已读取缓存" : ""}
+                      </small>
+                    </div>
+                    {(pageSummary?.status === "failed" || pageSummary?.status === "unavailable") && (
+                      <button onClick={() => setPageSummaryRefresh((value) => value + 1)}>重新生成</button>
+                    )}
+                  </div>
+                  {pageSummaryLoading ? (
+                    <p><RefreshCw className="spin" size={14} />正在结合当前快照的全部指标、证据与研究规则生成总结…</p>
+                  ) : pageSummary?.text ? (
+                    <p>{pageSummary.text}</p>
+                  ) : (
+                    <p>{pageSummary?.message || "等待当前快照的模型总结。"}</p>
+                  )}
+                  {pageSummary?.text && <small>{pageSummary.message} · 生成于 {dateText(pageSummary.created_at)}</small>}
+                  {!!pageSummary?.evidence_ids.length && (
+                    <div className="page-model-summary-evidence">
+                      {pageSummary.evidence_ids.slice(0, 8).map((id, index) => (
+                        <button key={id} onClick={() => openEvidence(id)}>引用 {index + 1}</button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
               {tab === "map" &&
                 <div
                   style={{ height: "100%", width: "100%", minWidth: 0, flex: 1 }}
                 >
                   <Suspense fallback={<div className="empty"><RefreshCw className="spin" />正在加载地图…</div>}>
                     <MapView
-                      records={work.records}
+                      records={mapRecords}
                       topic={topic}
                       resetKey={resetKey}
+                      onTranslateTitles={translateMapTitles}
                       onSelect={(r) => {
                         openEvidence(r.id);
                         setAsset(null);
                       }}
                     />
+                    {mapLoading && <div className="map-data-loading"><RefreshCw className="spin" size={14}/>正在加载地图动态…</div>}
                   </Suspense>
                 </div>
               }
@@ -1225,7 +1419,13 @@ export default function App() {
             <div className="brief-layout">
               <section className="panel brief-list">
                 <div className="section-heading">
-                  <h2>简报档案</h2>
+                  <div><h2>简报档案</h2><p>选择模板生成，历史观点按快照保留</p></div>
+                </div>
+                <div className="brief-template-picker">
+                  <label htmlFor="brief-template">生成模板</label>
+                  <select id="brief-template" aria-label="简报模板" value={briefTemplateId} onChange={event=>setBriefTemplateId(event.target.value)}>{briefTemplates.map(row=><option key={row.id} value={row.id}>{row.name}{row.is_default?" · 默认":""}</option>)}</select>
+                  <button onClick={()=>setBriefTemplateOpen(true)}>配置模板</button>
+                  <button className="primary" disabled={!workingSid||generating} onClick={generate}>{generating&&<RefreshCw size={13} className="spin"/>}{generating?"正在分析证据…":"生成新简报"}</button>
                 </div>
                 {briefs.map((b) => (
                   <button
@@ -1233,19 +1433,15 @@ export default function App() {
                     className={
                       brief?.id === b.id ? "brief-item selected" : "brief-item"
                     }
-                    onClick={() => {
-                      setBrief(b);
-                      setDiff("");
-                      setCompare("");
-                    }}
+                    onClick={() => void openBrief(b)}
                   >
                     <FileText size={17} />
-                    <div>
-                      <strong>{dateText(b.created_at)}</strong>
-                      <small>{b.mode}</small>
+                    <div className="brief-item-copy">
+                      <div className="brief-item-date"><strong>{dateText(b.created_at)}</strong>{b.snapshot_id===sid&&<span>当前快照</span>}</div>
+                      <small className={b.mode.includes("现场模型")?"mode-model":b.mode.includes("部分")?"mode-partial":"mode-local"}>{b.mode}</small>
+                      {b.template_id&&<small>模板 {briefTemplates.find(row=>row.id===b.template_id)?.name||b.template_id} v{b.template_version||1}</small>}
                       <small>
-                        快照 {b.snapshot_id.slice(0, 8)}{" "}
-                        {b.snapshot_id !== sid ? "· 其他版本" : ""}
+                        快照 {b.snapshot_id.slice(0, 8)}
                       </small>
                     </div>
                   </button>
@@ -1262,10 +1458,12 @@ export default function App() {
                     <div className="section-heading">
                       <div>
                         <h2>研究简报</h2>
-                        <p>
-                          历史档案 · {brief.mode} · 快照{" "}
-                          {brief.snapshot_id.slice(0, 8)}
-                        </p>
+                        <div className="brief-meta">
+                          <span className={`brief-mode ${brief.mode.includes("现场模型") ? "model" : brief.mode.includes("部分") ? "partial" : "local"}`}>{brief.mode}</span>
+                          <span>快照 {brief.snapshot_id.slice(0, 8)}</span>
+                          {brief.model ? <span>模型 {brief.model}</span> : <span>规则分析</span>}
+                          {brief.window_start && brief.window_end && <span>分析窗口 {dateText(brief.window_start)}—{dateText(brief.window_end)}</span>}
+                        </div>
                       </div>
                       <a
                         className="button"
@@ -1308,9 +1506,7 @@ export default function App() {
                       {diff ? (
                         <pre>{diff}</pre>
                       ) : (
-                        <Markdown remarkPlugins={[remarkGfm]}>
-                          {briefPresentation(brief.markdown)}
-                        </Markdown>
+                        <BriefViewer markdown={brief.markdown || ""} />
                       )}
                     </div>
                   </>
@@ -1533,9 +1729,9 @@ export default function App() {
                     GeoAgent 研究助手
                   </h2>
                   <small>
-                    PiChat Agent · {pichatAgentId} · {names[topic]} · 工作快照 {workingSid.slice(0, 8) || "未确认"}
+                    {pichatEmbedConfigured ? `PiChat Agent · ${pichatAgentId}` : `${status?.model.model || "本地证据检索"} · 内置问答`} · {names[topic]} · 工作快照 {workingSid.slice(0, 8) || "未确认"}
                   </small>
-                  <small role="status" aria-label="看板范围同步状态">{viewBridge.status}。仅同步快照、主题、维度、日期。</small>
+                  {pichatEmbedConfigured && <small role="status" aria-label="看板范围同步状态">{viewBridge.status}。仅同步快照、主题、维度、日期。</small>}
                 </div>
                 <button
                   aria-label="关闭研究助手"
@@ -1547,7 +1743,7 @@ export default function App() {
                   <X />
                 </button>
               </div>
-              <div className="pichat-embed-shell">
+              {pichatEmbedConfigured ? <div className="pichat-embed-shell">
                 {!pichatReady && !pichatAuthRequired && !pichatError && (
                   <div className="pichat-embed-status">
                     <RefreshCw className="spin" size={16} /> 正在连接 PiChat Agent…
@@ -1579,7 +1775,42 @@ export default function App() {
                   }}
                   allow="clipboard-read; clipboard-write"
                 /> : null}
-              </div>
+              </div> : <>
+                <div className="chat-body">
+                  <p className="chat-intro">
+                    使用当前工作快照中的结构化指标和新闻证据回答。数字由程序查询，模型负责归纳，并保留引用和数据缺口。
+                  </p>
+                  <div className="presets">
+                    {["本周哪些指标变化最大？", "哪些证据改变了当前判断？", "当前结论有哪些反证？", "还缺什么关键数据？"].map(item => (
+                      <button type="button" key={item} disabled={!workingSid || asking} onClick={() => { setQuestion(item); void ask(item); }}>{item}</button>
+                    ))}
+                  </div>
+                  {history.length > 0 && <select aria-label="历史问答" value={answer?.id || ""} onChange={event => setAnswer(history.find(item => item.id === event.target.value) || null)}>
+                    <option value="">历史问答</option>
+                    {history.map(item => <option key={item.id} value={item.id}>{item.query}</option>)}
+                  </select>}
+                  {!workingSid && <div className="empty"><p>请先在顶部快照版本中确认一个工作快照，再开始提问。</p></div>}
+                  {asking && <div className="empty"><RefreshCw className="spin" size={20}/><p>正在检索证据并生成回答…</p></div>}
+                  {answer && !asking && <div className="answer">
+                    <div className="question-bubble">{answer.query}</div>
+                    <div className="answer-mode">{answer.mode}<small>数据截至 {dateText(answer.as_of)} · 快照 {answer.snapshot_id.slice(0, 8)}</small></div>
+                    {answer.summary ? <div className="answer-summary"><span>总结回答</span><p>{answer.summary.text}</p><div className="citation-buttons">{answer.summary.evidence_ids.map(id => <button className="citation" key={id} onClick={() => openEvidence(id)}>查看依据</button>)}</div></div> : <Markdown remarkPlugins={[remarkGfm]}>{answer.message}</Markdown>}
+                    {answer.summary && <p className="answer-status">{answer.message}</p>}
+                    {(answer.facts.length > 0 || answer.inferences.length > 0 || answer.citations.length > 0 || answer.gaps.length > 0) && <details className="answer-evidence">
+                      <summary>研究依据与数据缺口</summary>
+                      {answer.facts.length > 0 && <><h3>事实与程序计算</h3>{answer.facts.map((item,index) => <div className="fact" key={`fact-${index}`}><label>{item.kind}</label><p>{item.text}</p><div className="citation-buttons">{item.evidence_ids.map(id => <button className="citation" key={id} onClick={() => openEvidence(id)}>查看证据</button>)}</div></div>)}</>}
+                      {answer.inferences.length > 0 && <><h3>模型推论</h3>{answer.inferences.map((item,index) => <div className="fact inference" key={`inference-${index}`}><label>{item.kind}</label><p>{item.text}</p><div className="citation-buttons">{item.evidence_ids.map(id => <button className="citation" key={id} onClick={() => openEvidence(id)}>查看依据</button>)}</div></div>)}</>}
+                      {answer.citations.length > 0 && <><h3>引用来源</h3>{answer.citations.map(item => <button className="reference" key={item.id} onClick={() => openEvidence(item.id)}><BookOpen size={14}/><span>{item.title}</span></button>)}</>}
+                      {answer.gaps.length > 0 && <><h3>数据缺口</h3><ul>{answer.gaps.map(item => <li key={item}>{item}</li>)}</ul></>}
+                      {answer.steps.length > 0 && <div className="steps">{answer.steps.join(" → ")}</div>}
+                    </details>}
+                  </div>}
+                </div>
+                <form className="chat-form" onSubmit={event => { event.preventDefault(); void ask(); }}>
+                  <textarea aria-label="研究问题" placeholder={workingSid ? "询问指标变化、证据、反证或资产影响…" : "请先确认工作快照"} value={question} disabled={!workingSid || asking} onChange={event => setQuestion(event.target.value)}/>
+                  <button className="primary" type="submit" aria-label="发送问题" disabled={!workingSid || asking || !question.trim()}><Send size={16}/></button>
+                </form>
+              </>}
             </aside>
           )}
         </main>
@@ -1712,8 +1943,12 @@ export default function App() {
                 )}
               </section>
               <div className="insight-section model-state">
-                {status?.translation?.running
-                  ? `中文译文准备中：${status.translation.ready}/${status.translation.total}`
+                {status?.translation?.total
+                  ? status.translation.running
+                    ? `中文化进行中：已完成 ${status.translation.ready.toLocaleString("zh-CN")} / ${status.translation.total.toLocaleString("zh-CN")} · 尚余 ${status.translation.pending.toLocaleString("zh-CN")} · ${Math.floor(status.translation.ready / status.translation.total * 100)}%`
+                    : status.translation.pending
+                      ? `中文化待继续：已完成 ${status.translation.ready.toLocaleString("zh-CN")} · 尚余 ${status.translation.pending.toLocaleString("zh-CN")}`
+                      : `中文化已完成：${status.translation.total.toLocaleString("zh-CN")} 条`
                   : status?.model.mode || "连接服务中"}{" "}
                 · 公开来源
               </div>
@@ -1837,16 +2072,9 @@ export default function App() {
                 onSaved={(r) => {
                   setSelected(r);
                   workspaceCache.current.clear();
-                  setWork((w) =>
-                    w
-                      ? {
-                          ...w,
-                          records: w.records.map((x) =>
-                            x.id === r.id ? r : x,
-                          ),
-                        }
-                      : w,
-                  );
+                  mapCache.current.clear();
+                  setPageSummaryRefresh((value) => value + 1);
+                  setMapRecords((rows) => rows.map((x) => x.id === r.id ? r : x));
                 }}
               />
             )}

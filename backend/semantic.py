@@ -11,12 +11,12 @@ from .events import event_metadata
 
 @lru_cache(maxsize=1)
 def metric_guides():
-    return json.loads((project_root() / 'config' / 'metric-guides.json').read_text())
+    return json.loads((project_root() / 'config' / 'metric-guides.json').read_text(encoding='utf-8'))
 
 
 @lru_cache(maxsize=1)
 def project_labels():
-    return json.loads((project_root() / 'config' / 'project-labels.json').read_text())
+    return json.loads((project_root() / 'config' / 'project-labels.json').read_text(encoding='utf-8'))
 
 
 def metric_semantics(metric):
@@ -81,9 +81,9 @@ def apply_review(record, review):
     return record
 
 
-def evidence_semantics(record, review=None):
+def evidence_semantics(record, review=None, cache=None):
     fields = event_metadata(record)
-    cache = translation_cache()
+    cache = translation_cache() if cache is None else cache
     fields['points'] = [{**p, 'label': chinese_text(p['label'], cache, '相关地区')} for p in fields['points']]
     return apply_review(fields, review)
 
@@ -104,8 +104,9 @@ def map_projection(records, reviews, categories, signal='all', region='', limit=
     from collections import Counter
     selected = []
     groups = {}
+    cache = translation_cache()
     for raw in records:
-        record = {**raw, **evidence_semantics(raw, reviews.get(raw['id']))}
+        record = {**raw, **evidence_semantics(raw, reviews.get(raw['id']), cache)}
         if record['event_category'] not in categories or (signal != 'all' and record['situation_signal'] != signal):
             continue
         points = [p for p in record['points'] if not region or region.casefold() in p['label'].casefold()]

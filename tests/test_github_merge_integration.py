@@ -60,16 +60,23 @@ def test_first_direct_collector_import_syncs_before_selecting_root(tmp_path, mon
     monkeypatch.setattr(module, "sync_local_collector_outputs", sync)
     monkeypatch.setattr(module, "load_bundle", load)
     monkeypatch.setattr(module, "save_snapshot", lambda bundle: ("new", True))
+    selected = []
+    monkeypatch.setattr(module, "set_working_snapshot_id", lambda snapshot_id: selected.append(snapshot_id))
     result = module.import_data()
     assert result["id"] == "new"
     assert result["sync"]["files"] == 1
+    assert selected == ["new"]
 
 
 def test_windows_merge_keeps_process_identity_and_custom_import_port():
     root = Path(__file__).resolve().parents[1]
     start = (root / "start.ps1").read_text(encoding="utf-8")
     stop = (root / "stop.ps1").read_text(encoding="utf-8")
-    assert "-eq $saved.createdAt" in start
-    assert "-ne $saved.createdAt" in stop
-    assert "-ne $crawlerSaved.createdAt" in stop
+    assert "-eq ([datetime]$saved.createdAt).ToUniversalTime()" in start
+    assert "-ne ([datetime]$saved.createdAt).ToUniversalTime()" in stop
+    assert "-ne ([datetime]$crawlerSaved.createdAt).ToUniversalTime()" in stop
+    assert "$saved.url -eq $url" in start
+    assert "Invoke-RestMethod -Uri ($url+'api/status')" in start
     assert "--import-url', ($url+'api/import')" in start
+    assert "Start-CrawlerManager $existingPython" in start
+    assert "--interval-sec', '86400'" in start
