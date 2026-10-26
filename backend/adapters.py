@@ -407,6 +407,9 @@ def load_bundle(root: Path):
         else:
             sources.append({"id": project_id, "monitor": project_id, "name": extension.get("name", project_id), "state": "imported", "count": len(extension.get("records", [])), "latest": extension.get("as_of")})
 
+    from .meeting_adapter import load_meetings
+    meetings = load_meetings(root, read, manifests, records, sources)
+
     from .report_adapter import load_reports
     load_reports(root,read,manifests,records,sources)
     from .paths import collector_read_root, knowledge_root
@@ -433,4 +436,4 @@ def load_bundle(root: Path):
         statuses=[s for s in sources if s['monitor']==project.name]
         projects.append({'id':project.name,'records':len(subset),'topic_records':sum(bool(r['topics']) for r in subset),'missing_published':sum(not r['published_at'] for r in subset),'missing_fetched':sum(not r['fetched_at'] for r in subset),'failed_sources':sum('fail' in str(s['state']) or s['state'] in {'configuration_required','stale'} for s in statuses),'sources':len(statuses),'state':'connected' if statuses or subset else 'unsupported','documents':documents})
     cleaning["unique_records"] = len(records)
-    return {"schema_version": "geo.v6/1", "records": sorted(records.values(), key=lambda r: r["id"]), "observations": observations, "sources": sources, "manifest": manifests, "errors": errors,'projects':projects,'cleaning':cleaning,"topic_exclusions":topic_exclusions}
+    return {"schema_version": "geo.v6/1", "records": sorted(records.values(), key=lambda r: r["id"]), "observations": observations, "sources": sources, "meetings": meetings, "manifest": manifests, "errors": errors,'projects':projects,'cleaning':cleaning,"topic_exclusions":topic_exclusions}

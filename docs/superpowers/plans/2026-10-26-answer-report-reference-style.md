@@ -38,22 +38,22 @@
 - Consumes: `render_answer_report(answer: dict, generated_at: str | None = None) -> str`
 - Produces: `_lead_from_markdown(value: object) -> str` 和保持兼容的 HTML 报告输出
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
   - 断言导出包含参考样式变量 `--bg:#0b1118`、金色强调和单栏容器。
   - 断言首段结论进入核心判断区，完整正文仍保留。
   - 断言四张信息卡、证据表和限制区存在。
   - 断言打印样式、无引用空状态、长内容布局类和危险内容转义存在。
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
   - Run: `python -m pytest tests/test_answer_report.py -q`
   - Expected: 新增样式和结构断言失败。
 
-- [ ] **Step 3: 实现内容投影和参考样式模板**
+- [x] **Step 3: 实现内容投影和参考样式模板**
   - 在 `backend/answer_report.py` 增加 `_lead_from_markdown(value: object) -> str`，只提取首个有效正文段作为导语，不修改 `summary_html`。
   - 将浅色侧栏模板替换为深色单栏模板；加入顶部元数据、导语、四张信息卡、完整研判、证据台账、限制区和打印样式。
   - 保留 `_safe_url`、HTML 转义、Markdown HTML 禁用和现有异常语义。
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
   - Run: `python -m pytest tests/test_answer_report.py -q`
   - Expected: PASS。
 
@@ -67,19 +67,19 @@
 - Consumes: `GET /api/answers/{answer_id}/report.html`
 - Produces: 可下载、可打印的 UTF-8 HTML 文件
 
-- [ ] **Step 1: 补充接口兼容测试**
+- [x] **Step 1: 补充接口兼容测试**
   - 断言响应仍为 `text/html`、带 UTF-8 下载文件名，且不包含回答、快照和证据内部 ID。
   - 断言原始来源链接、发布时间与采集时间仍可见。
 
-- [ ] **Step 2: 运行后端相关测试**
+- [x] **Step 2: 运行后端相关测试**
   - Run: `python -m pytest tests/test_answer_report.py tests/test_backend.py -q`
   - Expected: PASS。
 
-- [ ] **Step 3: 生成代表性导出文件并静态审查**
+- [x] **Step 3: 生成代表性导出文件并静态审查**
   - 使用测试回答调用 `render_answer_report` 生成临时 HTML。
   - 检查 HTML 标题、章节顺序、表格、空状态、媒体查询和打印媒体查询。
 
-- [ ] **Step 4: 运行项目构建与差异检查**
+- [x] **Step 4: 运行项目构建与差异检查**
   - Run: `npm test -- --runInBand`（若项目脚本不支持该参数则使用项目现有 Node 测试命令）
   - Run: `npm run build`
   - Run: `git diff --check -- backend/answer_report.py tests/test_answer_report.py`

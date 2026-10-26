@@ -34,6 +34,21 @@ def test_non_naval_news_gets_regional_anchor():
     assert result['points'][0]['precision']=='area'
     assert record['points']==[]
 
+
+def test_persisted_qa_citation_may_omit_optional_points():
+    citation = {
+        'id': 'evidence-1',
+        'title': 'Iran talks update',
+        'text': 'Officials described the latest talks.',
+        'url': 'https://example.org/evidence-1',
+        'topics': ['usiran'],
+    }
+
+    result = present_record(citation, {})
+
+    assert isinstance(result['points'], list)
+    assert result['source_name'] == '未知来源'
+
 def test_ceasefire_collapse_not_easing_and_unknown_not_sustain():
     collapse=normalize({'title':'Iran ceasefire collapse','summary':''},'new')
     assert event_metadata(collapse)['situation_signal']=='escalation'

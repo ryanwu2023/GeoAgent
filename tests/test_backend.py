@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from backend.adapters import load_bundle, normalize, safe_url, classify, clean_record_topics
 from backend.store import save_snapshot, get_snapshot, snapshots, db, set_working_snapshot_id
-from backend.research import metric_view, answer, analysis, create_brief, retrieve, candidates
+from backend.research import metric_view, answer, analysis, create_brief, retrieve, candidates, numeric_tokens, resolve_question_scope
 from backend.app import app
 
 @pytest.fixture(autouse=True)
@@ -23,6 +23,21 @@ def bundle():
 def stored():
     sid,_=save_snapshot(bundle())
     return get_snapshot(sid)
+
+
+def test_explicit_question_topic_overrides_stale_dashboard_scope():
+    assert resolve_question_scope("最新美伊冲突进展", "ukraine", "frontline") == ("usiran", "")
+    assert resolve_question_scope("俄乌最新情况", "usiran", "iran_readiness") == ("ukraine", "")
+    assert resolve_question_scope("最新情况怎么样", "ukraine", "frontline") == ("ukraine", "frontline")
+    assert resolve_question_scope("比较美伊与俄乌的资产影响", "usiran", "") == ("usiran", "")
+
+
+def test_answer_uses_explicit_usiran_question_instead_of_ukraine_tab():
+    snapshot = stored()
+    result = asyncio.run(answer(snapshot, "最新美伊冲突进展", "ukraine", "frontline", use_model=False))
+    assert result["topic"] == "usiran"
+    assert result["filters"]["dimension"] == ""
+    assert result["citations"]
 
 def test_snapshot_idempotency_revision_and_immutability():
     data=bundle();first,created=save_snapshot(data)
@@ -307,6 +322,12 @@ def test_no_evidence_does_not_invent_answer():
     assert result["summary"] is None
     assert "没有足够证据" in result["message"]
 
+def test_recent_question_excludes_stale_high_score_records():
+    old = normalize({"title": "US Iran conflict latest progress and agreement", "summary": "Detailed US Iran conflict progress.", "link": "https://old.example/item", "published": "2026-07-01T00:00:00Z"}, "readiness-monitor")
+    new = normalize({"title": "Iran conflict update", "summary": "Current Iran conflict development.", "link": "https://new.example/item", "published": "2026-10-20T00:00:00Z"}, "readiness-monitor")
+    found = retrieve([old, new], "近期美伊冲突有什么进展", recent_after="2026-10-07")
+    assert [item["url"] for item in found] == ["https://new.example/item"]
+
 def fake_model(monkeypatch, payload=None, error=False):
     monkeypatch.setenv("LLM_API_KEY","unit-test-not-a-real-key")
     monkeypatch.setenv("LLM_MODEL","mock")
@@ -327,13 +348,13 @@ def fake_model(monkeypatch, payload=None, error=False):
 def test_model_rejects_invented_citations_and_falls_back(monkeypatch):
     fake_model(monkeypatch,{"inferences":[{"text":"有影响","evidence_ids":["invented"]}]})
     r=asyncio.run(answer(stored(),"Iran supply"))
-    assert "模型失败" in r["mode"] and r["citations"]
+    assert "校验降级" in r["mode"] and r["citations"] and r["summary"]
     assert r["inferences"]==[]
 
 def test_model_timeout_retains_evidence(monkeypatch):
     fake_model(monkeypatch,error=True)
     r=asyncio.run(answer(stored(),"Iran supply"))
-    assert "模型失败" in r["mode"] and r["citations"]
+    assert "模型降级" in r["mode"] and r["citations"] and r["summary"]
 
 def test_valid_model_assets_are_versioned_and_scoped(monkeypatch):
     s=stored();rid=s["records"][0]["id"]
@@ -345,16 +366,59 @@ def test_valid_model_assets_are_versioned_and_scoped(monkeypatch):
     assert analysis(s,"usiran")["assets"][3]["direction"]=="双向作用"
     assert analysis(s,"ukraine")["assets"][3]["direction"]=="证据不足"
 
+def test_invalid_optional_asset_does_not_discard_valid_main_answer(monkeypatch):
+    s=stored();rid=s["records"][0]["id"]
+    fake_model(monkeypatch,{"assets":[{"id":"invalid-asset","direction":"偏正面","mechanism":"无效项","condition":"无效项","counter":"无效项","watch":"无效项","evidence_ids":[rid]}],"inferences":[]})
+    monkeypatch.setattr("backend.research.llm.qa_rounds",lambda:1)
+    result=asyncio.run(answer(s,"Iran supply 资产影响",topic="usiran"))
+    assert result["mode"]=="现场模型分析"
+    assert result["summary"] is not None
+    assert result.get("assessments") is None
+    assert any("已忽略一项" in gap for gap in result["gaps"])
+
+def test_explicit_new_question_does_not_inherit_previous_answer(monkeypatch):
+    s=stored()
+    first=asyncio.run(answer(s,"最新美伊局势",topic="all",use_model=False))
+    captured=[]
+    original_retrieve=retrieve
+    def recording_retrieve(records,query,*args,**kwargs):
+        captured.append(query)
+        return original_retrieve(records,query,*args,**kwargs)
+    monkeypatch.setattr("backend.research.retrieve",recording_retrieve)
+    asyncio.run(answer(s,"最新俄乌冲突进展",topic="all",use_model=False,previous_answer_id=first["id"]))
+    assert captured[0]=="最新俄乌冲突进展"
+    captured.clear()
+    asyncio.run(answer(s,"继续分析其中的外交线索",topic="all",use_model=False,previous_answer_id=first["id"]))
+    assert "追问" in captured[0] and "最新美伊局势" in captured[0]
+
 def test_model_new_numbers_rejected(monkeypatch):
     s=stored();rid=s["records"][0]["id"]
     fake_model(monkeypatch,{"inferences":[{"text":"上涨50%","evidence_ids":[rid]}]})
-    assert "模型失败" in asyncio.run(answer(s,"Iran supply"))["mode"]
+    result=asyncio.run(answer(s,"Iran supply"))
+    assert "校验降级" in result["mode"] and result["summary"]
+    assert all("50%" not in item["text"] for item in result["inferences"])
 
 def test_model_summary_new_numbers_rejected(monkeypatch):
     s=stored();rid=s["records"][0]["id"]
     fake_model(monkeypatch,{"summary":{"text":"综合材料判断，局势升级概率达到99%，但仍需核验。","evidence_ids":[rid]},"inferences":[]})
     result=asyncio.run(answer(s,"Iran supply"))
-    assert "模型失败" in result["mode"] and result["summary"] is None
+    assert "模型降级" in result["mode"] and result["summary"] is not None
+    assert "99%" not in result["summary"]["text"]
+
+def test_numeric_tokens_canonicalize_scientific_notation_as_one_value():
+    assert numeric_tokens("压力值1E+1，与10一致；不是孤立的1。") == {"10", "1"}
+
+def test_model_summary_removes_only_sentence_with_unsupported_decimal(monkeypatch):
+    s=stored();rid=s["records"][0]["id"]
+    text="当前材料显示局势仍在变化，相关陈述需要交叉核验。未经来源支持的估计值为0.07。后续应继续观察官方通报。"
+    fake_model(monkeypatch,{"summary":{"text":text,"evidence_ids":[rid]},"inferences":[]})
+    monkeypatch.setattr("backend.research.llm.qa_rounds",lambda:1)
+    result=asyncio.run(answer(s,"Iran supply"))
+    assert "校验降级" in result["mode"]
+    assert "局势仍在变化" in result["summary"]["text"]
+    assert "后续应继续观察" in result["summary"]["text"]
+    assert "0.07" not in result["summary"]["text"]
+    assert any("无来源数值" in gap for gap in result["gaps"])
 
 def test_model_summary_ignores_structured_evidence_id_digits(monkeypatch):
     s=stored();rid=s["records"][0]["id"]
@@ -377,6 +441,14 @@ def test_model_allows_dates_from_cited_evidence_metadata(monkeypatch):
     result=asyncio.run(answer(s,"Iran supply"))
     assert result["mode"]=="现场模型分析"
 
+def test_model_allows_snapshot_as_of_date_in_summary(monkeypatch):
+    s=stored();rid=s["records"][0]["id"]
+    year,month,day=s["created_at"][:10].split("-")
+    text=f"截至{year}年{int(month)}月{int(day)}日，当前材料显示局势仍有变化，但结论需要继续核验。"
+    fake_model(monkeypatch,{"summary":{"text":text,"evidence_ids":[rid]},"inferences":[]})
+    result=asyncio.run(answer(s,"Iran supply"))
+    assert result["mode"]=="现场模型分析"
+
 def test_general_model_question_does_not_send_full_rule_histories(monkeypatch):
     s=stored();rid=s["records"][0]["id"]
     async def compact_complete(messages):
@@ -386,9 +458,137 @@ def test_general_model_question_does_not_send_full_rule_histories(monkeypatch):
         return json.dumps({"summary":{"text":"根据当前材料，近期局势仍在变化，现有信息需要继续核验后再形成方向判断。","evidence_ids":[rid]},"inferences":[{"text":"材料显示局势仍需持续核验。","evidence_ids":[rid]}]}),"mock"
     monkeypatch.setattr("backend.research.llm.complete",compact_complete)
     monkeypatch.setenv("LLM_API_KEY","unit-test-not-a-real-key")
-    result=asyncio.run(answer(s,"近期伊朗局势有什么进展",topic="usiran"))
+    result=asyncio.run(answer(s,"伊朗局势有哪些证据",topic="usiran"))
     assert result["mode"]=="现场模型分析"
     assert result["summary"]["evidence_ids"]==[rid]
+
+def test_direct_model_runs_three_rounds_and_retrieves_review_clue(monkeypatch):
+    data = bundle()
+    extra = normalize({
+        "id": "two", "title": "Strait shipping insurance update",
+        "summary": "Insurance conditions changed while passage remained under review.",
+        "link": "https://example.net/news/2", "published": "2026-09-18T08:00:00Z",
+        "source_id": "independent", "tier": "T2", "party": "other",
+    }, "readiness-monitor")
+    extra["topics"] = ["usiran"]
+    extra["dimensions"] = {"usiran": "financial"}
+    extra["dimension_candidates"] = {"usiran": ["financial"]}
+    extra_two = normalize({
+        "id": "three", "title": "Freight risk premium update",
+        "summary": "Freight risk premium changed across the monitored route.",
+        "link": "https://example.net/news/3", "published": "2026-09-19T08:00:00Z",
+        "source_id": "independent", "tier": "T2", "party": "other",
+    }, "readiness-monitor")
+    extra_three = normalize({
+        "id": "four", "title": "Port transit data update",
+        "summary": "Port transit data added an independent check on passage conditions.",
+        "link": "https://example.net/news/4", "published": "2026-09-20T08:00:00Z",
+        "source_id": "independent", "tier": "T2", "party": "other",
+    }, "readiness-monitor")
+    for item in (extra_two, extra_three):
+        item["topics"] = ["usiran"]
+        item["dimensions"] = {"usiran": "financial"}
+        item["dimension_candidates"] = {"usiran": ["financial"]}
+    data["records"].extend([extra, extra_two, extra_three])
+    sid, _ = save_snapshot(data)
+    snapshot = get_snapshot(sid)
+    first_id = snapshot["records"][0]["id"]
+    extra_id = next(r["id"] for r in snapshot["records"] if "insurance" in r["title"].lower())
+    extra_two_id = next(r["id"] for r in snapshot["records"] if "premium" in r["title"].lower())
+    extra_three_id = next(r["id"] for r in snapshot["records"] if "transit" in r["title"].lower())
+    calls = []
+
+    async def complete(messages):
+        calls.append(messages)
+        payload = json.loads(messages[1]["content"])
+        if payload.get("stage") == "final_synthesis":
+            assert "一、结论摘要" in messages[0]["content"]
+            final_ids = {item["id"] for item in payload["context"]["evidence"]}
+            assert {extra_id, extra_two_id, extra_three_id}.issubset(final_ids)
+            assert payload["reviews"][0]["search_queries"] == ["shipping insurance"]
+            return json.dumps({"summary": {"text": "## 一、结论摘要\n\n当前材料显示局势仍有变化，航运保险、运费风险溢价和港口通行数据共同补充了风险传导信息，但其持续性仍需更多独立来源核验。\n\n## 二、关键证据\n\n- 航运与通行资料形成交叉观察。\n\n## 三、口径与限制\n\n- 当前材料仍需核验。\n\n## 四、后续观察点\n\n- 继续观察通行数据。", "evidence_ids": [extra_id, extra_two_id, extra_three_id]}, "inferences": []}), "mock"
+        if payload["round"] == 1:
+            return json.dumps({"question_understanding": "识别伊朗局势变化并核验供应链线索", "review_issues": ["需要检查航运保险线索"], "search_queries": ["shipping insurance"], "summary": {"text": "初步材料显示局势存在变化，但目前仍需检查航运相关线索并核验信息是否持续。", "evidence_ids": [first_id]}, "inferences": []}), "mock"
+        assert payload["previous_answer"]["summary"]["text"]
+        if payload["round"] == 2:
+            return json.dumps({"question_understanding": "", "review_issues": ["需要补充运费风险溢价"], "search_queries": ["freight risk premium"], "summary": {"text": "第二轮发现航运保险线索补充了风险传导信息，但还需要核对运费风险溢价。", "evidence_ids": [extra_id]}, "inferences": []}), "mock"
+        return json.dumps({"question_understanding": "", "review_issues": ["需要用通行数据交叉核验"], "search_queries": ["port transit data"], "summary": {"text": "第三轮结合运费风险溢价进一步修正判断，并继续补查港口通行数据。", "evidence_ids": [extra_id, extra_two_id]}, "inferences": []}), "mock"
+
+    monkeypatch.setattr("backend.research.model_status", lambda: {"configured": True, "provider": "openai-compatible"})
+    monkeypatch.setattr("backend.research.llm.qa_rounds", lambda: 3)
+    monkeypatch.setattr("backend.research.llm.complete", complete)
+    result = asyncio.run(answer(snapshot, "Iran supply 局势分析", topic="usiran"))
+    assert len(calls) == 4
+    assert result["model_rounds"] == {"completed": 3, "planned": 3}
+    assert result["summary"]["evidence_ids"] == [extra_id, extra_two_id, extra_three_id]
+    assert result["summary"]["text"].startswith("## 一、结论摘要\n\n")
+    assert {extra_id, extra_two_id, extra_three_id}.issubset({item["id"] for item in result["citations"]})
+    assert "逐轮复核、扩展检索与重写" in result["steps"]
+    assert [item["status"] for item in result["analysis_trace"]] == ["completed", "completed", "completed", "completed"]
+    assert [item.get("stage") for item in result["analysis_trace"]] == ["analysis", "analysis", "analysis", "synthesis"]
+    assert result["analysis_trace"][0]["search_queries"] == ["shipping insurance"]
+    assert extra_id in result["analysis_trace"][0]["evidence_ids"]
+    assert result["analysis_trace"][1]["search_queries"] == ["freight risk premium"]
+    assert extra_two_id in result["analysis_trace"][1]["evidence_ids"]
+    assert result["analysis_trace"][2]["search_queries"] == ["port transit data"]
+    assert extra_three_id in result["analysis_trace"][2]["evidence_ids"]
+    assert result["analysis_trace"][0]["details"][0].startswith("问题理解：")
+    assert result["analysis_trace"][3]["title"] == "最终复核与结论"
+    assert result["analysis_trace"][3]["summary"] == result["summary"]["text"]
+    assert result["analysis_trace"][0]["details"][2] == "补查“shipping insurance”：新增 1 条候选证据。"
+
+def test_pichat_qa_remains_single_agent_call(monkeypatch):
+    snapshot = stored()
+    rid = snapshot["records"][0]["id"]
+    calls = []
+
+    async def complete(messages):
+        calls.append(messages)
+        return json.dumps({"summary": {"text": "当前材料显示局势存在变化，但相关陈述和后续走势仍需交叉核验。", "evidence_ids": [rid]}, "inferences": []}), "Pi Chat Agent"
+
+    monkeypatch.setattr("backend.research.model_status", lambda: {"configured": True, "provider": "pichat"})
+    monkeypatch.setattr("backend.research.llm.complete", complete)
+    result = asyncio.run(answer(snapshot, "Iran supply", topic="usiran"))
+    assert len(calls) == 1
+    assert result["model_rounds"] == {"completed": 1, "planned": 1}
+    assert len(result["analysis_trace"]) == 1
+
+def test_streaming_ask_emits_progress_before_final_answer(monkeypatch):
+    snapshot = stored()
+    set_working_snapshot_id(snapshot["id"])
+
+    async def streamed_answer(snapshot, question, topic, dimension, start, end, use_model, previous_answer_id, progress=None):
+        trace = {"round": 1, "title": "初步整理", "status": "completed", "summary": "已完成首轮内部检索。", "details": [], "search_queries": [], "evidence_ids": []}
+        await progress(trace)
+        return {"id": "stream-answer", "snapshot_id": snapshot["id"], "as_of": snapshot["created_at"], "query": question, "topic": topic, "filters": {"dimension": dimension, "start": start, "end": end}, "created_at": snapshot["created_at"], "mode": "现场模型分析", "message": "完成", "summary": None, "facts": [], "citations": [], "inferences": [], "gaps": [], "steps": [], "analysis_trace": [trace]}
+
+    monkeypatch.setattr("backend.app.answer", streamed_answer)
+    response = TestClient(app).post("/api/ask/stream", json={"snapshot_id": snapshot["id"], "question": "测试流式过程", "topic": "usiran"})
+    assert response.status_code == 200
+    events = [json.loads(line) for line in response.text.splitlines() if line]
+    assert [item["event"] for item in events] == ["progress", "answer"]
+    assert events[0]["data"]["title"] == "初步整理"
+    assert events[1]["data"]["analysis_trace"][0]["status"] == "completed"
+
+
+def test_streaming_ask_can_opt_into_compact_answer_projection(monkeypatch):
+    snapshot = stored()
+    set_working_snapshot_id(snapshot["id"])
+    citation = {**snapshot["records"][0], "text": "很长的引用正文" * 2000}
+
+    async def streamed_answer(snapshot, question, topic, dimension, start, end, use_model, previous_answer_id, progress=None):
+        return {"id": "compact-answer", "snapshot_id": snapshot["id"], "as_of": snapshot["created_at"], "query": question, "topic": topic, "filters": {"dimension": dimension, "start": start, "end": end}, "created_at": snapshot["created_at"], "mode": "现场模型分析", "message": "完成", "summary": None, "facts": [], "citations": [citation], "internal_sources": [], "inferences": [], "gaps": [], "steps": [], "analysis_trace": []}
+
+    monkeypatch.setattr("backend.app.answer", streamed_answer)
+    response = TestClient(app).post("/api/ask/stream", json={
+        "snapshot_id": snapshot["id"], "question": "测试紧凑响应", "topic": "usiran", "compact": True,
+    })
+    assert response.status_code == 200
+    final = [json.loads(line) for line in response.text.splitlines() if line][-1]["data"]
+    assert final["response_projection"] == "compact-v1"
+    assert final["citations"][0]["id"] == citation["id"]
+    assert "text" not in final["citations"][0]
+    assert len(response.content) < 5000
 
 def test_three_rehearsals_brief_download_and_comparison():
     client=TestClient(app);s=stored();set_working_snapshot_id(s["id"]);ids=[]

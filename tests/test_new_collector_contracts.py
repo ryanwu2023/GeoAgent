@@ -77,7 +77,7 @@ def test_missing_configuration_does_not_call_sources(monkeypatch, tmp_path, caps
     monkeypatch.setattr(sys, "argv", ["collector.py"])
     assert fixed.run(kind, __file__) == 2
     output = tmp_path / "output"
-    payload = json.loads((output / "geo-v6.json").read_text())
+    payload = json.loads((output / "geo-v6.json").read_text(encoding="utf-8"))
     assert payload["collection_status"] == "configuration_required"
     assert payload["observations"] == []
     assert json.loads(capsys.readouterr().out)["collection_status"] == "configuration_required"
@@ -109,7 +109,7 @@ def test_usable_partial_metrics_keep_publishable_exit(monkeypatch, tmp_path, cap
     assert fixed.run("gas", __file__) == 0
     output = tmp_path / "output"
     for filename in ("geo-v6.json", "source-status.json", "_source_status.json"):
-        assert json.loads((output / filename).read_text())["collection_status"] == expected
+        assert json.loads((output / filename).read_text(encoding="utf-8"))["collection_status"] == expected
     assert json.loads(capsys.readouterr().out)["collection_status"] == expected
 
 
@@ -119,7 +119,7 @@ def test_all_failed_sources_do_not_publish_placeholders(monkeypatch, tmp_path):
     monkeypatch.setitem(fixed.COLLECTORS, "gas", lambda _: payload)
     monkeypatch.setattr(sys, "argv", ["collector.py"])
     assert fixed.run("gas", __file__) == 1
-    assert json.loads((tmp_path / "output" / "geo-v6.json").read_text())["collection_status"] == "failed"
+    assert json.loads((tmp_path / "output" / "geo-v6.json").read_text(encoding="utf-8"))["collection_status"] == "failed"
 
 
 def test_usda_keeps_good_years_and_reports_partial(monkeypatch):
@@ -161,7 +161,7 @@ def test_stcn_output_root_and_legacy_default(monkeypatch, tmp_path, isolated):
         monkeypatch.delenv("COLLECTOR_OUTPUT_ROOT")
         out = script_root / "output"
     assert stcn.main(days=1, max_pages=1, workers=1) == 0
-    assert json.loads((out / "geo-v6.json").read_text())["records"] == []
+    assert json.loads((out / "geo-v6.json").read_text(encoding="utf-8"))["records"] == []
     assert (out / "_collection_report.json").is_file()
     if isolated:
         assert not (script_root / "output").exists()

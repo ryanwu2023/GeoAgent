@@ -36,9 +36,37 @@ def test_hot_config_and_discovery(tmp_path,monkeypatch):
     assert llm.config()['LLM_MODEL']=='explicit'
     assert 'changed' not in str(llm.status())
 
+def test_openai_compatible_deepseek_disables_hidden_reasoning(tmp_path, monkeypatch):
+    monkeypatch.setattr(llm, 'ROOT', tmp_path)
+    (tmp_path/'.env').write_text(
+        'LLM_PROVIDER=openai-compatible\n'
+        'LLM_BASE_URL=https://provider.example/v1\n'
+        'LLM_API_KEY=test-only\n'
+        'LLM_MODEL=deepseek-v4.1-flash-1017\n',
+        encoding='utf-8',
+    )
+    def handler(request):
+        payload=json.loads(request.content)
+        assert payload['thinking']=={'type':'disabled'}
+        return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'连接成功'}}]})
+    real=httpx.AsyncClient
+    monkeypatch.setattr(llm.httpx,'AsyncClient',lambda **kw:real(transport=httpx.MockTransport(handler),**kw))
+    assert asyncio.run(llm.complete([{'role':'user','content':'测试'}]))==('连接成功','deepseek-v4.1-flash-1017')
+
 def test_safe_errors_hide_provider_body():
     response=httpx.Response(401,request=httpx.Request('POST','https://example.org'),text='secret')
     assert llm.error_message(httpx.HTTPStatusError('secret',request=response.request,response=response))=='Agent 或模型密钥无效'
+
+def test_direct_qa_rounds_default_env_and_bounds(tmp_path, monkeypatch):
+    monkeypatch.setattr(llm, 'ROOT', tmp_path)
+    monkeypatch.delenv('LLM_QA_ROUNDS', raising=False)
+    assert llm.qa_rounds() == 3
+    (tmp_path / '.env').write_text('LLM_QA_ROUNDS=4\n', encoding='utf-8')
+    assert llm.qa_rounds() == 4
+    monkeypatch.setenv('LLM_QA_ROUNDS', '99')
+    assert llm.qa_rounds() == 5
+    monkeypatch.setenv('LLM_QA_ROUNDS', 'invalid')
+    assert llm.qa_rounds() == 3
 
 def test_pichat_agent_is_preferred_and_keeps_key_server_side(tmp_path,monkeypatch):
     monkeypatch.setattr(llm,'ROOT',tmp_path)

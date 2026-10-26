@@ -1,0 +1,29 @@
+{
+  "version": "2026-10-26.2",
+  "gold_file": "tests/fixtures/qa_gold.json",
+  "score_policy": {
+    "min_quality_score": 70,
+    "min_fact_coverage_rate": 0.6,
+    "min_citation_support_rate": 0.8,
+    "min_topic_purity_rate": 0.9,
+    "require_non_empty_final": true,
+    "fail_on_hard_failure": true
+  },
+  "questions": [
+    {"id":"usiran-latest","topic":"usiran","question":"最新美伊冲突进展是什么？请说明主要变化、判断依据、不确定性和后续观察点。","expected_facets":["时效","外交","军事","反证","观察点"]},
+    {"id":"usiran-two-months","topic":"usiran","question":"分析近两个月美伊局势的主线变化，并说明哪些是事实、媒体转述和研究推断。","expected_facets":["时间范围","事件主线","来源等级","不确定性"]},
+    {"id":"houthi-saudi","topic":"usiran","question":"近期胡塞武装与沙特之间发生了什么？哪些袭击得到交叉确认，哪些仍是单方说法？","expected_facets":["胡塞","沙特","军事","交叉核验","单方声明"]},
+    {"id":"hormuz","topic":"usiran","question":"霍尔木兹海峡是否已经封锁或恢复通行？请结合通行指标和新闻证据回答。","expected_facets":["通行指标","观测日期","绝对水平","口径边界"]},
+    {"id":"asset-transmission","topic":"usiran","question":"当前美伊局势如何影响原油、黄金、美债、美元和权益？区分市场表现与条件传导。","expected_facets":["原油","黄金","美债","美元","权益","因果边界"]},
+    {"id":"post-election-strike","topic":"usiran","question":"所谓美国中期选举后可能再次打击伊朗的说法，目前证据到了哪一步？请区分计划、表态和已发生行动。","expected_facets":["时间","计划","表态","行动","证据等级"]},
+    {"id":"ukraine-latest","topic":"ukraine","question":"最新俄乌冲突有哪些值得关注的军事、援助和外交变化？","expected_facets":["军事","援助","外交","反证"]},
+    {"id":"ukraine-talks-execution","topic":"ukraine","question":"俄乌停火或和谈目前是意愿、框架还是已经执行？请列出支持证据、反证和失效条件。","expected_facets":["停火","和谈","执行","反证","失效条件"]},
+    {"id":"ukraine-aid-delivery","topic":"ukraine","question":"近期对乌援助有哪些已经拨付或交付，哪些仍只是承诺？这对持续作战能力有什么含义？","expected_facets":["援助","拨付","交付","承诺","作战能力"]},
+    {"id":"russia-financial-stress","topic":"ukraine","question":"结合美元兑卢布、布伦特原油和俄罗斯财政指标，判断俄罗斯金融压力是否上升。","expected_facets":["卢布","原油","财政","压力","数据缺口"]},
+    {"id":"europe-ukraine-macro","topic":"ukraine","question":"欧洲天然气库存、欧盟援乌实际拨款和乌克兰粮食出口如何影响俄乌冲突的宏观传导？","expected_facets":["天然气库存","实际拨款","粮食出口","宏观传导"]},
+    {"id":"ukraine-counterevidence","topic":"ukraine","question":"当前认为俄乌冲突将持续消耗的判断有哪些反证？未来哪些条件会让这一判断失效？","expected_facets":["持续消耗","反证","失效条件","观察点"]},
+    {"id":"cross-topic","topic":"all","question":"综合美伊和俄乌两个主题，当前对大类资产最重要的共同驱动、相反作用和数据缺口是什么？","expected_facets":["共同驱动","相反作用","资产","数据缺口"]},
+    {"id":"reliability-gaps","topic":"all","question":"当前数据库中哪些结论证据最弱？请按官方事实、媒体转述、单方声明和研究推断说明可靠性与补数方向。","expected_facets":["官方事实","媒体转述","单方声明","研究推断","数据缺口"]},
+    {"id":"internal-public-cross-check","topic":"usiran","question":"结合华泰内部消息与公开证据，核对近期美伊局势中最值得关注的三条线索，并明确哪些仍待外部核验。","expected_facets":["内部消息","公开证据","交叉核验","不确定性"]}
+  ]
+}

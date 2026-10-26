@@ -27,7 +27,7 @@
 - `HT_MACRO_CLIENT_CATEGORY`
 - `HT_MACRO_REFRESH_INTERVAL_SEC`，默认 1620 秒
 - `HT_MACRO_FETCH_TIMES`，默认 `08:00,14:00,20:00`
-- `HT_MACRO_PAGE_SIZE`，默认 100
+- `HT_MACRO_PAGE_SIZE`，默认 20，与用户给定请求一致
 - `HT_MACRO_MAX_PAGES`，默认 100
 - `HT_MACRO_ENABLED`，默认关闭；本地完成配置后显式开启
 
@@ -56,7 +56,7 @@
 ```json
 {
   "pageNum": 1,
-  "pageSize": 100,
+  "pageSize": 20,
   "msgTypes": ["WX"],
   "infoFlowSource": "external",
   "isImportant": null,

@@ -26,8 +26,8 @@ def event_metadata(record):
     if record.get('supplemental'):
         return {'event_category':'research','event_category_label':'补充研究','situation_signal':'unknown','signal_label':'研究观点','signal_basis':'补充报告，不作为独立事件确认','points':[]}
 
-    title = record.get('original_title', record['title']).lower()
-    text = title + ' ' + record.get('original_text', record['text']).lower()
+    title = str(record.get('original_title') or record.get('title') or '').lower()
+    text = title + ' ' + str(record.get('original_text') or record.get('text') or '').lower()
     category = 'domestic'
     rules = [
         ('diplomacy', r'negotiat|ceasefire|peace talks|summit|envoy|diploma|谈判|停火|斡旋'),
@@ -52,8 +52,17 @@ def event_metadata(record):
         category=record['event_category']
     if record.get('situation_signal') in SIGNALS and record.get('signal_basis'):
         signal=record['situation_signal']
-    points=[{**p,'label':PLACE_NAMES.get(p['label'],p['label'])} for p in record['points']]
-    if not points and record.get('topics'):
+    # Persisted citations and resumed QA runs may contain only the evidence
+    # fields needed by the answer.  Location metadata is optional there, so
+    # presentation must not fail merely because ``points`` was not stored.
+    points=[
+        {**p, 'label': PLACE_NAMES.get(p.get('label', ''), p.get('label', ''))}
+        for p in (record.get('points') or [])
+        if isinstance(p, dict)
+    ]
+    # Structured meeting records have a separate controlled venue layer.
+    # Never re-infer their venue from title text into the generic news layer.
+    if not points and record.get('topics') and record.get('scope') != '会晤日历':
         for content in (title, text):
             for term,label,lon,lat in GAZETTEER:
                 if (re.search(r'\b'+re.escape(term)+r'\b',content) or label in content) and label not in {p['label'] for p in points}:

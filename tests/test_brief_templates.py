@@ -187,3 +187,23 @@ def test_source_ledger_is_filled_when_template_places_it_first():
     result = asyncio.run(create_brief(snapshot, False, template["id"]))
     source_block = result["markdown"].split("## 证据与信源", 1)[1].split("## 核心判断", 1)[0]
     assert "https://example.org/" in source_block
+
+
+def test_brief_outlook_lists_upcoming_meetings_with_traceable_source():
+    snapshot = topic_snapshot()
+    evidence = normalize({"title": "美伊领导人计划会晤", "summary": "双方计划在多哈会晤。",
+                          "link": "https://example.org/meeting", "published": "2026-10-24T08:00:00+00:00",
+                          "source_id": "meeting-calendar-monitor", "tier": "T2"}, "new")
+    evidence.update(topics=["usiran"], dimensions={"usiran": "diplomacy"})
+    snapshot["records"].append(evidence)
+    snapshot["meetings"] = [{
+        "id": "EV-FUTURE", "evidence_id": evidence["id"], "title": "美伊领导人计划会晤",
+        "topics": ["usiran"], "date_start": "2099-11-03", "date_raw": "2099年11月3日",
+        "location": "多哈", "status": "arranged", "status_label": "已安排",
+        "inactive": False, "non_meeting": False,
+    }]
+    result = asyncio.run(create_brief(snapshot, False))
+    assert "未来会晤与政治日程" in result["markdown"]
+    assert "2099年11月3日 · 多哈 · 美伊领导人计划会晤 · 已安排" in result["markdown"]
+    assert evidence["id"] in result["markdown"]
+    assert result["generation_status"]["source_count"] >= 1

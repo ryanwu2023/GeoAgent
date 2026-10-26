@@ -11,6 +11,8 @@ data/
 *.tsbuildinfo
 .worktrees/
 .superpowers/
+.gstack/
+.tmp*
 collectors/*/output/
 collectors/**/__pycache__/
 collectors/**/*.pyc

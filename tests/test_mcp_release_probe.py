@@ -77,7 +77,11 @@ def test_sse_envelope_matches_request_id(monkeypatch):
     module.probe("https://example.org")
 
 
-@pytest.mark.parametrize("body, failure", [(b"<html>private</html>", "invalid_json"), (b"x" * (512 * 1024 + 1), "response_limit")])
+@pytest.mark.parametrize(
+    "body, failure",
+    [(b"<html>private</html>", "invalid_json"), (b"x" * (512 * 1024 + 1), "response_limit")],
+    ids=["invalid-json", "response-limit"],
+)
 def test_invalid_or_large_response_fails_closed(monkeypatch, capsys, body, failure):
     setup(monkeypatch, [Response({}, 401), Response(body)])
     with pytest.raises(module.ProbeError, match=failure):

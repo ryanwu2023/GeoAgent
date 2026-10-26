@@ -15,12 +15,13 @@ KNOWN_OUTPUT_KINDS = {
     "finance-series",
     "geo-v6",
     "taco",
+    "meeting-calendar",
 }
 
 
 def test_registry_is_well_formed_and_complete():
     registry = load_registry(REGISTRY_PATH)
-    assert len(registry) == 26
+    assert len(registry) == 27
     ids = [item["id"] for item in registry]
     assert len(ids) == len(set(ids))
 

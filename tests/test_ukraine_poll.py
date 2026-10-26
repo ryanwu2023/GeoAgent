@@ -110,7 +110,10 @@ def test_entire_raw_directory_symlink_is_rejected(monkeypatch,tmp_path):
     payload = poll.collect(__file__,fetcher=fetcher,today=date(2026,10,20))
     external = tmp_path/'external'
     (output/'raw').rename(external)
-    (output/'raw').symlink_to(external,target_is_directory=True)
+    try:
+        (output/'raw').symlink_to(external,target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"当前 Windows 账户不能创建符号链接：{getattr(exc, 'winerror', exc)}")
     with pytest.raises(ValueError,match='扩展原始证据'):
         load_bundle(tmp_path)
 
@@ -140,7 +143,10 @@ def test_raw_evidence_cannot_escape_collector(monkeypatch,tmp_path,relative):
     payload = poll.collect(__file__,fetcher=fetcher,today=date(2026,10,20))
     outside = tmp_path/'outside.html'
     outside.write_text('outside')
-    (output/'raw/symlink.html').symlink_to(outside)
+    try:
+        (output/'raw/symlink.html').symlink_to(outside)
+    except OSError as exc:
+        pytest.skip(f"当前 Windows 账户不能创建符号链接：{getattr(exc, 'winerror', exc)}")
     payload['records'][0]['raw_files'] = [relative]
     (output/'geo-v6.json').write_text(json.dumps(payload))
     with pytest.raises(ValueError,match='扩展原始证据'):

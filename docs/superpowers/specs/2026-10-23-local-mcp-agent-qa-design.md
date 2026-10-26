@@ -14,9 +14,9 @@ PiChat 路径保持兼容。本地 OpenAI-compatible 模型成为可调用 GeoAg
 
 1. `qa_planner`：解析主题、时间范围、问题类型、研究子问题、重点维度、指标意图和动态证据预算。优先使用快速模型，失败时用确定性规则生成计划。
 2. `qa_retrieval`：提供关键词、BM25、字符语义近似、实体、时间、来源等级和来源多样性组合的混合检索，并对候选结果重排序。
-3. `qa_agent`：向模型提供六个只读工具的函数定义，执行有界工具循环，保存每次调用、结果摘要和证据 ID，最后生成自由 Markdown 正文与独立引用映射。
+3. `qa_agent`：向模型提供九个只读工具的函数定义，执行有界工具循环，保存每次调用、结果摘要和证据 ID，最后生成自由 Markdown 正文与独立引用映射。
 
-六个工具与 MCP 公共能力保持同名和同一语义：
+九个工具与 MCP 公共能力保持同名和同一语义：
 
 - `geo_workspace_summary`
 - `geo_evidence_search`
@@ -24,6 +24,9 @@ PiChat 路径保持兼容。本地 OpenAI-compatible 模型成为可调用 GeoAg
 - `geo_metric_catalog`
 - `geo_metric_series`
 - `geo_analysis_view`
+- `geo_internal_message_stats`
+- `geo_internal_message_search`
+- `geo_internal_message_get`
 
 本地执行器直接调用共享业务函数，避免服务进程通过 HTTP 回调自己。MCP 对外接口和本地 Agent 共用同一快照、筛选规则和数据对象。
 
@@ -75,7 +78,7 @@ PiChat 路径保持兼容。本地 OpenAI-compatible 模型成为可调用 GeoAg
 
 ## 安全与错误处理
 
-- 仅允许六个只读工具；参数由后端按当前快照和页面范围重新校验。
+- 仅允许九个只读工具；参数由后端按当前快照和页面范围重新校验。华泰消息独立标记为内部线索，不能冒充公开证据或官方确认。
 - 单次问答设置最大工具调用次数、最大证据数量、最大全文读取数量和总体超时。
 - 工具异常不会清空前面成功的结果；Agent 使用已有材料收敛。
 - 模型不能扩大到未授权快照、主题或日期范围。

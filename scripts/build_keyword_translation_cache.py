@@ -1,4 +1,4 @@
-"""Build Chinese explanations for the actual discovery/admission/exclusion rules.
+"""Build Chinese explanations for the actual crawler search queries.
 
 The original rule is never changed.  Translations are stored separately and
 only used by the standalone data-lineage explainer.
@@ -111,7 +111,7 @@ def translate_english(batch: list[str], tokenizer, model) -> list[str]:
 def main() -> None:
     dataset = explainer.build_dataset(explainer.latest_snapshot())
     terms = list(dict.fromkeys(
-        rule["raw"] for crawler in dataset["crawlers"] for rule in crawler["term_rules"] if FOREIGN.search(rule["raw"])
+        rule["raw"] for crawler in dataset["crawlers"] for rule in crawler["search_queries"] if FOREIGN.search(rule["raw"])
     ))
     cache = json.loads(OUTPUT.read_text(encoding="utf-8-sig")) if OUTPUT.is_file() else {}
     pending = [term for term in terms if term not in cache]

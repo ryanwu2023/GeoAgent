@@ -31,6 +31,7 @@ from backend.catalog import TOPICS, RULE_VERSION, topic_dimensions
 from backend.events import SIGNALS, CATEGORIES, event_metadata
 from backend.collector_monitor import load_ledger_events, load_runs
 from backend.paths import project_root
+from backend.internal_messages import get_message as get_internal_message, message_stats as internal_message_stats, search_messages as search_internal_messages
 from scripts.integrate_collectors import load_registry
 
 from .audit import record, request_id_from_context
@@ -55,9 +56,12 @@ Limit = Annotated[int, Field(description="返回列表项上限1—50（采集�
 Offset = Annotated[int, Field(description="分页偏移，从0开始；total/has_more表示是否还有结果。")]
 Series = Annotated[str, Field(description="指标series或id，从geo_metric_catalog获取；如dgs10是美债10年收益率，不能自行编造。")]
 RecordId = Annotated[str, Field(description="证据ID，从检索结果或分析候选evidence_ids获取，必须属于指定快照。")]
-Query = Annotated[str, Field(description="与台账相同的子串关键词；原文/已有译文/来源匹配，不支持自然语言语义检索；空串按时间列出。")]
+Query = Annotated[str, Field(description="证据检索词；使用关键词、BM25、字符语义近似、实体、时间、来源等级和来源多样性混合重排序；来源等级不等于事实核验；空串按时间列出。")]
 RunId = Annotated[str, Field(description="采集批次ID，从geo_collector_runs获取；空串读取最近可见批次，不代表当前进程正在运行。")]
 CollectorId = Annotated[str, Field(description="采集器ID，空串为批次内全部采集器；与来源source不同。")]
+InternalMessageId = Annotated[str, Field(description="内部消息公开记录ID，从geo_internal_message_search获取；不使用上游群聊或发送人内部ID。")]
+InternalFilter = Annotated[str, Field(description="内部消息筛选值；空串表示不限。")]
+InternalMessageLimit = Annotated[int, Field(ge=1, le=20, description="内部消息搜索每页1—20条；先搜索短摘要，再用geo_internal_message_get按ID读取少量完整内容。禁止遍历全库正文填入单次模型上下文。")]
 BriefId = Annotated[str, Field(description="已归档简报ID，从geo_brief_list获取；即时问答不是档案。")]
 MaxPoints = Annotated[int, Field(description="返回最近观测点上限1—50，截断标志见history_truncated；区间计算基于截断前有效点。")]
 MaxBytes = Annotated[int, Field(description="简报正文UTF-8字节上限1—30000；truncated=true时不能当成完整正文。")]
@@ -234,13 +238,19 @@ def _collector_projection(run: dict[str, Any]) -> dict[str, Any]:
                 "records",
                 "outputs",
                 "last_success",
+                "last_success_at",
+                "last_run_at",
                 "source_health",
                 "error_type",
+                "error_reason",
+                "suggested_action",
             )
             if key in item
         }
         if "error_message" in item:
             projected["error_message"] = _sanitize_runtime_text(item.get("error_message"), limit=1000)
+        if "error_detail" in item:
+            projected["error_detail"] = _sanitize_runtime_text(item.get("error_detail"), limit=500)
         collectors.append(projected)
     result["collectors"] = collectors
     return result
@@ -637,7 +647,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
 
         return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
-    @server.tool(name="geo_evidence_search", description="在指定快照内分页检索证据摘要。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    @server.tool(name="geo_evidence_search", description="在指定快照内分页检索证据摘要，使用关键词、BM25、字符语义近似、实体、时间、来源等级和来源多样性混合重排序；关键候选须再用geo_evidence_get读取正文。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_evidence_search(
         snapshot_id: SnapshotId,
         q: Query = "",
@@ -667,7 +677,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             reviews = review_index(snapshot_id)
             page = matched[offset : offset + page_limit]
             return (
-                {"analysis_evidence_boundary": _analysis_evidence_boundary(), "query_scope": {"snapshot_id": snapshot_id, "topic": topic, "dimension": dimension, "start": start, "end": end, "q": q}, "search_basis": "与证据台账相同的大小写无关子串检索，包含原文、已有译文及来源，不是语义搜索。", "records": [{**_record_summary(item), **evidence_semantics(item, reviews.get(item['id']))} for item in page], "offset": offset, "limit": page_limit, "has_more": offset + page_limit < len(matched), "total": len(matched)},
+                {"analysis_evidence_boundary": _analysis_evidence_boundary(), "query_scope": {"snapshot_id": snapshot_id, "topic": topic, "dimension": dimension, "start": start, "end": end, "q": q}, "search_basis": "关键词、BM25、字符语义近似、实体、时间、来源等级和来源多样性混合重排序；来源等级不等于事实核验。", "records": [{**_record_summary(item), **evidence_semantics(item, reviews.get(item['id']))} for item in page], "offset": offset, "limit": page_limit, "has_more": offset + page_limit < len(matched), "total": len(matched)},
                 snapshot_provenance(snapshot, working_snapshot_id=working_id, latest_snapshot_id=_latest_snapshot_id()),
                 [],
             )
@@ -908,6 +918,73 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
 
         return await _run_tool(ctx=ctx, tool=tool, handler=handler)
 
+    @server.tool(
+        name="geo_internal_message_search",
+        description="检索本地去重保存的华泰宏观消息短摘要。支持关键词、日期、群聊显示名、标签和文本分类；每页最多20条，先筛选再用geo_internal_message_get按ID读取少量详情，不要遍历全库正文。结果不等于已核验事实。",
+        annotations={"readOnlyHint": True, "destructiveHint": False},
+        structured_output=False,
+    )
+    async def geo_internal_message_search(
+        query: Annotated[str, Field(description="标题、摘要、上游AI摘要、标签或群聊显示名中的原样子串；空串按时间列出。")]= "",
+        start: Start = "",
+        end: End = "",
+        group_name: InternalFilter = "",
+        tag: InternalFilter = "",
+        text_class: InternalFilter = "",
+        offset: Offset = 0,
+        limit: InternalMessageLimit = 20,
+        *,
+        ctx: Context,
+    ) -> str:
+        tool = "geo_internal_message_search"
+
+        def handler(principal: Any, _: str) -> tuple[Any, dict[str, Any], list[dict[str, Any]]]:
+            authorize(principal, tool=tool)
+            try:
+                data = search_internal_messages(
+                    query=query, start=start, end=end, group_name=group_name, tag=tag,
+                    text_class=text_class, offset=offset, limit=clamp_limit(limit, maximum=20),
+                )
+            except ValueError as exc:
+                raise MCPError("GEO_INVALID_FILTER", str(exc)) from exc
+            data["basis"] = "读取独立本地消息数据库的短摘要；消息时间与首次/最后采集时间分开，上游AI摘要不作为事实核验。完整内容只按搜索结果ID调用geo_internal_message_get。"
+            return data, {"kind": "live", "source": "ht-macro-local-db", "live": True}, []
+
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
+
+    @server.tool(
+        name="geo_internal_message_get",
+        description="按公开记录ID读取一条本地华泰宏观消息，不返回上游账号、Token、群聊内部ID或接收人内部ID。",
+        annotations={"readOnlyHint": True, "destructiveHint": False},
+        structured_output=False,
+    )
+    async def geo_internal_message_get(message_id: InternalMessageId, *, ctx: Context) -> str:
+        tool = "geo_internal_message_get"
+
+        def handler(principal: Any, _: str) -> tuple[Any, dict[str, Any], list[dict[str, Any]]]:
+            authorize(principal, tool=tool)
+            message = get_internal_message(message_id)
+            if message is None:
+                raise MCPError("GEO_INTERNAL_MESSAGE_NOT_FOUND", "内部消息不存在", {"message_id": message_id})
+            return {"message": message}, {"kind": "live", "source": "ht-macro-local-db", "live": True}, []
+
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
+
+    @server.tool(
+        name="geo_internal_message_stats",
+        description="读取华泰宏观本地消息库的记录数、最新消息、最近采集批次、文本分类和标签统计。",
+        annotations={"readOnlyHint": True, "destructiveHint": False},
+        structured_output=False,
+    )
+    async def geo_internal_message_stats(ctx: Context) -> str:
+        tool = "geo_internal_message_stats"
+
+        def handler(principal: Any, _: str) -> tuple[Any, dict[str, Any], list[dict[str, Any]]]:
+            authorize(principal, tool=tool)
+            return internal_message_stats(), {"kind": "live", "source": "ht-macro-local-db", "live": True}, []
+
+        return await _run_tool(ctx=ctx, tool=tool, handler=handler)
+
     def scoped_snapshot(principal, tool, snapshot_id, topic='all', dimension='', start='', end=''):
         _validate_filters(topic, dimension, start, end)
         working = store.get_working_snapshot_id()
@@ -940,6 +1017,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                     'questions': {'本周哪些指标发生变化': ['geo_metric_changes', 'geo_metric_series'],
                                   '地图主要事件与关联地区': ['geo_risk_map', 'geo_evidence_get'],
                                   '当前判断有哪些反证': ['geo_analysis_view', 'geo_evidence_search', 'geo_evidence_get'],
+                                  '内部宏观群近期提到什么': ['geo_internal_message_search', 'geo_internal_message_get'],
                                   '还缺什么数据': ['geo_workspace_summary', 'geo_source_health', 'geo_metric_catalog'],
                                   '快照版本列表（不代表当前页面筛选）': ['geo_snapshot_list']},
                     'context_priority': '用户明确指定优先，其次当前看板上下文；不知道当前范围时先澄清，不静默切换latest/all。'}, {}, []

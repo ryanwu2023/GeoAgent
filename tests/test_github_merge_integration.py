@@ -76,7 +76,7 @@ def test_windows_merge_keeps_process_identity_and_custom_import_port():
     assert "-ne ([datetime]$saved.createdAt).ToUniversalTime()" in stop
     assert "-ne ([datetime]$crawlerSaved.createdAt).ToUniversalTime()" in stop
     assert "$saved.url -eq $url" in start
-    assert "Invoke-RestMethod -Uri ($url+'api/status')" in start
+    assert "Invoke-RestMethod -Uri ($url+'healthz')" in start
     assert "--import-url', ($url+'api/import')" in start
     assert "Start-CrawlerManager $existingPython" in start
     assert "--interval-sec', '86400'" in start

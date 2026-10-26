@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { api, apiPut } from "./api";
+import { projectCollectorDiagnosis } from "./collectorDiagnostics";
 
 type CollectorStatus = "success" | "running" | "partial" | "failed" | "stale" | "offline";
 type CollectorGroup = "新闻" | "政府" | "媒体" | "市场" | "未分类";
@@ -40,8 +41,12 @@ type CollectorRecord = {
   records: number;
   outputs: number;
   lastSuccess: string;
+  lastRunAt?: string;
   sourceHealth: string;
   errorType?: string;
+  errorReason?: string;
+  errorDetail?: string;
+  suggestedAction?: string;
   errorMessage?: string;
 };
 
@@ -128,8 +133,13 @@ type CollectorRuntimePayload = {
       started_at?: string;
       finished_at?: string;
       last_success?: string;
+      last_success_at?: string;
+      last_run_at?: string;
       source_health?: string;
       error_type?: string;
+      error_reason?: string;
+      error_detail?: string;
+      suggested_action?: string;
       error_message?: string;
     }
   >;
@@ -333,6 +343,7 @@ const isCollectorGroup = (value: string | undefined): value is CollectorGroup =>
   value === "新闻" || value === "政府" || value === "媒体" || value === "市场" || value === "未分类";
 
 function mapRuntimeCollector(item: CollectorRuntimePayload["collectors"][number]): CollectorRecord {
+  const diagnosis = projectCollectorDiagnosis(item);
   return {
     id: item.id,
     name: item.name || item.id,
@@ -345,10 +356,14 @@ function mapRuntimeCollector(item: CollectorRuntimePayload["collectors"][number]
     attempts: item.attempts || "1 / 2",
     records: item.records ?? 0,
     outputs: item.outputs ?? 0,
-    lastSuccess: item.last_success || "未提供",
+    lastSuccess: diagnosis.lastSuccessAt || "",
+    lastRunAt: diagnosis.lastRunAt || "",
     sourceHealth: item.source_health || "状态待核对",
-    errorType: item.error_type || item.errorType,
-    errorMessage: item.error_message || item.errorMessage,
+    errorType: diagnosis.errorCategory || item.errorType,
+    errorReason: diagnosis.errorReason,
+    errorDetail: diagnosis.errorDetail,
+    suggestedAction: diagnosis.suggestedAction,
+    errorMessage: diagnosis.errorReason || item.errorMessage,
   };
 }
 
@@ -1262,8 +1277,8 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           <div className="batch-detail-panel">
             <div className="batch-panel-heading"><span className="collector-kicker"><ListChecks size={13} /> 源详情 · {selected?.name || "未选择"}</span><strong>{selected ? statusMeta[selected.status].label : runtimeRunStatus === "running" ? "等待状态" : "—"}</strong></div>
             {selected ? <>
-              <div className="batch-detail-summary"><span>阶段 <b>{selected.stage}</b></span><span>产物 <b>{selected.outputs}</b></span><span>耗时 <b>{selected.elapsed}</b></span><span>来源 <b>{selected.sourceHealth}</b></span></div>
-              <div className="batch-source-detail"><span>错误信息</span><strong className={selected.errorMessage ? "bad" : "ok"}>{selected.errorType || "无错误"}</strong><p>{selected.errorMessage || "本次采集没有记录错误。"}</p></div>
+              <div className="batch-detail-summary"><span>阶段 <b>{selected.stage}</b></span><span>产物 <b>{selected.outputs}</b></span><span>最近运行 <b>{selected.lastRunAt ? formatDateTime(selected.lastRunAt) : "未提供"}</b></span><span>最近成功 <b>{selected.lastSuccess ? formatDateTime(selected.lastSuccess) : "尚无成功记录"}</b></span></div>
+              <div className="batch-source-detail"><span>失败诊断</span><strong className={selected.errorReason || selected.errorMessage ? "bad" : "ok"}>{selected.errorType || "无错误"}</strong><p>{selected.errorReason || selected.errorMessage || "本次采集没有记录错误。"}</p>{selected.errorDetail && <small>脱敏日志摘要：{selected.errorDetail}</small>}{selected.errorType && <p><b>建议：</b>{selected.suggestedAction}</p>}</div>
               <div className="batch-event-list">{ledgerEvents.filter((event) => !event.collector_id || event.collector_id === selected.id).map((event) => <button key={event.id}><span><b>{event.event_type}</b><small>{formatDateTime(event.created_at, true)}</small></span><em className={event.status === "failed" ? "bad" : event.status === "succeeded" ? "ok" : ""}>{processEventLabel(event, collectors)}</em><p>{event.message || "已记录"}</p></button>)}{!ledgerEvents.length && <div className="batch-list-empty">暂无事件记录。</div>}</div>
               <pre className="batch-log-tail">{collectorLog?.available ? collectorLog.content || "（日志为空）" : "当前源暂无可读日志尾部"}</pre>
             </> : <div className="batch-list-empty">{runtimeRunStatus === "running" ? "批次正在运行，选择的采集器状态和日志会自动出现在这里。" : "从中间列表选择一个采集源查看详情。"}</div>}
@@ -1377,9 +1392,9 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           <div className={`collector-inspector-status status-${statusMeta[selected.status].className}`}><SelectedIcon size={17} /><strong>{statusMeta[selected.status].label}</strong><span>{selected.sourceHealth}</span></div>
           <div className="collector-inspector-tabs"><button className={inspectorTab === "detail" ? "selected" : ""} onClick={() => setInspectorTab("detail")}>运行详情</button><button className={inspectorTab === "history" ? "selected" : ""} onClick={() => setInspectorTab("history")}>历史记录</button><button className={inspectorTab === "resources" ? "selected" : ""} onClick={() => setInspectorTab("resources")}>相关资源</button></div>
           {inspectorTab === "detail" && <>
-            <div className="collector-detail-grid"><div><span>当前步骤</span><strong>{selected.stage}</strong></div><div><span>重试次数</span><strong>{selected.attempts}</strong></div><div><span>输出文件</span><strong>{selected.outputs} 个</strong></div><div><span>运行时长</span><strong>{selected.elapsed}</strong></div></div>
-            <div className="collector-detail-block"><span>最近一次成功</span><strong>{selected.lastSuccess}</strong></div>
-            <div className="collector-detail-block"><span>错误信息（最近一条）</span><article className={selected.errorMessage ? "has-error" : ""}>{selected.errorType ? <b>{selected.errorType}</b> : <b>无错误</b>}<p>{selected.errorMessage || "本次执行没有记录错误。"}</p><small>{selected.finishedAt} · 日志尾部</small></article></div>
+            <div className="collector-detail-grid"><div><span>当前步骤</span><strong>{selected.stage}</strong></div><div><span>重试次数</span><strong>{selected.attempts}</strong></div><div><span>最近运行</span><strong>{selected.lastRunAt ? formatDateTime(selected.lastRunAt) : "未提供"}</strong></div><div><span>最近成功</span><strong>{selected.lastSuccess ? formatDateTime(selected.lastSuccess) : "尚无成功记录"}</strong></div><div><span>输出文件</span><strong>{selected.outputs} 个</strong></div><div><span>运行时长</span><strong>{selected.elapsed}</strong></div></div>
+            <div className="collector-detail-block"><span>失败诊断</span><article className={selected.errorReason || selected.errorMessage ? "has-error" : ""}>{selected.errorType ? <b>{selected.errorType} · {selected.stage}</b> : <b>本轮无错误</b>}<p>{selected.errorReason || selected.errorMessage || "本次执行没有记录错误。"}</p>{selected.errorDetail && <small>脱敏日志摘要：{selected.errorDetail}</small>}</article></div>
+            {(selected.errorType || selected.suggestedAction) && <div className="collector-detail-block"><span>建议处理</span><article><b>下一步</b><p>{selected.suggestedAction || "查看脱敏日志和来源状态，修复首个明确错误后再补采。"}</p><small>建议先单独补采，避免重复运行全部采集器。</small></article></div>}
             <div className="collector-detail-block"><span>运行事件</span>{ledgerEventsAvailable && ledgerEvents.length ? <div className="collector-event-list">{ledgerEvents.slice(-4).map((event) => <article key={event.id}><b>{event.event_type}</b><p>{event.message || event.status || "已记录"}</p><small>{event.created_at.replace("T", " ").slice(0, 19)}</small></article>)}</div> : <article><b>账本事件未提供</b><p>{dataSource === "runtime" ? "该历史报告尚未关联 SQLite 运行账本。" : "演示数据尚未连接真实运行事件。"}</p></article>}</div>
             <div className="collector-detail-block"><span>日志尾部</span><div className="collector-log-toolbar"><button className={logStream === "stderr" ? "selected" : ""} onClick={() => setLogStream("stderr")}>stderr</button><button className={logStream === "stdout" ? "selected" : ""} onClick={() => setLogStream("stdout")}>stdout</button></div><pre className="collector-log-tail">{collectorLog?.available ? collectorLog.content || "（日志为空）" : "当前运行尚无可读日志尾部"}</pre></div>
             <div className="collector-detail-block"><span>来源状态</span>{collectorSources ? <><div className="collector-source-summary"><b>{collectorSources.summary.healthy} / {collectorSources.summary.total} 正常</b><small>{collectorSources.summary.failed} 失败 · {collectorSources.summary.stale} 过期 · {collectorSources.summary.disabled} 停用 · {collectorSources.updated_at ? collectorSources.updated_at.replace("T", " ").slice(0, 16) : "时间未提供"}</small></div><div className="collector-source-list">{collectorSources.sources.slice().sort((a, b) => { const rank = (state?: string) => state === "ok" ? 0 : state === "disabled" ? 1 : 2; return rank(b.state) - rank(a.state); }).slice(0, 12).map((source) => <article key={source.id}><span><b>{source.id}</b><small>{source.publisher || "未提供发布方"}</small></span><em className={source.state === "ok" ? "ok" : source.state === "disabled" ? "disabled" : "bad"}>{source.state || "未知"}</em><small>{source.error || `${source.entries ?? 0} 条 · HTTP ${source.http_status ?? "—"}`}</small></article>)}</div>{collectorSources.sources.length > 12 && <small className="collector-source-more">仅显示 12 个来源；接口返回完整来源列表。</small>}</> : <article><b>暂无来源产物</b><p>当前采集器没有可读取的 `_source_status.json`、`_fetch_stats.json` 或 `_source_health.json`。</p></article>}</div>
