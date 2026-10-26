@@ -27,7 +27,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     GEO_DATA_DIR=/app/data \
     COLLECTOR_DATA_ROOT=/app/data/collector-output
 COPY requirements.txt ./
-RUN python -m venv /app/.venv && /app/.venv/bin/pip install --no-cache-dir -r requirements.txt
+ARG PYPI_INDEX_URL=https://pypi.org/simple
+RUN test "${PYPI_INDEX_URL#https://}" != "$PYPI_INDEX_URL" \
+    && python -m venv /app/.venv \
+    && /app/.venv/bin/pip install --no-cache-dir --index-url "$PYPI_INDEX_URL" -r requirements.txt
 ENV PATH="/app/.venv/bin:${PATH}"
 COPY backend ./backend
 COPY scripts ./scripts

@@ -22,6 +22,7 @@ case ${1:-} in
   verify)
     docker build --provenance=false --sbom=false --build-arg VITE_PICHAT_EMBED_ORIGIN=https://chat.lhotsetech.com \
       --build-arg DEBIAN_MIRROR=https://mirrors.aliyun.com \
+      --build-arg PYPI_INDEX_URL=https://mirrors.aliyun.com/pypi/simple \
       --build-arg VITE_PICHAT_PRODUCT_USER_ID=geoagent-owner \
       -t "$candidate" .
     trap 'docker image rm "$candidate" >/dev/null 2>&1 || true' EXIT
