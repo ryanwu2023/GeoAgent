@@ -14,9 +14,13 @@ RUN npm test && npm run build
 
 FROM python:3.12-slim-bookworm
 WORKDIR /app
+ARG DEBIAN_MIRROR=https://deb.debian.org
 # Finance and TACO explicitly use curl transport; Python dependencies alone
 # cannot satisfy it. Fail the image build if the executable is unavailable.
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+RUN test "${DEBIAN_MIRROR#https://}" != "$DEBIAN_MIRROR" \
+    && sed -i "s|http://deb.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources \
+    && apt-get update -o APT::Update::Error-Mode=any \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
     && curl --version && rm -rf /var/lib/apt/lists/*
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
