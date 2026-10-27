@@ -85,6 +85,20 @@ class SpecialistBudget:
             total_seconds=max(10.0, min(240.0, total_seconds)),
         )
 
+    @classmethod
+    def from_settings(cls, settings: dict[str, Any]) -> "SpecialistBudget":
+        """用页面保存的热更新值覆盖环境默认值，工具与上下文预算保持原规则。"""
+        base = cls.from_environment()
+        return cls(
+            max_parallel=int(settings.get("max_parallel", base.max_parallel)),
+            per_agent_tool_calls=base.per_agent_tool_calls,
+            total_tool_calls=base.total_tool_calls,
+            per_agent_seconds=float(settings.get("per_agent_timeout_seconds", base.per_agent_seconds)),
+            per_agent_context_tokens=base.per_agent_context_tokens,
+            total_context_tokens=base.total_context_tokens,
+            total_seconds=float(settings.get("total_timeout_seconds", base.total_seconds)),
+        )
+
 
 @dataclass
 class SpecialistMemo:
