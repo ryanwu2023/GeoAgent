@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from backend.qa_multiagent import SpecialistBudget, _parse_action, run_specialists
 from backend.qa_harness import _fallback_metrics, _replace_model_metric_table
+from backend.qa_agent import normalize_final
 
 
 def test_specialist_action_normalizes_flash_tool_aliases_and_drops_unknown_fields():
@@ -201,3 +202,25 @@ def test_final_metric_table_uses_tool_previous_period_not_window_start():
     assert "115.81 美元/桶" in rendered
     assert "-6.22 美元/桶；-5.37%" in rendered
     assert "106.6 美元/桶" not in rendered
+
+
+def test_finalizer_repairs_inline_anchor_record_mapping_for_read_evidence_only():
+    valid_id = "2e41661579e7229e0421e5a3"
+    tools = SimpleNamespace(full_text_ids=[valid_id])
+    value = {
+        "action": "final",
+        "answer_markdown": (
+            f"官方尚未确认行动。〔S1：{valid_id}〕\n\n"
+            "另一条未读材料不得引用。〔S2：ffffffffffffffffffffffff〕"
+        ),
+        "citation_map": [],
+        "gaps": [],
+    }
+
+    result = normalize_final(value, tools)
+
+    assert result["citation_map"] == [{"anchor": "S1", "evidence_ids": [valid_id]}]
+    assert result["evidence_ids"] == [valid_id]
+    assert "〔S1〕" in result["annotated_text"]
+    assert "ffffffffffffffffffffffff" not in result["annotated_text"]
+    assert "2e41661579e7229e0421e5a3" not in result["text"]
