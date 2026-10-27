@@ -767,6 +767,7 @@ async def answer(snapshot, query, topic="all", dimension="", start="", end="", u
             base["multi_agent"] = outcome.get("multi_agent", {"status": "skipped"})
             base["agent_memos"] = outcome.get("agent_memos", {})
             base["tool_budget"] = outcome.get("tool_budget", {})
+            base["cost_estimate"] = outcome.get("cost_estimate", {})
             base["run_id"] = outcome.get("run_id", "")
             base["run_status"] = outcome.get("status", "completed")
             base["model"] = outcome.get("model") or planner_model
