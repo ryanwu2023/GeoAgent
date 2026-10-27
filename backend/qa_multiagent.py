@@ -309,9 +309,60 @@ def _json_object(raw: str) -> dict[str, Any]:
         if start < 0 or end <= start:
             raise
         value = json.loads(cleaned[start:end + 1])
+    # Some OpenAI-compatible models JSON-encode the whole action twice.  It is
+    # still a valid machine action, so unwrap one bounded layer rather than
+    # degrading it to an opaque free-text memo.
+    if isinstance(value, str):
+        value = json.loads(value)
     if not isinstance(value, dict):
         raise ValueError("specialist_action_not_object")
     return value
+
+
+def _canonical_tool_arguments(tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Normalize common model aliases, then keep only each tool's safe schema."""
+    raw = dict(arguments or {})
+    if tool in {"geo_evidence_search", "geo_internal_message_search"}:
+        if not raw.get("q") and raw.get("query"):
+            raw["q"] = raw.get("query")
+    elif tool == "geo_evidence_get":
+        if not raw.get("record_id"):
+            raw["record_id"] = raw.get("evidence_id") or raw.get("id")
+    elif tool == "geo_internal_message_get":
+        if not raw.get("message_id"):
+            raw["message_id"] = raw.get("record_id") or raw.get("id")
+    elif tool == "geo_metric_series":
+        if not raw.get("series"):
+            raw["series"] = raw.get("metric_series") or raw.get("metric")
+
+    allowed: dict[str, tuple[str, ...]] = {
+        "geo_workspace_summary": (),
+        "geo_evidence_search": ("q", "limit", "source_tiers"),
+        "geo_evidence_get": ("record_id",),
+        "geo_metric_catalog": ("limit",),
+        "geo_metric_series": ("series", "max_points"),
+        "geo_analysis_view": ("asset_id", "scenario_id"),
+        "geo_internal_message_search": ("q", "limit", "start", "end"),
+        "geo_internal_message_get": ("message_id",),
+        "geo_internal_message_stats": (),
+    }
+    clean = {key: raw[key] for key in allowed.get(tool, ()) if raw.get(key) not in (None, "")}
+    if "limit" in clean:
+        try:
+            clean["limit"] = max(1, min(20, int(clean["limit"])))
+        except (TypeError, ValueError):
+            clean.pop("limit", None)
+    if "max_points" in clean:
+        try:
+            clean["max_points"] = max(2, min(50, int(clean["max_points"])))
+        except (TypeError, ValueError):
+            clean.pop("max_points", None)
+    if isinstance(clean.get("source_tiers"), list):
+        clean["source_tiers"] = [
+            str(item).upper() for item in clean["source_tiers"]
+            if str(item).upper() in {"T1", "T2", "T3"}
+        ]
+    return clean
 
 
 def _parse_action(raw: str) -> SpecialistAction:
@@ -338,7 +389,8 @@ def _parse_action(raw: str) -> SpecialistAction:
     if action == "tool":
         arguments = value.get("arguments") if isinstance(value.get("arguments"), dict) else {}
         return SpecialistAction(
-            "tool", tool=str(value.get("tool") or "").strip(), arguments=arguments,
+            "tool", tool=str(value.get("tool") or "").strip(),
+            arguments=_canonical_tool_arguments(str(value.get("tool") or "").strip(), arguments),
             purpose=str(value.get("purpose") or "").strip()[:300],
         )
     if action == "ledger_update":
@@ -348,7 +400,13 @@ def _parse_action(raw: str) -> SpecialistAction:
             ledger_updates=tuple(item for item in updates if isinstance(item, dict)),
         )
     if action == "memo":
-        memo = value.get("memo") if isinstance(value.get("memo"), dict) else {
+        memo_value = value.get("memo")
+        if isinstance(memo_value, str):
+            try:
+                memo_value = _json_object(memo_value)
+            except (json.JSONDecodeError, ValueError):
+                memo_value = {"summary": memo_value}
+        memo = memo_value if isinstance(memo_value, dict) else {
             key: item for key, item in value.items() if key != "action"
         }
         return SpecialistAction("memo", memo=memo)
@@ -637,7 +695,10 @@ async def run_specialists(
             last_tokens = 0
             memo: SpecialistMemo | None = None
             follow_up_performed = False
-            max_decisions = max(2, min(3, tool_limit + 1))
+            # Tool budget and decision budget are different: after the last
+            # permitted read, reserve one extra model turn to synthesize the
+            # structured memo instead of stopping on a tool action.
+            max_decisions = max(2, min(5, tool_limit + 1))
             for decision_no in range(1, max_decisions + 1):
                 compact_calls = build_preview(calls, max(500, agent_context_cap - 3200))
                 recommended_metrics: list[str] = []
