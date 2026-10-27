@@ -77,6 +77,8 @@ app.add_middleware(BearerAuthMiddleware, config=mcp_config, managed_keys=True)
 app.include_router(integrations_router)
 from .model_routes import router as model_router, test_translation
 app.include_router(model_router)
+from .qa_agent_routes import router as qa_agent_router
+app.include_router(qa_agent_router)
 from .mcp_workbench import router as workbench_router
 app.include_router(workbench_router)
 # Delegate at the native path, with a fresh SDK session manager per lifecycle.
