@@ -738,12 +738,15 @@ def validate_payload(body, kind):
     if looks_like_challenge(body):
         return False, "js-challenge-page"
     if kind == "csv":
+        if looks_like_html(body):
+            head = body[:4096].decode("utf-8", "replace").lower()
+            if "site maintenance" in head or "we'll be back soon" in head:
+                return False, "source-maintenance-page"
+            return False, "csv-is-html"
         head = body[:4096].decode("utf-8", "replace")
         first = head.splitlines()[0] if head.splitlines() else ""
         if "," not in first:
             return False, "csv-no-comma-header"
-        if looks_like_html(body):
-            return False, "csv-is-html"
         return True, "csv-ok"
     if kind == "arcgis_json":
         try:

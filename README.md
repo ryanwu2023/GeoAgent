@@ -91,9 +91,26 @@ MCP 已随主后端启动：开发页面地址为 `http://127.0.0.1:8010/mcp`，
 
 独立调试入口 `backend.geo_mcp.server` 的 8401 服务仍可使用，但不再是项目启动的前置条件；其 legacy loopback token 与 scope-file 模式保留兼容。项目统一 `/mcp` 支持页面管理的 Key；不要把本地开发 token 用作公网凭证。
 
-未配置 Pi Chat 时，也可以配置 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`，使用兼容 `/chat/completions` 的模型作为降级。请求只在用户提问、翻译或生成简报时发起，发送的是检索到的原文片段、计算结果和研究规则；Pi Chat 优先于直连模型配置。
+未配置 Pi Chat 时，也可以配置 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`，使用兼容 `/chat/completions` 的模型。默认 `LLM_AGENT_MODE=tools`：本地模型先制定问题计划，再在后端边界内自主选择快照概览、公开证据检索与全文、指标目录与序列、资产/情景分析，以及 `geo_internal_message_stats`、`geo_internal_message_search`、`geo_internal_message_get` 三个华泰内部消息工具，共九个只读工具。后端执行工具并锁定快照、主题、日期、证据与上下文预算；模型不能直接访问文件、数据库或网络。
 
-未配置模型时，使用真实的本地检索、数值计算及模板简报，并明确标注，不伪装成模型输出。模型输出需要 JSON，引用不存在、出现未经授权的新数值、接口失败或超时都会保留本地结果。引用校验不代表语义已经验证。
+未配置模型时，使用真实的本地检索、数值计算及模板简报，并明确标注，不伪装成模型输出。工具代理采用动态证据预算，先宽检索并混合重排序，再读取少量关键证据全文；复杂问题最多补充检索 20 条华泰内部消息、读取 6 条正文。华泰消息在回答中单独列示为“内部消息、待外部核验”，不与公开证据混为同一引用。最终正文是自由 Markdown，引用通过独立 `citation_map` 映射并逐句检查。单句数字或引用失败只删除该句，最终始终保留可读回答。设置 `LLM_AGENT_MODE=legacy` 可临时使用旧三轮兼容管线，`LLM_QA_ROUNDS=1..5` 仅作用于该兼容管线。PiChat Agent 继续自行管理工具循环。
+
+本地 `tools` 模式使用可恢复的单 Agent Harness。运行依次经过问题规划、宽检索、关键正文读取、复核补查、答案综合和引用校验；每个阶段与工具批次写入 `qa_runs`、`qa_steps` 和 `qa_artifacts`。完整工具结果保存在本地数据库，模型只接收结构化预览和研究记忆，避免截断损坏 JSON。只读且互不依赖的调用有界并发执行，单个工具失败不会丢弃同批成功结果。模型超时或引用校验失败时，系统从最近检查点重试或生成确定性降级回答，不能返回空白。
+
+浏览器收到 `run_id` 后按快照、主题、维度、日期和原始问题保存续跑标识；连接中断时后端继续写检查点，同范围再次提交会复用成功结果。`GET /api/qa-runs/{run_id}` 可读取脱敏的阶段、步骤、工具成功数和恢复状态，不返回完整工具工件。以下变量控制上下文预算：
+
+```dotenv
+QA_CONTEXT_MAX_TOKENS=32000
+QA_CONTEXT_SOFT_TOKENS=24000
+QA_CONTEXT_OUTPUT_RESERVE=6000
+QA_TOOL_PREVIEW_TOKENS=1800
+```
+
+这套 Harness 只作用于本地 OpenAI-compatible 模型。PiChat 的请求协议、Agent 工具循环以及 GeoAgent MCP 对外工具保持原样；九个本地工具仍是原来的只读注册对象。
+
+可以分别配置 `LLM_FAST_MODEL` 与 `LLM_REASONING_MODEL`。快速模型用于问题规划和检索辅助，推理模型用于工具选择与最终研究回答；留空时均回退到 `LLM_MODEL`，状态接口会显示是否发生回退。模型名必须是 `/models` 实际返回的 ID。当前模型服务如果只提供 Flash 模型，代码不会虚构或自动选择不存在的推理模型。
+
+固定问答评测集位于 `config/qa-benchmark.json`。服务启动后运行 `python scripts/evaluate_qa.py --config config/qa-benchmark.json --label local-agent`，可保存事实覆盖、时间范围、引用可打开率、反证、因果边界、工具成功率、重试、上下文压缩与延迟结果；切换到 PiChat 配置后使用不同 `--label` 再跑，可在同一问题集上比较，而不是仅比较回答篇幅。
 
 “分析资产影响”可生成当前主题/筛选/快照范围内的有条件资产与情景解释并保存版本；模型判断始终待研究员核验。无模型或无证据时，资产矩阵显示研究规则及证据不足，不机械输出涨跌。
 
@@ -105,11 +122,24 @@ MCP 结果会先保存原始响应，再转换成统一记录并直接生成新�
 
 当前实现支持 Streamable HTTP JSON-RPC，并优先调用 `knowledge_search`。更换其他 MCP 服务时，该服务需要提供兼容的检索工具或在 `backend/mcp_news.py` 增加字段适配。
 
+## 华泰宏观内部消息源
+
+项目可通过内部 HTTP 接口每天三次采集宏观群消息，并在本地 SQLite 中稳定去重。真实账号和密码只写入本地 `.env`；参考 `.env.example` 中的 `HT_MACRO_*` 配置。`start.bat` 会同时启动长驻消息服务，服务启动后立即补采，之后按北京时间 `08:00、14:00、20:00` 抓取消息列表，并每 27 分钟刷新访问令牌。运行状态可通过 `GET /api/internal-messages/status` 查看。
+
+外部 Agent 使用原有 GeoAgent MCP 地址和 Bearer Key，通过以下只读工具访问本地数据：
+
+- `geo_internal_message_search`：按关键词、日期、群聊显示名、标签和文本分类检索短摘要，每页最多20条；
+- `geo_internal_message_get`：读取单条标准化消息；
+- `geo_internal_message_stats`：读取记录量、最近消息、最近采集批次与分类统计。
+
+MCP 不返回上游账号、访问令牌、群聊内部 ID、发送人内部 ID、接收人内部 ID 或本地数据库路径。消息及上游 AI 摘要仍属于待核验材料。
+使用时应先搜索短摘要，再对少量相关ID读取详情；不要分页遍历全库并把全部正文同时提交给模型。
+
 ## 新爬虫扩展
 
 在任何子项目下输出 `output/geo-v6.json`，使用 `geo.v6/1` 协议。参见 [接入协议](docs/adapter-contract.md) 及 `examples/geo-v6.example.json`。示例是协议测试数据，默认不导入真实快照。
 
-项目内置 25 个采集器的统一注册表。证券时报采集器固定读取要闻、新闻和 7×24 快讯，补充美伊冲突、胡塞武装、霍尔木兹海峡、俄乌冲突及资产传导报道；五个俄乌资产传导采集器使用俄罗斯央行与联邦国库局、GIE AGSI、USDA PS&D、乌克兰国家银行、Eurostat 与欧盟委员会等固定渠道。常用命令：
+项目当前内置 26 个采集器的统一注册表（原有 25 个，后新增俄乌相关民调采集器）。证券时报采集器固定读取要闻、新闻和 7×24 快讯，补充美伊冲突、胡塞武装、霍尔木兹海峡、俄乌冲突及资产传导报道；五个俄乌资产传导采集器使用俄罗斯央行与联邦国库局、GIE AGSI、USDA PS&D、乌克兰国家银行、Eurostat 与欧盟委员会等固定渠道。常用命令：
 
 ```powershell
 python scripts/collect.py --list

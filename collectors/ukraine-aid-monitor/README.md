@@ -2,6 +2,8 @@
 
 监测乌克兰依赖的西方后援：援助包与资金承诺、贷款与金融援助（IMF/G7/欧盟）、武器装备援助、美国情报支持，以及中国视角（新华社/中方涉乌表态，用户指定通道）。
 
+同一采集器还发布欧洲融资条件量化指标：TradingView日频的德国、法国、欧元区10年期收益率，以及同日法德利差；FRED/OECD月频序列只用于交叉核验，不补写日频值。
+
 承继 ua-front-monitor 骨架：配置驱动源 + 主题锚定（并入各桶全部词表，兼容「Pentagon announces new package」类无国名主语）+ tier 分级 + 事实/观点三分类 + 援助动能 flags + 意向守卫 + 累积档回填（cfg_ver 含代码哈希）+ 离线自检。
 
 ## 用法
@@ -48,4 +50,12 @@ flags：`pledge_only` 承诺未交付 / `delivered` 已交付 / `delay_or_halt` 
 
 - `output/LATEST.md` 日报（人读）+ `output/ALL-records.jsonl` 累积总档（结构化、去重、first_seen）
 - `output/<日期>/uaid-<日期>.md` + `records.jsonl`（快照=窗口内全部，非仅新增）
+- `output/geo-v6.json` 欧洲主权债收益率量化数据；`source-status.json` 与 `_source_status.json` 保存逐来源状态
 - `output/_filter_audit.json` 被锚定拦截候选逐条留档；`output/_verify_last.json` 对账状态（报告动态引用）
+
+### 欧洲收益率口径
+
+- 日频主序列：`TVC:DE10Y`、`TVC:FR10Y`、`TVC:EU10Y`，只发布已完成交易日。
+- 月频核验：FRED `IRLTLT01DEM156N`、`IRLTLT01FRM156N`、`IRLTLT01EZM156N`。
+- 法德利差：`(法国10Y-德国10Y)×100`，单位为基点，只使用同日有效值。
+- TradingView失败时FRED不会冒充日频；缺失值不填零。

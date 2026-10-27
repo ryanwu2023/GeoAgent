@@ -858,6 +858,10 @@ FLAG_LABEL = {"official_data": "官方数据语境", "forecast_estimate": "预�
 BUCKET_ORDER = ["duma_election", "oil_exports", "fiscal_deficit",
                 "military_spending", "ruble_fx", "labor_shortage", "china_xinhua"]
 
+def active_bucket_order(cfg):
+    """返回当前监测桶；已结束事件的历史分类定义仍保留。"""
+    return [bid for bid in BUCKET_ORDER if cfg.get("buckets", {}).get(bid, {}).get("active", True)]
+
 def _row_link(r):
     return f"[原文]({r['url']})" if r.get("url") else "—"
 
@@ -880,7 +884,8 @@ def _sect(W, rows):
 def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdir):
     W = []
     dt = as_of.isoformat()
-    by_bucket = Counter(b for r in records for b in r["buckets"])
+    active_buckets = active_bucket_order(cfg)
+    by_bucket = Counter(b for r in records for b in r["buckets"] if b in active_buckets)
     by_kind = Counter(r["kind"] for r in records)
     by_stance = Counter(r["stance"] for r in records if r.get("stance") != "unclassified")
     cross = {bid: Counter() for bid in cfg["buckets"]}
@@ -903,8 +908,8 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
     W.append("  『贬值/升值』的基期必须逐条核对。")
     W.append("- **油品出口**：无官方逐日披露，量与折扣依赖船期数据转述（T3）；")
     W.append("  禁运/限价语境下『量稳收入降』是常态组合，出口量与出口收入分开读。")
-    W.append("- **选举周期效应**：2026-09-20 单一投票日前后报道量尖峰属周期现象，")
-    W.append("  票数/席位以 CEC 为准（本出口 CEC 不可达，先经 T3 转述）。")
+    W.append("- **历史选举资料**：2026-09-20 国家杜马选举已结束，历史记录保留供回放，")
+    W.append("  当前日常采集不再轮询选举专用来源。")
     W.append("- **内政动能词表是启发式**：恶化/收紧 vs 缓解，否定翻转，只看方向不看强度。")
     W.append(f"- 本轮配置指纹 `cfg_ver={stats['cfg_ver'][:12]}…`；快照内唯一（闸门断言）。")
     W.append("")
@@ -922,7 +927,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
     W.append("")
     W.append("| 信号桶 | T1 | T2 | T3 | 警告 |")
     W.append("|---|---|---|---|---|")
-    for bid in BUCKET_ORDER:
+    for bid in active_buckets:
         c = cross[bid]
         warn = "⚠️ 全 T3（官方一手缺失）" if bid in all_t3 else ""
         W.append(f"| {cfg['buckets'][bid]['label']} | {c.get('T1', 0)} | {c.get('T2', 0)} | {c.get('T3', 0)} | {warn} |")
@@ -947,13 +952,12 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
     W.append("")
 
     # ---- §3-§9 分桶 ----
-    sec_map = [("duma_election", "3", "国家杜马选举（2026-09 单一投票日）"),
-               ("oil_exports", "4", "油品出口与石油收入"),
-               ("fiscal_deficit", "5", "财政赤字与预算执行"),
-               ("military_spending", "6", "军费开支"),
-               ("ruble_fx", "7", "卢布汇率与货币政策"),
-               ("labor_shortage", "8", "劳动力短缺与劳动力市场"),
-               ("china_xinhua", "9", "中国视角（新华社/中俄经贸）")]
+    sec_map = [("oil_exports", "3", "油品出口与石油收入"),
+               ("fiscal_deficit", "4", "财政赤字与预算执行"),
+               ("military_spending", "5", "军费开支"),
+               ("ruble_fx", "6", "卢布汇率与货币政策"),
+               ("labor_shortage", "7", "劳动力短缺与劳动力市场"),
+               ("china_xinhua", "8", "中国视角（新华社/中俄经贸）")]
     for bid, num, name in sec_map:
         rows = [r for r in records if bid in r["buckets"]]
         W.append(f"## {num}. {name}（{len(rows)} 条）")
@@ -961,7 +965,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
         _sect(W, rows)
 
     # ---- §9.x 新华社/中文窗口全部条目（按 source 筛选，与桶无关）----
-    W.append("### 9.x 新华社/中文窗口全部快照条目（按信源筛选，与桶无关）")
+    W.append("### 8.x 新华社/中文窗口全部快照条目（按信源筛选，与桶无关）")
     W.append("")
     cn = [r for r in records if r.get("source_id") in CHINA_SOURCE_IDS]
     if cn:

@@ -1,0 +1,2037 @@
+{
+  "schema_ver": 1,
+  "parse_ver": 1,
+  "timezone": "Asia/Shanghai",
+  "horizon_days": 120,
+  "retention_days": 21,
+  "max_signal_age_days": 45,
+  "request_timeout": 25,
+  "min_interval_per_host": 1.0,
+  "per_source_max": 150,
+  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "report": {
+    "title": "全球主要领导人会晤日程（俄乌 / 美伊 / 中欧 / 亚洲 / 中东）",
+    "max_rows_per_track": 40,
+    "source_name_max": 22,
+    "desc_scan_chars": 300
+  },
+  "tracks": {
+    "ru-ua": {
+      "label": "俄乌",
+      "actors": [
+        "russia",
+        "ukraine"
+      ]
+    },
+    "us-ir": {
+      "label": "美伊",
+      "actors": [
+        "usa",
+        "iran"
+      ]
+    },
+    "il-ir": {
+      "label": "以伊 / 胡塞",
+      "actors": [
+        "israel",
+        "iran",
+        "houthis"
+      ]
+    },
+    "cn-eu": {
+      "label": "中国—欧洲",
+      "actors": [
+        "china",
+        "eu"
+      ]
+    },
+    "asia": {
+      "label": "亚洲与印太",
+      "actors": []
+    },
+    "mideast": {
+      "label": "中东（其他）",
+      "actors": []
+    },
+    "multi": {
+      "label": "多边峰会与其他",
+      "actors": []
+    }
+  },
+  "actors": [
+    {
+      "id": "russia",
+      "zh": "俄罗斯",
+      "aliases": [
+        "Russia",
+        "Russian",
+        "Kremlin"
+      ]
+    },
+    {
+      "id": "ukraine",
+      "zh": "乌克兰",
+      "aliases": [
+        "Ukraine",
+        "Ukrainian",
+        "Kyiv"
+      ]
+    },
+    {
+      "id": "usa",
+      "zh": "美国",
+      "aliases": [
+        "United States",
+        "U.S.",
+        "US",
+        "Washington",
+        "White House"
+      ]
+    },
+    {
+      "id": "iran",
+      "zh": "伊朗",
+      "aliases": [
+        "Iran",
+        "Iranian",
+        "Tehran"
+      ]
+    },
+    {
+      "id": "israel",
+      "zh": "以色列",
+      "aliases": [
+        "Israel",
+        "Israeli",
+        "Jerusalem"
+      ]
+    },
+    {
+      "id": "houthis",
+      "zh": "胡塞武装",
+      "aliases": [
+        "Houthi",
+        "Houthis",
+        "Ansar Allah"
+      ]
+    },
+    {
+      "id": "china",
+      "zh": "中国",
+      "aliases": [
+        "China",
+        "Chinese",
+        "Beijing"
+      ]
+    },
+    {
+      "id": "eu",
+      "zh": "欧盟",
+      "aliases": [
+        "European Union",
+        "EU",
+        "Brussels"
+      ]
+    },
+    {
+      "id": "germany",
+      "zh": "德国",
+      "aliases": [
+        "Germany",
+        "German",
+        "Berlin"
+      ]
+    },
+    {
+      "id": "france",
+      "zh": "法国",
+      "aliases": [
+        "France",
+        "French",
+        "Paris"
+      ]
+    },
+    {
+      "id": "uk",
+      "zh": "英国",
+      "aliases": [
+        "Britain",
+        "British",
+        "United Kingdom",
+        "UK",
+        "London"
+      ]
+    },
+    {
+      "id": "italy",
+      "zh": "意大利",
+      "aliases": [
+        "Italy",
+        "Italian",
+        "Rome"
+      ]
+    },
+    {
+      "id": "india",
+      "zh": "印度",
+      "aliases": [
+        "India",
+        "Indian",
+        "New Delhi"
+      ]
+    },
+    {
+      "id": "japan",
+      "zh": "日本",
+      "aliases": [
+        "Japan",
+        "Japanese",
+        "Tokyo"
+      ]
+    },
+    {
+      "id": "south_korea",
+      "zh": "韩国",
+      "aliases": [
+        "South Korea",
+        "Korean",
+        "Seoul"
+      ]
+    },
+    {
+      "id": "singapore",
+      "zh": "新加坡",
+      "aliases": [
+        "Singapore"
+      ]
+    },
+    {
+      "id": "indonesia",
+      "zh": "印度尼西亚",
+      "aliases": [
+        "Indonesia",
+        "Indonesian",
+        "Jakarta"
+      ]
+    },
+    {
+      "id": "saudi",
+      "zh": "沙特阿拉伯",
+      "aliases": [
+        "Saudi Arabia",
+        "Saudi",
+        "Riyadh"
+      ]
+    },
+    {
+      "id": "turkey",
+      "zh": "土耳其",
+      "aliases": [
+        "Turkey",
+        "Turkish",
+        "Ankara",
+        "Istanbul"
+      ]
+    },
+    {
+      "id": "egypt",
+      "zh": "埃及",
+      "aliases": [
+        "Egypt",
+        "Egyptian",
+        "Cairo"
+      ]
+    },
+    {
+      "id": "qatar",
+      "zh": "卡塔尔",
+      "aliases": [
+        "Qatar",
+        "Qatari",
+        "Doha"
+      ]
+    },
+    {
+      "id": "uae",
+      "zh": "阿联酋",
+      "aliases": [
+        "United Arab Emirates",
+        "UAE",
+        "Abu Dhabi",
+        "Emirati"
+      ]
+    }
+  ],
+  "persons": [
+    {
+      "id": "trump",
+      "zh": "特朗普",
+      "role": "美国总统",
+      "country": "美国",
+      "track": [
+        "ru-ua",
+        "us-ir",
+        "multi"
+      ],
+      "aliases": [
+        "Donald Trump",
+        "Trump",
+        "President Trump"
+      ],
+      "weak": []
+    },
+    {
+      "id": "putin",
+      "zh": "普京",
+      "role": "俄罗斯总统",
+      "country": "俄罗斯",
+      "track": [
+        "ru-ua",
+        "us-ir",
+        "multi"
+      ],
+      "aliases": [
+        "Vladimir Putin",
+        "Putin",
+        "President Putin"
+      ],
+      "weak": []
+    },
+    {
+      "id": "pezeshkian",
+      "zh": "佩泽希齐扬",
+      "role": "伊朗总统",
+      "country": "伊朗",
+      "track": [
+        "us-ir",
+        "multi"
+      ],
+      "aliases": [
+        "Masoud Pezeshkian",
+        "Pezeshkian",
+        "Pezeshkian",
+        "Iranian president",
+        "President of Iran",
+        "Pezeshkyan",
+        "Massoud Pezeshkian"
+      ],
+      "weak": []
+    },
+    {
+      "id": "zelensky",
+      "zh": "泽连斯基",
+      "role": "乌克兰总统",
+      "country": "乌克兰",
+      "track": [
+        "ru-ua",
+        "multi"
+      ],
+      "aliases": [
+        "Volodymyr Zelensky",
+        "Zelensky",
+        "Zelenskyy",
+        "Ukrainian president",
+        "Zelenskiy",
+        "Zelenskyi"
+      ],
+      "weak": []
+    },
+    {
+      "id": "rubio",
+      "zh": "鲁比奥",
+      "role": "美国国务卿",
+      "country": "美国",
+      "track": [
+        "ru-ua",
+        "us-ir",
+        "multi"
+      ],
+      "aliases": [
+        "Marco Rubio",
+        "Rubio",
+        "Secretary of State Rubio"
+      ],
+      "weak": []
+    },
+    {
+      "id": "hegseth",
+      "zh": "赫格塞思",
+      "role": "美国国防部长",
+      "country": "美国",
+      "track": [
+        "ru-ua",
+        "multi"
+      ],
+      "aliases": [
+        "Pete Hegseth",
+        "Hegseth",
+        "Defense Secretary Hegseth"
+      ],
+      "weak": []
+    },
+    {
+      "id": "witkoff",
+      "zh": "威特科夫",
+      "role": "美国中东问题特使",
+      "country": "美国",
+      "track": [
+        "us-ir",
+        "ru-ua"
+      ],
+      "aliases": [
+        "Steve Witkoff",
+        "Witkoff"
+      ],
+      "weak": []
+    },
+    {
+      "id": "kushner",
+      "zh": "库什纳",
+      "role": "美方谈判代表",
+      "country": "美国",
+      "track": [
+        "us-ir"
+      ],
+      "aliases": [
+        "Jared Kushner",
+        "Kushner"
+      ],
+      "weak": []
+    },
+    {
+      "id": "vance",
+      "zh": "万斯",
+      "role": "美国副总统",
+      "country": "美国",
+      "track": [
+        "us-ir",
+        "multi"
+      ],
+      "aliases": [
+        "JD Vance",
+        "J.D. Vance",
+        "Vance"
+      ],
+      "weak": []
+    },
+    {
+      "id": "araghchi",
+      "zh": "阿拉格齐",
+      "role": "伊朗外长",
+      "country": "伊朗",
+      "track": [
+        "us-ir",
+        "multi"
+      ],
+      "aliases": [
+        "Abbas Araghchi",
+        "Araghchi",
+        "Iranian Foreign Minister",
+        "Abbas Araqchi",
+        "Araqchi"
+      ],
+      "weak": []
+    },
+    {
+      "id": "khamenei",
+      "zh": "哈梅内伊",
+      "role": "伊朗最高领袖",
+      "country": "伊朗",
+      "track": [
+        "us-ir"
+      ],
+      "aliases": [
+        "Ali Khamenei",
+        "Khamenei",
+        "Supreme Leader"
+      ],
+      "weak": []
+    },
+    {
+      "id": "ghalibaf",
+      "zh": "卡利巴夫",
+      "role": "伊朗议会议长",
+      "country": "伊朗",
+      "track": [
+        "us-ir"
+      ],
+      "aliases": [
+        "Mohammad Bagher Ghalibaf",
+        "Ghalibaf",
+        "Qalibaf"
+      ],
+      "weak": []
+    },
+    {
+      "id": "larijani",
+      "zh": "拉里贾尼",
+      "role": "伊朗最高国家安全委员会秘书",
+      "country": "伊朗",
+      "track": [
+        "us-ir"
+      ],
+      "aliases": [
+        "Ali Larijani",
+        "Larijani"
+      ],
+      "weak": []
+    },
+    {
+      "id": "rezaei",
+      "zh": "雷扎伊",
+      "role": "伊朗确定国家利益委员会秘书",
+      "country": "伊朗",
+      "track": [
+        "us-ir"
+      ],
+      "aliases": [
+        "Mohsen Rezaei",
+        "Rezaei"
+      ],
+      "weak": []
+    },
+    {
+      "id": "netanyahu",
+      "zh": "内塔尼亚胡",
+      "role": "以色列总理",
+      "country": "以色列",
+      "track": [
+        "il-ir",
+        "multi"
+      ],
+      "aliases": [
+        "Benjamin Netanyahu",
+        "Netanyahu",
+        "Israeli Prime Minister",
+        "Bibi Netanyahu"
+      ],
+      "weak": []
+    },
+    {
+      "id": "katz",
+      "zh": "卡茨",
+      "role": "以色列国防部长",
+      "country": "以色列",
+      "track": [
+        "il-ir"
+      ],
+      "aliases": [
+        "Israel Katz",
+        "Defense Minister Katz"
+      ],
+      "weak": [
+        "Katz"
+      ]
+    },
+    {
+      "id": "saar",
+      "zh": "萨尔",
+      "role": "以色列外长",
+      "country": "以色列",
+      "track": [
+        "il-ir"
+      ],
+      "aliases": [
+        "Gideon Sa'ar",
+        "Gideon Saar",
+        "Foreign Minister Sa'ar"
+      ],
+      "weak": [
+        "Sa'ar",
+        "Saar"
+      ]
+    },
+    {
+      "id": "houthi_leader",
+      "zh": "阿卜杜勒马利克·胡塞",
+      "role": "胡塞武装领导人",
+      "country": "也门",
+      "track": [
+        "il-ir"
+      ],
+      "aliases": [
+        "Abdulmalik al-Houthi",
+        "al-Houthi",
+        "Abdul-Malik al-Houthi"
+      ],
+      "weak": []
+    },
+    {
+      "id": "saree",
+      "zh": "萨雷亚",
+      "role": "胡塞武装发言人",
+      "country": "也门",
+      "track": [
+        "il-ir"
+      ],
+      "aliases": [
+        "Yahya Saree",
+        "Yahya Sarea"
+      ],
+      "weak": [
+        "Saree",
+        "Sarea"
+      ]
+    },
+    {
+      "id": "xi",
+      "zh": "习近平",
+      "role": "中国国家主席",
+      "country": "中国",
+      "track": [
+        "multi"
+      ],
+      "aliases": [
+        "Xi Jinping",
+        "President Xi"
+      ],
+      "weak": [
+        "Xi"
+      ]
+    },
+    {
+      "id": "wang_yi",
+      "zh": "王毅",
+      "role": "中国外长",
+      "country": "中国",
+      "track": [
+        "multi",
+        "us-ir"
+      ],
+      "aliases": [
+        "Wang Yi",
+        "Chinese Foreign Minister"
+      ],
+      "weak": []
+    },
+    {
+      "id": "lavrov",
+      "zh": "拉夫罗夫",
+      "role": "俄罗斯外长",
+      "country": "俄罗斯",
+      "track": [
+        "ru-ua",
+        "us-ir",
+        "multi"
+      ],
+      "aliases": [
+        "Sergei Lavrov",
+        "Lavrov",
+        "Russian Foreign Minister"
+      ],
+      "weak": []
+    },
+    {
+      "id": "macron",
+      "zh": "马克龙",
+      "role": "法国总统",
+      "country": "法国",
+      "track": [
+        "ru-ua",
+        "multi"
+      ],
+      "aliases": [
+        "Emmanuel Macron",
+        "Macron"
+      ],
+      "weak": []
+    },
+    {
+      "id": "merz",
+      "zh": "默茨",
+      "role": "德国总理",
+      "country": "德国",
+      "track": [
+        "ru-ua",
+        "multi"
+      ],
+      "aliases": [
+        "Friedrich Merz",
+        "Merz"
+      ],
+      "weak": []
+    },
+    {
+      "id": "starmer",
+      "zh": "斯塔默",
+      "role": "英国首相",
+      "country": "英国",
+      "track": [
+        "ru-ua",
+        "multi"
+      ],
+      "aliases": [
+        "Keir Starmer",
+        "Starmer"
+      ],
+      "weak": []
+    },
+    {
+      "id": "kallas",
+      "zh": "卡拉斯",
+      "role": "欧盟外交与安全政策高级代表",
+      "country": "欧盟",
+      "track": [
+        "ru-ua",
+        "multi"
+      ],
+      "aliases": [
+        "Kaja Kallas",
+        "Kallas"
+      ],
+      "weak": []
+    },
+    {
+      "id": "steinmeier",
+      "zh": "施泰因迈尔",
+      "role": "德国总统",
+      "country": "德国",
+      "track": [
+        "cn-eu",
+        "multi"
+      ],
+      "aliases": [
+        "Frank-Walter Steinmeier",
+        "Steinmeier",
+        "German President",
+        "President Steinmeier"
+      ],
+      "weak": []
+    },
+    {
+      "id": "vonderleyen",
+      "zh": "冯德莱恩",
+      "role": "欧盟委员会主席",
+      "country": "欧盟",
+      "track": [
+        "cn-eu",
+        "multi"
+      ],
+      "aliases": [
+        "Ursula von der Leyen",
+        "von der Leyen",
+        "European Commission President"
+      ],
+      "weak": []
+    },
+    {
+      "id": "meloni",
+      "zh": "梅洛尼",
+      "role": "意大利总理",
+      "country": "意大利",
+      "track": [
+        "cn-eu",
+        "multi"
+      ],
+      "aliases": [
+        "Giorgia Meloni",
+        "Meloni",
+        "Italian Prime Minister"
+      ],
+      "weak": []
+    },
+    {
+      "id": "modi",
+      "zh": "莫迪",
+      "role": "印度总理",
+      "country": "印度",
+      "track": [
+        "asia",
+        "multi"
+      ],
+      "aliases": [
+        "Narendra Modi",
+        "Modi",
+        "Indian Prime Minister"
+      ],
+      "weak": []
+    },
+    {
+      "id": "takaichi",
+      "zh": "高市早苗",
+      "role": "日本首相",
+      "country": "日本",
+      "track": [
+        "asia",
+        "multi"
+      ],
+      "aliases": [
+        "Sanae Takaichi",
+        "Takaichi",
+        "Japanese Prime Minister",
+        "Japan's Prime Minister"
+      ],
+      "weak": []
+    },
+    {
+      "id": "lee_jm",
+      "zh": "李在明",
+      "role": "韩国总统",
+      "country": "韩国",
+      "track": [
+        "asia",
+        "multi"
+      ],
+      "aliases": [
+        "Lee Jae-myung",
+        "Lee Jae myung",
+        "South Korean President",
+        "President Lee Jae-myung"
+      ],
+      "weak": [
+        "Lee Jae"
+      ]
+    },
+    {
+      "id": "wong",
+      "zh": "黄循财",
+      "role": "新加坡总理",
+      "country": "新加坡",
+      "track": [
+        "asia"
+      ],
+      "aliases": [
+        "Lawrence Wong",
+        "Singapore Prime Minister",
+        "PM Wong"
+      ],
+      "weak": [
+        "Wong"
+      ]
+    },
+    {
+      "id": "prabowo",
+      "zh": "普拉博沃",
+      "role": "印度尼西亚总统",
+      "country": "印度尼西亚",
+      "track": [
+        "asia"
+      ],
+      "aliases": [
+        "Prabowo Subianto",
+        "Prabowo",
+        "Indonesian President"
+      ],
+      "weak": []
+    },
+    {
+      "id": "mbs",
+      "zh": "穆罕默德·本·萨勒曼",
+      "role": "沙特王储兼首相",
+      "country": "沙特阿拉伯",
+      "track": [
+        "mideast",
+        "multi"
+      ],
+      "aliases": [
+        "Mohammed bin Salman",
+        "Mohammad bin Salman",
+        "Mohammed Bin Salman",
+        "Saudi crown prince",
+        "Saudi Crown Prince",
+        "MbS"
+      ],
+      "weak": [
+        "bin Salman"
+      ]
+    },
+    {
+      "id": "erdogan",
+      "zh": "埃尔多安",
+      "role": "土耳其总统",
+      "country": "土耳其",
+      "track": [
+        "mideast",
+        "multi"
+      ],
+      "aliases": [
+        "Recep Tayyip Erdogan",
+        "Erdogan",
+        "Turkish President"
+      ],
+      "weak": []
+    },
+    {
+      "id": "sisi",
+      "zh": "塞西",
+      "role": "埃及总统",
+      "country": "埃及",
+      "track": [
+        "mideast"
+      ],
+      "aliases": [
+        "Abdel Fattah el-Sisi",
+        "Abdel Fattah el-Sissi",
+        "Abdel Fattah al-Sisi",
+        "al-Sisi",
+        "el-Sisi",
+        "el-Sissi",
+        "Egyptian President",
+        "Egypt's Sisi"
+      ],
+      "weak": [
+        "Sisi",
+        "Sissi"
+      ]
+    },
+    {
+      "id": "tamim",
+      "zh": "塔米姆",
+      "role": "卡塔尔埃米尔",
+      "country": "卡塔尔",
+      "track": [
+        "mideast",
+        "multi"
+      ],
+      "aliases": [
+        "Emir Tamim",
+        "Sheikh Tamim bin Hamad",
+        "Tamim bin Hamad",
+        "Qatar's Emir"
+      ],
+      "weak": []
+    }
+  ],
+  "locations": [
+    {
+      "zh": "莫斯科",
+      "en": "Moscow",
+      "country": "俄罗斯",
+      "aliases": [
+        "Moscow",
+        "Kremlin"
+      ]
+    },
+    {
+      "zh": "德黑兰",
+      "en": "Tehran",
+      "country": "伊朗",
+      "aliases": [
+        "Tehran",
+        "Teheran"
+      ]
+    },
+    {
+      "zh": "华盛顿",
+      "en": "Washington",
+      "country": "美国",
+      "aliases": [
+        "Washington",
+        "White House",
+        "State Department",
+        "Pentagon",
+        "Capitol Hill"
+      ]
+    },
+    {
+      "zh": "基辅",
+      "en": "Kyiv",
+      "country": "乌克兰",
+      "aliases": [
+        "Kyiv",
+        "Kiev"
+      ]
+    },
+    {
+      "zh": "耶路撒冷",
+      "en": "Jerusalem",
+      "country": "以色列",
+      "aliases": [
+        "Jerusalem"
+      ]
+    },
+    {
+      "zh": "特拉维夫",
+      "en": "Tel Aviv",
+      "country": "以色列",
+      "aliases": [
+        "Tel Aviv"
+      ]
+    },
+    {
+      "zh": "多哈",
+      "en": "Doha",
+      "country": "卡塔尔",
+      "aliases": [
+        "Doha"
+      ]
+    },
+    {
+      "zh": "日内瓦",
+      "en": "Geneva",
+      "country": "瑞士",
+      "aliases": [
+        "Geneva"
+      ]
+    },
+    {
+      "zh": "维也纳",
+      "en": "Vienna",
+      "country": "奥地利",
+      "aliases": [
+        "Vienna"
+      ]
+    },
+    {
+      "zh": "伊斯坦布尔",
+      "en": "Istanbul",
+      "country": "土耳其",
+      "aliases": [
+        "Istanbul"
+      ]
+    },
+    {
+      "zh": "安卡拉",
+      "en": "Ankara",
+      "country": "土耳其",
+      "aliases": [
+        "Ankara"
+      ]
+    },
+    {
+      "zh": "北京",
+      "en": "Beijing",
+      "country": "中国",
+      "aliases": [
+        "Beijing"
+      ]
+    },
+    {
+      "zh": "深圳",
+      "en": "Shenzhen",
+      "country": "中国",
+      "aliases": [
+        "Shenzhen"
+      ]
+    },
+    {
+      "zh": "迈阿密",
+      "en": "Miami",
+      "country": "美国",
+      "aliases": [
+        "Miami"
+      ]
+    },
+    {
+      "zh": "约翰内斯堡",
+      "en": "Johannesburg",
+      "country": "南非",
+      "aliases": [
+        "Johannesburg"
+      ]
+    },
+    {
+      "zh": "利雅得",
+      "en": "Riyadh",
+      "country": "沙特阿拉伯",
+      "aliases": [
+        "Riyadh"
+      ]
+    },
+    {
+      "zh": "马斯喀特",
+      "en": "Muscat",
+      "country": "阿曼",
+      "aliases": [
+        "Muscat"
+      ]
+    },
+    {
+      "zh": "伊斯兰堡",
+      "en": "Islamabad",
+      "country": "巴基斯坦",
+      "aliases": [
+        "Islamabad"
+      ]
+    },
+    {
+      "zh": "巴库",
+      "en": "Baku",
+      "country": "阿塞拜疆",
+      "aliases": [
+        "Baku"
+      ]
+    },
+    {
+      "zh": "阿布扎比",
+      "en": "Abu Dhabi",
+      "country": "阿联酋",
+      "aliases": [
+        "Abu Dhabi"
+      ]
+    },
+    {
+      "zh": "迪拜",
+      "en": "Dubai",
+      "country": "阿联酋",
+      "aliases": [
+        "Dubai"
+      ]
+    },
+    {
+      "zh": "开罗",
+      "en": "Cairo",
+      "country": "埃及",
+      "aliases": [
+        "Cairo"
+      ]
+    },
+    {
+      "zh": "贝鲁特",
+      "en": "Beirut",
+      "country": "黎巴嫩",
+      "aliases": [
+        "Beirut"
+      ]
+    },
+    {
+      "zh": "萨那",
+      "en": "Sanaa",
+      "country": "也门",
+      "aliases": [
+        "Sanaa",
+        "Sana'a"
+      ]
+    },
+    {
+      "zh": "索契",
+      "en": "Sochi",
+      "country": "俄罗斯",
+      "aliases": [
+        "Sochi"
+      ]
+    },
+    {
+      "zh": "圣彼得堡",
+      "en": "St. Petersburg",
+      "country": "俄罗斯",
+      "aliases": [
+        "St. Petersburg",
+        "Saint Petersburg"
+      ]
+    },
+    {
+      "zh": "明斯克",
+      "en": "Minsk",
+      "country": "白俄罗斯",
+      "aliases": [
+        "Minsk"
+      ]
+    },
+    {
+      "zh": "布达佩斯",
+      "en": "Budapest",
+      "country": "匈牙利",
+      "aliases": [
+        "Budapest"
+      ]
+    },
+    {
+      "zh": "布拉迪斯拉发",
+      "en": "Bratislava",
+      "country": "斯洛伐克",
+      "aliases": [
+        "Bratislava"
+      ]
+    },
+    {
+      "zh": "罗马",
+      "en": "Rome",
+      "country": "意大利",
+      "aliases": [
+        "Rome"
+      ]
+    },
+    {
+      "zh": "巴黎",
+      "en": "Paris",
+      "country": "法国",
+      "aliases": [
+        "Paris"
+      ]
+    },
+    {
+      "zh": "柏林",
+      "en": "Berlin",
+      "country": "德国",
+      "aliases": [
+        "Berlin"
+      ]
+    },
+    {
+      "zh": "伦敦",
+      "en": "London",
+      "country": "英国",
+      "aliases": [
+        "London"
+      ]
+    },
+    {
+      "zh": "布鲁塞尔",
+      "en": "Brussels",
+      "country": "比利时",
+      "aliases": [
+        "Brussels"
+      ]
+    },
+    {
+      "zh": "纽约",
+      "en": "New York",
+      "country": "美国",
+      "aliases": [
+        "New York",
+        "UN Headquarters",
+        "United Nations headquarters"
+      ]
+    },
+    {
+      "zh": "新德里",
+      "en": "New Delhi",
+      "country": "印度",
+      "aliases": [
+        "New Delhi"
+      ]
+    },
+    {
+      "zh": "东京",
+      "en": "Tokyo",
+      "country": "日本",
+      "aliases": [
+        "Tokyo"
+      ]
+    },
+    {
+      "zh": "首尔",
+      "en": "Seoul",
+      "country": "韩国",
+      "aliases": [
+        "Seoul"
+      ]
+    },
+    {
+      "zh": "新加坡",
+      "en": "Singapore",
+      "country": "新加坡",
+      "aliases": [
+        "Singapore"
+      ]
+    },
+    {
+      "zh": "雅加达",
+      "en": "Jakarta",
+      "country": "印度尼西亚",
+      "aliases": [
+        "Jakarta"
+      ]
+    },
+    {
+      "zh": "合肥",
+      "en": "Hefei",
+      "country": "中国",
+      "aliases": [
+        "Hefei"
+      ]
+    },
+    {
+      "zh": "马德里",
+      "en": "Madrid",
+      "country": "西班牙",
+      "aliases": [
+        "Madrid"
+      ]
+    },
+    {
+      "zh": "华沙",
+      "en": "Warsaw",
+      "country": "波兰",
+      "aliases": [
+        "Warsaw"
+      ]
+    }
+  ],
+  "families": [
+    {
+      "id": "gecf",
+      "label": "天然气出口国论坛（GECF）",
+      "keywords": [
+        "GECF",
+        "Gas Exporting Countries Forum",
+        "Gas Exporters' Summit",
+        "gas forum"
+      ]
+    },
+    {
+      "id": "g20",
+      "label": "G20 峰会",
+      "keywords": [
+        "G20",
+        "Group of Twenty"
+      ]
+    },
+    {
+      "id": "apec",
+      "label": "APEC 领导人会议",
+      "keywords": [
+        "APEC",
+        "Asia-Pacific Economic Cooperation"
+      ]
+    },
+    {
+      "id": "brics",
+      "label": "金砖峰会",
+      "keywords": [
+        "BRICS"
+      ]
+    },
+    {
+      "id": "sco",
+      "label": "上合组织峰会",
+      "keywords": [
+        "Shanghai Cooperation",
+        "SCO summit"
+      ]
+    },
+    {
+      "id": "unga",
+      "label": "联合国大会",
+      "keywords": [
+        "UN General Assembly",
+        "General Debate",
+        "UNGA"
+      ]
+    },
+    {
+      "id": "nato",
+      "label": "北约峰会",
+      "keywords": [
+        "NATO summit"
+      ]
+    },
+    {
+      "id": "opec",
+      "label": "OPEC 会议",
+      "keywords": [
+        "OPEC"
+      ]
+    },
+    {
+      "id": "gcc",
+      "label": "海湾合作委员会（GCC）",
+      "keywords": [
+        "Gulf Cooperation Council",
+        "GCC summit"
+      ]
+    },
+    {
+      "id": "oic",
+      "label": "伊斯兰合作组织（OIC）",
+      "keywords": [
+        "Organisation of Islamic Cooperation",
+        "Organization of Islamic Cooperation",
+        "OIC"
+      ]
+    },
+    {
+      "id": "arab_league",
+      "label": "阿拉伯国家联盟",
+      "keywords": [
+        "Arab League"
+      ]
+    },
+    {
+      "id": "davos",
+      "label": "世界经济论坛（达沃斯）",
+      "keywords": [
+        "World Economic Forum",
+        "Davos"
+      ]
+    },
+    {
+      "id": "election",
+      "label": "政治日程",
+      "keywords": [
+        "midterm",
+        "midterms",
+        "midterm elections",
+        "general election"
+      ]
+    }
+  ],
+  "meeting_terms": [
+    "meet",
+    "meets",
+    "meeting",
+    "met",
+    "talks",
+    "talk",
+    "summit",
+    "negotiation",
+    "negotiations",
+    "visit",
+    "visits",
+    "bilateral",
+    "trilateral",
+    "round of talks",
+    "sit down",
+    "hold talks",
+    "held talks",
+    "travel to",
+    "trip to",
+    "arrive in",
+    "arrives in",
+    "host",
+    "hosts",
+    "receive",
+    "receives",
+    "conference",
+    "forum",
+    "sidelines"
+  ],
+  "status_lexicon": {
+    "canceled": {
+      "label": "已取消",
+      "rank": -70,
+      "phrases": [
+        "canceled",
+        "cancelled",
+        "called off",
+        "scrapped",
+        "aborted"
+      ]
+    },
+    "postponed": {
+      "label": "已推迟",
+      "rank": -60,
+      "phrases": [
+        "postponed",
+        "postpones",
+        "delayed",
+        "put off",
+        "pushed back"
+      ]
+    },
+    "denied": {
+      "label": "已否认",
+      "rank": -50,
+      "phrases": [
+        "denied",
+        "denies",
+        "deny",
+        "ruled out",
+        "rules out",
+        "no plans",
+        "not planning",
+        "is not true",
+        "dismissed as false"
+      ]
+    },
+    "held": {
+      "label": "已举行",
+      "rank": 95,
+      "phrases": [
+        "met with",
+        "held talks",
+        "held a meeting",
+        "talks were held",
+        "meeting with",
+        "meeting between",
+        "wrapped up talks",
+        "concluded talks",
+        "hosted talks",
+        "received",
+        "signed an agreement"
+      ]
+    },
+    "confirmed": {
+      "label": "已确认",
+      "rank": 85,
+      "phrases": [
+        "confirmed",
+        "confirms",
+        "will take place",
+        "agreed to meet",
+        "agreed to hold",
+        "finalized",
+        "finalised",
+        "is set to meet",
+        "both sides confirmed",
+        "mutually agreed"
+      ]
+    },
+    "scheduled": {
+      "label": "日期已定",
+      "rank": 78,
+      "phrases": [
+        "scheduled for",
+        "is scheduled",
+        "set for",
+        "will be held on",
+        "slated for",
+        "fixed for"
+      ]
+    },
+    "arranged": {
+      "label": "已安排",
+      "rank": 65,
+      "phrases": [
+        "will meet",
+        "will hold talks",
+        "will visit",
+        "to meet",
+        "to hold talks",
+        "to visit",
+        "is due to",
+        "are due to",
+        "to travel to",
+        "will travel to",
+        "announced",
+        "announces"
+      ]
+    },
+    "proposed": {
+      "label": "已预告",
+      "rank": 45,
+      "phrases": [
+        "plans to",
+        "plan to",
+        "planning to",
+        "proposed",
+        "proposes",
+        "floats",
+        "floated",
+        "open to",
+        "considering",
+        "may meet",
+        "could meet",
+        "expected to meet",
+        "weighing",
+        "suggests"
+      ]
+    },
+    "reported": {
+      "label": "媒体报道（未证实）",
+      "rank": 30,
+      "phrases": [
+        "reportedly",
+        "sources say",
+        "according to sources",
+        "media reports",
+        "reports say",
+        "said to",
+        "claims",
+        "unconfirmed"
+      ]
+    }
+  },
+  "exclude_title_patterns": [
+    "Opinion |",
+    "Opinion:",
+    "Editorial",
+    "Letter to the editor",
+    "Cartoon",
+    "Podcast",
+    "What if",
+    "How to",
+    "Explainer: Why",
+    "Analysis: What"
+  ],
+  "sources": [
+    {
+      "id": "whitehouse",
+      "name": "白宫",
+      "tier": 1,
+      "kind": "rss",
+      "url": "https://www.whitehouse.gov/news/feed/",
+      "enabled": true
+    },
+    {
+      "id": "state",
+      "name": "美国国务院",
+      "tier": 1,
+      "kind": "rss",
+      "url": "https://www.state.gov/rss-feed/press-releases/feed/",
+      "egress": "direct",
+      "enabled": true
+    },
+    {
+      "id": "kremlin",
+      "name": "克里姆林宫",
+      "tier": 1,
+      "kind": "html",
+      "url": "http://en.kremlin.ru/events/president/news",
+      "enabled": true
+    },
+    {
+      "id": "tass",
+      "name": "TASS（俄官方背景）",
+      "tier": 2,
+      "kind": "rss",
+      "url": "https://tass.com/rss/v2.xml",
+      "enabled": true
+    },
+    {
+      "id": "irna",
+      "name": "IRNA（伊朗官方通讯社）",
+      "tier": 2,
+      "kind": "rss",
+      "url": "https://en.irna.ir/rss",
+      "enabled": true
+    },
+    {
+      "id": "mehr",
+      "name": "Mehr News（伊朗）",
+      "tier": 2,
+      "kind": "rss",
+      "url": "https://en.mehrnews.com/rss",
+      "enabled": true
+    },
+    {
+      "id": "tehrantimes",
+      "name": "Tehran Times",
+      "tier": 2,
+      "kind": "rss",
+      "url": "https://www.tehrantimes.com/rss",
+      "enabled": true
+    },
+    {
+      "id": "ukrinform",
+      "name": "Ukrinform（乌克兰官方通讯社）",
+      "tier": 2,
+      "kind": "rss",
+      "url": "https://www.ukrinform.net/rss/block-lastnews",
+      "enabled": true
+    },
+    {
+      "id": "aljazeera",
+      "name": "Al Jazeera",
+      "tier": 2,
+      "kind": "rss",
+      "url": "https://www.aljazeera.com/xml/rss/all.xml",
+      "enabled": true
+    },
+    {
+      "id": "toi",
+      "name": "Times of Israel",
+      "tier": 2,
+      "kind": "rss",
+      "url": "https://www.timesofisrael.com/feed/",
+      "enabled": true
+    },
+    {
+      "id": "google_news",
+      "name": "Google News 检索",
+      "tier": 3,
+      "kind": "query",
+      "enabled": true
+    }
+  ],
+  "queries": [
+    {
+      "id": "q_ruua_1",
+      "track": "ru-ua",
+      "q": "Putin Zelensky meeting OR talks when:30d"
+    },
+    {
+      "id": "q_ruua_2",
+      "track": "ru-ua",
+      "q": "Ukraine Russia peace talks when:30d"
+    },
+    {
+      "id": "q_ruua_3",
+      "track": "ru-ua",
+      "q": "trilateral talks Ukraine Russia US when:30d"
+    },
+    {
+      "id": "q_ruua_4",
+      "track": "ru-ua",
+      "q": "Zelensky negotiators talks when:30d"
+    },
+    {
+      "id": "q_ruua_5",
+      "track": "ru-ua",
+      "q": "Putin Trump summit when:30d"
+    },
+    {
+      "id": "q_usir_1",
+      "track": "us-ir",
+      "q": "Iran US talks negotiations when:30d"
+    },
+    {
+      "id": "q_usir_2",
+      "track": "us-ir",
+      "q": "Araghchi Witkoff talks when:30d"
+    },
+    {
+      "id": "q_usir_3",
+      "track": "us-ir",
+      "q": "Iran president Pezeshkian Moscow when:30d"
+    },
+    {
+      "id": "q_usir_4",
+      "track": "us-ir",
+      "q": "Putin Pezeshkian meeting when:30d"
+    },
+    {
+      "id": "q_usir_5",
+      "track": "us-ir",
+      "q": "Iran nuclear talks when:30d"
+    },
+    {
+      "id": "q_ilir_1",
+      "track": "il-ir",
+      "q": "Netanyahu Iran meeting when:30d"
+    },
+    {
+      "id": "q_ilir_2",
+      "track": "il-ir",
+      "q": "Houthi US talks ceasefire when:30d"
+    },
+    {
+      "id": "q_multi_1",
+      "track": "multi",
+      "q": "GECF summit Moscow when:30d"
+    },
+    {
+      "id": "q_multi_2",
+      "track": "multi",
+      "q": "G20 summit Miami when:30d"
+    },
+    {
+      "id": "q_multi_3",
+      "track": "multi",
+      "q": "APEC summit Shenzhen when:30d"
+    },
+    {
+      "id": "q_multi_4",
+      "track": "multi",
+      "q": "Rubio Lavrov meeting when:30d"
+    },
+    {
+      "id": "q_multi_5",
+      "track": "multi",
+      "q": "Hegseth Ukraine meeting when:30d"
+    },
+    {
+      "id": "q_multi_6",
+      "track": "multi",
+      "q": "US midterms November 2026 when:30d"
+    },
+    {
+      "id": "q_multi_7",
+      "track": "multi",
+      "q": "Kremlin Putin schedule meetings when:30d"
+    },
+    {
+      "id": "q_multi_8",
+      "track": "multi",
+      "q": "Pezeshkian visit Russia when:30d"
+    },
+    {
+      "id": "q_cneu_1",
+      "track": "cn-eu",
+      "q": "Steinmeier China state visit when:30d"
+    },
+    {
+      "id": "q_cneu_2",
+      "track": "cn-eu",
+      "q": "Merz Japan South Korea visit when:30d"
+    },
+    {
+      "id": "q_cneu_3",
+      "track": "cn-eu",
+      "q": "EU China summit talks when:30d"
+    },
+    {
+      "id": "q_cneu_4",
+      "track": "cn-eu",
+      "q": "Macron China visit when:30d"
+    },
+    {
+      "id": "q_asia_1",
+      "track": "asia",
+      "q": "Modi visit China OR Japan meeting when:30d"
+    },
+    {
+      "id": "q_asia_2",
+      "track": "asia",
+      "q": "Japan prime minister summit meeting when:30d"
+    },
+    {
+      "id": "q_asia_3",
+      "track": "asia",
+      "q": "South Korea president summit when:30d"
+    },
+    {
+      "id": "q_asia_4",
+      "track": "asia",
+      "q": "ASEAN summit leaders when:30d"
+    },
+    {
+      "id": "q_me_1",
+      "track": "mideast",
+      "q": "Saudi crown prince visit talks when:30d"
+    },
+    {
+      "id": "q_me_2",
+      "track": "mideast",
+      "q": "Erdogan meeting talks when:30d"
+    },
+    {
+      "id": "q_me_3",
+      "track": "mideast",
+      "q": "Egypt president summit meeting when:30d"
+    },
+    {
+      "id": "q_me_4",
+      "track": "mideast",
+      "q": "Qatar emir visit talks when:30d"
+    }
+  ],
+  "anchors": [
+    {
+      "id": "a_gecf_ministerial",
+      "date": "2026-10-25",
+      "date_end": "2026-10-26",
+      "precision": "range",
+      "title": "GECF 部长级及筹备会议",
+      "location": "莫斯科",
+      "family": "gecf",
+      "persons": [],
+      "actors": [
+        "russia",
+        "iran"
+      ],
+      "status": "arranged",
+      "note": "为 10-27 领导人峰会做准备；参会为能源部长级官员",
+      "verify_query": "GECF ministerial meeting Moscow October 2026",
+      "match_any": [
+        "ministerial",
+        "preparatory",
+        "prep committee"
+      ],
+      "snap": true
+    },
+    {
+      "id": "a_gecf_summit",
+      "date": "2026-10-27",
+      "date_end": "",
+      "precision": "day",
+      "title": "第八届 GECF 领导人峰会",
+      "location": "莫斯科",
+      "family": "gecf",
+      "persons": [
+        "pezeshkian",
+        "putin"
+      ],
+      "actors": [
+        "russia",
+        "iran"
+      ],
+      "status": "confirmed",
+      "note": "伊方已确认佩泽希齐扬出席；俄方表示期待其参会",
+      "verify_query": "GECF summit Moscow Pezeshkian Putin October 27",
+      "match_any": [
+        "leaders",
+        "summit",
+        "leaders' summit"
+      ],
+      "snap": true
+    },
+    {
+      "id": "a_ru_ir_bilateral",
+      "date": "2026-10-27",
+      "date_end": "",
+      "precision": "day",
+      "title": "俄伊领导人双边会晤",
+      "location": "莫斯科",
+      "family": "bilateral",
+      "persons": [
+        "putin",
+        "pezeshkian"
+      ],
+      "actors": [
+        "russia",
+        "iran"
+      ],
+      "status": "proposed",
+      "note": "双方已预告，通常安排在峰会期间",
+      "verify_query": "Putin Pezeshkian bilateral meeting Moscow",
+      "match_any": [
+        "bilateral",
+        "one-on-one",
+        "talks"
+      ],
+      "snap": false
+    },
+    {
+      "id": "a_us_midterms",
+      "date": "2026-11-03",
+      "date_end": "",
+      "precision": "day",
+      "title": "美国中期选举（非会晤）",
+      "location": "美国",
+      "family": "election",
+      "persons": [
+        "trump"
+      ],
+      "actors": [
+        "usa"
+      ],
+      "status": "confirmed",
+      "note": "日期由法律确定，属政治日程，不是会晤",
+      "verify_query": "US midterm elections November 3 2026",
+      "match_any": [
+        "midterm"
+      ],
+      "snap": true
+    },
+    {
+      "id": "a_apec",
+      "date": "2026-11-18",
+      "date_end": "2026-11-19",
+      "precision": "range",
+      "title": "APEC 领导人会议",
+      "location": "深圳",
+      "family": "apec",
+      "persons": [
+        "trump",
+        "xi"
+      ],
+      "actors": [
+        "usa",
+        "china"
+      ],
+      "status": "arranged",
+      "note": "峰会日期确定；美方已宣布会晤计划，双边会晤本身待确认",
+      "verify_query": "APEC summit Shenzhen November 2026 Trump Xi meeting",
+      "match_any": [
+        "apec"
+      ],
+      "snap": true
+    },
+    {
+      "id": "a_us_ir_talks",
+      "date": "2026-11-15",
+      "date_end": "2026-11-30",
+      "precision": "month",
+      "title": "美伊潜在新一轮谈判（地点未定）",
+      "location": "地点未定",
+      "family": "talks",
+      "persons": [
+        "witkoff",
+        "kushner",
+        "araghchi"
+      ],
+      "actors": [
+        "usa",
+        "iran"
+      ],
+      "status": "unconfirmed",
+      "note": "暂无确认日期，仅有渠道与斡旋方消息",
+      "verify_query": "US Iran new round talks November 2026",
+      "match_any": [
+        "talks",
+        "negotiation",
+        "round"
+      ],
+      "snap": false
+    },
+    {
+      "id": "a_g20",
+      "date": "2026-12-14",
+      "date_end": "2026-12-15",
+      "precision": "range",
+      "title": "G20 领导人峰会",
+      "location": "迈阿密",
+      "family": "g20",
+      "persons": [
+        "trump"
+      ],
+      "actors": [
+        "usa"
+      ],
+      "status": "confirmed",
+      "note": "峰会日期确定；与会领导人名单待定",
+      "verify_query": "G20 summit Miami December 2026",
+      "match_any": [
+        "g20"
+      ],
+      "snap": true
+    },
+    {
+      "id": "a_steinmeier_cn",
+      "date": "2026-10-27",
+      "date_end": "2026-10-31",
+      "precision": "range",
+      "title": "德国总统施泰因迈尔对华国事访问",
+      "location": "北京",
+      "family": "bilateral",
+      "persons": [
+        "steinmeier",
+        "xi"
+      ],
+      "actors": [
+        "germany",
+        "china"
+      ],
+      "status": "confirmed",
+      "note": "中国外交部 10-23 宣布：应习近平邀请，10-27 至 10-31 国事访问；除北京外访问安徽省（合肥）",
+      "verify_query": "Steinmeier state visit China October 27 31 2026",
+      "match_any": [
+        "Steinmeier",
+        "state visit"
+      ],
+      "snap": false
+    },
+    {
+      "id": "a_merz_jp",
+      "date": "2026-10-28",
+      "date_end": "",
+      "precision": "day",
+      "title": "默茨—高市早苗 会谈",
+      "location": "东京",
+      "family": "bilateral",
+      "persons": [
+        "merz",
+        "takaichi"
+      ],
+      "actors": [
+        "germany",
+        "japan"
+      ],
+      "status": "arranged",
+      "note": "读卖新闻报道：默茨 10-28 前后访日，议题为军用无人机共同开发与关键矿产供应链",
+      "verify_query": "Merz Japan visit Takaichi October 2026",
+      "match_any": [
+        "Merz",
+        "Takaichi"
+      ],
+      "snap": false
+    },
+    {
+      "id": "a_merz_kr",
+      "date": "2026-10-29",
+      "date_end": "",
+      "precision": "day",
+      "title": "默茨—李在明 首脑会谈",
+      "location": "首尔",
+      "family": "bilateral",
+      "persons": [
+        "merz",
+        "lee_jm"
+      ],
+      "actors": [
+        "germany",
+        "south_korea"
+      ],
+      "status": "arranged",
+      "note": "10-29 首尔首脑会谈；10-29 至 31 出席德国经济亚太会议",
+      "verify_query": "Merz Lee Jae-myung summit Seoul October 29 2026",
+      "match_any": [
+        "Lee Jae-myung",
+        "summit"
+      ],
+      "snap": false
+    }
+  ]
+}

@@ -11,11 +11,13 @@ from .collector_ledger import CollectorLedger
 
 
 _SECRET = re.compile(
-    r"(?i)(\b(?:api[_-]?key|authorization|cookie|password|token|proxy[_-]?auth)\b\s*[:=]\s*)([^\s,;]+)"
+    r"(?i)([\"']?\b(?:api[_-]?key|access[_-]?token|authorization|cookie|password|token|proxy[_-]?auth)\b[\"']?\s*[:=]\s*)(?:Bearer\s+\[REDACTED\]|\"[^\"]*\"|'[^']*'|[^\s,;}\]]+)"
 )
+_BEARER = re.compile(r"(?i)Bearer\s+[A-Za-z0-9._~+/=-]+")
 
 
 def redact(value: str) -> str:
+    value = _BEARER.sub("Bearer [REDACTED]", value)
     return _SECRET.sub(r"\1[REDACTED]", value)
 
 

@@ -15,6 +15,7 @@ PROVIDERS = {"disabled", "deepseek", "openai-compatible", "pichat"}
 ENV_KEYS = (
     "PICHAT_BASE_URL", "PICHAT_API_KEY", "PICHAT_TIMEOUT",
     "LLM_BASE_URL", "LLM_MODEL", "LLM_API_KEY", "LLM_TIMEOUT",
+    "LLM_FAST_MODEL", "LLM_REASONING_MODEL", "LLM_AGENT_MODE",
 )
 PUBLIC_KEYS = (
     "provider", "base_url", "model", "timeout_seconds",

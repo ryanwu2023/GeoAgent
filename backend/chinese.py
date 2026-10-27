@@ -106,6 +106,15 @@ def record_translation(record, cache):
 
 def present_record(record,cache=None):
     cache=translation_cache() if cache is None else cache
+    # QA citations are deliberately compact and may omit map/source display
+    # fields that exist on full snapshot records.  Supply presentation-only
+    # defaults without changing the persisted evidence object.
+    record = {
+        **record,
+        'title': str(record.get('title') or ''),
+        'text': str(record.get('text') or record.get('summary') or ''),
+        'source_name': str(record.get('source_name') or record.get('source_id') or record.get('source') or '未知来源'),
+    }
     metadata=event_metadata(record)
     metadata['points']=[{**p,'label':chinese_text(p['label'],cache,'相关地区')} for p in metadata['points']]
     translation=record_translation(record,cache)
@@ -184,9 +193,166 @@ def present_map_record(record, cache=None):
         **metadata,
     }
 
-def present_answer(answer):
-    cache=translation_cache()
-    return {**answer,'facts':[{**f,'text':f['text'].replace(' USD',' 美元')} for f in answer['facts']],'citations':[present_record(r,cache) for r in answer['citations']]}
+def _present_answer_citation_summary(record, cache):
+    """Project one citation for the interactive answer UI.
+
+    The complete immutable record remains available from the snapshot-bound
+    evidence endpoint and in the persisted answer used by HTML exports.  A
+    streamed answer only needs enough metadata to render its source list.
+    """
+    translation = record_translation(record, cache)
+    return {
+        "id": record.get("id", ""),
+        "title": translation.get("title") or record.get("title") or "未提供标题",
+        "source_name": source_name(record.get("source_name", ""), cache),
+        "publisher": record.get("publisher", ""),
+        "published_at": record.get("published_at"),
+        "fetched_at": record.get("fetched_at"),
+        "tier": record.get("tier", ""),
+        "verification": record.get("verification", ""),
+    }
+
+
+def _present_internal_source_summary(record):
+    """Keep the local-message card useful without returning its full body."""
+    keys = (
+        "id", "title", "ai_title",
+        "text_class", "primary_tag", "tags", "group_name", "message_at",
+        "receive_time", "source", "verification",
+    )
+    result = {key: record.get(key) for key in keys if record.get(key) not in (None, "", [])}
+    text = str(record.get("content_abstract") or record.get("ai_short") or record.get("ai_content") or "").strip()
+    if text:
+        result["content_abstract"] = text[:600].rstrip() + ("…" if len(text) > 600 else "")
+    return result
+
+
+def _shorten(value, limit):
+    text = str(value or "").strip()
+    return text[:limit].rstrip() + ("…" if len(text) > limit else "")
+
+
+def _repair_reference_only_summary(answer):
+    """Keep old persisted placeholder answers readable after the validator fix."""
+    summary = answer.get("summary")
+    text = str(summary.get("text") or "").strip() if isinstance(summary, dict) else ""
+    if not re.fullmatch(r"[（(]?\s*(?:见上|同上|如上|见前文|答案见上)[。.!！]?\s*[）)]?", text):
+        return answer
+    topic = str(answer.get("topic") or "")
+    subject = "美伊局势" if topic == "usiran" else "俄乌局势" if topic == "ukraine" else "当前地缘局势"
+    citations = [item for item in answer.get("citations", []) if isinstance(item, dict)]
+    facts = []
+    for item in citations[:6]:
+        title = str(item.get("title_zh") or item.get("title") or "").strip()
+        source = str(item.get("source_name") or item.get("source") or "公开来源").strip()
+        published = str(item.get("published_at") or "时间未标注")[:16]
+        if title:
+            facts.append(f"- {title}（{source}，{published}）")
+    gaps = [str(item).strip() for item in answer.get("gaps", []) if str(item).strip()][:5]
+    repaired = [
+        "## 结论摘要",
+        f"本次模型最终轮只返回了过程引用，未形成可展示正文。系统已保留{subject}本轮实际检索到的证据，并按可追溯内容生成以下回答；这些材料可说明近期报道重点，仍不能仅凭标题或单一来源判定局势已经升级、持续或缓和。",
+        "\n## 当前可确认内容",
+        *(facts or ["- 本轮没有取得足以形成明确结论的公开证据。"]),
+        "\n## 判断与不确定性",
+        "当事方声明只能确认其作出过相关表态，媒体转述仍需回到原始来源核验；市场同步变化不能单独证明由冲突导致。",
+        "\n## 数据缺口",
+        *(f"- {item}" for item in gaps),
+        "- 原模型最终综合正文缺失，现有内容为系统依据已保存证据生成的降级回答。",
+        "\n## 后续观察",
+        "继续核对最新官方声明、实际行动、反向证据与关键量化指标；取得新增材料后重新运行问答可获得完整模型综合。",
+    ]
+    repaired_answer = dict(answer)
+    repaired_answer["summary"] = {
+        **(summary or {}),
+        "text": "\n".join(repaired),
+        "evidence_ids": [str(item.get("id")) for item in citations[:6] if item.get("id")],
+    }
+    repaired_answer["message"] = "历史回答的最终正文曾缺失；已根据已保存证据恢复为可阅读的降级回答。"
+    return repaired_answer
+
+
+def _present_analysis_trace(trace):
+    """Project the visible audit trail without duplicating the final answer.
+
+    Full trace events remain in the persisted answer and harness checkpoints.
+    The interactive response already carries the final Markdown under
+    ``summary.text``, so repeating it in the synthesis trace can double the
+    payload while adding no information to the process view.
+    """
+    result = []
+    for item in trace or []:
+        projected = {
+            "round": item.get("round", len(result) + 1),
+            "title": item.get("title") or "分析步骤",
+            "status": item.get("status") or "completed",
+        }
+        for key in ("stage", "kind", "phase", "call_id", "tool"):
+            if item.get(key):
+                projected[key] = item[key]
+        for key in ("duration_ms", "result_count", "context_tokens"):
+            if item.get(key) is not None:
+                projected[key] = item[key]
+        for key in ("retry_count", "compacted", "recovered"):
+            if item.get(key):
+                projected[key] = item[key]
+        if item.get("stage") == "synthesis":
+            projected["summary"] = "已完成最终复核与结论，完整内容见下方总结回答。"
+        else:
+            projected["summary"] = _shorten(item.get("summary"), 900)
+        details = [
+            _shorten(value, 420) for value in (item.get("details") or [])[:12]
+        ]
+        searches = [
+            _shorten(value, 180) for value in (item.get("search_queries") or [])[:12]
+        ]
+        evidence_ids = list((item.get("evidence_ids") or [])[:6])
+        if details:
+            projected["details"] = details
+        if searches:
+            projected["search_queries"] = searches
+        if evidence_ids:
+            projected["evidence_ids"] = evidence_ids
+        result.append(projected)
+    return result
+
+
+def present_answer(answer, compact=False):
+    """Localize an answer, optionally projecting it for interactive delivery.
+
+    ``compact=False`` preserves the historical API/report shape.  Compact
+    delivery is opt-in so non-UI clients that consume full citation records do
+    not change behavior.
+    """
+    answer = _repair_reference_only_summary(answer)
+    cache = translation_cache()
+    result = {
+        **answer,
+        "facts": [
+            {**fact, "text": fact["text"].replace(" USD", " 美元")}
+            for fact in answer.get("facts", [])
+        ],
+    }
+    if not compact:
+        result["citations"] = [present_record(record, cache) for record in answer.get("citations", [])]
+        return result
+
+    result["citations"] = [
+        _present_answer_citation_summary(record, cache)
+        for record in answer.get("citations", [])
+    ]
+    result["internal_sources"] = [
+        _present_internal_source_summary(record)
+        for record in answer.get("internal_sources", [])
+    ]
+    result["analysis_trace"] = _present_analysis_trace(answer.get("analysis_trace", []))
+    # These objects are useful while producing/debugging an answer, but the UI
+    # renders the auditable analysis trace and citation map instead.  Keeping
+    # them in the persisted answer preserves resume and report behavior.
+    result.pop("question_plan", None)
+    result.pop("tool_calls", None)
+    result["response_projection"] = "compact-v1"
+    return result
 
 _worker=None
 _worker_snapshot_id=None

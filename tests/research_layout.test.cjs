@@ -171,7 +171,7 @@ test('App places one embedded iframe inside the persistent right chat pane', () 
   }
 });
 
-test('left business menu retains its eight views and has no chat route', () => {
+test('left business menu includes the meeting calendar and has no chat route', () => {
   const menus = descendants(app, node => literalAttribute(node, 'className') === 'monitor-tabs');
   assert.equal(menus.length, 1);
   const menuMaps = descendants(menus[0], node => ts.isCallExpression(node)
@@ -184,7 +184,7 @@ test('left business menu retains its eight views and has no chat route', () => {
     assert.ok(ts.isStringLiteral(item.elements[0]));
     return item.elements[0].text;
   });
-  assert.deepEqual(ids, ['map', 'evidence', 'scenarios', 'sources', 'pipeline', 'metrics', 'assets', 'briefs']);
+  assert.deepEqual(ids, ['map', 'meetings', 'evidence', 'scenarios', 'sources', 'pipeline', 'metrics', 'assets', 'briefs']);
   assert.equal(calls(menus[0], 'setChatOpen').length, 0);
 });
 
@@ -224,4 +224,44 @@ test('local QA keeps a separate bottom composer row in the research dock', () =>
   const css = fs.readFileSync(path.join(__dirname, '../src/research-dock.css'), 'utf8');
   assert.match(css, /\.research-chat-pane\s*>\s*\.chat-panel-local\s*\{[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto/s);
   assert.match(css, /\.chat-panel-local\s*>\s*\.chat-body\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*auto/s);
+});
+
+test('local QA clears the submitted composer text before streaming the answer', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/App.tsx'), 'utf8');
+  const submit = source.indexOf('const submittedQuestion = q.trim();');
+  const clear = source.indexOf('setQuestion("");', submit);
+  const stream = source.indexOf('apiStream<AnalysisRound,Answer>', submit);
+  assert.ok(submit >= 0);
+  assert.ok(clear > submit && clear < stream);
+  assert.match(source.slice(stream, stream + 500), /question:\s*submittedQuestion/);
+});
+
+test('local QA separates three analysis rounds from final synthesis', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/QaTrace.tsx'), 'utf8');
+  assert.match(source, /item\.stage!=="synthesis"/);
+  assert.match(source, /item\.stage === "synthesis" \? "收敛"/);
+  assert.match(source, /最终复核\$\{synthesis\.status/);
+  assert.match(source, /不展示模型隐藏推理/);
+});
+
+test('answer citations carry the frozen answer snapshot and render markdown', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/App.tsx'), 'utf8');
+  assert.match(source, /openEvidence\(id,null,answer\.snapshot_id\)/);
+  assert.match(source, /<Markdown remarkPlugins=\{\[remarkGfm\]\}>\{normalizeAnswerMarkdown\(answer\.summary\.text\)\}<\/Markdown>/);
+  assert.match(source, /snapshot_id=\$\{selectedSnapshotId\}/);
+});
+
+test('local QA requests compact answers while full evidence stays on demand', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/App.tsx'), 'utf8');
+  assert.match(source, /run_id:\s*activeRunId,\s*compact:\s*true/s);
+  assert.match(source, /new URLSearchParams\(\{snapshot_id:workingSid,compact:"true"\}\)/);
+  assert.match(source, /openEvidence\(item\.id,null,answer\.snapshot_id\)/);
+});
+
+test('completed local answers can download a deterministic HTML report', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/App.tsx'), 'utf8');
+  assert.match(source, /\/api\/answers\/\$\{encodeURIComponent\(item\.id\)\}\/report\.html/);
+  assert.match(source, /保存为 HTML 报告/);
+  assert.match(source, /忠实导出当前回答和引用，不再次调用模型/);
+  assert.match(source, /answer\.summary && <div className="answer-actions"/);
 });

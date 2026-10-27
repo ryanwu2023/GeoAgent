@@ -4,18 +4,22 @@ from .link_health import link_health, summary as link_summary
 import json
 import os
 import httpx
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
+from io import BytesIO
 from pathlib import Path
 from typing import Literal
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
+from uuid import uuid4
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
+import asyncio
+import logging
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from .store import ROOT, snapshots, snapshot_summaries, get_snapshot, save_snapshot, db, data_dir, digest, get_working_snapshot_id, set_working_snapshot_id
 from .adapters import load_bundle
-from .research import filtered_records, metrics, analysis, coverage, answer, create_brief, model_status, page_summary
+from .research import filtered_records, metrics, analysis, coverage, answer, create_brief, model_status, page_summary, resolve_question_scope
 from .semantic import risk_panel_counts
 from .catalog import RULE_VERSION, topic_dimensions
 from .chinese import present_record, present_record_summary, present_map_record, present_answer, translation_cache, source_name, start_translation, translation_status, localize_brief_markdown
@@ -29,6 +33,13 @@ from scripts.integrate_collectors import load_registry
 from .mcp_news import McpClient, load_config as load_mcp_config, public_config as public_mcp_config, save_config as save_mcp_config, store_news
 from .external_mcp import public_registry as public_external_mcp_registry, test_and_save as test_and_save_external_mcp, delete_server as delete_external_mcp_server, news_import_capability, _safe_error as safe_mcp_error
 from .brief_templates import list_templates, get_template, save_template, set_default as set_default_brief_template, delete_template as delete_brief_template
+from .answer_report import content_disposition, render_answer_report
+from .meeting_export import filter_meetings, meeting_export_filename, render_meeting_workbook
+from .internal_messages import message_stats as internal_message_stats, status_path as internal_message_status_path
+from .qa_harness_state import HarnessScope
+from .qa_harness_store import HarnessStore, ScopeMismatchError
+
+logger = logging.getLogger(__name__)
 
 def load_env():
     file = ROOT / ".env"
@@ -74,6 +85,18 @@ app.router.routes.append(Route("/mcp", endpoint=ProjectMCP()))
 @app.get("/healthz")
 def mcp_health():
     return {"status": "ok", "service": "geoagent-mcp", "protocol_version": "geo-mcp/v1"}
+
+
+@app.get("/api/internal-messages/status")
+def internal_messages_status():
+    status = {}
+    path = internal_message_status_path()
+    if path.is_file():
+        try:
+            status = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            status = {"state": "status_unreadable"}
+    return {"service": status or {"state": "not_started"}, "database": internal_message_stats()}
 Topic = Literal["all", "usiran", "ukraine"]
 
 
@@ -112,6 +135,11 @@ async def pichat_embed_identity(agent_id: str = "geo-research-assistant"):
             )
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"PiChat 身份服务不可用: {exc}") from exc
+    if response.status_code in (401, 403):
+        # Credential/policy failures are not transient transport failures.
+        # Never forward the upstream body (which can contain private details).
+        code = "PICHAT_APP_KEY_REJECTED" if response.status_code == 401 else "PICHAT_EMBED_FORBIDDEN"
+        raise HTTPException(status_code=502, detail={"code": code, "upstream_status": response.status_code})
     if response.status_code >= 400:
         raise HTTPException(status_code=502, detail=f"PiChat 身份签发失败: HTTP {response.status_code}")
     try:
@@ -877,6 +905,90 @@ def evidence(rid: str, snapshot_id: str):
         raise HTTPException(404, "证据不在当前快照内")
     return {**apply_review(present_record(record),review_index(snapshot_id).get(rid)),"link_health":link_health(snapshot_id,record.get("url",""))}
 
+
+@app.get("/api/meetings")
+def meeting_list(
+    snapshot_id: str, topic: Topic = "all", track: str = Query("", max_length=40),
+    status: str = Query("", max_length=120), person: str = Query("", max_length=120),
+    start: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$"),
+    end: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$"),
+    include_inactive: bool = False, offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """Return the meeting calendar frozen inside the requested snapshot."""
+    validate_range(start, end)
+    snapshot = snapshot_or_404(snapshot_id)
+    rows, range_start, range_end = filter_meetings(
+        snapshot, topic=topic, track=track, status=status, person=person, start=start, end=end,
+        include_inactive=include_inactive,
+    )
+    counts = {}
+    for item in rows:
+        key = item.get("status") or "unknown"
+        counts[key] = counts.get(key, 0) + 1
+    return {
+        "snapshot_id": snapshot_id, "as_of": snapshot.get("created_at"),
+        "range": {"start": range_start, "end": range_end}, "total": len(rows),
+        "offset": offset, "limit": limit, "status_counts": counts,
+        "records": rows[offset:offset + limit],
+        "basis": "冻结快照中的结构化会晤日历；计划、媒体报道和人工基线不等于会晤必然举行。",
+    }
+
+
+@app.get("/api/meetings/export.xlsx")
+def meeting_export(
+    snapshot_id: str, topic: Topic = "all", track: str = Query("", max_length=40),
+    status: str = Query("", max_length=120), person: str = Query("", max_length=120),
+    start: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$"),
+    end: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$"),
+    include_inactive: bool = False,
+):
+    """Export the current meeting-calendar filters from one frozen snapshot."""
+    validate_range(start, end)
+    snapshot = snapshot_or_404(snapshot_id)
+    rows, range_start, range_end = filter_meetings(
+        snapshot, topic=topic, track=track, status=status, person=person, start=start, end=end,
+        include_inactive=include_inactive,
+    )
+    if not rows:
+        raise HTTPException(409, "当前筛选范围没有可导出的会晤日程")
+    exported_at = datetime.now(timezone.utc)
+    status_labels = sorted({str(item.get("status_label") or item.get("status") or "待确认") for item in rows})
+    person_labels = sorted({
+        str(entry.get("name") or entry.get("id") or "")
+        for item in rows for entry in item.get("persons", [])
+        if not person or any(
+            person.casefold() in str(value).casefold()
+            for value in (entry.get("id", ""), entry.get("name", ""))
+        )
+    })
+    content = render_meeting_workbook(rows, {
+        "exported_at": exported_at.isoformat(), "as_of": snapshot.get("created_at"),
+        "topic": {"all": "全部外交日程", "usiran": "美伊相关日程", "ukraine": "俄乌相关日程"}.get(topic, topic),
+        "status": "、".join(status_labels) if status else "全部状态",
+        "person": "、".join(value for value in person_labels if value) if person else "全部人物",
+        "start": range_start, "end": range_end, "include_inactive": include_inactive,
+        "basis": "冻结快照中的结构化会晤日历；计划、媒体报道和人工基线不等于会晤必然举行。",
+    })
+    filename = meeting_export_filename(exported_at)
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename=geoagent-meetings.xlsx; filename*=UTF-8''{quote(filename)}",
+            "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@app.get("/api/meetings/{event_id}")
+def meeting_detail(event_id: str, snapshot_id: str):
+    snapshot = snapshot_or_404(snapshot_id)
+    item = next((row for row in snapshot.get("meetings", []) if row.get("id") == event_id), None)
+    if item is None:
+        raise HTTPException(404, "会晤日历记录不存在")
+    return {**item, "snapshot_id": snapshot_id, "as_of": snapshot.get("created_at")}
+
 @app.post("/api/evidence/{rid}/translate")
 async def translate_evidence(rid:str,snapshot_id:str):
     from .translation_service import translate_items
@@ -977,19 +1089,156 @@ class Ask(BaseModel):
     start: str = ""
     end: str = ""
     use_model: bool = True
+    run_id: str = Field(default="", max_length=96, pattern=r"^[A-Za-z0-9_-]*$")
+    compact: bool = False
 
 @app.post("/api/ask")
 async def ask(body: Ask):
     validate_range(body.start, body.end)
     snapshot = working_snapshot_or_409(body.snapshot_id)
-    return present_answer(await answer(snapshot, body.question, body.topic, body.dimension, body.start, body.end, body.use_model,body.previous_answer_id))
+    effective_topic, effective_dimension = resolve_question_scope(body.question, body.topic, body.dimension)
+    kwargs = {"run_id": body.run_id} if body.run_id else {}
+    return present_answer(
+        await answer(snapshot, body.question, effective_topic, effective_dimension, body.start, body.end, body.use_model, body.previous_answer_id, **kwargs),
+        compact=body.compact,
+    )
+
+@app.post("/api/ask/stream")
+async def ask_stream(body: Ask):
+    """Stream auditable round summaries, followed by the persisted answer."""
+    validate_range(body.start, body.end)
+    snapshot = working_snapshot_or_409(body.snapshot_id)
+    effective_topic, effective_dimension = resolve_question_scope(body.question, body.topic, body.dimension)
+    local_harness = bool(
+        body.use_model and model_status().get("configured")
+        and model_status().get("provider") != "pichat" and llm.agent_mode() == "tools"
+    )
+    run_id = body.run_id or (f"qa-{uuid4().hex}" if local_harness else "")
+    if body.run_id and local_harness:
+        try:
+            prior_run = HarnessStore().find_resumable_run(
+                body.run_id,
+                HarnessScope(body.snapshot_id, effective_topic, effective_dimension, body.start, body.end),
+            )
+            if prior_run is not None and prior_run.question != body.question:
+                raise ScopeMismatchError("运行问题与当前提交内容不一致")
+        except ScopeMismatchError as exc:
+            raise HTTPException(409, str(exc)) from exc
+    queue = asyncio.Queue()
+    done = object()
+
+    async def report(item):
+        await queue.put({"event": "progress", "data": item})
+
+    async def run():
+        try:
+            if run_id:
+                await queue.put({"event": "run", "data": {"run_id": run_id, "phase": "planning", "status": "running"}})
+            kwargs = {"run_id": run_id} if run_id else {}
+            result = await answer(snapshot, body.question, effective_topic, effective_dimension, body.start, body.end, body.use_model, body.previous_answer_id, progress=report, **kwargs)
+            await queue.put({"event": "answer", "data": present_answer(result, compact=body.compact)})
+        except Exception:
+            logger.exception("qa_stream_run_failed", extra={"run_id": run_id})
+            await queue.put({"event": "error", "data": {"message": "问答处理失败，请稍后重试；现有快照数据未被修改。"}})
+        finally:
+            await queue.put(done)
+
+    task = asyncio.create_task(run())
+
+    async def events():
+        try:
+            while True:
+                item = await queue.get()
+                if item is done:
+                    break
+                yield json.dumps(item, ensure_ascii=False) + "\n"
+        finally:
+            # A disconnected browser must not destroy the persisted run. The
+            # task continues to its next checkpoint and can later be resumed.
+            pass
+
+    return StreamingResponse(events(), media_type="application/x-ndjson", headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
+@app.get("/api/qa-runs/{run_id}")
+def qa_run_status(run_id: str):
+    store = HarnessStore()
+    run = store.load_run(run_id)
+    if run is None:
+        raise HTTPException(404, "问答运行不存在")
+    return {
+        "run_id": run.run_id,
+        "answer_id": run.answer_id,
+        "snapshot_id": run.scope.snapshot_id,
+        "scope_hash": run.scope.stable_hash(),
+        "phase": run.phase.value,
+        "status": run.status,
+        "created_at": run.created_at,
+        "updated_at": run.updated_at,
+        "resumable": run.status == "running",
+        "last_error": run.errors[-1] if run.errors else None,
+        "steps": store.list_steps(run_id),
+        "tool_summary": {
+            "total": len(run.tool_calls),
+            "completed": sum(item.status == "completed" for item in run.tool_calls.values()),
+            "failed": sum(item.status in {"failed", "degraded"} for item in run.tool_calls.values()),
+            "attempts_used": run.tool_attempts_used,
+            "max_total_attempts": run.budget.max_total_tool_attempts,
+        },
+        "agent_tasks": [
+            {
+                "task_id": task.task_id,
+                "agent_id": task.agent_id,
+                "agent_role": task.agent_role,
+                "objective": task.objective,
+                "status": task.status,
+                "started_at": task.started_at,
+                "finished_at": task.finished_at,
+                "tool_call_ids": task.tool_call_ids,
+                "memo": task.memo,
+                "error": task.error,
+            }
+            for task in run.agent_tasks.values()
+        ],
+    }
+
+
+@app.get("/api/qa-runs/{run_id}/tool-calls/{call_id}")
+def qa_tool_call_detail(run_id: str, call_id: str):
+    detail = HarnessStore().get_tool_call_detail(run_id, call_id)
+    if detail is None:
+        # Deliberately use one response for unknown runs, calls and cross-run
+        # call IDs so this audit endpoint cannot enumerate another run.
+        raise HTTPException(404, "工具调用记录不存在")
+    return detail
 
 @app.get("/api/answers")
-def answers(snapshot_id: str):
+def answers(snapshot_id: str, compact: bool = False):
     snapshot_or_404(snapshot_id)
     with db() as c:
         rows = c.execute("SELECT payload FROM answers WHERE snapshot_id=? ORDER BY created_at DESC LIMIT 30", (snapshot_id,)).fetchall()
-    return [present_answer(json.loads(r[0])) for r in rows]
+    return [present_answer(json.loads(r[0]), compact=compact) for r in rows]
+
+@app.get("/api/answers/{answer_id}/report.html")
+def answer_html_report(answer_id: str):
+    with db() as c:
+        row = c.execute("SELECT payload FROM answers WHERE id=?", (answer_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "问答记录不存在")
+    answer_payload = present_answer(json.loads(row[0]))
+    try:
+        document = render_answer_report(answer_payload)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return HTMLResponse(
+        document,
+        headers={
+            "Content-Disposition": content_disposition(answer_payload.get("query")),
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+        },
+    )
 
 class BriefRequest(BaseModel):
     snapshot_id: str

@@ -48,6 +48,62 @@ def test_load_latest_run_projects_report_without_claiming_missing_data(tmp_path)
     assert result["collectors"][0]["elapsed"] == "60秒"
 
 
+def test_failure_projection_classifies_reason_redacts_detail_and_suggests_action(tmp_path):
+    run = tmp_path / "collection-runs" / "latest"
+    run.mkdir(parents=True)
+    registry = tmp_path / "collectors.json"
+    registry.write_text(json.dumps({"collectors": [{"id": "gas", "name_zh": "天然气库存"}]}), encoding="utf-8")
+    (run / "results.json").write_text(
+        json.dumps({
+            "started_at": "2026-10-26T01:00:00+00:00",
+            "results": [{
+                "id": "gas",
+                "returncode": 1,
+                "attempts": 2,
+                "max_attempts": 2,
+                "started_at": "2026-10-26T01:00:00+00:00",
+                "finished_at": "2026-10-26T01:01:00+00:00",
+                "stdout_tail": json.dumps({
+                    "collection_status": "configuration_required",
+                    "status": [{"detail": "缺少GIE_API_KEY；token=super-secret"}],
+                }, ensure_ascii=False),
+            }],
+        }, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    item = load_latest_run(tmp_path / "collection-runs", registry)["collectors"][0]
+
+    assert item["stage"] == "缺少运行配置"
+    assert item["error_type"] == "CONFIGURATION_REQUIRED"
+    assert item["error_reason"].startswith("缺少采集所需")
+    assert item["suggested_action"].startswith("按日志提示")
+    assert "super-secret" not in item["error_detail"]
+    assert "[REDACTED]" in item["error_detail"]
+    assert item["attempts"] == "2 / 2"
+    assert item["last_run_at"] == "2026-10-26T01:01:00+00:00"
+
+
+def test_latest_failure_inherits_previous_success_time(tmp_path):
+    root = tmp_path / "collection-runs"
+    registry = tmp_path / "collectors.json"
+    registry.write_text(json.dumps({"collectors": [{"id": "demo", "name_zh": "演示采集器"}]}), encoding="utf-8")
+    for run_id, started, result in (
+        ("old", "2026-10-25T01:00:00+00:00", {"id": "demo", "returncode": 0, "started_at": "2026-10-25T01:00:00+00:00", "finished_at": "2026-10-25T01:02:00+00:00"}),
+        ("new", "2026-10-26T01:00:00+00:00", {"id": "demo", "returncode": 1, "started_at": "2026-10-26T01:00:00+00:00", "finished_at": "2026-10-26T01:01:00+00:00", "stderr_tail": "HTTP Error 503: Service Unavailable"}),
+    ):
+        directory = root / run_id
+        directory.mkdir(parents=True)
+        (directory / "results.json").write_text(json.dumps({"started_at": started, "results": [result]}), encoding="utf-8")
+
+    item = load_latest_run(root, registry)["collectors"][0]
+
+    assert item["error_type"] == "UPSTREAM_UNAVAILABLE"
+    assert item["last_run_at"] == "2026-10-26T01:01:00+00:00"
+    assert item["last_success_at"] == "2026-10-25T01:02:00+00:00"
+    assert item["last_success"] == "2026-10-25T01:02:00+00:00"
+
+
 def test_load_latest_run_reports_unavailable_when_no_valid_report(tmp_path):
     result = load_latest_run(tmp_path / "missing", tmp_path / "missing-registry.json")
 

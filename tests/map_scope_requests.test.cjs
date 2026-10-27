@@ -32,14 +32,17 @@ const effect = effects[0];
 // Execute the real App effect and its returned cleanup against deferred API
 // responses. These are request-ordering tests, not a substitute for browser QA.
 function harness() {
-  const state = {records: [], loading: false, error: '', writes: 0};
+  const state = {records: [], meetings: [], loading: false, error: '', writes: 0};
   const requests = [];
   const context = vm.createContext({
     sid: 'snapshot-a', topic: 'usiran', dimension: '', start: '', end: '', tab: 'map',
     URLSearchParams,
     mapCache: {current: new Map()},
+    meetingMapCache: {current: new Map()},
     api: url => new Promise((resolve, reject) => requests.push({url, resolve, reject})),
+    apiMeetings: () => Promise.resolve({records: []}),
     setMapRecords: value => { state.records = value; state.writes++; },
+    setMapMeetings: value => { state.meetings = value; state.writes++; },
     setMapLoading: value => { state.loading = value; state.writes++; },
     setError: value => { state.error = value; state.writes++; },
   });
@@ -166,6 +169,7 @@ test('a cache hit clears loading and cannot be replaced by the prior pending req
     }).toString();
     const cached = [{id: 'cached-b'}];
     h.context.mapCache.current.set(nextKey, cached);
+    h.context.meetingMapCache.current.set(nextKey, []);
     h.render({sid: 'snapshot-b'});
     assert.equal(h.requests.length, 1);
     assert.equal(h.state.records, cached);
