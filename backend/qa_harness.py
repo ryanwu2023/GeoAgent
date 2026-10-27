@@ -464,6 +464,9 @@ async def run_local_harness(
         reservation = await cost_ledger.reserve(input_tokens, 2200)
         try:
             content, model = await complete(messages, **kwargs)
+        except asyncio.CancelledError:
+            await cost_ledger.settle(reservation, output_tokens=0)
+            raise
         except Exception:
             # 服务失败时仍可能产生输入费用，按零输出结算，避免重试绕过费用上限。
             await cost_ledger.settle(reservation, output_tokens=0)
