@@ -164,7 +164,7 @@ export default function App() {
     workingSidRef = useRef("");
   const lastTopic = useRef("usiran");
   const [settingsOpen,setSettingsOpen] = useState(false);
-  const [settingsSection,setSettingsSection] = useState<"embed"|"model">("embed");
+  const [settingsSection,setSettingsSection] = useState<"embed"|"model"|"agent"|"mcp">("embed");
   const [mcpWorkbenchOpen,setMcpWorkbenchOpen] = useState(false);
   const [mcpWorkbenchView,setMcpWorkbenchView] = useState<"local"|"external">("local");
   const [connection,setConnection] = useState({origin:"http://127.0.0.1:9172",agent_id:"geo-research-assistant",product_user_id:"geoagent-local",embed_configured:false});
