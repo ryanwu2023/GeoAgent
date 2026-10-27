@@ -852,10 +852,16 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     }
   }
 
-  async function queueRun(ids: string[], label: string) {
+  async function queueRun(ids: string[], label: string, singleCollector = false) {
     setNotice(`正在提交“${label}”…`);
     try {
-      const response = await api<CollectorJobResponse>("/collector/runs", { ids, retry_attempts: 2, retry_backoff_sec: 1, auto_import: true });
+      const response = await api<CollectorJobResponse>("/collector/runs", {
+        ids,
+        timeout: singleCollector ? 300 : 900,
+        retry_attempts: singleCollector ? 1 : 2,
+        retry_backoff_sec: 1,
+        auto_import: true,
+      });
       setRuntimeRunId(response.run_id);
       setSelectedRunId(response.run_id);
       setRuntimeRequestId(response.request_id);
@@ -1374,14 +1380,19 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             {filtered.map((collector) => {
               const meta = statusMeta[collector.status];
               const Icon = meta.icon;
-              return <button key={collector.id} className={`collector-row ${collector.id === selectedId ? "selected" : ""} status-${meta.className}`} onClick={() => selectCollector(collector.id)} aria-pressed={collector.id === selectedId}>
-                <span className="collector-status-icon"><Icon size={17} /></span>
-                <span className="collector-row-main"><strong>{collector.name}</strong><small>{collector.group} · {collector.id}</small></span>
-                <span className="collector-row-stage"><small>当前阶段</small><span>{collector.stage}</span><i><b style={{ width: `${progressFor(collector.status)}%` }} /></i></span>
-                <span className="collector-row-stats"><small>输出文件 {collector.outputs.toLocaleString("zh-CN")} 个</small><small>{collector.elapsed}</small></span>
-                <span className="collector-row-status"><em>{meta.label}</em><small>{collector.finishedAt}</small></span>
-                <ChevronRight size={16} className="collector-row-chevron" />
-              </button>;
+              return <div key={collector.id} className="collector-row-shell">
+                <button className={`collector-row ${collector.id === selectedId ? "selected" : ""} status-${meta.className}`} onClick={() => selectCollector(collector.id)} aria-pressed={collector.id === selectedId}>
+                  <span className="collector-status-icon"><Icon size={17} /></span>
+                  <span className="collector-row-main"><strong>{collector.name}</strong><small>{collector.group} · {collector.id}</small></span>
+                  <span className="collector-row-stage"><small>当前阶段</small><span>{collector.stage}</span><i><b style={{ width: `${progressFor(collector.status)}%` }} /></i></span>
+                  <span className="collector-row-stats"><small>输出文件 {collector.outputs.toLocaleString("zh-CN")} 个</small><small>{collector.elapsed}</small></span>
+                  <span className="collector-row-status"><em>{meta.label}</em><small>{collector.finishedAt}</small></span>
+                  <ChevronRight size={16} className="collector-row-chevron" />
+                </button>
+                <button className="collector-row-rerun" disabled={runtimeRunStatus === "running" || Boolean(runtimeRequestId)}
+                  title="只运行这个采集器" aria-label={`只运行 ${collector.name}`}
+                  onClick={() => void queueRun([collector.id], `单独采集 ${collector.name}`, true)}><RotateCcw size={13} /> 单采</button>
+              </div>;
             })}
             {!filtered.length && <div className="collector-empty"><Search size={22} /><strong>{dataSource === "runtime" ? "本次报告没有匹配的采集器" : "暂无真实采集器数据"}</strong><span>{dataSource === "runtime" ? "调整状态、分组或关键词后重试。" : "启动采集服务或检查 API 连接后刷新。"}</span></div>}
           </div>
@@ -1398,7 +1409,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             <div className="collector-detail-block"><span>运行事件</span>{ledgerEventsAvailable && ledgerEvents.length ? <div className="collector-event-list">{ledgerEvents.slice(-4).map((event) => <article key={event.id}><b>{event.event_type}</b><p>{event.message || event.status || "已记录"}</p><small>{event.created_at.replace("T", " ").slice(0, 19)}</small></article>)}</div> : <article><b>账本事件未提供</b><p>{dataSource === "runtime" ? "该历史报告尚未关联 SQLite 运行账本。" : "演示数据尚未连接真实运行事件。"}</p></article>}</div>
             <div className="collector-detail-block"><span>日志尾部</span><div className="collector-log-toolbar"><button className={logStream === "stderr" ? "selected" : ""} onClick={() => setLogStream("stderr")}>stderr</button><button className={logStream === "stdout" ? "selected" : ""} onClick={() => setLogStream("stdout")}>stdout</button></div><pre className="collector-log-tail">{collectorLog?.available ? collectorLog.content || "（日志为空）" : "当前运行尚无可读日志尾部"}</pre></div>
             <div className="collector-detail-block"><span>来源状态</span>{collectorSources ? <><div className="collector-source-summary"><b>{collectorSources.summary.healthy} / {collectorSources.summary.total} 正常</b><small>{collectorSources.summary.failed} 失败 · {collectorSources.summary.stale} 过期 · {collectorSources.summary.disabled} 停用 · {collectorSources.updated_at ? collectorSources.updated_at.replace("T", " ").slice(0, 16) : "时间未提供"}</small></div><div className="collector-source-list">{collectorSources.sources.slice().sort((a, b) => { const rank = (state?: string) => state === "ok" ? 0 : state === "disabled" ? 1 : 2; return rank(b.state) - rank(a.state); }).slice(0, 12).map((source) => <article key={source.id}><span><b>{source.id}</b><small>{source.publisher || "未提供发布方"}</small></span><em className={source.state === "ok" ? "ok" : source.state === "disabled" ? "disabled" : "bad"}>{source.state || "未知"}</em><small>{source.error || `${source.entries ?? 0} 条 · HTTP ${source.http_status ?? "—"}`}</small></article>)}</div>{collectorSources.sources.length > 12 && <small className="collector-source-more">仅显示 12 个来源；接口返回完整来源列表。</small>}</> : <article><b>暂无来源产物</b><p>当前采集器没有可读取的 `_source_status.json`、`_fetch_stats.json` 或 `_source_health.json`。</p></article>}</div>
-            <div className="collector-detail-actions"><button className="primary" onClick={() => queueRun([selected.id], `补采 ${selected.name}`)}><RotateCcw size={15} /> 补采</button><button onClick={retryCurrentRun}><RefreshCw size={15} /> 重试</button></div>
+            <div className="collector-detail-actions"><button className="primary" disabled={runtimeRunStatus === "running" || Boolean(runtimeRequestId)} onClick={() => queueRun([selected.id], `单独采集 ${selected.name}`, true)}><RotateCcw size={15} /> 单独采集</button><button onClick={retryCurrentRun}><RefreshCw size={15} /> 重试失败项</button></div>
             <p className="collector-inspector-footnote">日志来自运行报告或账本事件的受限尾部，后端会脱敏 token、cookie、authorization 等字段。</p>
           </>}
           {inspectorTab === "history" && <div className="collector-history-list">
