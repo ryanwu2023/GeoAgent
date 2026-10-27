@@ -675,7 +675,7 @@ async def answer(snapshot, query, topic="all", dimension="", start="", end="", u
     # An empty retrieval is an explicit no-evidence result.  Do not send it
     # through the model or synthesize a fallback paragraph: that would turn
     # an unanswered question into an apparently supported conclusion.
-    if not citations and not facts:
+    if not citations and not facts and not any(k in query for k in ['资产', '情景', '简报', '关联']):
         with db() as c:
             c.execute("INSERT INTO answers VALUES (?,?,?,?,?)", (base["id"], snapshot["id"], original_query, base["created_at"], canonical(base)))
         return base
