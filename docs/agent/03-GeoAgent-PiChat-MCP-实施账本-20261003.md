@@ -947,3 +947,10 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 本地真实身份BFF复验HTTP200、token_present=true、Agent正确、userId与真实user.id一致；后台配置确认使用新本地Key且origin仍chat.test。保存即时生效，**本轮未重启任何服务**，没有更改VPN/TUN、DNS或TLS校验。
 - 右侧本地页实际恢复原8轮历史，宿主错误提示消失，下轮范围r2确认0b18ddf4/ukraine/全部维度/空日期，底部输入框及操作栏可见。实际输入“连接恢复验收草稿（不发送）”后发送按钮启用，随后清空草稿、按钮恢复禁用；未发送新消息、调用MCP、生成语音或将旧历史答复当作本次取数证明。页面非空、无框架错误覆盖，本轮采集的warn/error日志为空；Browser插件未提供，使用既有CUA内嵌浏览器验证默认1021×988视口，不冒称客户1920×1200实体机验收。
 - 工作快照仍0b18ddf4，翻译running=false/worker_running=false；左侧该旧快照民调缺失和独立总结引用校验提示未被掩盖，本次仅关闭身份凭据到期导致的连接故障。截图 `/tmp/geoagent-local-embed-renewed-20261020.jpg` 已核对输入框位于可视区，临时证据不入Git；本轮账本随此前授权同步GitHub，不表示已同步GitLab或发布生产。
+
+### 2026-10-27：GitHub main 同步及生产发布准备（MR 待流水线）
+
+- 已从 GitHub `upstream/main` 获取最新提交并快进本地 `main` 至 `66e4c20`；随后与 GitLab `origin/main` 合并，生成 `f32f9d3`，保留双方实施账本内容并解决唯一冲突。
+- 已将合并结果推送到 GitLab 分支 `codex/github-production-sync`；GitHub `upstream/main` 已是最新，无需重复推送。
+- 本地验证：前端 `npm test` 通过 128/128；后端针对欧洲收益率、会议接口和报告流程的定向测试通过 18/18；完整 CI 与生产发布仍待 MR 流水线确认。
+- 本轮未提交密钥、临时文件或本地环境文件；生产发布必须以 MR 合并、主分支流水线通过及受保护生产标签为准。
