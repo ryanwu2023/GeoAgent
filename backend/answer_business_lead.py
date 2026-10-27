@@ -170,17 +170,39 @@ def _plain_markdown(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def _without_leading_heading(value: str) -> str:
+    return re.sub(
+        r"^(?:(?:[一二三四五六七八九十]+|\d+)[、.)]\s*)?(?:结论摘要|核心判断|总结回答|结论)\s*[：:]?\s*",
+        "",
+        value,
+    ).strip()
+
+
+def _fit_complete_sentences(value: str, maximum: int = 300) -> str:
+    if len(value) <= maximum:
+        return value
+    fitted = ""
+    for sentence in re.findall(r".*?[。！？；](?:\s+|$)|.+$", value):
+        sentence = sentence.strip()
+        if len(fitted) + len(sentence) > maximum:
+            break
+        fitted += sentence
+    return fitted if fitted else value[:maximum]
+
+
 def fallback_business_lead(answer: dict) -> str:
     """从原回答提取业务段落；没有合格段落时使用无新增事实的安全文案。"""
     summary = answer.get("summary") if isinstance(answer.get("summary"), dict) else {}
     raw = str(summary.get("text") or "").replace("\r\n", "\n")
     for block in re.split(r"\n\s*\n", raw):
-        clean = _plain_markdown(block)
+        clean = _without_leading_heading(_plain_markdown(block))
         clean = re.sub(r"^\d+[.)、]\s*", "", clean)
-        if not clean or _META_OPENING.search(clean):
+        sentences = [item.strip() for item in re.findall(r".*?[。！？；](?:\s+|$)|.+$", clean) if item.strip()]
+        clean = "".join(item for item in sentences if not _META_OPENING.search(item))
+        if not clean:
             continue
         if _BUSINESS_TERMS.search(clean) and len(clean) >= 20:
-            return clean[:520]
+            return _fit_complete_sentences(clean)
     return "当前材料尚不足以形成不依赖额外推断的业务核心判断。本报告保留原回答、证据与数据缺口，用户应结合最新官方行动、独立信源核验和关键量化指标变化继续判断。"
 
 
@@ -201,7 +223,13 @@ def _parse_json_object(raw: str) -> dict:
 
 def _normalize_lead(value: object) -> str:
     text = _plain_markdown(str(value or ""))
-    return re.sub(r"^(?:核心判断|结论)\s*[：:]\s*", "", text).strip()
+    text = _without_leading_heading(text)
+    if len(text) <= 300:
+        return text
+    # A capable model may overshoot the requested length by one final sentence.
+    # Keep only complete sentences and never cut a factual claim mid-way.
+    fitted = _fit_complete_sentences(text)
+    return fitted if len(fitted) >= 150 else text
 
 
 def _validate_payload(payload: dict, context: dict) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
@@ -249,7 +277,7 @@ async def generate_business_lead(
         )
     system = (
         "你是地缘政治研究报告编辑。只生成首页业务核心判断，不重写全文。"
-        "必须直接回应用户问题，用一段150至300字中文说明当前状态、关键变化、未来取决于什么；"
+        "必须直接回应用户问题，用一段180至260字中文说明当前状态、关键变化、未来取决于什么；"
         "仅当问题相关时说明大类资产含义。不得以快照、检索轮次、来源等级或证据数量开头，"
         "不得把媒体报道写成已确认行动，不得新增材料中没有的数字。"
         "只返回JSON对象：business_lead、evidence_ids、metric_series、scope。"

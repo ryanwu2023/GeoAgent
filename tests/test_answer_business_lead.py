@@ -84,6 +84,26 @@ def test_generate_valid_business_lead(snapshot):
     assert result.text == lead
 
 
+def test_generate_trims_only_complete_sentence_when_model_slightly_overshoots(snapshot):
+    first = (
+        "俄乌局势处于局部停火试探与远程打击持续并行的战术性停顿阶段，近期接触增加但仍不足以证明全面停火已经形成。"
+        "后续主要取决于局部安排能否持续执行、直接谈判是否形成正式文件，以及外部援助与远程打击是否继续升级；"
+        "这些条件未同时改善前，缓和只能视为有限窗口，不能外推为冲突结束。"
+    )
+    second = "资产层面仍应继续观察能源、汇率与欧洲利率是否出现同向变化，单一市场价格不能证明冲突变量已经成为主要驱动。" * 2
+
+    async def complete(messages, **kwargs):
+        return (
+            '{"business_lead":"' + first + second + '","evidence_ids":["k1"],"metric_series":[],"scope":"ukraine"}',
+            "test-model",
+        )
+
+    result = asyncio.run(generate_business_lead(answer("俄乌冲突最新情况", "ukraine"), snapshot, complete))
+    assert result.mode == "model"
+    assert 150 <= len(result.text) <= 300
+    assert result.text.endswith(("。", "；", "！", "？"))
+
+
 @pytest.mark.parametrize("mode", ["timeout", "invalid_json", "unknown_id", "unsupported_number", "too_short", "metadata"])
 def test_invalid_model_output_uses_safe_fallback(snapshot, mode):
     async def complete(messages, **kwargs):
