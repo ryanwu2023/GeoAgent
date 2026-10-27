@@ -672,6 +672,13 @@ async def answer(snapshot, query, topic="all", dimension="", start="", end="", u
             "message": "已检索到相关材料。以下为原始片段，未完成语义核验或资产方向判定。" if citations else "当前筛选范围没有足够证据回答这个问题。请补充数据或扩大检索范围。",
             "gaps": ["来源等级不等于事实核验结果", "市场观测仅供对照，尚未完成冲突因果验证，不生成价格目标或资产收益预测"],
             "steps": ["范围与快照锁定", "检索证据", "程序计算", "引用检查"]}
+    # An empty retrieval is an explicit no-evidence result.  Do not send it
+    # through the model or synthesize a fallback paragraph: that would turn
+    # an unanswered question into an apparently supported conclusion.
+    if not citations and not facts:
+        with db() as c:
+            c.execute("INSERT INTO answers VALUES (?,?,?,?,?)", (base["id"], snapshot["id"], original_query, base["created_at"], canonical(base)))
+        return base
     assessment_requested = any(k in query for k in ['资产','情景','简报','关联'])
     if assessment_requested:
         evaluated = analysis(snapshot, topic, dimension, start, end)
