@@ -954,3 +954,10 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 已将合并结果推送到 GitLab 分支 `codex/github-production-sync`；GitHub `upstream/main` 已是最新，无需重复推送。
 - 本地验证：前端 `npm test` 通过 128/128；后端针对欧洲收益率、会议接口和报告流程的定向测试通过 18/18；完整 CI 与生产发布仍待 MR 流水线确认。
 - 本轮未提交密钥、临时文件或本地环境文件；生产发布必须以 MR 合并、主分支流水线通过及受保护生产标签为准。
+
+### 2026-10-27：v1.0.28 生产发布阻断（Runner Kubernetes TLS）
+
+- MR !20 已合并到 `main`，合并后 verify 流水线 #6295 通过（729 项测试，2 个跳过）；GitHub `upstream/main` 已同步。
+- 已创建受保护生产标签 `geoagent-prod-v1.0.28`，标签流水线 #6296 的 verify 作业 #31444 通过。
+- deploy 作业 #31445 未执行应用变更即失败：Runner 使用生产 kubeconfig 访问 `https://gzg.sealos.run:6443` 时出现 `x509: certificate signed by unknown authority (crypto/rsa: verification error, candidate authority kubernetes-ca)`；未关闭 TLS 校验、未修改生产凭据、未创建 release ConfigMap、未滚动 Pod。
+- 当前结论：代码已合并且生产发布候选验证通过，但 v1.0.28 尚未发布生效；需由平台侧修复/重新签发 Runner 使用的生产 CA 链或 kubeconfig 后，重新执行同一受保护发布流程。
