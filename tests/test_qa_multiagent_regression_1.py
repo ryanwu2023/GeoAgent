@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from backend.qa_multiagent import SpecialistBudget, _parse_action, run_specialists
 from backend.qa_harness import _fallback_metrics, _replace_model_metric_table
 from backend.qa_agent import normalize_final
+from backend.research import numeric_tokens
 
 
 def test_specialist_action_normalizes_flash_tool_aliases_and_drops_unknown_fields():
@@ -224,3 +225,9 @@ def test_finalizer_repairs_inline_anchor_record_mapping_for_read_evidence_only()
     assert "〔S1〕" in result["annotated_text"]
     assert "ffffffffffffffffffffffff" not in result["annotated_text"]
     assert "2e41661579e7229e0421e5a3" not in result["text"]
+
+
+def test_numeric_validator_ignores_oversized_identifier_fragments_without_overflow():
+    oversized = "9" * 200_000
+
+    assert numeric_tokens(f"正常数值 5.37；不透明标识 {oversized}") == {"5.37"}

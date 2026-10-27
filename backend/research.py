@@ -3,7 +3,7 @@ import difflib
 import json
 import os
 import re
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, DecimalException, ROUND_HALF_UP
 from datetime import datetime, timezone, timedelta
 import httpx
 from . import llm
@@ -190,12 +190,18 @@ def numeric_tokens(text):
     """Canonical numeric values in model text or its cited source material."""
     values = set()
     for token in NUMBER_PATTERN.findall(str(text or "")):
+        # Tool receipts can contain opaque identifiers or malformed upstream
+        # payload fragments with extremely long digit runs. They are not
+        # factual numeric claims and must never crash final-answer validation.
+        compact = token.replace(",", "")
+        if len(compact) > 64:
+            continue
         try:
-            value = format(Decimal(token.replace(",", "")).normalize(), "f")
+            value = format(Decimal(compact).normalize(), "f")
             if "." in value:
                 value = value.rstrip("0").rstrip(".")
             values.add("0" if value in {"-0", "+0"} else value)
-        except InvalidOperation:
+        except DecimalException:
             continue
     return values
 
