@@ -3,7 +3,7 @@ from datetime import date
 
 PRIORITIES={
  'usiran':['brent','hormuz_total','breakeven10_fred','dgs10','hy_oas','gold','sp500','usdcny'],
- 'ukraine':['ru_usdrub_cbr','ru_brent_rub_proxy','ua_current_account','ua_goods_balance','eu_cereal_imports_from_ukraine','eu_ukraine_facility_disbursed_cumulative','eu_ukraine_facility_disbursement','eu_gas_storage_full','ttf_gas','wheat'],
+ 'ukraine':['ua_aid_fr_de_10y_spread','ua_aid_fr10y','ua_aid_de10y','ua_aid_eu10y','ru_usdrub_cbr','ru_brent_rub_proxy','ua_current_account','ua_goods_balance','eu_cereal_imports_from_ukraine','eu_ukraine_facility_disbursed_cumulative','eu_ukraine_facility_disbursement','eu_gas_storage_full','ttf_gas','wheat'],
  'all':['brent','hormuz_total','dgs10','hy_oas','gold','sp500','eurusd'],
 }
 PATHS={

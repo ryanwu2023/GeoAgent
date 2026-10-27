@@ -1,111 +1,93 @@
-# European Sovereign Yields Implementation Plan
+# 欧洲主权债收益率接入实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **执行要求：** 按任务逐项实施和验证，使用复选框跟踪进度。
 
-**Goal:** Stop daily Russian Duma election collection and add Germany, France, Euro Area 10-year yields plus the France-Germany spread to the Ukraine quantitative workspace.
+**目标：** 停止俄罗斯国家杜马选举的日常采集，并为俄乌主题增加德国、法国、欧元区10年期收益率和法德利差。
 
-**Architecture:** Keep `ukraine-aid-monitor` as the registered business collector while adding a focused `european_yields.py` sibling that publishes `output/geo-v6.json`; the existing adapter already imports this file alongside `ALL-records.jsonl`. TradingView daily history is primary, FRED monthly series are validation-only, and the derived spread uses same-day observations only.
+**架构：** 保留 `ukraine-aid-monitor` 作为注册采集器，在同一目录增加独立的 `european_yields.py`，发布 `output/geo-v6.json`；现有适配器会将该文件与 `ALL-records.jsonl` 一起导入。TradingView日频历史为主数据，FRED月频仅作交叉核验，法德利差只使用同日有效观测计算。
 
-**Tech Stack:** Python 3, `websocket-client`, FRED CSV, geo.v6 extension contract, FastAPI snapshot adapter, React/TypeScript/Vite.
+**技术栈：** Python 3、TradingView Scanner HTTP 接口、FRED CSV、geo.v6扩展协议、FastAPI快照适配器、React/TypeScript/Vite。
 
-**Spec:** `docs/superpowers/specs/2026-10-27-european-sovereign-yields-design.md`
+**设计文档：** `docs/superpowers/specs/2026-10-27-european-sovereign-yields-design.md`
 
-## Global Constraints
+## 全局约束
 
-- Preserve all historical Duma election records; only stop future election-specific polling and current-report emphasis.
-- Publish only completed TradingView daily candles and never forward-fill FRED monthly values into daily observations.
-- Missing, failed, and no-new-data states must remain distinct; never replace a missing yield with zero.
-- Bind all four metrics to `topic=ukraine`, `dimension=aid`, `bucket=rates`, with `shared_market=false`.
-- France-Germany spread equals `(FR10Y - DE10Y) * 100` on same-day valid observations and is expressed in basis points.
-- Do not modify or delete the user's untracked spreadsheet files.
+- 保留全部历史杜马选举记录，只停止未来选举专用轮询和当前日报重点展示。
+- 只发布TradingView已完成交易日的日线，不把FRED月频值前向填充为日频。
+- 明确区分缺失、失败和正常无新增；不得用零替代缺失收益率。
+- 四项指标绑定 `topic=ukraine`、`dimension=aid`、`bucket=rates`、`shared_market=false`。
+- 法德利差公式为 `(FR10Y-DE10Y)×100`，单位为基点，且只使用同日有效观测。
+- 不修改或删除用户未纳入Git的Excel文件。
 
-## Review Focus
+## 重点复核风险
 
-- TradingView returns a partial symbol set: publish valid symbols, mark the collector partial, and derive no spread unless both country series overlap.
-- TradingView returns an in-progress current-day candle: exclude it from published history.
-- FRED is newer or older than the matching TradingView month: validation metadata must not overwrite or extend the daily series.
-- Non-trading days have no new candle: report normal no-new-data rather than failure.
-- Existing archived Duma election records still normalize and load after election sources and active report sections are disabled.
+- TradingView仅部分品种成功时，保留成功序列并标记部分成功；德国或法国任一缺失时不计算利差。
+- TradingView返回当天未收盘蜡烛时，不能进入已完成日线历史。
+- FRED与TradingView最新月份不一致时，只写核验信息，不覆盖或延长日频序列。
+- 非交易日没有新蜡烛属于正常无新增，不应标记失败。
+- 停用选举源后，既有杜马选举记录仍可正常归一化和回放。
 
 ---
 
-### Task 1: Retire Daily Duma Election Polling
+### 任务一：停止国家杜马选举日常采集
 
-**Files:**
-- Modify: `collectors/russia-domestic-monitor/config.json`
-- Modify: `collectors/russia-domestic-monitor/russia_domestic_monitor.py`
-- Modify: `collectors/russia-domestic-monitor/README.md`
-- Test: `tests/test_russia_domestic_retirement.py`
+**修改文件：**
 
-**Interfaces:**
-- Consumes: existing source configuration and archived `ALL-records.jsonl` records.
-- Produces: `active_bucket_order(cfg: dict) -> list[str]`, excluding `duma_election` from current runs while preserving historical classification support.
+- `collectors/russia-domestic-monitor/config.json`
+- `collectors/russia-domestic-monitor/russia_domestic_monitor.py`
+- `collectors/russia-domestic-monitor/README.md`
+- `tests/test_russia_domestic_retirement.py`
 
-- [ ] **Step 1: Write failing tests for disabled election-only sources, current report exclusion, and historical classification compatibility.**
-- [ ] **Step 2: Run `python -m pytest tests/test_russia_domestic_retirement.py -q` and verify the tests fail.**
-- [ ] **Step 3: Disable only election-specific sources, route report ordering through `active_bucket_order`, and update stale title/boundary text without deleting the archived bucket definition.**
-- [ ] **Step 4: Run the new test and `python collectors/russia-domestic-monitor/russia_domestic_monitor.py --selftest`; expect all checks to pass.**
-- [ ] **Step 5: Commit the Duma retirement change.**
+- [x] 编写选举专用来源停用、日报栏目移除、历史分类仍可用的失败测试。
+- [x] 运行测试并确认修改前失败。
+- [x] 仅停用选举专用来源；当前日报排序不再包含 `duma_election`；保留历史桶定义。
+- [x] 更新README、标题和过期边界说明。
+- [x] 运行新测试与采集器离线自检。
 
-### Task 2: Add TradingView Daily Yield Collection and FRED Validation
+### 任务二：增加TradingView日频收益率和FRED月频核验
 
-**Files:**
-- Create: `collectors/ukraine-aid-monitor/european_yields.py`
-- Modify: `collectors/ukraine-aid-monitor/ukraine_aid_monitor.py`
-- Modify: `collectors/ukraine-aid-monitor/run.bat`
-- Modify: `collectors/ukraine-aid-monitor/run_new.bat`
-- Modify: `collectors/ukraine-aid-monitor/README.md`
-- Modify: `collectors/collectors.json`
-- Modify: `requirements.txt`
-- Test: `tests/test_european_yields_collector.py`
+**新增或修改文件：**
 
-**Interfaces:**
-- Produces: `fetch_tradingview_history(symbol: str, bars: int = 800) -> tuple[bytes, list[dict]]`.
-- Produces: `fetch_fred_monthly(series_id: str) -> tuple[bytes, list[dict]]`.
-- Produces: `same_day_spread(france: list[dict], germany: list[dict]) -> list[dict]`.
-- Produces: `build_payload(output_root: Path, today: date | None = None) -> dict` using `schema_version='geo.v6/1'`.
-- Produces: `main(argv: list[str] | None = None) -> int`, writing `geo-v6.json`, `source-status.json`, `_source_status.json`, and raw archives atomically.
+- 新增 `collectors/ukraine-aid-monitor/european_yields.py`
+- 修改 `collectors/ukraine-aid-monitor/ukraine_aid_monitor.py`
+- 修改 `collectors/ukraine-aid-monitor/README.md`
+- 修改 `collectors/collectors.json`
+- 新增 `tests/test_european_yields_collector.py`
 
-- [ ] **Step 1: Write failing offline tests for three daily series, completed-day filtering, same-day spread calculation, partial-source behavior, FRED validation-only behavior, and zero/missing rejection.**
-- [ ] **Step 2: Run `python -m pytest tests/test_european_yields_collector.py -q`; expect failures because the module does not exist.**
-- [ ] **Step 3: Implement the collector with TradingView symbols `TVC:DE10Y`, `TVC:FR10Y`, `TVC:EU10Y` and FRED series `IRLTLT01DEM156N`, `IRLTLT01FRM156N`, `IRLTLT01EZM156N`; add `websocket-client` explicitly to runtime requirements.**
-- [ ] **Step 4: Invoke the focused metric collector from both launchers after news collection; change the registry output kind to `records-and-metrics` while retaining the same collector ID.**
-- [ ] **Step 5: Run the offline collector tests and the existing registry/selftest suites; expect all to pass.**
-- [ ] **Step 6: Commit the yield collector and contract changes.**
+**对外接口：**
 
-### Task 3: Import, Prioritize, and Present the Ukraine Metrics
+- `fetch_tradingview_history(symbol: str, bars: int = 800) -> tuple[bytes, list[dict]]`：读取 TradingView 最新完整日频观测，并与本地历史序列合并积累
+- `fetch_fred_monthly(series_id: str) -> tuple[bytes, list[dict]]`
+- `same_day_spread(france: list[dict], germany: list[dict]) -> list[dict]`
+- `build_payload(output_root: Path, today: date | None = None) -> dict`
+- `main(argv: list[str] | None = None) -> int`
 
-**Files:**
-- Modify: `backend/workbench.py`
-- Modify: `src/metric_category.ts`
-- Test: `tests/test_european_yield_integration.py`
-- Test: `tests/metric_category.test.cjs`
+- [x] 编写三条日频序列、收盘日过滤、同日利差、部分失败、FRED仅核验以及缺失值处理测试。
+- [x] 实现 `TVC:DE10Y`、`TVC:FR10Y`、`TVC:EU10Y` 日频序列，并通过每日运行逐步积累历史。
+- [x] 接入 `IRLTLT01DEM156N`、`IRLTLT01FRM156N`、`IRLTLT01EZM156N` 月频核验。
+- [x] 输出 `geo-v6.json`、来源状态和原始归档，并由主采集器入口统一调用。
+- [x] 将注册表输出类型升级为 `records-and-metrics`，不引入额外运行依赖。
+- [x] 运行采集器测试、注册表测试和离线自检。
 
-**Interfaces:**
-- Consumes: four geo.v6 observations from Task 2.
-- Produces: topic-scoped metric API rows searchable by German/French/Euro Area/yield/spread terms and eligible for Ukraine important-metric selection.
+### 任务三：导入、排序和前端展示
 
-- [ ] **Step 1: Write failing backend integration tests that import a dual-output `ukraine-aid-monitor`, expose all four metrics only for `ukraine`, and preserve source/status metadata.**
-- [ ] **Step 2: Add TypeScript assertions that all four metrics classify as `经济` from `bucket='rates'`.**
-- [ ] **Step 3: Run the focused Python and Node tests; verify the new assertions fail before implementation.**
-- [ ] **Step 4: Add the four series to Ukraine metric priorities and make any minimal importer/category adjustments required by the failing tests.**
-- [ ] **Step 5: Run `python -m pytest tests/test_european_yield_integration.py tests/test_backend.py -q` and `node --test tests/metric_category.test.cjs`; expect PASS.**
-- [ ] **Step 6: Commit the integration and presentation changes.**
+**修改文件：**
 
-### Task 4: Live Collection and End-to-End Verification
+- `backend/workbench.py`
+- `src/metric_category.ts`
+- `tests/test_european_yield_integration.py`
+- `tests/metric_category.test.cjs`
 
-**Files:**
-- Modify if required by verified defects: `collectors/ukraine-aid-monitor/european_yields.py`
-- Modify if required by verified defects: `src/MetricChart.tsx`
-- Test: `scripts/verify_latest_requests.py`
+- [x] 编写双输出导入、仅俄乌主题可见、来源状态保留的后端测试。
+- [x] 编写四项指标均归类为“经济”的前端分类测试。
+- [x] 将四项序列加入俄乌重点指标优先级，并做通过测试所需的最小导入调整。
+- [x] 运行后端指标与前端分类测试。
 
-**Interfaces:**
-- Consumes: production TradingView/FRED responses and the built snapshot.
-- Produces: a refreshed snapshot where the Ukraine metric page renders four yield cards with values, dates, source status, axes, and hover detail.
+### 任务四：真实采集与端到端验证
 
-- [ ] **Step 1: Run the collector once against live sources and inspect `geo-v6.json` for four non-duplicated observations, sorted unique dates, and valid source states.**
-- [ ] **Step 2: Build a new snapshot and query the backend metric endpoint for `topic=ukraine`; verify all four series appear and do not appear for `topic=usiran`.**
-- [ ] **Step 3: Run the Vite build plus `scripts/verify_latest_requests.py`; verify coordinates, hover values, current/previous values, and topic-specific display.**
-- [ ] **Step 4: Run focused and regression suites: collector contracts, adapters/backend, metric category, and frontend build.**
-- [ ] **Step 5: Review `git diff --check`, confirm the user spreadsheet remains untracked and untouched, then commit any live-compatibility fixes.**
+- [x] 真实运行采集器，检查四项观测无重复、日期有序且来源状态正确。
+- [x] 构建新快照，确认俄乌指标接口包含四项、美伊接口不包含。
+- [x] 执行Vite生产构建，复用既有指标卡的坐标、悬停值、当前值、前值和主题筛选能力。
+- [x] 运行采集器协议、适配器、后端、指标分类和前端构建回归测试。
+- [x] 执行 `git diff --check`，确认用户Excel文件未被触碰。
 

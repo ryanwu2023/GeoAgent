@@ -114,8 +114,8 @@
       "url": "https://news.google.com/rss/search?q=Russia+(%22State+Duma%22+OR+%22Duma+election%22+OR+%22parliamentary+election%22+OR+%22single+voting+day%22)&hl=en-US&gl=US&ceid=US:en",
       "tier": "T3",
       "publisher": "Google News",
-      "enabled": true,
-      "note": "杜马选举通道；依赖代理出口可达 google（2026-09-19 出口 50465 对 google 域 502 全断，断连自动留档，恢复自动回补）"
+      "enabled": false,
+      "note": "2026-09-20 国家杜马选举已经结束，停止每日轮询；历史记录和分类定义保留供回放。"
     },
     {
       "id": "gn-oil",
@@ -361,6 +361,7 @@
   "buckets": {
     "duma_election": {
       "label": "国家杜马选举（2026-09 单一投票日）",
+      "active": false,
       "require_all": [
         [
           "election",

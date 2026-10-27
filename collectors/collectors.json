@@ -301,7 +301,7 @@
       "selftest_args": [
         "--selftest"
       ],
-      "output_kind": "records-jsonl",
+      "output_kind": "records-and-metrics",
       "enabled": true
     },
     {
