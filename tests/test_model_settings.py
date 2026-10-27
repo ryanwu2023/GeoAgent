@@ -1,6 +1,7 @@
 """Backend-only model configuration and transport contracts; no live secrets."""
 import asyncio
 import json
+import os
 import stat
 
 import httpx
@@ -57,8 +58,9 @@ def test_saved_settings_are_private_atomic_and_hot_read(monkeypatch):
     published = []
 
     def replace(source, target):
-        assert stat.S_IMODE(model_settings.os.stat(source).st_mode) == 0o600
-        published.append(json.loads(model_settings.Path(source).read_text()))
+        if os.name != "nt":
+            assert stat.S_IMODE(model_settings.os.stat(source).st_mode) == 0o600
+        published.append(json.loads(model_settings.Path(source).read_text(encoding="utf-8")))
         original_replace(source, target)
 
     monkeypatch.setattr(model_settings.os, "replace", replace)
@@ -68,7 +70,8 @@ def test_saved_settings_are_private_atomic_and_hot_read(monkeypatch):
     assert result["configured"]
     assert "test-model" not in json.dumps(result)
     path = model_settings.settings_path()
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert len(published) == 1
     assert not list(path.parent.glob(".model-settings-*"))
     assert llm.config()["model"] == "deepseek-flash"
@@ -270,7 +273,10 @@ def test_symlink_settings_are_rejected(tmp_path):
     path.parent.mkdir(parents=True)
     private = tmp_path / "not-model-settings.json"
     private.write_text("do-not-read")
-    path.symlink_to(private)
+    try:
+        path.symlink_to(private)
+    except OSError as exc:
+        pytest.skip(f"当前 Windows 账户不能创建符号链接：{exc.winerror if hasattr(exc, 'winerror') else exc}")
     assert model_settings.public_settings()["source"] == "error"
     with pytest.raises(ValueError, match="符号链接"):
         model_settings.effective_settings()

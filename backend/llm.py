@@ -1,5 +1,6 @@
 """Agent/model transports, hot-readable local configuration, no browser secrets."""
 import hashlib
+import os
 import httpx
 from .store import ROOT
 from . import model_settings
@@ -27,6 +28,8 @@ def pichat_endpoint(url):
 
 def status():
     view = model_settings.public_settings(env_root=ROOT)
+    fast_model = role_model("fast", fallback=view["model"])
+    reasoning_model = role_model("reasoning", fallback=view["model"])
     return {
         **view,
         "model": view["model"] or ("自动发现" if view["configured"] else "未接入模型"),
@@ -35,6 +38,11 @@ def status():
             else "模型分析" if view["configured"] else "本地证据检索"
         ),
         "auto_model": bool(view["configured"] and view["provider"] != "pichat" and not view["model"]),
+        "qa_rounds": 1 if view["provider"] == "pichat" else qa_rounds(),
+        "agent_mode": "pichat" if view["provider"] == "pichat" else agent_mode(),
+        "fast_model": "Pi Chat Agent" if view["provider"] == "pichat" else fast_model,
+        "reasoning_model": "Pi Chat Agent" if view["provider"] == "pichat" else reasoning_model,
+        "reasoning_model_fallback": bool(view["provider"] != "pichat" and reasoning_model and reasoning_model == view["model"]),
     }
 
 def cache_identity():
@@ -49,6 +57,60 @@ def cache_identity():
         'endpoint_hash': hashlib.sha256(target.encode('utf-8')).hexdigest()[:16],
     }
 
+def qa_rounds(default=3):
+    """Return the bounded loop count for direct-model Q&A.
+
+    This is deliberately independent from saved provider credentials: the
+    loop count is operational policy, not a secret.  Read the project .env so
+    start.bat users get the same behaviour as process-level deployments.
+    """
+    raw = os.getenv("LLM_QA_ROUNDS", "").strip()
+    if not raw:
+        path = ROOT / ".env"
+        if path.is_file():
+            for line in path.read_text(encoding="utf-8-sig").splitlines():
+                if "=" not in line or line.lstrip().startswith("#"):
+                    continue
+                key, value = line.split("=", 1)
+                if key.strip() == "LLM_QA_ROUNDS":
+                    raw = value.strip().strip('"').strip("'")
+                    break
+    try:
+        value = int(raw or default)
+    except ValueError:
+        value = default
+    return max(1, min(5, value))
+
+
+def _project_env(name, default=""):
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    path = ROOT / ".env"
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8-sig").splitlines():
+            if "=" not in line or line.lstrip().startswith("#"):
+                continue
+            key, raw = line.split("=", 1)
+            if key.strip() == name:
+                parsed = raw.strip().strip('"').strip("'")
+                return parsed or default
+    return default
+
+
+def agent_mode():
+    """Select the direct-model orchestration policy without exposing secrets."""
+    value = _project_env("LLM_AGENT_MODE", "tools").lower()
+    return "tools" if value in {"1", "true", "yes", "on", "tools", "agent"} else "legacy"
+
+
+def role_model(role, *, fallback=""):
+    if role == "fast":
+        return _project_env("LLM_FAST_MODEL", fallback)
+    if role == "reasoning":
+        return _project_env("LLM_REASONING_MODEL", fallback)
+    return fallback
+
 async def resolve_model(client,c):
     if c["model"]:return c["model"]
     response=await client.get(c["base_url"]+'/models',headers={'Authorization':'Bearer '+c["api_key"]})
@@ -57,7 +119,7 @@ async def resolve_model(client,c):
     if not names:raise ValueError('服务未返回可用模型，请在 .env 填写 LLM_MODEL')
     return names[0]
 
-async def complete(messages, *, settings_override=None):
+async def complete(messages, *, settings_override=None, model_role="default"):
     if settings_override is None:
         c=config()
     else:
@@ -79,8 +141,16 @@ async def complete(messages, *, settings_override=None):
             return content,'Pi Chat Agent'
     async with httpx.AsyncClient(timeout=c["timeout_seconds"], verify=verify, follow_redirects=False) as client:
         model=await resolve_model(client,c)
+        selected = role_model(model_role, fallback=model) if model_role in {"fast", "reasoning"} else model
+        model = selected or model
         payload={'model':model,'messages':messages,'stream':False}
-        if c["provider"] == "deepseek":
+        # Some OpenAI-compatible gateways expose DeepSeek models without
+        # identifying the provider as ``deepseek``.  Their reasoning mode can
+        # consume the entire completion budget before emitting ``content`` on
+        # long tool contexts.  The GeoAgent harness already performs explicit
+        # plan/search/review loops, so disable hidden model reasoning for any
+        # DeepSeek model name as well as the native provider.
+        if c["provider"] == "deepseek" or "deepseek" in model.lower():
             payload["thinking"]={"type":"disabled"}
         response=await client.post(model_settings.endpoint_for(c),headers={'Authorization':'Bearer '+c["api_key"]},json=payload)
         response.raise_for_status()

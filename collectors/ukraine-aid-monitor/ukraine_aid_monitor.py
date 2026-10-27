@@ -22,6 +22,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter, OrderedDict
 from datetime import datetime, timezone, timedelta, date
+from pathlib import Path
 from urllib.parse import urlparse
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -1028,7 +1029,8 @@ def main():
     outdir = args.out_dir or os.path.join(BASE, "output")
 
     if args.selftest:
-        sys.exit(run_selftest(cfg, eng))
+        from european_yields import selftest as yield_selftest
+        sys.exit(max(run_selftest(cfg, eng), yield_selftest()))
 
     # ★ 打印**实际生效**的出口，而不是环境变量里的那一个：
     #   出口池按真实目标深探排序，环境代理若是「半死」的（gstatic 通、
@@ -1117,6 +1119,12 @@ def main():
     print(f"[backfill] 回填 {n_bf} 条；新增 {n_new}；快照 {len(recs)}（无日期 {len(undated)}）")
     append_health_alert(paths["latest"], src_stats, outdir)
     append_verification_section(paths["latest"], recs, cfg)
+    # 同一业务采集器同时发布新闻记录与欧洲融资条件量化指标。
+    # 量化子模块自行保留部分失败状态，不因单个行情源失败丢弃新闻产出。
+    from european_yields import collect_and_write
+    yield_payload = collect_and_write(Path(outdir), today=as_of)
+    print(f"[yields] {yield_payload['collection_status']} · "
+          f"{len(yield_payload['observations'])} 项指标")
     print(f"[done] {paths['latest']}")
 
 # ---------------------------------------------------------------- selftest

@@ -179,6 +179,48 @@ def fetch_all(cfg, from_file=None, proxy=None, run_date=None):
     return payloads, statuses
 
 
+def restore_recent_history(statuses, out_root):
+    """Use locally verified history when a live source is temporarily unavailable.
+
+    This does not make stale data fresh.  It only restores the last successful
+    observations into the normal staleness gate, which still rejects a series
+    once its configured lag limit is exceeded.  The source status retains the
+    live-fetch failure so downstream users can distinguish a current response
+    from a cache fallback.
+    """
+    history_dir = os.path.join(out_root, "history")
+    restored = []
+    for st in statuses:
+        if st.get("status", "").startswith(("OK", "LOADED")):
+            continue
+        sid = st.get("id")
+        path = os.path.join(history_dir, "%s.jsonl" % sid)
+        if not sid or not os.path.isfile(path):
+            continue
+        rows = emit.read_jsonl(path)
+        data = {
+            str(row.get("date")): row.get("value")
+            for row in rows
+            if row.get("date") and row.get("value") is not None
+        }
+        if not data:
+            continue
+        dates = sorted(data)
+        st["live_status"] = st.get("status")
+        st["live_error"] = st.get("error")
+        st["status"] = "LOADED_CACHE"
+        st["channel"] = "verified-history-cache"
+        st["cache_path"] = os.path.relpath(path, out_root)
+        st["cache_fallback"] = True
+        st["n"] = len(data)
+        st["first_date"] = dates[0]
+        st["last_date"] = dates[-1]
+        st["last_value"] = data[dates[-1]]
+        st["_data"] = data
+        restored.append(st)
+    return restored
+
+
 # ---------------------------------------------------------------------------
 # 陈旧度检查
 # ---------------------------------------------------------------------------
@@ -1602,6 +1644,11 @@ def selftest(cfg):
        net.validate_payload(b"a,b\n1,2\n", "csv")[0])
     ck("validate: HTML 冒充 CSV 被拒",
        not net.validate_payload(b"<!DOCTYPE html><html>", "csv")[0])
+    _maint = net.validate_payload(
+        b"<!doctype html><html><title>Site Maintenance</title>"
+        b"<p>We'll be back soon!</p></html>", "csv")
+    ck("validate: 维护页给出明确原因",
+       _maint == (False, "source-maintenance-page"), "got %r" % (_maint,))
 
     # --- 原子写入 ---
     import tempfile
@@ -1774,6 +1821,17 @@ def main(argv=None):
                                    proxy=args.proxy, run_date=run_date)
     for st in statuses:
         st["proxy_decision"] = dec
+
+    # FRED and other public providers occasionally return an HTML maintenance
+    # page with HTTP 200.  Keep the live failure visible, but allow the last
+    # verified local history through the existing per-series staleness gate.
+    # This avoids publishing a fake current value while preventing a brief
+    # provider outage from disabling the whole composite.
+    cached = restore_recent_history(statuses, out_root)
+    for st in cached:
+        print("  [CACHE] %-22s live=%s；历史到 %s（仍需通过陈旧度门禁）"
+              % (st["id"], st.get("live_error") or st.get("live_status"),
+                 st.get("last_date")))
 
     # 落盘原始载荷
     if not args.from_file:

@@ -39,6 +39,36 @@ def db():
     CREATE TABLE IF NOT EXISTS page_summaries(cache_key TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL REFERENCES snapshots(id), page TEXT NOT NULL, scope TEXT NOT NULL, created_at TEXT NOT NULL, model TEXT NOT NULL, payload TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS snapshot_stats(snapshot_id TEXT PRIMARY KEY REFERENCES snapshots(id), records INTEGER NOT NULL, observations INTEGER NOT NULL, sources INTEGER NOT NULL, errors INTEGER NOT NULL, cleaning TEXT NOT NULL, import_stats TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS workspace_state(key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS qa_runs(
+        run_id TEXT PRIMARY KEY,
+        answer_id TEXT,
+        snapshot_id TEXT NOT NULL,
+        scope_hash TEXT NOT NULL,
+        phase TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        payload TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS qa_steps(
+        run_id TEXT NOT NULL,
+        sequence INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        PRIMARY KEY(run_id,sequence)
+    );
+    CREATE TABLE IF NOT EXISTS qa_artifacts(
+        artifact_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        call_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        byte_count INTEGER NOT NULL,
+        token_estimate INTEGER NOT NULL,
+        preview TEXT NOT NULL,
+        payload TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_qa_steps_run ON qa_steps(run_id,sequence);
+    CREATE INDEX IF NOT EXISTS idx_qa_artifacts_run_call ON qa_artifacts(run_id,call_id);
     """)
     try:
         yield c

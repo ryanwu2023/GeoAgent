@@ -2,6 +2,7 @@ import { lazy, Suspense, useDeferredValue, useEffect, useRef, useState } from "r
 import IntegrationSettings from "./IntegrationSettings";
 import McpWorkbench from "./McpWorkbench";
 import BriefTemplateEditor from "./BriefTemplateEditor";
+import AnalysisProcess from "./QaTrace";
 import projectLabels from "../config/project-labels.json";
 import { panelEntryScope } from "./hostViewContext";
 import { useEmbedIdentity } from "./useEmbedIdentity";
@@ -10,6 +11,7 @@ import { DEFAULT_RESEARCH_WIDTH } from "./researchLayout";
 import type { CSSProperties } from "react";
 import {
   Activity,
+  AlertTriangle,
   ArrowUpRight,
   BookOpen,
   ChevronRight,
@@ -25,8 +27,9 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { api, apiPut, dateText, num } from "./api";
+import { api, apiMeetings, apiPut, apiStream, dateText, num } from "./api";
 import type {
+  AnalysisRound,
   Answer,
   Asset,
   Brief,
@@ -36,6 +39,7 @@ import type {
   Metric,
   ExternalMcpRegistry,
   MapEvidence,
+  Meeting,
   PageSummary,
   Status,
   Workspace,
@@ -48,8 +52,10 @@ import CollectorMonitor from "./CollectorMonitor";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import BriefViewer from "./BriefViewer";
+import MeetingCalendar from "./MeetingCalendar";
 import { useHostViewContext } from "./useHostViewContext";
 import { metricCategory } from "./metric_category";
+import { clearRunId, mergeAnalysisTrace, normalizeAnswer, normalizeAnswerMarkdown, qaRunStorageKey, saveRunId, storedRunId } from "./qa_ui";
 
 const MapView = lazy(() => import("./MapView"));
 
@@ -72,6 +78,7 @@ const names: Record<string, string> = {
 const movementClass = (m: Metric) =>
   m.delta == null || m.delta === 0 ? "flat" : m.delta > 0 ? "up" : "down";
 const modelSummaryTabs = new Set(["metrics", "scenarios", "assets"]);
+
 export default function App() {
   const [sourceMetric, setSourceMetric] = useState<Metric | null>(null);
   const [translating, setTranslating] = useState(false);
@@ -96,6 +103,7 @@ export default function App() {
     [end, setEnd] = useState("");
   const [work, setWork] = useState<Workspace | null>(null),
     [mapRecords, setMapRecords] = useState<MapEvidence[]>([]),
+    [mapMeetings, setMapMeetings] = useState<Meeting[]>([]),
     [mapLoading, setMapLoading] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
@@ -105,6 +113,10 @@ export default function App() {
     [pageSummaryLoading, setPageSummaryLoading] = useState(false),
     [pageSummaryRefresh, setPageSummaryRefresh] = useState(0);
   const [selected, setSelected] = useState<Evidence | null>(null),
+    [selectedSnapshotId, setSelectedSnapshotId] = useState(""),
+    [openingEvidenceId, setOpeningEvidenceId] = useState(""),
+    [evidenceOpenError, setEvidenceOpenError] = useState(""),
+    [evidenceRequest, setEvidenceRequest] = useState<{id:string;snapshotId:string}|null>(null),
     [asset, setAsset] = useState<Asset | null>(null),
     [sourcesOpen, setSourcesOpen] = useState(false),
     [search, setSearch] = useState(""),
@@ -116,7 +128,9 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(true),
     [question, setQuestion] = useState(""),
     [answer, setAnswer] = useState<Answer | null>(null),
+    [analysisTrace, setAnalysisTrace] = useState<AnalysisRound[]>([]),
     [asking, setAsking] = useState(false),
+    [reportDownloading, setReportDownloading] = useState(false),
     [replay, setReplay] = useState(false),
     [history, setHistory] = useState<Answer[]>([]);
   const [embedWorkspaceScope, setEmbedWorkspaceScope] = useState("");
@@ -183,6 +197,7 @@ export default function App() {
     new Map<string, { time: number; data: Workspace }>(),
   );
   const mapCache = useRef(new Map<string, MapEvidence[]>());
+  const meetingMapCache = useRef(new Map<string, Meeting[]>());
   const mapTranslationScope = useRef("");
   mapTranslationScope.current = JSON.stringify([sid,topic,dimension,start,end]);
   const pichatFrameRef = useRef<HTMLIFrameElement | null>(null);
@@ -273,6 +288,7 @@ export default function App() {
           if (nextId) {
             workspaceCache.current.clear();
             mapCache.current.clear();
+            meetingMapCache.current.clear();
             setWorkingSid(nextId);
             setSid(nextId);
             setNotice(`后台采集与导入已完成，已切换至最新工作快照 ${nextId.slice(0, 8)}`);
@@ -316,6 +332,7 @@ export default function App() {
             if (nextId && nextId !== workingSidRef.current) {
               workspaceCache.current.clear();
               mapCache.current.clear();
+              meetingMapCache.current.clear();
               workingSidRef.current = nextId;
               setWorkingSid(nextId);
               setSid(nextId);
@@ -386,8 +403,10 @@ export default function App() {
     }
     const key = new URLSearchParams({ snapshot_id: sid, topic, dimension, start, end }).toString();
     const cached = mapCache.current.get(key);
-    if (cached) {
+    const cachedMeetings = meetingMapCache.current.get(key);
+    if (cached && cachedMeetings) {
       setMapRecords(cached);
+      setMapMeetings(cachedMeetings);
       setMapLoading(false);
       return;
     }
@@ -396,11 +415,16 @@ export default function App() {
     let cancelled = false;
     setMapLoading(true);
     setMapRecords([]);
-    api<MapEvidence[]>("/map-records?" + key)
-      .then((records) => {
+    Promise.all([
+      api<MapEvidence[]>("/map-records?" + key),
+      apiMeetings({ snapshot_id: sid, topic, include_inactive: false, limit: 500 }),
+    ])
+      .then(([records, meetingPayload]) => {
         if (cancelled) return;
         mapCache.current.set(key, records);
+        meetingMapCache.current.set(key, meetingPayload.records);
         setMapRecords(records);
+        setMapMeetings(meetingPayload.records);
       })
       .catch((e) => {
         if (!cancelled) setError((e as Error).message);
@@ -503,11 +527,11 @@ export default function App() {
     setDiff("");
     if (workingSid) {
       const v = selectionVersion.current;
-      api<Answer[]>("/answers?snapshot_id=" + workingSid)
+      api<Answer[]>("/answers?" + new URLSearchParams({snapshot_id:workingSid,compact:"true"}))
         .then((h) => {
           if (v === selectionVersion.current)
             setHistory(
-              h.filter(
+              h.map(normalizeAnswer).filter(
                 (a) =>
                   a.topic === topic &&
                   (a.filters?.dimension || "") === dimension,
@@ -593,6 +617,10 @@ export default function App() {
   function closeDetails() {
     detailRequestVersion.current++;
     setSelected(null);
+    setSelectedSnapshotId("");
+    setOpeningEvidenceId("");
+    setEvidenceOpenError("");
+    setEvidenceRequest(null);
     setAsset(null);
     setSourceMetric(null);
   }
@@ -600,17 +628,27 @@ export default function App() {
     closeDetails();
     setAsset(nextAsset);
   }
-  async function openEvidence(id: string, metric: Metric | null = null) {
-    if (!sid) return;
+  async function openEvidence(id: string, metric: Metric | null = null, evidenceSnapshotId = sid) {
+    if (!evidenceSnapshotId) return;
     const version = ++detailRequestVersion.current;
+    setEvidenceRequest({id,snapshotId:evidenceSnapshotId});
+    setOpeningEvidenceId(id);
+    setEvidenceOpenError("");
     try {
-      const r = await api<Evidence>(`/evidence/${id}?snapshot_id=${sid}`);
+      const r = await api<Evidence>(`/evidence/${encodeURIComponent(id)}?snapshot_id=${encodeURIComponent(evidenceSnapshotId)}`);
       if (version !== detailRequestVersion.current) return;
       setSelected(r);
+      setSelectedSnapshotId(evidenceSnapshotId);
       setSourceMetric(metric);
       setAsset(null);
     } catch (e) {
-      if (version === detailRequestVersion.current) setError((e as Error).message);
+      if (version === detailRequestVersion.current) {
+        const message=`证据 ${id.slice(0,8)}… 无法打开：${(e as Error).message}`;
+        setEvidenceOpenError(message);
+        setError(message);
+      }
+    } finally {
+      if (version === detailRequestVersion.current) setOpeningEvidenceId("");
     }
   }
   async function translateMapTitles(ids: string[]) {
@@ -649,26 +687,57 @@ export default function App() {
   }
   async function ask(q = question) {
     if (!q.trim() || !workingSid) return;
+    const submittedQuestion = q.trim();
+    setQuestion("");
     const previous_answer_id = answer?.id || "";
     const version = selectionVersion.current;
     setAsking(true);
     setAnswer(null);
+    setAnalysisTrace([]);
     setReplay(false);
     openResearchAssistant();
     setSourcesOpen(false);
+    const runStorageKey=qaRunStorageKey(workingSid,topic,dimension,start,end,submittedQuestion);
+    let activeRunId=storedRunId(window.localStorage,runStorageKey);
+    const requestBody=()=>({
+      snapshot_id: workingSid,
+      question: submittedQuestion,
+      topic,
+      dimension,
+      start,
+      end,
+      previous_answer_id,
+      run_id: activeRunId,
+      compact: true,
+    });
+    const stream=()=>apiStream<AnalysisRound,Answer>("/ask/stream", {...requestBody(),question: submittedQuestion}, item => {
+      if (version !== selectionVersion.current) return;
+      setAnalysisTrace(current => mergeAnalysisTrace(current,item));
+    }, run=>{
+      activeRunId=run.run_id;
+      saveRunId(window.localStorage,runStorageKey,run.run_id);
+    });
     try {
-      const a = await api<Answer>("/ask", {
-        snapshot_id: workingSid,
-        question: q,
-        topic,
-        dimension,
-        start,
-        end,
-        previous_answer_id,
-      });
+      let a:Answer;
+      try {
+        a=await stream();
+      } catch (firstError) {
+        if(!activeRunId)throw firstError;
+        let state:{status:string}|null=null;
+        for(let attempt=0;attempt<20;attempt++){
+          await new Promise(resolve=>setTimeout(resolve,750));
+          try{state=await api<{status:string}>(`/qa-runs/${activeRunId}`)}catch{state=null}
+          if(state&&state.status!=="running")break;
+        }
+        if(!state||state.status==="running")throw new Error(`连接中断，分析运行 ${activeRunId} 已保存，可再次提交同一问题继续。`);
+        a=await stream();
+      }
       if (version === selectionVersion.current) {
-        setAnswer(a);
-        setHistory((h) => [a, ...h]);
+        clearRunId(window.localStorage,runStorageKey);
+        const normalized=normalizeAnswer(a);
+        setAnswer(normalized);
+        setAnalysisTrace(normalized.analysis_trace || []);
+        setHistory((h) => [normalized, ...h.filter(item=>item.id!==normalized.id)]);
         api<Workspace>(
           "/workspace?" +
             new URLSearchParams({
@@ -684,9 +753,42 @@ export default function App() {
         });
       }
     } catch (e) {
+      if (version === selectionVersion.current) setQuestion(current=>current||submittedQuestion);
       setError((e as Error).message);
     } finally {
       setAsking(false);
+    }
+  }
+  async function downloadAnswerReport(item: Answer) {
+    if (!item.summary || reportDownloading) return;
+    setReportDownloading(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/answers/${encodeURIComponent(item.id)}/report.html`);
+      if (!response.ok) {
+        const raw = await response.text();
+        let detail = "HTML 报告生成失败";
+        try { const data = JSON.parse(raw); detail = typeof data.detail === "string" ? data.detail : detail; } catch { if (raw) detail = raw; }
+        throw new Error(detail);
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const filename = encodedName ? decodeURIComponent(encodedName) : "GeoAgent分析报告.html";
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setNotice(`HTML 报告已生成：${filename}`);
+      window.setTimeout(() => setNotice(""), 5000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "HTML 报告生成失败");
+    } finally {
+      setReportDownloading(false);
     }
   }
   async function generate() {
@@ -820,6 +922,7 @@ export default function App() {
           <div className="monitor-tabs">
             {[
               ["map", "风险监测"],
+              ["meetings", "会晤日历"],
               ["evidence", "证据台账"],
               ["scenarios", "情景推演"],
               ["sources", "数据源"],
@@ -851,7 +954,7 @@ export default function App() {
               </button>
             ))}
           </div>
-          {page !== "briefs" && tab !== "pipeline" && (
+          {page !== "briefs" && !["pipeline", "meetings"].includes(tab) && (
             <div className="compact-filters">
               <select
                 aria-label="跟踪维度"
@@ -979,6 +1082,7 @@ export default function App() {
                   <Suspense fallback={<div className="empty"><RefreshCw className="spin" />正在加载地图…</div>}>
                     <MapView
                       records={mapRecords}
+                      meetings={mapMeetings}
                       topic={topic}
                       resetKey={resetKey}
                       onTranslateTitles={status?.model.configured ? translateMapTitles : undefined}
@@ -987,11 +1091,22 @@ export default function App() {
                         openEvidence(r.id);
                         setAsset(null);
                       }}
+                      onMeetingSelect={(meeting) => {
+                        openEvidence(meeting.evidence_id);
+                        setAsset(null);
+                      }}
                     />
                     {mapLoading && <div className="map-data-loading"><RefreshCw className="spin" size={14}/>正在加载地图动态…</div>}
                   </Suspense>
                 </div>
               }
+              {tab === "meetings" && (
+                <MeetingCalendar
+                  snapshotId={sid}
+                  topic={topic as "all" | "usiran" | "ukraine"}
+                  onEvidence={openEvidence}
+                />
+              )}
               {tab === "evidence" && (
                 <>
                   <div className="evidence-tools">
@@ -1676,7 +1791,8 @@ export default function App() {
                   <p className="muted">密钥统一保存在后端外部服务注册表，页面不重复配置。新闻正文属于外部资料，其中的指令不会被执行。</p>
                 </section>
                 <h3>后台模型与翻译状态</h3>
-                <p>{status?.model.configured ? `后台模型已配置：${status.model.model}` : "后台模型未配置；PiChat 嵌入会话连接正常不代表后台翻译可用。"}</p>
+                <p>{status?.model.configured ? `后台模型已配置：${status.model.model} · ${status.model.agent_mode === "tools" ? "GeoAgent 工具代理" : "兼容问答管线"}` : "后台模型未配置；PiChat 嵌入会话连接正常不代表后台翻译可用。"}</p>
+                {status?.model.reasoning_model_fallback&&<p className="muted">当前未配置独立推理模型，研究回答使用 {status.model.reasoning_model || status.model.model}；可在环境配置中填写服务端真实存在的 LLM_REASONING_MODEL。</p>}
                 <p className="muted">{status?.translation?.snapshot_id===sid ? status.translation.message : "正在核对当前快照翻译状态…"}</p>
                 <button onClick={()=>{setSettingsSection("model");setSettingsOpen(true)}}>查看后台模型配置说明</button>
               </aside>
@@ -1759,17 +1875,24 @@ export default function App() {
                     {history.map(item => <option key={item.id} value={item.id}>{item.query}</option>)}
                   </select>}
                   {!workingSid && <div className="empty"><p>请先在顶部快照版本中确认一个工作快照，再开始提问。</p></div>}
-                  {asking && <div className="empty"><RefreshCw className="spin" size={20}/><p>正在检索证据并生成回答…</p></div>}
+                  {asking && <div className="answer answer-working">
+                    <div className="answer-working-label"><RefreshCw className="spin" size={16}/><span>正在结合当前快照进行多轮分析…</span></div>
+                    <AnalysisProcess live rounds={analysisTrace.length?analysisTrace:[{round:1,stage:"analysis",title:"理解问题与初步回答",status:"running",summary:"正在理解问题、锁定范围并检索首轮内部资料。",details:["即将展示检索范围、阶段结论、复核问题和新增依据。"],search_queries:[],evidence_ids:[]}]} planned={status?.model.qa_rounds||3} openingEvidenceId={openingEvidenceId} onEvidence={id=>void openEvidence(id,null,workingSid)}/>
+                  </div>}
                   {answer && !asking && <div className="answer">
                     <div className="question-bubble">{answer.query}</div>
-                    <div className="answer-mode">{answer.mode}<small>数据截至 {dateText(answer.as_of)} · 快照 {answer.snapshot_id.slice(0, 8)}</small></div>
-                    {answer.summary ? <div className="answer-summary"><span>总结回答</span><p>{answer.summary.text}</p><div className="citation-buttons">{answer.summary.evidence_ids.map(id => <button className="citation" key={id} onClick={() => openEvidence(id)}>查看依据</button>)}</div></div> : <Markdown remarkPlugins={[remarkGfm]}>{answer.message}</Markdown>}
+                    <div className="answer-mode">{answer.mode}<small>数据截至 {dateText(answer.as_of)} · 快照 {answer.snapshot_id.slice(0, 8)}{answer.retrieval_window?.recent_after?` · 近期证据自 ${answer.retrieval_window.recent_after}`:""}</small></div>
+                    {(answer.analysis_trace?.length||analysisTrace.length)>0&&<AnalysisProcess rounds={answer.analysis_trace||analysisTrace} planned={answer.model_rounds?.planned||answer.analysis_trace?.length||analysisTrace.length} openingEvidenceId={openingEvidenceId} onEvidence={id=>void openEvidence(id,null,answer.snapshot_id)}/>}
+                    {evidenceOpenError&&<div className="inline-error" role="alert">{evidenceOpenError}</div>}
+                    {answer.summary ? <div className="answer-summary"><header><span>综合研判</span><small>结论、证据、资产传导与观察点</small></header><Markdown remarkPlugins={[remarkGfm]}>{normalizeAnswerMarkdown(answer.summary.text)}</Markdown><div className="citation-buttons">{answer.summary.evidence_ids.map((id,index) => <button className="citation" key={id} aria-busy={openingEvidenceId===id} disabled={openingEvidenceId===id} onClick={() => openEvidence(id,null,answer.snapshot_id)}>{openingEvidenceId===id?"正在读取…":`查看依据 ${index+1}`}</button>)}</div></div> : <Markdown remarkPlugins={[remarkGfm]}>{normalizeAnswerMarkdown(answer.message)}</Markdown>}
                     {answer.summary && <p className="answer-status">{answer.message}</p>}
-                    {(answer.facts.length > 0 || answer.inferences.length > 0 || answer.citations.length > 0 || answer.gaps.length > 0) && <details className="answer-evidence">
+                    {answer.summary && <div className="answer-actions"><button type="button" onClick={()=>void downloadAnswerReport(answer)} disabled={reportDownloading}><Download size={14}/>{reportDownloading?"正在生成 HTML…":"保存为 HTML 报告"}</button><small>忠实导出当前回答和引用，不再次调用模型。</small></div>}
+                    {(answer.facts.length > 0 || answer.inferences.length > 0 || answer.citations.length > 0 || (answer.internal_sources?.length||0) > 0 || answer.gaps.length > 0) && <details className="answer-evidence">
                       <summary>研究依据与数据缺口</summary>
-                      {answer.facts.length > 0 && <><h3>事实与程序计算</h3>{answer.facts.map((item,index) => <div className="fact" key={`fact-${index}`}><label>{item.kind}</label><p>{item.text}</p><div className="citation-buttons">{item.evidence_ids.map(id => <button className="citation" key={id} onClick={() => openEvidence(id)}>查看证据</button>)}</div></div>)}</>}
-                      {answer.inferences.length > 0 && <><h3>模型推论</h3>{answer.inferences.map((item,index) => <div className="fact inference" key={`inference-${index}`}><label>{item.kind}</label><p>{item.text}</p><div className="citation-buttons">{item.evidence_ids.map(id => <button className="citation" key={id} onClick={() => openEvidence(id)}>查看依据</button>)}</div></div>)}</>}
-                      {answer.citations.length > 0 && <><h3>引用来源</h3>{answer.citations.map(item => <button className="reference" key={item.id} onClick={() => openEvidence(item.id)}><BookOpen size={14}/><span>{item.title}</span></button>)}</>}
+                      {answer.facts.length > 0 && <><h3>事实与程序计算</h3>{answer.facts.map((item,index) => <div className="fact" key={`fact-${index}`}><label>{item.kind}</label><p>{item.text}</p><div className="citation-buttons">{item.evidence_ids.map(id => <button className="citation" key={id} onClick={() => openEvidence(id,null,answer.snapshot_id)}>查看证据</button>)}</div></div>)}</>}
+                      {answer.inferences.length > 0 && <><h3>模型推论</h3>{answer.inferences.map((item,index) => <div className="fact inference" key={`inference-${index}`}><label>{item.kind}</label><p>{item.text}</p><div className="citation-buttons">{item.evidence_ids.map(id => <button className="citation" key={id} onClick={() => openEvidence(id,null,answer.snapshot_id)}>查看依据</button>)}</div></div>)}</>}
+                      {answer.citations.length > 0 && <><h3>引用来源</h3>{answer.citations.map(item => <button className="reference" key={item.id} onClick={() => openEvidence(item.id,null,answer.snapshot_id)}><BookOpen size={14}/><span>{item.title}</span></button>)}</>}
+                      {(answer.internal_sources?.length||0) > 0 && <><h3>华泰内部消息补充</h3><p className="internal-source-boundary">内部消息用于补充线索，内容及上游摘要仍需结合官方或独立来源核验。</p>{answer.internal_sources!.map(item => <details className="internal-source" key={item.id}><summary><span>{item.ai_title||item.title||"未命名消息"}</span><small>{dateText(item.message_at||item.receive_time||"")}</small></summary><p>{item.content_abstract||item.ai_short||item.ai_content||"暂无可展示摘要"}</p><div>{[item.text_class,item.primary_tag,item.group_name].filter(Boolean).join(" · ")}</div></details>)}</>}
                       {answer.gaps.length > 0 && <><h3>数据缺口</h3><ul>{answer.gaps.map(item => <li key={item}>{item}</li>)}</ul></>}
                       {answer.steps.length > 0 && <div className="steps">{answer.steps.join(" → ")}</div>}
                     </details>}
@@ -2002,6 +2125,23 @@ export default function App() {
           </aside>
         </div>
       )}
+      {!selected && evidenceRequest && (openingEvidenceId || evidenceOpenError) && (
+        <div className="drawer-backdrop evidence-backdrop" onClick={closeDetails}>
+          <aside className="drawer evidence-loading-drawer" role="dialog" aria-modal="true" aria-label="证据读取状态" onClick={(event)=>event.stopPropagation()}>
+            <div className="drawer-heading">
+              <h2><BookOpen size={17}/>证据详情</h2>
+              <button aria-label="关闭证据读取状态" onClick={closeDetails}><X/></button>
+            </div>
+            {openingEvidenceId ? <div className="evidence-loading-state" role="status">
+              <RefreshCw className="spin" size={21}/>
+              <div><strong>正在读取证据全文</strong><p>首次打开历史快照可能需要几秒，读取完成后会自动显示来源、时间和原文。</p></div>
+            </div> : <div className="evidence-loading-state error" role="alert">
+              <AlertTriangle size={21}/>
+              <div><strong>证据读取失败</strong><p>{evidenceOpenError}</p><button type="button" onClick={()=>void openEvidence(evidenceRequest.id,null,evidenceRequest.snapshotId)}>重新读取</button></div>
+            </div>}
+          </aside>
+        </div>
+      )}
       {selected && (
         <div
           className="drawer-backdrop evidence-backdrop"
@@ -2031,12 +2171,12 @@ export default function App() {
               <span className="pill subdued">{selected.verification}</span>
             </div>
             <h2 className="record-title">{selected.title}</h2>
-            <p className="translation-state">{titleTranslationLabel(selected,status?.translation?.snapshot_id===sid ? status.translation : undefined)}</p>
+            <p className="translation-state">{titleTranslationLabel(selected,status?.translation?.snapshot_id===selectedSnapshotId ? status.translation : undefined)}</p>
             {!selected.supplemental && (
               <ReviewPanel
-                key={sid + selected.id}
+                key={selectedSnapshotId + selected.id}
                 record={selected}
-                sid={sid}
+                sid={selectedSnapshotId}
                 onSaved={(r) => {
                   setSelected(r);
                   workspaceCache.current.clear();
@@ -2089,12 +2229,12 @@ export default function App() {
                 setTranslating(true);
                 try {
                   const r = await api<{ ok: boolean; message: string }>(
-                    `/evidence/${selected.id}/translate?snapshot_id=${sid}`,
+                    `/evidence/${selected.id}/translate?snapshot_id=${selectedSnapshotId}`,
                     {},
                   );
                   if (version !== detailRequestVersion.current) return;
                   setNotice(r.message);
-                  if (r.ok) await openEvidence(selected.id, sourceMetric);
+                   if (r.ok) await openEvidence(selected.id, sourceMetric, selectedSnapshotId);
                 } catch {
                   if (version === detailRequestVersion.current) setError("翻译请求失败，原文保留");
                 } finally {

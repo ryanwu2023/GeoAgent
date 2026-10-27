@@ -1,0 +1,77 @@
+{
+  "usiran-latest": {
+    "topic":"usiran", "fact_groups":[["美伊","伊朗","美国"],["外交","谈判","斡旋"],["军事","打击","部署"],["观察","触发"]],
+    "required_sections":["结论","依据","不确定","观察"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":7,
+    "requires_counterevidence":true, "requires_assets":false, "requires_metrics":false
+  },
+  "usiran-two-months": {
+    "topic":"usiran", "fact_groups":[["两个月","近两月","时间"],["外交","谈判"],["军事","打击"],["官方","单方"],["媒体转述","报道称"],["推断","判断"]],
+    "required_sections":["结论","主线","证据","限制"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":62,
+    "requires_counterevidence":true, "requires_assets":false, "requires_metrics":false
+  },
+  "houthi-saudi": {
+    "topic":"usiran", "fact_groups":[["胡塞"],["沙特"],["袭击","无人机","导弹"],["确认","核验"],["单方","未确认"]],
+    "required_sections":["结论","事实","核验","缺口"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":10,
+    "requires_counterevidence":true, "requires_assets":false, "requires_metrics":false
+  },
+  "hormuz": {
+    "topic":"usiran", "fact_groups":[["霍尔木兹"],["通行","艘次","载重吨"],["观测","截至"],["封锁","断航","恢复"],["口径","AIS","基数"]],
+    "required_sections":["结论","指标","证据","限制"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":14,
+    "requires_counterevidence":true, "requires_assets":false, "requires_metrics":true
+  },
+  "asset-transmission": {
+    "topic":"usiran", "fact_groups":[["原油","布伦特"],["黄金"],["美债","收益率"],["美元"],["权益","股指"],["因果","传导"]],
+    "required_sections":["结论","市场表现","传导","限制"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":7,
+    "requires_counterevidence":true, "requires_assets":true, "requires_metrics":true
+  },
+  "post-election-strike": {
+    "topic":"usiran", "fact_groups":[["选举"],["计划","筹划"],["表态","声称"],["尚未","未发生","未确认"],["来源","证据等级","媒体转述"]],
+    "required_sections":["结论","证据","边界","观察"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":14,
+    "requires_counterevidence":true, "requires_assets":false, "requires_metrics":false
+  },
+  "ukraine-latest": {
+    "topic":"ukraine", "fact_groups":[["俄乌","乌克兰","俄罗斯"],["军事","战线","打击"],["援助","交付"],["外交","和谈"],["反证","尚未"]],
+    "required_sections":["结论","军事","援助","外交","限制"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":7,
+    "requires_counterevidence":true, "requires_assets":false, "requires_metrics":false
+  },
+  "ukraine-talks-execution": {
+    "topic":"ukraine", "fact_groups":[["停火","和谈"],["意愿","框架","协议"],["执行","落实"],["反证","否认"],["失效","触发"]],
+    "required_sections":["结论","支持证据","反证","失效条件"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":14,
+    "requires_counterevidence":true, "requires_assets":false, "requires_metrics":false
+  },
+  "ukraine-aid-delivery": {
+    "topic":"ukraine", "fact_groups":[["援助"],["拨付","支付"],["交付","到货"],["承诺","宣布"],["作战能力","持续能力"]],
+    "required_sections":["结论","已交付","承诺","影响","缺口"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":30,
+    "requires_counterevidence":true, "requires_assets":false, "requires_metrics":true
+  },
+  "russia-financial-stress": {
+    "topic":"ukraine", "fact_groups":[["美元兑卢布","卢布汇率"],["布伦特","油价"],["财政赤字","财政收入","军费"],["金融压力"],["缺口","滞后"]],
+    "required_sections":["结论","指标","联合判断","限制"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":31,
+    "requires_counterevidence":true, "requires_assets":true, "requires_metrics":true
+  },
+  "europe-ukraine-macro": {
+    "topic":"ukraine", "fact_groups":[["天然气库存","注气","取气"],["援乌","拨款"],["粮食","出口"],["宏观","传导"],["能源","通胀","贸易"]],
+    "required_sections":["结论","数据","传导","缺口"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":31,
+    "requires_counterevidence":true, "requires_assets":true, "requires_metrics":true
+  },
+  "ukraine-counterevidence": {
+    "topic":"ukraine", "fact_groups":[["持续消耗"],["反证","相反"],["停火","和谈"],["失效条件","触发条件"],["观察点","跟踪"]],
+    "required_sections":["基准判断","反证","失效条件","观察点"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":14,
+    "requires_counterevidence":true, "requires_assets":false, "requires_metrics":false
+  },
+  "cross-topic": {
+    "topic":"all", "fact_groups":[["美伊"],["俄乌"],["共同驱动"],["相反作用","抵消"],["资产"],["数据缺口"]],
+    "required_sections":["结论","共同驱动","相反作用","资产","缺口"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":14,
+    "requires_counterevidence":true, "requires_assets":true, "requires_metrics":true
+  },
+  "reliability-gaps": {
+    "topic":"all", "fact_groups":[["官方"],["媒体转述"],["单方声明"],["研究推断","模型推论"],["可靠性","证据等级"],["补数","数据缺口"]],
+    "required_sections":["结论","证据分层","薄弱点","补数方向"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":30,
+    "requires_counterevidence":true, "requires_assets":false, "requires_metrics":false
+  },
+  "internal-public-cross-check": {
+    "topic":"usiran", "fact_groups":[["华泰","内部消息"],["公开证据"],["交叉核验"],["待外部核验","待核验"],["三条","3条"]],
+    "required_sections":["结论","内部消息","公开证据","核验","限制"], "forbidden_terms":["足球","猴痘","地震"], "recent_days":14,
+    "requires_counterevidence":true, "requires_assets":false, "requires_metrics":false
+  }
+}

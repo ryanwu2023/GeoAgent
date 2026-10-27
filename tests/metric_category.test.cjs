@@ -15,3 +15,8 @@ test('polling category uses explicit semantic bucket, not a Trump-only label', (
   assert.equal(metricCategory({name:'军费中的百分比',unit:'%'}),'军事');
   assert.equal(metricCategory({name:'利率',unit:'%',bucket:'rates'}),'经济');
 });
+test('European sovereign yield metrics are economic indicators', () => {
+  for (const name of ['德国10年期国债收益率','法国10年期国债收益率','欧元区10年期收益率','法德10年期国债利差']) {
+    assert.equal(metricCategory({name,unit:name.includes('利差')?'bp':'%',bucket:'rates'}),'经济');
+  }
+});

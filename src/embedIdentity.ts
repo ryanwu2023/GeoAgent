@@ -4,7 +4,18 @@ export const EMBED_SLOW_NOTICE_MS = 10_000;
 export const EMBED_RETRY_DELAYS_MS = [2_000, 5_000] as const;
 
 export class EmbedIdentityFailure extends Error {
-  constructor(message: string, readonly retryable = false) { super(message); }
+  constructor(message: string, readonly retryable = false, readonly publicMessage?: string) { super(message); }
+}
+
+export function identityResponseFailure(status: number, body: unknown): EmbedIdentityFailure {
+  const detail = body && typeof body === 'object' && 'detail' in body ? body.detail : null;
+  const code = detail && typeof detail === 'object' && 'code' in detail ? detail.code : null;
+  if (code === 'PICHAT_APP_KEY_REJECTED') return new EmbedIdentityFailure('App key rejected', false,
+    'PiChat 拒绝嵌入身份：应用 Key 无效、已到期或已撤销。请在连接配置中更新有效的 PiChat 应用 Key，再重试连接。');
+  if (code === 'PICHAT_EMBED_FORBIDDEN') return new EmbedIdentityFailure('Embed policy rejected', false,
+    'PiChat 拒绝嵌入权限：请核对该应用的入口、Agent 和来源配置，再重试连接。');
+  // Do not render arbitrary upstream text or private response fields.
+  return new EmbedIdentityFailure('Identity rejected', [408,429,500,502,503,504].includes(status));
 }
 
 type Options = {
@@ -126,7 +137,8 @@ export class EmbedIdentity {
             }, delay));
           } else {
             this.identityStopped = true;
-            this.options.status('error','PiChat 身份获取失败或超时，请检查连接配置或重试连接。');
+            this.options.status('error',error instanceof EmbedIdentityFailure && error.publicMessage
+              ? error.publicMessage : 'PiChat 身份获取失败或超时，请检查连接配置或重试连接。');
           }
         }
       }).finally(() => {

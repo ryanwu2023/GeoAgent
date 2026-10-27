@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from backend.collector_logs import read_log_tail
+from backend.collector_logs import read_log_tail, redact
 
 
 def test_log_tail_falls_back_to_ledger_event(tmp_path):
@@ -17,3 +17,14 @@ def test_log_tail_falls_back_to_ledger_event(tmp_path):
     assert payload["available"] is True
     assert payload["source"] == "ledger-event"
     assert payload["content"] == "hello"
+
+
+def test_redact_masks_bearer_and_quoted_json_credentials():
+    value = 'Authorization: Bearer abc.def "access_token": "secret-value", password=hunter2'
+
+    safe = redact(value)
+
+    assert "abc.def" not in safe
+    assert "secret-value" not in safe
+    assert "hunter2" not in safe
+    assert safe.count("[REDACTED]") == 3

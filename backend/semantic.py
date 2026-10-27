@@ -110,13 +110,11 @@ def risk_panel_counts(records, reviews, *, classify=None):
 
 
 def search_evidence(records, query):
-    """Exact panel substring matching, including translated fields and sources."""
+    """Hybrid panel retrieval; empty queries retain reverse chronology."""
     needle = query.strip().casefold()
     if needle:
-        cache = translation_cache()
-        records = [r for r in records if any(needle in str(v).casefold() for v in (
-            r.get('title', ''), r.get('text', ''), r.get('title_zh', ''), r.get('summary_zh', ''),
-            r.get('source_name', ''), r.get('publisher', ''), source_name(r.get('source_name', ''), cache)))]
+        from .qa_retrieval import hybrid_retrieve
+        return hybrid_retrieve(records, query, limit=len(records))
     return sorted(records, key=lambda r: (r.get('published_at') or '', r['id']), reverse=True)
 
 

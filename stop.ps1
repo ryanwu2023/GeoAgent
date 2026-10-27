@@ -4,6 +4,8 @@ $statePath = Join-Path $PSScriptRoot 'data\server-process.json'
 $entryPath = Join-Path $PSScriptRoot 'scripts\serve.py'
 $crawlerStatePath = Join-Path $PSScriptRoot 'data\crawler-manager-process.json'
 $crawlerEntryPath = Join-Path $PSScriptRoot 'scripts\crawler_manager.py'
+$internalMessageStatePath = Join-Path $PSScriptRoot 'data\ht-macro-service-process.json'
+$internalMessageEntryPath = Join-Path $PSScriptRoot 'scripts\ht_macro_service.py'
 
 function Read-JsonUtf8([string]$Path) {
     $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
@@ -11,6 +13,17 @@ function Read-JsonUtf8([string]$Path) {
 }
 
 try {
+    if (Test-Path -LiteralPath $internalMessageStatePath) {
+        $serviceSaved = Read-JsonUtf8 $internalMessageStatePath
+        $serviceProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($serviceSaved.processId)" -ErrorAction SilentlyContinue
+        if ($serviceProcess) {
+            if ($serviceSaved.entry -ne $internalMessageEntryPath -or -not $serviceProcess.CommandLine.Contains($internalMessageEntryPath) -or $serviceProcess.CreationDate.ToUniversalTime() -ne ([datetime]$serviceSaved.createdAt).ToUniversalTime()) {
+                throw 'Internal message process identity mismatch. Refusing to stop an unrelated process.'
+            }
+            & taskkill.exe /PID $serviceSaved.processId /T /F | Out-Null
+        }
+        Remove-Item -LiteralPath $internalMessageStatePath -ErrorAction SilentlyContinue
+    }
     if (Test-Path -LiteralPath $crawlerStatePath) {
         $crawlerSaved = Read-JsonUtf8 $crawlerStatePath
         $crawlerProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($crawlerSaved.processId)" -ErrorAction SilentlyContinue
@@ -32,5 +45,5 @@ try {
     Stop-Process -Id $saved.processId -ErrorAction Stop
     Wait-Process -Id $saved.processId -Timeout 10 -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $statePath
-    Write-Host 'Project server and crawler manager stopped. Stored data is unchanged.'
+    Write-Host 'Project server, crawler manager and internal message service stopped. Stored data is unchanged.'
 } catch { Write-Error $_ -ErrorAction Continue; exit 1 }

@@ -51,19 +51,24 @@ function evaluate(code, context) {
 // Run the actual App request functions and UI callbacks against deferred API
 // responses. This verifies async ordering without claiming a browser lifecycle test.
 function harness() {
-  const state = {selected: null, asset: null, metric: null, error: '', notice: '', chatOpen: true, translating: false};
+  const state = {selected: null, selectedSnapshotId: '', asset: null, metric: null, error: '', notice: '', chatOpen: true, translating: false, openingEvidenceId: '', evidenceOpenError: '', evidenceRequest: null};
   const requests = [];
   const context = vm.createContext({
     sid: 'snapshot-a',
+    selectedSnapshotId: 'snapshot-a',
     selected: {id: 'record-a'},
     sourceMetric: null,
     detailRequestVersion: {current: 0},
     selectionVersion: {current: 17},
     api: url => new Promise((resolve, reject) => requests.push({url, resolve, reject})),
     setSelected: value => { state.selected = value; },
+    setSelectedSnapshotId: value => { state.selectedSnapshotId = value; context.selectedSnapshotId = value; },
     setAsset: value => { state.asset = value; },
     setSourceMetric: value => { state.metric = value; },
     setError: value => { state.error = value; },
+    setOpeningEvidenceId: value => { state.openingEvidenceId = value; },
+    setEvidenceOpenError: value => { state.evidenceOpenError = value; },
+    setEvidenceRequest: value => { state.evidenceRequest = value; },
     setNotice: value => { state.notice = value; },
     setChatOpen: value => { state.chatOpen = value; },
     setTranslating: value => { state.translating = value; },
@@ -110,10 +115,20 @@ test('the most recently requested evidence wins when responses arrive out of ord
   assert.equal(h.context.selectionVersion.current, 17);
 });
 
+test('answer evidence uses its own frozen snapshot instead of the visible snapshot', async () => {
+  const h = harness();
+  const pending = h.context.openEvidence('record-answer', null, 'snapshot-answer');
+  assert.equal(h.requests[0].url, '/evidence/record-answer?snapshot_id=snapshot-answer');
+  h.requests[0].resolve({id: 'record-answer'});
+  await pending;
+  assert.equal(h.state.selectedSnapshotId, 'snapshot-answer');
+});
+
 test('switching either right tab prevents a late evidence response from reopening details', async () => {
   for (const next of [false, true]) {
     const h = harness(), pending = h.context.openEvidence('record-a');
     h.context.changeTab(next);
+    assert.equal(h.state.openingEvidenceId, '');
     h.requests[0].resolve({id: 'record-a'});
     await pending;
     assert.equal(h.state.selected, null);
@@ -128,6 +143,7 @@ test('both detail close buttons invalidate pending evidence, including failed re
     for (const rejected of [false, true]) {
       const h = harness(), pending = h.context.openEvidence('record-a');
       h.context[close]();
+      assert.equal(h.state.openingEvidenceId, '');
       if (rejected) h.requests[0].reject(new Error('stale failure'));
       else h.requests[0].resolve({id: 'record-a'});
       await pending;
@@ -170,7 +186,8 @@ test('a current detail error is still displayed and missing snapshots issue no r
   const h = harness(), pending = h.context.openEvidence('record-a');
   h.requests[0].reject(new Error('current failure'));
   await pending;
-  assert.equal(h.state.error, 'current failure');
+  assert.match(h.state.error, /证据 record-a… 无法打开：current failure/);
+  assert.equal(h.state.evidenceOpenError, h.state.error);
   h.context.sid = '';
   await h.context.openEvidence('record-b');
   assert.equal(h.requests.length, 1);

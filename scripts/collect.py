@@ -213,7 +213,12 @@ def _run_one_unlocked(
         if output_stage.exists():
             shutil.rmtree(output_stage)
         output_stage.mkdir(parents=True, exist_ok=True)
-        env = {**os.environ, "PYTHONUTF8": "1", "COLLECTOR_OUTPUT_ROOT": str(output_stage)}
+        env = {
+            **os.environ,
+            "PYTHONUTF8": "1",
+            "COLLECTOR_OUTPUT_ROOT": str(output_stage),
+            "COLLECTOR_STATE_ROOT": str(data_root / item["id"] / "state"),
+        }
         started = datetime.now(timezone.utc).isoformat()
         first_started = first_started or started
         try:

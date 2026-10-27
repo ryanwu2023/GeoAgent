@@ -8,11 +8,13 @@ implemented in the next phase.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from .collector_ledger import CollectorLedger
+from .collector_logs import redact
 
 
 STATUS_MAP = {
@@ -20,6 +22,90 @@ STATUS_MAP = {
     "timeout": ("failed", "请求超时"),
     "entrypoint_missing": ("failed", "入口缺失"),
 }
+
+
+ERROR_GUIDANCE = {
+    "TIMEOUT": ("请求超时", "采集器在限定时间内没有完成，通常是上游响应慢、网络不通或任务卡住。", "先重试一次；若仍超时，检查网络和上游状态，再适当增加单个采集器超时时间。"),
+    "CONFIGURATION_REQUIRED": ("缺少运行配置", "缺少采集所需的访问密钥或运行参数，本轮没有生成新观测。", "按日志提示补齐对应环境变量或访问密钥，然后单独补采该采集器。"),
+    "UPSTREAM_UNAVAILABLE": ("上游服务不可用", "上游站点返回 5xx 服务错误，当前无法稳定取得数据。", "稍后补采；若连续失败，检查上游公告并启用已配置的备用来源。"),
+    "ACCESS_DENIED": ("访问被拒绝", "上游站点拒绝请求，可能需要授权、请求头调整或降低访问频率。", "核对授权与来源访问规则；不要连续高频重试。"),
+    "RATE_LIMITED": ("访问频率受限", "上游站点触发限流，本轮请求被暂时拒绝。", "等待限流窗口结束后补采，并降低并发或增加退避时间。"),
+    "TLS_CERTIFICATE": ("证书校验失败", "与上游建立安全连接时证书校验失败。", "核对系统时间、证书链和代理设置；不要直接关闭证书校验。"),
+    "DNS_FAILURE": ("域名解析失败", "当前环境无法解析上游域名。", "检查 DNS、代理和网络连通性后再补采。"),
+    "NETWORK_CONNECTION": ("网络连接失败", "无法连接上游站点或连接被对端中断。", "检查网络、代理和上游可用性，然后单独补采。"),
+    "PARSE_ERROR": ("响应解析失败", "上游返回内容与当前解析规则不一致，数据门禁拒绝发布不完整结果。", "查看脱敏日志并核对上游字段变化，修复解析规则后补采。"),
+    "DEPENDENCY_MISSING": ("运行依赖缺失", "采集器缺少 Python 模块或本地运行依赖。", "安装项目锁定的依赖后重新运行，不要只在单个采集器目录临时安装。"),
+    "ENTRYPOINT_MISSING": ("启动文件缺失", "注册表指向的采集器启动文件不存在。", "核对 collectors.json 的 entrypoint 与项目文件是否一致。"),
+    "OUTPUT_NOT_PUBLISHED": ("未生成可发布产物", "进程正常结束，但没有新产物通过输出门禁。", "检查来源返回、输出目录和结构校验结果；确认后再补采。"),
+    "SERVICE_INTERRUPTED": ("运行被中断", "项目或采集服务在该采集器完成前停止。", "确认服务已稳定启动，再对该采集器执行补采。"),
+    "PROCESS_FAILED": ("采集进程异常", "采集器以非零状态退出，具体原因需结合下方脱敏日志摘要判断。", "查看脱敏日志和来源状态；修复首个明确错误后再补采。"),
+}
+
+
+def _embedded_detail(value: str) -> str | None:
+    """Extract a collector-published detail without exposing its full log."""
+    stripped = value.strip()
+    if not stripped.startswith("{"):
+        return None
+    try:
+        payload = json.loads(stripped)
+    except ValueError:
+        return None
+    statuses = payload.get("status") if isinstance(payload, dict) else None
+    if isinstance(statuses, list):
+        for item in statuses:
+            if isinstance(item, dict) and item.get("detail"):
+                return str(item["detail"])
+    return None
+
+
+def _error_category(item: dict[str, Any], status: str) -> str | None:
+    if status == "success" or status == "running":
+        return None
+    returncode = item.get("returncode")
+    text = "\n".join(str(item.get(key) or "") for key in ("stderr_tail", "stdout_tail")).lower()
+    if returncode == "timeout":
+        return "TIMEOUT"
+    if returncode == "entrypoint_missing":
+        return "ENTRYPOINT_MISSING"
+    if item.get("published") is False and returncode == 0:
+        return "OUTPUT_NOT_PUBLISHED"
+    if "configuration_required" in text or re.search(r"缺少\s*[a-z0-9_]*api[_-]?key", text, re.I):
+        return "CONFIGURATION_REQUIRED"
+    if "429" in text or "too many requests" in text or "rate limit" in text:
+        return "RATE_LIMITED"
+    if re.search(r"(?:http(?: error)?\s*)?(?:500|502|503|504)\b", text):
+        return "UPSTREAM_UNAVAILABLE"
+    if re.search(r"(?:http(?: error)?\s*)?(?:401|403)\b", text) or "access denied" in text:
+        return "ACCESS_DENIED"
+    if "certificate_verify_failed" in text or "ssl" in text or "tls" in text:
+        return "TLS_CERTIFICATE"
+    if "name or service not known" in text or "getaddrinfo" in text or "dns" in text:
+        return "DNS_FAILURE"
+    if any(term in text for term in ("connection refused", "connection reset", "network is unreachable", "connecterror", "连接失败")):
+        return "NETWORK_CONNECTION"
+    if any(term in text for term in ("jsondecodeerror", "parse error", "解析失败", "schema", "unexpected field")):
+        return "PARSE_ERROR"
+    if "modulenotfounderror" in text or "no module named" in text:
+        return "DEPENDENCY_MISSING"
+    return "PROCESS_FAILED"
+
+
+def _diagnosis(item: dict[str, Any], status: str) -> dict[str, Any]:
+    category = _error_category(item, status)
+    if category is None:
+        return {"error_type": None, "error_reason": None, "error_detail": None, "suggested_action": None}
+    stage, reason, action = ERROR_GUIDANCE[category]
+    raw = str(item.get("stderr_tail") or item.get("stdout_tail") or "")
+    detail = _embedded_detail(raw) or raw.strip().splitlines()[-1] if raw.strip() else None
+    safe_detail = redact(detail)[:500] if detail else None
+    return {
+        "error_type": category,
+        "error_reason": reason,
+        "error_detail": safe_detail,
+        "suggested_action": action,
+        "diagnostic_stage": stage,
+    }
 
 
 def _registry_labels(registry_path: Path) -> dict[str, str]:
@@ -76,13 +162,17 @@ def _elapsed_label(item: dict[str, Any]) -> str:
 def _project_item(item: dict[str, Any], labels: dict[str, str]) -> dict[str, Any]:
     collector_id = str(item.get("id", "unknown"))
     returncode = item.get("returncode")
-    status, stage = ("running", "采集中") if item.get("status") == "running" else STATUS_MAP.get(returncode, ("failed", "采集进程失败"))
-    error_type = None
-    if returncode == "timeout":
-        error_type = "TIMEOUT"
-    elif returncode not in (0, None):
-        error_type = "COLLECTOR_PROCESS"
-    error_message = (item.get("stderr_tail") or item.get("stdout_tail") or None) if status != "success" else None
+    if item.get("status") == "running":
+        status, stage = "running", "采集中"
+    elif returncode == 0 and item.get("published") is False:
+        status, stage = "partial", "未生成可发布产物"
+    else:
+        status, stage = STATUS_MAP.get(returncode, ("failed", "采集进程失败"))
+    diagnosis = _diagnosis(item, status)
+    stage = diagnosis.get("diagnostic_stage") or stage
+    attempts = item.get("attempts") if isinstance(item.get("attempts"), int) else 1
+    max_attempts = item.get("max_attempts") if isinstance(item.get("max_attempts"), int) else max(1, attempts)
+    last_run_at = item.get("finished_at") or item.get("started_at")
     return {
         "id": collector_id,
         "name": labels.get(collector_id, collector_id),
@@ -95,13 +185,17 @@ def _project_item(item: dict[str, Any], labels: dict[str, str]) -> dict[str, Any
         "elapsed": _elapsed_label(item),
         "started_at": item.get("started_at"),
         "finished_at": item.get("finished_at") or "—",
-        "attempts": "1 / 2",
+        "attempts": f"{attempts} / {max_attempts}",
         "records": _record_count(item),
         "outputs": _output_count(item),
+        "last_run_at": last_run_at,
         "last_success": item.get("finished_at") if status == "success" else None,
+        "last_success_at": item.get("finished_at") if status == "success" else None,
         "source_health": "运行报告已完成" if status == "success" else "运行报告未完成",
-        "error_type": error_type,
-        "error_message": error_message[-1000:] if isinstance(error_message, str) else None,
+        **{key: value for key, value in diagnosis.items() if key != "diagnostic_stage"},
+        # Keep the legacy field for older frontends, but make it a concise,
+        # redacted reason rather than a raw stdout/stderr dump.
+        "error_message": diagnosis.get("error_reason"),
     }
 
 
@@ -179,7 +273,11 @@ def load_runs(runs_root: Path, registry_path: Path, limit: int = 20, *, run_id: 
     labels = _registry_labels(registry_path)
     ledger = _ledger(runs_root)
     runs: list[dict[str, Any]] = []
-    for report in reports[: max(0, limit)]:
+    # Parse the full persisted history before applying the response limit. A
+    # failed current run needs an older successful run to populate
+    # ``last_success_at``; slicing first made every failure look as if it had
+    # never succeeded.
+    for report in reports:
         parsed = _load_report(report, labels)
         if parsed is not None:
             # The compatibility state.json can remain `running` when the
@@ -208,11 +306,26 @@ def load_runs(runs_root: Path, registry_path: Path, limit: int = 20, *, run_id: 
                                 stage="运行中断",
                                 source_health="服务进程已中断",
                                 error_type="SERVICE_INTERRUPTED",
-                                error_message="项目或采集服务在该采集器完成前停止",
+                                error_reason=ERROR_GUIDANCE["SERVICE_INTERRUPTED"][1],
+                                error_message=ERROR_GUIDANCE["SERVICE_INTERRUPTED"][1],
+                                error_detail="项目或采集服务在该采集器完成前停止",
+                                suggested_action=ERROR_GUIDANCE["SERVICE_INTERRUPTED"][2],
                             )
                     parsed["failed_count"] = sum(item.get("status") == "failed" for item in parsed.get("collectors", []))
             runs.append(parsed)
-    return runs
+    last_success_by_collector: dict[str, str] = {}
+    for run in reversed(runs):
+        for collector in run.get("collectors", []):
+            collector_id = str(collector.get("id", ""))
+            current = collector.get("finished_at") or collector.get("started_at")
+            collector["last_run_at"] = collector.get("last_run_at") or current
+            if collector.get("status") == "success" and isinstance(current, str) and current:
+                last_success_by_collector[collector_id] = current
+            previous_success = last_success_by_collector.get(collector_id)
+            collector["last_success_at"] = previous_success
+            # Legacy field remains available for existing clients.
+            collector["last_success"] = previous_success
+    return runs[: max(0, limit)]
 
 
 def load_latest_run(runs_root: Path, registry_path: Path) -> dict[str, Any]:
