@@ -62,3 +62,19 @@ geoagent:sealos:rollback:
   allow_failure: true
   script:
     - bash scripts/ci/sealos-release.sh rollback
+
+# Read-only incident evidence from the actual production pod, without a rollout.
+geoagent:sealos:diagnose-identity:
+  stage: deploy
+  needs: []
+  resource_group: geoagent-sealos-production
+  environment:
+    name: geoagent-sealos-production
+    action: verify
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+    - when: never
+  allow_failure: true
+  script:
+    - bash scripts/ci/diagnose_identity.sh

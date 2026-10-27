@@ -923,6 +923,14 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 嵌入端补发一条不预填读数的业务问题，询问当前俄乌范围民调、最新两波比较和受访人群，不生成语音。原生输入回执迟滞且中文输入丢字，未发送乱码；最终形成第1轮英文问题，输入框已空、发送按钮禁用、范围r3仍是新快照/ukraine。轮次目录可见已完成回答摘要，正确区分“结构化可比民调为俄罗斯列瓦达系列”与“乌克兰民调新闻线索T3，不能接成同一曲线”。但点击目录、重新绑定与窗口重绘后，原生AX仍未给出完整答复正文，截图也停留在较早会话画面；因此**不记为Agent全文、两期表格和每条引用逐项验收通过**，也不据此宣称PiChat故障或擅改其配置。看板/后台总结/冻结原文/MCP真实读数已闭环，Agent正文复核是独立待补验项。
 - 生产验收文件 `ukraine-inspect-1792532528.json`、`ukraine-mcp-1792532574.json`、`ukraine-prod-final.png` 与 `ukraine-v127-pipeline-passed.png` 仅保留本机临时目录；截图用于民调卡片/发布状态证明，不作为当前Agent完整回答或受控1920×1200证明。Browser插件未提供，本地使用CUA内嵌页、生产遵照用户要求使用外置Chrome原生接口；本地新鲜日志空，生产原生接口未取得控制台日志，不声称生产Console零错误。隔离18011验收进程与临时标签页已关闭，8010服务未停。
 
+### 2026-10-26：生产嵌入身份 502 诊断（进行中）
+
+- 外置 Chrome 复现身份获取失败，点击重试后的三次 `/api/pichat/embed-identity` 均 HTTP502；独立认证请求约12.6秒返回 `PiChat 身份服务不可用`，未取得token。健康接口和公开嵌入配置HTTP200，origin仍为公网 `chat.lhotsetech.com`。
+- PiChat 206节点同时段入口日志未见这些请求；本机和206访问公网身份路径无凭据GET约0.14/0.10秒返回404，证明这两个观测点能到达服务，不能替代Sealos Pod的出站链路。当前DNS指向139.224.61.228，仓库出站清单仍是10月9日旧网关地址；尚未读取实际NetworkPolicy，暂不确认根因或更换Key。
+- Runner实际地址已为192.168.100.202，旧214不可达。增加受保护main上的手动只读身份诊断作业：使用原生产File变量，在Pod内检查DNS、无凭据上游HTTP及宿主身份接口，仅打印状态/耗时/异常类型/token存在布尔值；不输出身份正文、不导出凭据、不改配置、不触发rollout。16项诊断脱敏/引用保护及发布门禁测试通过。生产结果待后续补记。
+- MR !19 首轮6196构建未进入测试：31028/31029索引连接超时，31034在部分索引恢复后仍下载Debian包失败。Runner主机/普通容器成功不能替代BuildKit链路；没有绕过CI合并。为本项目CI显式选用HTTPS阿里云Debian镜像，APT签名校验保持，索引任何错误立即失败；Dockerfile默认仍为官方HTTPS源。两条镜像索引路径在Runner返回200，完整构建结果继续等待。
+- 流水线#6199作业#31051确认Debian安装通过，后续PyPI读取超时导致依赖解析失败，尚未进入测试。Runner独立容器使用阿里云HTTPS PyPI镜像完整安装同一requirements成功；增加仅构建期的HTTPS包源参数，默认仍为官方PyPI，CI使用可达镜像，不关闭TLS验证、不更改生产模型或身份配置。16项局部回归再次通过；完整CI及生产诊断仍待结果。
+
 ### 2026-10-20：GitHub同步及本地嵌入401定位（凭据续签待确认）
 
 - 用户要求将已修复内容push到GitHub，并排查本地右侧未连接。先fetch核对GitHub main为本地祖先（本地领先34、落后0），无冲突、无强推；已将 `927e1f36251a400a3868a0c33a82570c577d63d0` 推送到 `ryanwu2023/GeoAgent` main，并用ls-remote核对一致，包含v1.0.27俄乌民调及发布账本。
@@ -939,3 +947,17 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 本地真实身份BFF复验HTTP200、token_present=true、Agent正确、userId与真实user.id一致；后台配置确认使用新本地Key且origin仍chat.test。保存即时生效，**本轮未重启任何服务**，没有更改VPN/TUN、DNS或TLS校验。
 - 右侧本地页实际恢复原8轮历史，宿主错误提示消失，下轮范围r2确认0b18ddf4/ukraine/全部维度/空日期，底部输入框及操作栏可见。实际输入“连接恢复验收草稿（不发送）”后发送按钮启用，随后清空草稿、按钮恢复禁用；未发送新消息、调用MCP、生成语音或将旧历史答复当作本次取数证明。页面非空、无框架错误覆盖，本轮采集的warn/error日志为空；Browser插件未提供，使用既有CUA内嵌浏览器验证默认1021×988视口，不冒称客户1920×1200实体机验收。
 - 工作快照仍0b18ddf4，翻译running=false/worker_running=false；左侧该旧快照民调缺失和独立总结引用校验提示未被掩盖，本次仅关闭身份凭据到期导致的连接故障。截图 `/tmp/geoagent-local-embed-renewed-20261020.jpg` 已核对输入框位于可视区，临时证据不入Git；本轮账本随此前授权同步GitHub，不表示已同步GitLab或发布生产。
+
+### 2026-10-27：GitHub main 同步及生产发布准备（MR 待流水线）
+
+- 已从 GitHub `upstream/main` 获取最新提交并快进本地 `main` 至 `66e4c20`；随后与 GitLab `origin/main` 合并，生成 `f32f9d3`，保留双方实施账本内容并解决唯一冲突。
+- 已将合并结果推送到 GitLab 分支 `codex/github-production-sync`；GitHub `upstream/main` 已是最新，无需重复推送。
+- 本地验证：前端 `npm test` 通过 128/128；后端针对欧洲收益率、会议接口和报告流程的定向测试通过 18/18；完整 CI 与生产发布仍待 MR 流水线确认。
+- 本轮未提交密钥、临时文件或本地环境文件；生产发布必须以 MR 合并、主分支流水线通过及受保护生产标签为准。
+
+### 2026-10-27：v1.0.28 生产发布阻断（Runner Kubernetes TLS）
+
+- MR !20 已合并到 `main`，合并后 verify 流水线 #6295 通过（729 项测试，2 个跳过）；GitHub `upstream/main` 已同步。
+- 已创建受保护生产标签 `geoagent-prod-v1.0.28`，标签流水线 #6296 的 verify 作业 #31444 通过。
+- deploy 作业 #31445 未执行应用变更即失败：Runner 使用生产 kubeconfig 访问 `https://gzg.sealos.run:6443` 时出现 `x509: certificate signed by unknown authority (crypto/rsa: verification error, candidate authority kubernetes-ca)`；未关闭 TLS 校验、未修改生产凭据、未创建 release ConfigMap、未滚动 Pod。
+- 当前结论：代码已合并且生产发布候选验证通过，但 v1.0.28 尚未发布生效；需由平台侧修复/重新签发 Runner 使用的生产 CA 链或 kubeconfig 后，重新执行同一受保护发布流程。

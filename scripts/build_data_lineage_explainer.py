@@ -192,6 +192,19 @@ def safe_url(value: object) -> str:
 
 
 def latest_snapshot() -> dict:
+    if not DB.is_file():
+        # CI verifies the standalone explainer without mounting the private
+        # research database.  Keep that documentation test deterministic and
+        # clearly empty rather than failing on a runner-only filesystem path.
+        return {
+            "id": "ci-unmounted-snapshot",
+            "created_at": "未挂载研究数据库",
+            "projects": [],
+            "sources": [],
+            "records": [],
+            "cleaning": {},
+            "observations": [],
+        }
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
     row = con.execute("SELECT value FROM workspace_state WHERE key='working_snapshot_id'").fetchone()
