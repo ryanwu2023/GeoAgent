@@ -734,6 +734,16 @@ async def answer(snapshot, query, topic="all", dimension="", start="", end="", u
                 run_id=run_id or None,
                 answer_id=base["id"],
             )
+            # Preserve runtime/budget receipts even when the generated prose
+            # later fails citation or numeric validation and the answer falls
+            # back to the compatibility pipeline.  These fields describe work
+            # already performed and are still needed for cost/timeout audits.
+            base["multi_agent"] = outcome.get("multi_agent", {"status": "skipped"})
+            base["agent_memos"] = outcome.get("agent_memos", {})
+            base["tool_budget"] = outcome.get("tool_budget", {})
+            base["cost_estimate"] = outcome.get("cost_estimate", {})
+            base["run_id"] = outcome.get("run_id", "")
+            base["run_status"] = outcome.get("status", "completed")
             final = outcome["final"]
             summary_text = str(final.get("text") or "").strip()
             summary_ids = [rid for rid in final.get("evidence_ids", []) if rid in agent_tools.record_by_id]

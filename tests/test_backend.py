@@ -405,6 +405,59 @@ def test_model_summary_new_numbers_rejected(monkeypatch):
     assert "模型降级" in result["mode"] and result["summary"] is not None
     assert "99%" not in result["summary"]["text"]
 
+
+def test_agent_cost_receipt_survives_answer_validation_fallback(monkeypatch):
+    snapshot = stored()
+    rid = snapshot["records"][0]["id"]
+
+    async def planned(*args, **kwargs):
+        from backend.qa_planner import deterministic_plan
+        return deterministic_plan(
+            "最新美伊局势",
+            topic="usiran",
+            dimension="",
+            start="",
+            end="",
+            snapshot_as_of=snapshot["created_at"],
+        ), "planner-test"
+
+    async def degraded_agent(**kwargs):
+        return {
+            "final": {"text": "", "evidence_ids": []},
+            "cost_estimate": {"limit_enabled": True, "estimated_cny": 0.01, "max_cost_cny": 0.02},
+            "tool_budget": {"attempts_used": 1, "max_total_attempts": 8},
+            "multi_agent": {"status": "degraded"},
+            "agent_memos": {},
+            "run_id": "qa-cost-fallback",
+            "status": "degraded",
+        }
+
+    async def compatible_answer(messages):
+        return json.dumps({
+            "summary": {
+                "text": "当前材料显示美伊局势仍在变化，但公开信息需要继续交叉核验。",
+                "evidence_ids": [rid],
+            },
+            "inferences": [],
+        }, ensure_ascii=False), "fallback-test"
+
+    monkeypatch.setattr("backend.research.model_status", lambda: {"configured": True, "provider": "openai-compatible"})
+    monkeypatch.setattr("backend.research.llm.agent_mode", lambda: "tools")
+    monkeypatch.setattr("backend.research.build_question_plan", planned)
+    monkeypatch.setattr("backend.research.run_agent", degraded_agent)
+    monkeypatch.setattr("backend.research.llm.complete", compatible_answer)
+    monkeypatch.setattr("backend.research.llm.qa_rounds", lambda: 1)
+
+    result = asyncio.run(answer(snapshot, "最新美伊局势", topic="usiran"))
+
+    assert result["summary"]["text"].startswith("当前材料显示美伊局势")
+    assert result["cost_estimate"] == {
+        "limit_enabled": True,
+        "estimated_cny": 0.01,
+        "max_cost_cny": 0.02,
+    }
+    assert result["run_id"] == "qa-cost-fallback"
+
 def test_numeric_tokens_canonicalize_scientific_notation_as_one_value():
     assert numeric_tokens("压力值1E+1，与10一致；不是孤立的1。") == {"10", "1"}
 
