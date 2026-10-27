@@ -273,6 +273,34 @@ def _detail_request(spec: SpecialistSpec, calls: list[dict[str, Any]], index: in
     return None
 
 
+def _known_record_id(calls: list[dict[str, Any]]) -> str:
+    """Return only an ID that appeared in this specialist's own receipts."""
+    for call in reversed(calls):
+        preview = call.get("preview")
+        if not isinstance(preview, dict):
+            continue
+        record = next(iter(_iter_items(preview, "records", "record")), None)
+        if record and record.get("id"):
+            return str(record["id"])
+        existing = preview.get("top_existing_ids")
+        if isinstance(existing, list):
+            candidate = next((str(item) for item in existing if str(item).strip()), "")
+            if candidate:
+                return candidate
+    return ""
+
+
+def _known_internal_message_id(calls: list[dict[str, Any]]) -> str:
+    for call in reversed(calls):
+        preview = call.get("preview")
+        if not isinstance(preview, dict):
+            continue
+        message = next(iter(_iter_items(preview, "messages", "message")), None)
+        if message and message.get("id"):
+            return str(message["id"])
+    return ""
+
+
 def _as_result(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -834,9 +862,40 @@ async def run_specialists(
                             "preview": {"error": "tool_not_allowed_or_budget_exhausted"},
                         })
                         continue
+                    arguments = dict(action.arguments)
+                    if action.tool == "geo_evidence_get" and not arguments.get("record_id"):
+                        known_id = _known_record_id(calls)
+                        if known_id:
+                            arguments["record_id"] = known_id
+                    elif action.tool == "geo_internal_message_get" and not arguments.get("message_id"):
+                        known_id = _known_internal_message_id(calls)
+                        if known_id:
+                            arguments["message_id"] = known_id
+                    elif action.tool == "geo_metric_series" and not arguments.get("series"):
+                        used_series = {
+                            _series_from_call(call) for call in calls
+                            if call.get("tool") == "geo_metric_series" and _series_from_call(call)
+                        }
+                        known_series = next(
+                            (item for item in recommended_metrics if item not in used_series), "",
+                        )
+                        if known_series:
+                            arguments["series"] = known_series
+                    required = {
+                        "geo_evidence_get": "record_id",
+                        "geo_internal_message_get": "message_id",
+                        "geo_metric_series": "series",
+                    }.get(action.tool)
+                    if required and not arguments.get(required):
+                        calls.append({
+                            "call_id": f"specialist-{spec.role}-invalid-{decision_no}",
+                            "tool": action.tool, "ok": False,
+                            "preview": {"error": f"missing_{required}"},
+                        })
+                        continue
                     request = ToolRequest(
-                        _call_id(spec.role, action.tool, action.arguments, tool_calls_used + 1),
-                        action.tool, action.arguments,
+                        _call_id(spec.role, action.tool, arguments, tool_calls_used + 1),
+                        action.tool, arguments,
                     )
                     try:
                         results = await execute_tools(spec.role, [request])

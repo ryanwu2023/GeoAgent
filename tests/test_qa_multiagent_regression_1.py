@@ -107,3 +107,62 @@ def test_specialist_keeps_a_final_synthesis_turn_after_using_tool_budget():
     ]
     assert result.memos["event"].status == "completed"
     assert result.memos["event"].summary == "已读取正文并完成核验"
+
+
+def test_specialist_fills_missing_evidence_id_only_from_own_search_receipt():
+    plan = {
+        "topic": "usiran",
+        "multi_agent": {"enabled": True, "agents": ["counterevidence"]},
+        "search_queries": ["美伊 反证"],
+        "focuses": ["反证"],
+    }
+    executed = []
+
+    async def execute_tools(role, requests):
+        results = []
+        for request in requests:
+            executed.append((request.tool, dict(request.arguments)))
+            preview = {
+                "records": [],
+                "top_existing_ids": ["already-known-1"],
+                "returned_new": 0,
+            }
+            if request.tool == "geo_evidence_get":
+                preview = {"record": {"id": request.arguments["record_id"], "text": "完整正文"}}
+            results.append({
+                "call_id": request.call_id,
+                "tool": request.tool,
+                "ok": True,
+                "preview": preview,
+            })
+        return results
+
+    replies = iter([
+        {"action": "tool", "tool": "geo_evidence_get", "arguments": {}, "purpose": "读取已有候选"},
+        {"action": "memo", "memo": {
+            "summary": "已核对既有候选正文",
+            "findings": [], "claims": [], "counter_evidence": [],
+            "gaps": [], "watchpoints": [],
+            "evidence_ids": ["already-known-1"], "metric_series": [],
+            "follow_up_queries": [],
+        }},
+    ])
+
+    async def complete(messages, model_role="reasoning"):
+        return json.dumps(next(replies), ensure_ascii=False), "test-model"
+
+    result = asyncio.run(run_specialists(
+        question="最新美伊局势有哪些反证",
+        plan=plan,
+        scope={"snapshot_id": "s1", "topic": "usiran", "start": "", "end": ""},
+        execute_tools=execute_tools,
+        complete=complete,
+        budget=SpecialistBudget(
+            per_agent_tool_calls=2,
+            total_tool_calls=2,
+            per_agent_seconds=2,
+        ),
+    ))
+
+    assert executed[1] == ("geo_evidence_get", {"record_id": "already-known-1"})
+    assert result.memos["counterevidence"].status == "completed"
