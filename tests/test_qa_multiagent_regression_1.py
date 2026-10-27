@@ -1,7 +1,9 @@
 import asyncio
 import json
+from types import SimpleNamespace
 
 from backend.qa_multiagent import SpecialistBudget, _parse_action, run_specialists
+from backend.qa_harness import _fallback_metrics, _replace_model_metric_table
 
 
 def test_specialist_action_normalizes_flash_tool_aliases_and_drops_unknown_fields():
@@ -166,3 +168,36 @@ def test_specialist_fills_missing_evidence_id_only_from_own_search_receipt():
 
     assert executed[1] == ("geo_evidence_get", {"record_id": "already-known-1"})
     assert result.memos["counterevidence"].status == "completed"
+
+
+def test_final_metric_table_uses_tool_previous_period_not_window_start():
+    catalog_metric = {
+        "series": "brent",
+        "name": "布伦特原油",
+        "unit": "美元/桶",
+        "current": {"date": "2026-10-27", "value": 109.59},
+        "previous": {"date": "2026-10-26", "value": 115.81},
+        "delta": -6.22,
+        "pct": -5.37,
+        "scope": "共享市场背景",
+    }
+    # The later envelope emulates a window calculation whose "previous" is
+    # actually the interval start. It must not replace the catalog ledger.
+    window_metric = {
+        **catalog_metric,
+        "previous": {"date": "2026-10-01", "value": 106.60},
+        "delta": 2.99,
+        "pct": 2.80,
+    }
+    context = SimpleNamespace(envelopes=[
+        SimpleNamespace(tool="geo_metric_catalog", preview={"metrics": [catalog_metric]}),
+        SimpleNamespace(tool="geo_metric_series", preview={"metric": window_metric}),
+    ])
+    metrics = _fallback_metrics(context)
+    answer = "三、量化指标与资产传导\n\n| 指标 | 最新值 | 前值 | 单期变化 | 观测日期 | 口径 |\n|---|---:|---:|---:|---|---|\n| 错误 | 1 | 2 | 3 | — | — |\n"
+
+    rendered = _replace_model_metric_table(answer, metrics)
+
+    assert "115.81 美元/桶" in rendered
+    assert "-6.22 美元/桶；-5.37%" in rendered
+    assert "106.6 美元/桶" not in rendered

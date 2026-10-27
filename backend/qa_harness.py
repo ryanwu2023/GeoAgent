@@ -1301,10 +1301,14 @@ async def run_local_harness(
             raise ValueError(last_error or "模型未生成最终回答")
         if isinstance(final_value, dict) and isinstance(final_value.get("answer_markdown"), str):
             final_value = dict(final_value)
-            metric_block = context.memory.get("metric_block")
-            block_metrics = metric_block.get("metrics", []) if isinstance(metric_block, dict) else []
+            # The answer table must use the same latest-vs-previous-period
+            # semantics as the quantitative indicator page.  metric_block is
+            # a window summary and may carry first/last values; using it here
+            # previously rewrote "previous" into the window start and then
+            # failed the numeric validator.  Tool receipts are the canonical
+            # current/previous/delta/pct ledger.
             final_value["answer_markdown"] = _replace_model_metric_table(
-                final_value["answer_markdown"], block_metrics or context.memory.get("metrics", []),
+                final_value["answer_markdown"], _fallback_metrics(context),
             )
         final = finalize_validated(
             draft=final_value,
