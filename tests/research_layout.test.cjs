@@ -258,10 +258,13 @@ test('local QA requests compact answers while full evidence stays on demand', ()
   assert.match(source, /openEvidence\(item\.id,null,answer\.snapshot_id\)/);
 });
 
-test('completed local answers can download a deterministic HTML report', () => {
+test('completed local answers can generate and download a contextual HTML report', () => {
   const source = fs.readFileSync(path.join(__dirname, '../src/App.tsx'), 'utf8');
   assert.match(source, /\/api\/answers\/\$\{encodeURIComponent\(item\.id\)\}\/report\.html/);
   assert.match(source, /保存为 HTML 报告/);
-  assert.match(source, /忠实导出当前回答和引用，不再次调用模型/);
+  assert.match(source, /正在生成业务核心判断并整理报告/);
+  assert.match(source, /导出时调用模型生成业务核心判断，原问答正文与引用保持不变/);
+  assert.doesNotMatch(source, /忠实导出当前回答和引用，不再次调用模型/);
+  assert.match(source, /disabled=\{reportDownloading\}/);
   assert.match(source, /answer\.summary && <div className="answer-actions"/);
 });

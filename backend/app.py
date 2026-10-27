@@ -34,6 +34,7 @@ from .mcp_news import McpClient, load_config as load_mcp_config, public_config a
 from .external_mcp import public_registry as public_external_mcp_registry, test_and_save as test_and_save_external_mcp, delete_server as delete_external_mcp_server, news_import_capability, _safe_error as safe_mcp_error
 from .brief_templates import list_templates, get_template, save_template, set_default as set_default_brief_template, delete_template as delete_brief_template
 from .answer_report import content_disposition, render_answer_report
+from .answer_business_lead import generate_business_lead
 from .meeting_export import filter_meetings, meeting_export_filename, render_meeting_workbook
 from .internal_messages import message_stats as internal_message_stats, status_path as internal_message_status_path
 from .qa_harness_state import HarnessScope
@@ -1222,14 +1223,19 @@ def answers(snapshot_id: str, compact: bool = False):
     return [present_answer(json.loads(r[0]), compact=compact) for r in rows]
 
 @app.get("/api/answers/{answer_id}/report.html")
-def answer_html_report(answer_id: str):
+async def answer_html_report(answer_id: str):
     with db() as c:
         row = c.execute("SELECT payload FROM answers WHERE id=?", (answer_id,)).fetchone()
     if row is None:
         raise HTTPException(404, "问答记录不存在")
     answer_payload = present_answer(json.loads(row[0]))
     try:
-        document = render_answer_report(answer_payload)
+        summary = answer_payload.get("summary")
+        if not isinstance(summary, dict) or not str(summary.get("text") or "").strip():
+            raise ValueError("该回答没有可导出的总结内容")
+        snapshot = snapshot_or_404(answer_payload.get("snapshot_id"))
+        business_lead = await generate_business_lead(answer_payload, snapshot)
+        document = render_answer_report(answer_payload, business_lead=business_lead)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     return HTMLResponse(

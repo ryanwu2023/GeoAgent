@@ -96,7 +96,7 @@ def content_disposition(query: object) -> str:
     return f"attachment; filename=geoagent-report.html; filename*=UTF-8''{quote(filename)}"
 
 
-def render_answer_report(answer: dict, generated_at: str | None = None) -> str:
+def render_answer_report(answer: dict, generated_at: str | None = None, business_lead=None) -> str:
     summary = answer.get("summary")
     if not isinstance(summary, dict) or not _clean_text(summary.get("text")):
         raise ValueError("该回答没有可导出的总结内容")
@@ -135,7 +135,11 @@ def render_answer_report(answer: dict, generated_at: str | None = None) -> str:
         )
     evidence_html = "".join(evidence_rows) or '<tr><td colspan="5">当前回答没有可展开的逐条引用。</td></tr>'
 
-    gaps = [f"<li>{html.escape(_clean_text(item))}</li>" for item in answer.get("gaps", []) if _clean_text(item)]
+    gap_values = [_clean_text(item) for item in answer.get("gaps", []) if _clean_text(item)]
+    lead_warning = _clean_text(getattr(business_lead, "warning", ""))
+    if lead_warning and lead_warning not in gap_values:
+        gap_values.append(lead_warning)
+    gaps = [f"<li>{html.escape(item)}</li>" for item in gap_values]
     gaps_html = "".join(gaps) or "<li>当前回答未单列其他数据缺口。</li>"
     filters = answer.get("filters") if isinstance(answer.get("filters"), dict) else {}
     date_range = "未限定日期"
@@ -143,7 +147,7 @@ def render_answer_report(answer: dict, generated_at: str | None = None) -> str:
         date_range = f"{filters.get('start') or '最早记录'} 至 {filters.get('end') or '数据截至日'}"
     topic = _TOPIC_NAMES.get(str(answer.get("topic") or "all"), str(answer.get("topic") or "综合范围"))
     dimension = _clean_text(filters.get("dimension")) or "全部维度"
-    lead = _lead_from_markdown(summary.get("text"))
+    lead = _clean_text(getattr(business_lead, "text", "")) or _lead_from_markdown(summary.get("text"))
 
     return f'''<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -164,5 +168,5 @@ header{{padding:56px 0 36px;border-bottom:1px solid var(--line);margin-bottom:34
 <main><section class="analysis"><h2 class="section-title"><span class="num">01</span>综合研判</h2><div class="analysis-body">{summary_html}</div></section>
 <section class="evidence"><h2 class="section-title"><span class="num">02</span>证据与信源</h2><p class="section-lead">仅列出本回答实际引用的材料。来源等级表示来源类型，不代表陈述已获独立确认。</p><div class="table-wrap"><table><thead><tr><th>来源与标题</th><th>发布时间与采集时间</th><th>证据内容要点</th><th>层级与核验</th><th>原始链接</th></tr></thead><tbody>{evidence_html}</tbody></table></div></section>
 <section class="boundary"><h2 class="section-title"><span class="num">03</span>口径、限制与缺口</h2><div class="warn"><div class="t">必须与结论一起阅读的限制</div><ul>{gaps_html}</ul><div class="method">媒体转述、当事方声明和关键词命中不自动等于事实成立。报道数量不代表事件概率，价格同步变化不单独证明因果；资产关联属于有条件的研究判断，不构成交易指令。</div></div></section></main>
-<footer><span>GeoAgent · 地缘政治数据与分析工作台</span><span>导出过程未再次调用模型；内部回答编号、快照编号和证据内部 ID 未写入报告。</span></footer>
+<footer><span>GeoAgent · 地缘政治数据与分析工作台</span><span>导出时调用模型生成业务核心判断；原问答正文与引用未重新生成，内部回答编号、快照编号和证据内部 ID 未写入报告。</span></footer>
 </div></body></html>'''

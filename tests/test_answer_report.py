@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.adapters import normalize
+from backend.answer_business_lead import BusinessLeadResult
 from backend.answer_report import _lead_from_markdown, render_answer_report
 from backend.app import app
 from backend.store import canonical, db, save_snapshot
@@ -12,6 +13,14 @@ from backend.store import canonical, db, save_snapshot
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("GEO_DATA_DIR", str(tmp_path / "data"))
+    async def generate(answer, snapshot):
+        return BusinessLeadResult(
+            "美伊局势处于高压僵持，外交窗口仍未关闭；近期谈判信号与军事戒备并行，后续主要取决于双方是否出现可核验的接触和实际行动降温。若紧张继续推升能源与运输风险，通胀预期和利率压力可能上升；若谈判落实并伴随部署回撤，风险溢价才可能缓解。现有媒体转述只能作为线索，不能证明行动已经发生。",
+            "usiran",
+            "model",
+            ("report-source",),
+        )
+    monkeypatch.setattr("backend.app.generate_business_lead", generate)
 
 
 def persisted_answer(summary=True):
@@ -70,6 +79,8 @@ def test_answer_report_download_contains_readable_evidence_without_internal_ids(
     assert answer["id"] not in response.text
     assert answer["snapshot_id"] not in response.text
     assert record["id"] not in response.text
+    assert "美伊局势处于高压僵持" in response.text
+    assert "导出时调用模型生成业务核心判断" in response.text
 
 
 def test_answer_report_uses_reference_dark_research_report_style():
@@ -104,6 +115,31 @@ def test_answer_report_lead_keeps_complete_markdown_answer():
     assert "二、关键证据" in document
     assert "后续完整证据章节必须保留。" in document
     assert document.count("当前局势处于高压对峙，外交窗口仍未关闭。") == 2
+
+
+def test_answer_report_prefers_generated_business_lead_and_keeps_original_body():
+    answer, _ = persisted_answer()
+    generated = BusinessLeadResult("这是根据用户业务语境生成的核心判断。", "usiran", "model")
+
+    document = render_answer_report(answer, "2026-10-22T02:00:00Z", generated)
+
+    assert "这是根据用户业务语境生成的核心判断。" in document
+    assert "当前局势仍需交叉核验。" in document
+    assert "导出时调用模型生成业务核心判断" in document
+
+
+def test_answer_report_fallback_warning_is_in_limitations():
+    answer, _ = persisted_answer()
+    generated = BusinessLeadResult(
+        "当前局势仍需交叉核验。",
+        "usiran",
+        "fallback",
+        warning="业务核心判断生成失败，已使用原回答回退。",
+    )
+
+    document = render_answer_report(answer, "2026-10-22T02:00:00Z", generated)
+
+    assert "业务核心判断生成失败，已使用原回答回退。" in document
 
 
 def test_lead_from_markdown_ignores_headings_and_markup():
