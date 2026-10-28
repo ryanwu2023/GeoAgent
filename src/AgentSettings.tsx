@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { sessionFetch as fetch } from "./sessionFetch";
 import { draftToPayload, settingsToDraft, validateAgentSettings, type AgentSettings as AgentConfig, type AgentSettingsDraft } from "./agent_settings";
 
 async function requestAgentSettings(method = "GET", body?: AgentConfig): Promise<AgentConfig> {

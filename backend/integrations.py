@@ -114,20 +114,15 @@ def save(body: PiChatSettings):
     if not cfg["app_key"]:
         cfg["app_key"] = settings()["app_key"]
     with db() as conn:
-        conn.execute("INSERT OR REPLACE INTO workspace_state(key,value,updated_at) VALUES(?,?,?)",
+        conn.execute("INSERT INTO workspace_state(key,value,updated_at) VALUES(%s,%s,%s) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",
                      ("integrations.pichat", json.dumps(cfg), datetime.now(timezone.utc).isoformat()))
     return read()
 
 
 def key_table(conn):
-    conn.execute("CREATE TABLE IF NOT EXISTS integration_mcp_keys (id TEXT PRIMARY KEY, label TEXT NOT NULL, token_hash TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT)")
-    if "deleted_at" not in {row[1] for row in conn.execute("PRAGMA table_info(integration_mcp_keys)")}:
-        # StrictMode or multiple tabs can race on the first old-schema load.
-        # Serialize migration, then re-check after acquiring the writer lock.
-        if not conn.in_transaction:
-            conn.execute("BEGIN IMMEDIATE")
-        if "deleted_at" not in {row[1] for row in conn.execute("PRAGMA table_info(integration_mcp_keys)")}:
-            conn.execute("ALTER TABLE integration_mcp_keys ADD COLUMN deleted_at TEXT")
+    conn.execute("SELECT pg_advisory_xact_lock(71001)")
+    conn.execute("CREATE TABLE IF NOT EXISTS integration_mcp_keys (id TEXT PRIMARY KEY, label TEXT NOT NULL, token_hash TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT, deleted_at TEXT)")
+    conn.execute("ALTER TABLE integration_mcp_keys ADD COLUMN IF NOT EXISTS deleted_at TEXT")
 
 
 @router.get("/mcp-keys", dependencies=[Depends(admin)])
@@ -148,7 +143,7 @@ def create_key(body: NewKey):
     created = datetime.now(timezone.utc).isoformat()
     with db() as conn:
         key_table(conn)
-        conn.execute("INSERT INTO integration_mcp_keys(id,label,token_hash,created_at,revoked_at) VALUES(?,?,?,?,NULL)",
+        conn.execute("INSERT INTO integration_mcp_keys(id,label,token_hash,created_at,revoked_at) VALUES(%s,%s,%s,%s,NULL)",
                      (key_id, body.label, hashlib.sha256(raw.encode()).hexdigest(), created))
     return {"id": key_id, "label": body.label, "created_at": created, "key": raw}
 
@@ -157,7 +152,7 @@ def create_key(body: NewKey):
 def revoke_key(key_id: str):
     with db() as conn:
         key_table(conn)
-        result = conn.execute("UPDATE integration_mcp_keys SET revoked_at=COALESCE(revoked_at,?) WHERE id=?",
+        result = conn.execute("UPDATE integration_mcp_keys SET revoked_at=COALESCE(revoked_at,%s) WHERE id=%s",
                               (datetime.now(timezone.utc).isoformat(), key_id))
         if not result.rowcount:
             raise HTTPException(404, "Key 不存在")
@@ -169,12 +164,12 @@ def delete_revoked_key(key_id: str):
     # Retain a revoked tombstone, never restore the credential through cleanup.
     with db() as conn:
         key_table(conn)
-        row = conn.execute("SELECT revoked_at FROM integration_mcp_keys WHERE id=?", (key_id,)).fetchone()
+        row = conn.execute("SELECT revoked_at FROM integration_mcp_keys WHERE id=%s", (key_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Key 不存在")
         if not row["revoked_at"]:
             raise HTTPException(409, "启用中的 Key 不可删除，请先撤销")
-        conn.execute("UPDATE integration_mcp_keys SET deleted_at=? WHERE id=?",
+        conn.execute("UPDATE integration_mcp_keys SET deleted_at=%s WHERE id=%s",
                      (datetime.now(timezone.utc).isoformat(), key_id))
     return {"ok": True}
 
@@ -184,7 +179,7 @@ def managed_principal(token):
         return None
     with db() as conn:
         key_table(conn)
-        row = conn.execute("SELECT id FROM integration_mcp_keys WHERE token_hash=? AND revoked_at IS NULL",
+        row = conn.execute("SELECT id FROM integration_mcp_keys WHERE token_hash=%s AND revoked_at IS NULL",
                            (hashlib.sha256(token.encode()).hexdigest(),)).fetchone()
     if not row:
         return None

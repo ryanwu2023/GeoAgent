@@ -143,7 +143,7 @@ def test_api_filters_and_snapshot_bound_citations(tmp_path, monkeypatch):
     assert collector_runs.json()['runs']==[]
     snapshot_projection=client.get('/api/collector/snapshots')
     assert snapshot_projection.status_code==200
-    assert snapshot_projection.json()['source']=='research-sqlite-snapshot-projection'
+    assert snapshot_projection.json()['source']=='research-postgresql-snapshot-projection'
     assert snapshot_projection.json()['snapshots'][0]['id']==s['id']
     assert snapshot_projection.json()['snapshots'][0]['records']==1
     assert client.get('/api/workspace-selection').json()['available'] is False
@@ -152,7 +152,7 @@ def test_api_filters_and_snapshot_bound_citations(tmp_path, monkeypatch):
     assert client.get('/api/workspace-selection').json()['snapshot_id']==s['id']
     assert client.get('/api/status').json()['working_snapshot_id']==s['id']
     assert client.put('/api/workspace-selection',json={'snapshot_id':'missing'}).status_code==404
-    assert client.get('/api/collector/ledger').json()=={"available":False,"source":"none","runs":[]}
+    assert client.get('/api/collector/ledger').json()=={"available":True,"source":"collector-ledger","runs":[]}
     assert client.get('/api/collector/sources').json()=={"available":False,"source":"none","collector_id":None,"collectors":[]}
     assert client.get('/api/collector/runs/missing/events').json()["available"] is False
     assert client.get('/api/collector/runs/missing').status_code==404

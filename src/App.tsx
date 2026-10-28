@@ -1,3 +1,5 @@
+import {SessionAccount} from "./SessionGate";
+import {sessionFetch as fetch} from "./sessionFetch";
 import { lazy, Suspense, useDeferredValue, useEffect, useRef, useState } from "react";
 import IntegrationSettings from "./IntegrationSettings";
 import McpWorkbench from "./McpWorkbench";
@@ -861,6 +863,7 @@ export default function App() {
           ))}
         </nav>
         <div className="header-actions">
+          <SessionAccount/>
           <button onClick={()=>{setSettingsSection("embed");setSettingsOpen(true)}}>连接配置</button>
           <button onClick={()=>{setMcpWorkbenchView("local");setMcpWorkbenchOpen(true)}}>MCP 工作台</button>
           <label className="snapshot-selector">

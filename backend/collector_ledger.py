@@ -1,116 +1,26 @@
-"""Persistent execution ledger and single-instance lock for collectors.
-
-The collector reports remain the compatibility output consumed by the current
-UI.  This module adds a small SQLite sidecar so the service can answer a
-different question reliably: what the scheduler is doing, and what happened to
-each collector in a run.  SQLite is intentionally local and single-host for
-Phase 1; a multi-host deployment should move this contract to PostgreSQL.
-"""
+"""Persistent PostgreSQL execution ledger and local collector service lock."""
 
 from __future__ import annotations
 
 import json
 import os
-import sqlite3
+from .database import connect
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS collector_runs (
-    run_id TEXT PRIMARY KEY,
-    run_kind TEXT NOT NULL,
-    status TEXT NOT NULL,
-    started_at TEXT NOT NULL,
-    finished_at TEXT,
-    topic TEXT,
-    timeout_sec INTEGER,
-    expected INTEGER NOT NULL DEFAULT 0,
-    completed INTEGER NOT NULL DEFAULT 0,
-    failed INTEGER NOT NULL DEFAULT 0,
-    error_type TEXT,
-    error_message TEXT,
-    import_status TEXT,
-    snapshot_id TEXT,
-    import_error_type TEXT,
-    import_error_message TEXT,
-    gate_decision TEXT,
-    gate_reviewer TEXT,
-    gate_reason TEXT,
-    gate_at TEXT
-);
-
-CREATE TABLE IF NOT EXISTS collector_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id TEXT NOT NULL,
-    collector_id TEXT,
-    event_type TEXT NOT NULL,
-    status TEXT,
-    message TEXT,
-    payload_json TEXT,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (run_id) REFERENCES collector_runs(run_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_collector_events_run_created
-    ON collector_events(run_id, created_at, id);
-
-CREATE TABLE IF NOT EXISTS collector_reviews (
-    run_id TEXT NOT NULL,
-    item_id TEXT NOT NULL,
-    status TEXT NOT NULL,
-    reviewer TEXT,
-    reason TEXT,
-    evidence_json TEXT,
-    updated_at TEXT NOT NULL,
-    PRIMARY KEY (run_id, item_id),
-    FOREIGN KEY (run_id) REFERENCES collector_runs(run_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_collector_reviews_run_updated
-    ON collector_reviews(run_id, updated_at);
-"""
-
-
 def utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _connect(path: Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(path)
-    connection.row_factory = sqlite3.Row
-    return connection
-
-
 class CollectorLedger:
-    """A small append-oriented run/event ledger backed by SQLite."""
+    """Append-oriented run/event ledger in the configured PostgreSQL database."""
 
-    def __init__(self, path: Path):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with _connect(self.path) as connection:
-            connection.executescript(SCHEMA)
-            # The ledger is a sidecar that can survive service upgrades.  Keep
-            # old local databases readable without asking users to delete run
-            # history when import observability is added.
-            existing = {
-                row[1]
-                for row in connection.execute("PRAGMA table_info(collector_runs)").fetchall()
-            }
-            for name, definition in (
-                ("import_status", "TEXT"),
-                ("snapshot_id", "TEXT"),
-                ("import_error_type", "TEXT"),
-                ("import_error_message", "TEXT"),
-                ("gate_decision", "TEXT"),
-                ("gate_reviewer", "TEXT"),
-                ("gate_reason", "TEXT"),
-                ("gate_at", "TEXT"),
-            ):
-                if name not in existing:
-                    connection.execute(f"ALTER TABLE collector_runs ADD COLUMN {name} {definition}")
+    def __init__(self):
+        with connect():
+            pass
 
     def run_started(
         self,
@@ -121,12 +31,12 @@ class CollectorLedger:
         topic: str | None,
         timeout_sec: int,
     ) -> None:
-        with _connect(self.path) as connection:
+        with connect() as connection:
             connection.execute(
                 """
                 INSERT INTO collector_runs
                     (run_id, run_kind, status, started_at, topic, timeout_sec)
-                VALUES (?, ?, 'running', ?, ?, ?)
+                VALUES (%s, %s, 'running', %s, %s, %s)
                 """,
                 (run_id, run_kind, started_at, topic, timeout_sec),
             )
@@ -143,12 +53,12 @@ class CollectorLedger:
         created_at: str | None = None,
     ) -> None:
         payload_json = json.dumps(payload, ensure_ascii=False) if payload is not None else None
-        with _connect(self.path) as connection:
+        with connect() as connection:
             connection.execute(
                 """
                 INSERT INTO collector_events
                     (run_id, collector_id, event_type, status, message, payload_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     run_id,
@@ -177,14 +87,14 @@ class CollectorLedger:
         import_error_type: str | None = None,
         import_error_message: str | None = None,
     ) -> None:
-        with _connect(self.path) as connection:
+        with connect() as connection:
             connection.execute(
                 """
                 UPDATE collector_runs
-                SET status = ?, finished_at = ?, expected = ?, completed = ?, failed = ?,
-                    error_type = ?, error_message = ?, import_status = ?, snapshot_id = ?,
-                    import_error_type = ?, import_error_message = ?
-                WHERE run_id = ?
+                SET status = %s, finished_at = %s, expected = %s, completed = %s, failed = %s,
+                    error_type = %s, error_message = %s, import_status = %s, snapshot_id = %s,
+                    import_error_type = %s, import_error_message = %s
+                WHERE run_id = %s
                 """,
                 (
                     status,
@@ -212,13 +122,13 @@ class CollectorLedger:
         import_error_message: str | None = None,
     ) -> None:
         """Update import outcome without changing the collection outcome."""
-        with _connect(self.path) as connection:
+        with connect() as connection:
             connection.execute(
                 """
                 UPDATE collector_runs
-                SET import_status = ?, snapshot_id = ?,
-                    import_error_type = ?, import_error_message = ?
-                WHERE run_id = ?
+                SET import_status = %s, snapshot_id = %s,
+                    import_error_type = %s, import_error_message = %s
+                WHERE run_id = %s
                 """,
                 (
                     import_status,
@@ -240,12 +150,12 @@ class CollectorLedger:
     ) -> None:
         if decision not in {"approved", "rejected"}:
             raise ValueError("gate decision must be approved or rejected")
-        with _connect(self.path) as connection:
+        with connect() as connection:
             connection.execute(
                 """
                 UPDATE collector_runs
-                SET gate_decision = ?, gate_reviewer = ?, gate_reason = ?, gate_at = ?
-                WHERE run_id = ?
+                SET gate_decision = %s, gate_reviewer = %s, gate_reason = %s, gate_at = %s
+                WHERE run_id = %s
                 """,
                 (decision, reviewer, reason, decided_at or utc_timestamp(), run_id),
             )
@@ -258,24 +168,24 @@ class CollectorLedger:
         started_at: str | None = None,
     ) -> None:
         """Create a minimal parent row so old reports can receive reviews."""
-        with _connect(self.path) as connection:
+        with connect() as connection:
             connection.execute(
                 """
-                INSERT OR IGNORE INTO collector_runs
+                INSERT INTO collector_runs
                     (run_id, run_kind, status, started_at)
-                VALUES (?, ?, 'historical', ?)
+                VALUES (%s, %s, 'historical', %s) ON CONFLICT DO NOTHING
                 """,
                 (run_id, run_kind, started_at or utc_timestamp()),
             )
 
     def reviews(self, run_id: str) -> list[dict]:
-        with _connect(self.path) as connection:
+        with connect() as connection:
             rows = connection.execute(
                 """
                 SELECT run_id, item_id, status, reviewer, reason,
                        evidence_json, updated_at
                 FROM collector_reviews
-                WHERE run_id = ?
+                WHERE run_id = %s
                 ORDER BY item_id
                 """,
                 (run_id,),
@@ -307,12 +217,12 @@ class CollectorLedger:
             raise ValueError("review status must be pending, accepted, or rejected")
         timestamp = updated_at or utc_timestamp()
         evidence_json = json.dumps(evidence, ensure_ascii=False) if evidence is not None else None
-        with _connect(self.path) as connection:
+        with connect() as connection:
             connection.execute(
                 """
                 INSERT INTO collector_reviews
                     (run_id, item_id, status, reviewer, reason, evidence_json, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT(run_id, item_id) DO UPDATE SET
                     status = excluded.status,
                     reviewer = excluded.reviewer,
@@ -326,11 +236,11 @@ class CollectorLedger:
 
     def recover_unfinished(self, *, finished_at: str, exclude_run_id: str | None = None) -> list[str]:
         """Mark runs left running by a killed service as explicitly abandoned."""
-        with _connect(self.path) as connection:
+        with connect() as connection:
             query = "SELECT run_id FROM collector_runs WHERE status = 'running'"
             params: tuple[str, ...] = ()
             if exclude_run_id:
-                query += " AND run_id != ?"
+                query += " AND run_id != %s"
                 params = (exclude_run_id,)
             rows = connection.execute(query, params).fetchall()
             run_ids = [row[0] for row in rows]
@@ -338,9 +248,9 @@ class CollectorLedger:
                 connection.execute(
                     """
                     UPDATE collector_runs
-                    SET status = 'abandoned', finished_at = ?, error_type = ?,
-                        error_message = ?, import_status = COALESCE(import_status, ?)
-                    WHERE run_id = ? AND status = 'running'
+                    SET status = 'abandoned', finished_at = %s, error_type = %s,
+                        error_message = %s, import_status = COALESCE(import_status, %s)
+                    WHERE run_id = %s AND status = 'running'
                     """,
                     (
                         finished_at,
@@ -354,34 +264,34 @@ class CollectorLedger:
                     """
                     INSERT INTO collector_events
                         (run_id, event_type, status, message, created_at)
-                    VALUES (?, 'run_abandoned', 'abandoned', ?, ?)
+                    VALUES (%s, 'run_abandoned', 'abandoned', %s, %s)
                     """,
                     (run_id, "服务进程中断，运行记录已标记为 abandoned", finished_at),
                 )
         return run_ids
 
     def run(self, run_id: str) -> dict | None:
-        with _connect(self.path) as connection:
+        with connect() as connection:
             row = connection.execute(
-                "SELECT * FROM collector_runs WHERE run_id = ?",
+                "SELECT * FROM collector_runs WHERE run_id = %s",
                 (run_id,),
             ).fetchone()
         return dict(row) if row is not None else None
 
     def runs(self, limit: int = 20) -> list[dict]:
-        with _connect(self.path) as connection:
+        with connect() as connection:
             rows = connection.execute(
                 """
                 SELECT * FROM collector_runs
                 ORDER BY started_at DESC, run_id DESC
-                LIMIT ?
+                LIMIT %s
                 """,
                 (max(0, limit),),
             ).fetchall()
         return [dict(row) for row in rows]
 
     def events(self, run_id: str, limit: int = 100) -> list[dict]:
-        with _connect(self.path) as connection:
+        with connect() as connection:
             rows = connection.execute(
                 """
                 SELECT id, run_id, collector_id, event_type, status, message,
@@ -390,10 +300,10 @@ class CollectorLedger:
                     SELECT id, run_id, collector_id, event_type, status, message,
                            payload_json, created_at
                     FROM collector_events
-                    WHERE run_id = ?
+                    WHERE run_id = %s
                     ORDER BY id DESC
-                    LIMIT ?
-                )
+                    LIMIT %s
+                ) AS recent_events
                 ORDER BY id ASC
                 """,
                 (run_id, max(0, limit)),

@@ -46,11 +46,11 @@ def scoped_snapshot(tmp_path, monkeypatch):
     })
     with db() as connection:
         for version, signal in [(1, "sustain"), (2, "easing")]:
-            connection.execute("INSERT INTO reviews VALUES (?,?,?,?,?,?,?)",
+            connection.execute("INSERT INTO reviews VALUES (%s,%s,%s,%s,%s,%s,%s)",
                                (sid, records[0]["id"], version, signal,
                                 "reviewer", "Reviewed statement", "2026-10-02"))
         # A review in another snapshot must not alter this snapshot's totals.
-        connection.execute("INSERT INTO reviews VALUES (?,?,?,?,?,?,?)",
+        connection.execute("INSERT INTO reviews VALUES (%s,%s,%s,%s,%s,%s,%s)",
                            ("other-snapshot", records[1]["id"], 1, "escalation",
                             "reviewer", "Unrelated review", "2026-10-02"))
     yield sid

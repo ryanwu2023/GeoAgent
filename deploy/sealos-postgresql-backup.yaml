@@ -1,0 +1,73 @@
+# Uses the same verified PostgreSQL image as the database.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: geoagent-postgresql-backup
+spec:
+  schedule: "15 2 * * *"
+  timeZone: Asia/Shanghai
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app: geoagent-postgresql-backup
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          imagePullSecrets:
+            - name: stocklinkes-mcp
+          containers:
+            - name: backup
+              image: crpi-pkfixdfs4f7qepax.cn-shanghai.personal.cr.aliyuncs.com/stocklink-base/geoagent@sha256:2cd2c0f809604aaeff6f0ec8f40aecbd025613107561015c69369a1a7f1d3416
+              env:
+                - name: PGHOST
+                  value: geoagent-postgresql
+                - name: PGDATABASE
+                  value: geoagent
+                - name: PGUSER
+                  value: geoagent
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: geoagent-postgresql
+                      key: PGPASSWORD
+              command: [/bin/sh, -ec]
+              args:
+                - |
+                  umask 077
+                  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+                  mkdir -p /backups/daily
+                  target="/backups/daily/.partial-$stamp"
+                  mkdir "$target"
+                  trap 'rm -rf -- "$target"' EXIT
+                  pg_dump --format=custom --no-owner --no-acl --file="$target/database.dump"
+                  pg_restore --list "$target/database.dump" > "$target/toc.txt"
+                  (cd "$target" && sha256sum database.dump > database.sha256)
+                  mv "$target" "/backups/daily/$stamp"
+                  # Prune only completed daily dumps owned by this job, retaining seven.
+                  ls -1dt /backups/daily/20* | tail -n +8 | while IFS= read -r old; do
+                    rm -rf -- "$old"
+                  done
+                  echo "PostgreSQL backup complete: $stamp"
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                  ephemeral-storage: 128Mi
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+                  ephemeral-storage: 512Mi
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: geoagent-postgresql-backups

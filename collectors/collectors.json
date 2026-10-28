@@ -263,7 +263,11 @@
         "--selftest"
       ],
       "output_kind": "geo-v6",
-      "enabled": true
+      "enabled": true,
+      "direct_hosts": [
+        "www.stcn.com",
+        "stcn.com"
+      ]
     },
     {
       "id": "taco-monitor",
@@ -355,7 +359,10 @@
         "--selftest"
       ],
       "output_kind": "geo-v6",
-      "enabled": true
+      "enabled": true,
+      "direct_hosts": [
+        "www.news.cn"
+      ]
     }
   ]
 }

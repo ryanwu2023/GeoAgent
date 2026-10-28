@@ -1,3 +1,5 @@
+PostgreSQL setup and migration are required before using this deployment: [instructions](POSTGRESQL.md).
+
 # GeoAgent Sealos production releases
 
 Production tag: `geoagent-prod-v1.2.3` (three numeric version components).
@@ -25,7 +27,7 @@ the following protected variables, scoped to `geoagent-sealos-production`:
 
 Keep expansion disabled for secret values. Never commit kubeconfig, registry
 credentials, PiChat keys, web passwords, or phone numbers. Existing runtime
-Secrets and SQLite PVC are reused; this pipeline does not reinitialize data.
+Secrets and data PVC and PostgreSQL database are reused; this pipeline does not reinitialize data.
 
 After merging the release configuration into main:
 

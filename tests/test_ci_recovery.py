@@ -1,24 +1,51 @@
 import os
 from pathlib import Path
-import sqlite3
 import subprocess
 
 import pytest
 
-from scripts.ci.backup import backup
+from scripts.ci.backup import backup, postgres_environment
+from psycopg.conninfo import conninfo_to_dict
 
 POLICY = Path(__file__).resolve().parents[1] / "scripts/ci/release-policy.sh"
 
 
-def test_backup_is_consistent_and_does_not_overwrite(tmp_path):
-    with sqlite3.connect(tmp_path / "research.sqlite3") as db:
-        db.execute("CREATE TABLE sample(value TEXT)")
-        db.execute("INSERT INTO sample VALUES ('preserved')")
+def test_backup_uses_postgres_dump_and_does_not_overwrite(tmp_path, monkeypatch):
+    calls = []
+    def run(args, **kwargs):
+        calls.append((args, kwargs))
+        if args[0] == "pg_dump":
+            Path(args[-1]).write_bytes(b"PGDMP-test")
+        return subprocess.CompletedProcess(args, 0)
+    monkeypatch.setattr("scripts.ci.backup.subprocess.run", run)
     target = backup(tmp_path, "123")
-    with sqlite3.connect(target / "research.sqlite3") as db:
-        assert db.execute("SELECT value FROM sample").fetchone()[0] == "preserved"
+    assert (target / "database.dump").read_bytes() == b"PGDMP-test"
+    assert calls[0][0][0] == "pg_dump"
+    assert calls[0][1]["env"]["PGDATABASE"] == conninfo_to_dict(os.environ["GEO_DATABASE_URL"])["dbname"]
+    assert calls[1][0][:2] == ["pg_restore", "--list"]
+    assert not (target / "database.dump.partial").exists()
     with pytest.raises(FileExistsError):
         backup(tmp_path, "123")
+
+
+def test_backup_environment_decodes_password_and_preserves_tls(monkeypatch):
+    with monkeypatch.context() as pg_env:
+        pg_env.setenv("PGHOSTADDR", "203.0.113.1")
+        env = postgres_environment("postgresql://geo:p%40ss%3Aword@database:5433/research?sslmode=verify-full")
+    assert env["PGDATABASE"] == "research"
+    assert env["PGHOST"] == "database" and env["PGPORT"] == "5433"
+    assert env["PGPASSWORD"] == "p@ss:word"
+    assert env["PGSSLMODE"] == "verify-full"
+    assert "PGHOSTADDR" not in env
+
+
+def test_failed_dump_has_no_success_manifest(tmp_path, monkeypatch):
+    def fail(args, **kwargs):
+        raise subprocess.CalledProcessError(1, args)
+    monkeypatch.setattr("scripts.ci.backup.subprocess.run", fail)
+    with pytest.raises(RuntimeError, match="PostgreSQL backup failed"):
+        backup(tmp_path, "123")
+    assert not (tmp_path / "release-backups/123/manifest.json").exists()
 
 
 def test_active_collection_blocks_backup(tmp_path):

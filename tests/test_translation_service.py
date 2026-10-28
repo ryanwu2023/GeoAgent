@@ -158,7 +158,8 @@ def test_real_worker_transport_hot_reads_saved_deepseek_configuration(monkeypatc
         assert json.loads(calls[-1].content)["model"] == model
     assert len(calls) == 2
     assert (tmp_path / "model-settings.json").is_file()
-    assert not (tmp_path / "research.sqlite3").exists()
+    from backend.store import snapshots
+    assert snapshots() == []
     assert not (tmp_path / "translation.request").exists()
 
 
@@ -196,7 +197,8 @@ def test_actual_draft_transport_leaves_saved_configuration_untouched(monkeypatch
     assert result["model"] == "deepseek-pro"
     assert len(calls) == 1
     assert (tmp_path / "model-settings.json").read_bytes() == before
-    assert not (tmp_path / "research.sqlite3").exists()
+    from backend.store import snapshots
+    assert snapshots() == []
     assert not (tmp_path / "translation.request").exists()
 
 

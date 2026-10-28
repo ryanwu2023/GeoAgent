@@ -155,6 +155,7 @@ def test_bad_optional_model_config_does_not_stop_app_and_can_be_repaired(client,
     })
     set_working_snapshot_id(sid)
     path = model_settings.settings_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("broken-sensitive-model-configuration")
     monkeypatch.setenv("LLM_API_KEY", "test-no-fallback")
     monkeypatch.setattr(chinese, "_worker", None)

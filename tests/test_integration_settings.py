@@ -126,11 +126,12 @@ def test_legacy_key_schema_concurrent_migration(client):
     from concurrent.futures import ThreadPoolExecutor
     from backend.integrations import key_table
     with db() as conn:
+        conn.execute("DROP TABLE integration_mcp_keys")
         conn.execute("CREATE TABLE integration_mcp_keys (id TEXT PRIMARY KEY, label TEXT NOT NULL, token_hash TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT)")
     def migrate(_):
         with db() as conn:
             key_table(conn)
-            assert "deleted_at" in {row[1] for row in conn.execute("PRAGMA table_info(integration_mcp_keys)")}
+            assert "deleted_at" in {row[0] for row in conn.execute("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='integration_mcp_keys'")}
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(migrate, range(16)))
 
@@ -140,7 +141,8 @@ def test_workbench_real_mcp_and_management_auth(client):
     assert client.get(url, headers={"X-GeoAgent-Admin": "bad"}).status_code == 200
     catalog = client.get(url)
     assert catalog.headers["cache-control"] == "no-store"
-    assert len(catalog.json()["tools"]) == 20
+    assert len(catalog.json()["tools"]) == 22
+    assert {"geo_sync_manifest", "geo_sync_chunk"} <= {tool["name"] for tool in catalog.json()["tools"]}
     assert "inputSchema" in catalog.json()["tools"][0]
     assert catalog.json()["instructions"]
     key = client.post("/api/integrations/mcp-keys", json={"label": "trial"}).json()

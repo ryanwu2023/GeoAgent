@@ -28,6 +28,8 @@ def snapshot_payload(meetings):
 
 def test_meeting_api_filters_topic_person_status_and_inactive(tmp_path, monkeypatch):
     monkeypatch.setenv("GEO_DATA_DIR", str(tmp_path))
+    # The default meeting range starts at the snapshot creation date.
+    monkeypatch.setattr("backend.store.now", lambda: "2026-10-27T00:00:00+00:00")
     sid, _ = save_snapshot(snapshot_payload([
         meeting("EV-1"), meeting("EV-2", status="canceled"),
         meeting("EV-3", topics=["ukraine"], date_start="2026-11-02"),

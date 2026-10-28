@@ -25,8 +25,18 @@ case ${1:-} in
       --build-arg PYPI_INDEX_URL=https://mirrors.aliyun.com/pypi/simple \
       --build-arg VITE_PICHAT_PRODUCT_USER_ID=geoagent-owner \
       -t "$candidate" .
-    trap 'docker image rm "$candidate" >/dev/null 2>&1 || true' EXIT
-    docker run --rm --user "$(id -u):$(id -g)" --env GEO_DATA_DIR=/tmp/geoagent-ci-data \
+    pg_container="geoagent-test-pg-${CI_PIPELINE_ID}"
+    pg_network="geoagent-test-net-${CI_PIPELINE_ID}"
+    trap 'docker rm -f "$pg_container" >/dev/null 2>&1 || true; docker network rm "$pg_network" >/dev/null 2>&1 || true; docker image rm "$candidate" >/dev/null 2>&1 || true' EXIT
+    docker network create "$pg_network"
+    docker run -d --name "$pg_container" --network "$pg_network" --network-alias postgres \
+      -e POSTGRES_PASSWORD=isolated-ci-only -e POSTGRES_DB=geoagent_test postgres:17
+    for attempt in $(seq 1 60); do
+      docker exec "$pg_container" pg_isready -U postgres -d geoagent_test && break
+      sleep 1
+    done
+    docker exec "$pg_container" pg_isready -U postgres -d geoagent_test
+    docker run --rm --network "$pg_network" --env GEO_TEST_DATABASE_URL=postgresql://postgres:isolated-ci-only@postgres/geoagent_test --user "$(id -u):$(id -g)" --env GEO_DATA_DIR=/tmp/geoagent-ci-data \
       --env COLLECTOR_DATA_ROOT=/tmp/geoagent-ci-data/collector-output --env HOME=/tmp \
       --mount "type=bind,source=$PWD/release,target=/reports" \
       --mount "type=bind,source=$PWD/tests,target=/app/tests,readonly" \
@@ -95,10 +105,9 @@ case ${1:-} in
         --from-literal="backup=$backup_path"
       next_owner=$CI_PIPELINE_ID
       next_sequence=$CI_PIPELINE_ID
-      # Reconcile this release's gateway policy. Browser/API login is unchanged;
-      # only /mcp delegates to the mandatory application Bearer validator.
-      kubectl -n "$namespace" create configmap geoagent-gateway \
-        --from-file=default.conf=deploy/gateway.conf --dry-run=client -o yaml | kubectl -n "$namespace" apply -f -
+      # The initial form-login migration installs a versioned gateway config
+      # atomically with the authenticated app. Never edit a live gateway policy
+      # ahead of its matching application image.
     else
       digest=$(kubectl -n "$namespace" get configmap "$record" -o jsonpath='{.data.previous}')
       deployed_image=$(kubectl -n "$namespace" get configmap "$record" -o jsonpath='{.data.image}')
@@ -109,6 +118,9 @@ case ${1:-} in
     [[ $digest == "$repository"@sha256:* && ${digest##*@sha256:} =~ ^[a-f0-9]{64}$ ]] || { echo 'Invalid target image'; exit 1; }
     printf 'action=%s\ncommit=%s\ntag=%s\npipeline=%s\nprevious=%s\nimage=%s\n' \
       "$action" "$CI_COMMIT_SHA" "$CI_COMMIT_TAG" "$CI_PIPELINE_ID" "$previous" "$digest" > release/geoagent-release.txt
+    # A historical pre-login image would expose APIs behind the new gateway.
+    # Such rollbacks require restoring the matching old gateway/pod template.
+    docker run --rm --entrypoint python "$digest" -c 'import importlib.util; assert importlib.util.find_spec("backend.web_auth"), "Restore the matching Basic-auth gateway before rolling back a pre-login image"'
     # CAS prevents an out-of-band deployment/config change being overwritten.
     annotations=$(kubectl -n "$namespace" get deployment geoagent -o jsonpath='{.metadata.annotations}')
     init_annotations=''
@@ -116,7 +128,7 @@ case ${1:-} in
     patch="[{\"op\":\"test\",\"path\":\"/metadata/resourceVersion\",\"value\":\"$revision\"},${init_annotations}{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/$index/image\",\"value\":\"$digest\"},{\"op\":\"add\",\"path\":\"/metadata/annotations/geoagent-release-owner\",\"value\":\"$next_owner\"},{\"op\":\"add\",\"path\":\"/metadata/annotations/geoagent-release-sequence\",\"value\":\"$next_sequence\"}]"
     if [[ $action == deploy ]]; then
       env_names=$(kubectl -n "$namespace" get deployment geoagent -o jsonpath="{range .spec.template.spec.containers[$index].env[*]}{.name}{'\n'}{end}")
-      for setting in GEOAGENT_TRUST_AUTHENTICATED_GATEWAY PICHAT_EMBED_BASE_URL; do
+      for setting in GEOAGENT_TRUST_AUTHENTICATED_GATEWAY GEO_WEB_AUTH_ENABLED PICHAT_EMBED_BASE_URL; do
         value=true
         [[ $setting != PICHAT_EMBED_BASE_URL ]] || value=https://chat.lhotsetech.com
         env_index=0
@@ -135,7 +147,7 @@ case ${1:-} in
     status=failed
     if kubectl -n "$namespace" rollout status deployment/geoagent --timeout=300s &&
        { [[ $action != deploy ]] || kubectl -n "$namespace" exec deployment/geoagent -c geoagent -- python -m scripts.ci.configure_integrations; } &&
-       kubectl -n "$namespace" exec deployment/geoagent -c geoagent -- python -c 'import json,urllib.request; r=urllib.request.urlopen("http://127.0.0.1:8000/api/status",timeout=15); assert r.status==200; assert "snapshots" in json.load(r); print("GeoAgent status: HTTP 200")' &&
+       kubectl -n "$namespace" exec deployment/geoagent -c geoagent -- python -c 'import json,urllib.request; r=urllib.request.urlopen("http://127.0.0.1:8000/readyz",timeout=15); assert r.status==200; assert json.load(r).get("status")=="ok"; print("GeoAgent status: HTTP 200")' &&
        [[ $(curl --silent --show-error --max-time 30 -o /dev/null -w '%{http_code}' https://geoagent.lhotsetech.com/api/status) == 401 ]]; then
       status=passed
     fi

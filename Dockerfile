@@ -12,7 +12,7 @@ ARG VITE_PICHAT_AGENT_ID=geo-research-assistant
 ARG VITE_PICHAT_PRODUCT_USER_ID=geoagent-local
 RUN npm test && npm run build
 
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim-trixie
 WORKDIR /app
 ARG DEBIAN_MIRROR=https://deb.debian.org
 # Finance and TACO explicitly use curl transport; Python dependencies alone
@@ -20,7 +20,7 @@ ARG DEBIAN_MIRROR=https://deb.debian.org
 RUN test "${DEBIAN_MIRROR#https://}" != "$DEBIAN_MIRROR" \
     && sed -i "s|http://deb.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources \
     && apt-get update -o APT::Update::Error-Mode=any \
-    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && apt-get install -y --no-install-recommends curl ca-certificates postgresql-client-17 \
     && curl --version && rm -rf /var/lib/apt/lists/*
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

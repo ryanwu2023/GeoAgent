@@ -345,11 +345,8 @@ def load_latest_run(runs_root: Path, registry_path: Path) -> dict[str, Any]:
 
 
 def _ledger(runs_root: Path) -> CollectorLedger | None:
-    path = runs_root / "ledger.sqlite3"
-    if not path.is_file():
-        return None
     try:
-        return CollectorLedger(path)
+        return CollectorLedger()
     except (OSError, ValueError):
         return None
 

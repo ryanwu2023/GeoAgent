@@ -6,27 +6,20 @@ import hashlib
 import json
 import os
 import re
-import sqlite3
-from contextlib import contextmanager
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from .store import data_dir
+from .database import connect as database, Row
 
 
 CHINA_TZ = timezone(timedelta(hours=8))
-SCHEMA_VERSION = "1"
 DEFAULT_FETCH_TIMES = ("08:00", "14:00", "20:00")
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def message_db_path() -> Path:
-    configured = os.getenv("HT_MACRO_DB_PATH", "").strip()
-    return Path(configured) if configured else data_dir() / "ht-macro" / "messages.sqlite3"
 
 
 def raw_archive_root() -> Path:
@@ -37,110 +30,6 @@ def raw_archive_root() -> Path:
 def status_path() -> Path:
     configured = os.getenv("HT_MACRO_STATUS_PATH", "").strip()
     return Path(configured) if configured else data_dir() / "ht-macro" / "status.json"
-
-
-def _connect(path: Path | None = None) -> sqlite3.Connection:
-    target = path or message_db_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(target, timeout=10)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA journal_mode=WAL")
-    connection.execute("PRAGMA busy_timeout=10000")
-    connection.execute("PRAGMA foreign_keys=ON")
-    return connection
-
-
-def initialize(path: Path | None = None) -> Path:
-    target = path or message_db_path()
-    with _connect(target) as connection:
-        connection.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS schema_meta (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS messages (
-                public_id TEXT PRIMARY KEY,
-                dedupe_key TEXT NOT NULL UNIQUE,
-                upstream_unique_id TEXT,
-                external_unique_id TEXT,
-                upstream_message_id TEXT,
-                message_type TEXT,
-                title TEXT NOT NULL DEFAULT '',
-                content_abstract TEXT NOT NULL DEFAULT '',
-                ai_title TEXT NOT NULL DEFAULT '',
-                ai_short TEXT NOT NULL DEFAULT '',
-                ai_content TEXT NOT NULL DEFAULT '',
-                message_at TEXT,
-                message_time_ms INTEGER,
-                upstream_updated_at TEXT,
-                first_seen_at TEXT NOT NULL,
-                last_seen_at TEXT NOT NULL,
-                text_type TEXT,
-                text_class TEXT,
-                industry_json TEXT NOT NULL DEFAULT '[]',
-                primary_tag TEXT,
-                tag_code TEXT,
-                tags_json TEXT NOT NULL DEFAULT '[]',
-                group_name TEXT,
-                sender_name TEXT,
-                receive_time TEXT,
-                origin_type TEXT,
-                is_important INTEGER,
-                topics_json TEXT NOT NULL DEFAULT '[]',
-                relevance_status TEXT NOT NULL DEFAULT 'unclassified',
-                extra_info_error TEXT,
-                content_hash TEXT NOT NULL,
-                raw_json TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS messages_message_at_idx ON messages(message_at DESC);
-            CREATE INDEX IF NOT EXISTS messages_group_idx ON messages(group_name);
-            CREATE INDEX IF NOT EXISTS messages_class_idx ON messages(text_class);
-            CREATE INDEX IF NOT EXISTS messages_tag_idx ON messages(primary_tag);
-            CREATE TABLE IF NOT EXISTS message_tags (
-                public_id TEXT NOT NULL REFERENCES messages(public_id) ON DELETE CASCADE,
-                tag_name TEXT NOT NULL,
-                tag_type TEXT,
-                classification TEXT,
-                PRIMARY KEY(public_id, tag_name)
-            );
-            CREATE TABLE IF NOT EXISTS collection_runs (
-                run_id TEXT PRIMARY KEY,
-                started_at TEXT NOT NULL,
-                finished_at TEXT,
-                status TEXT NOT NULL,
-                pages INTEGER NOT NULL DEFAULT 0,
-                received INTEGER NOT NULL DEFAULT 0,
-                inserted INTEGER NOT NULL DEFAULT 0,
-                updated INTEGER NOT NULL DEFAULT 0,
-                duplicates INTEGER NOT NULL DEFAULT 0,
-                upstream_total INTEGER,
-                error_type TEXT,
-                error_message TEXT
-            );
-            CREATE INDEX IF NOT EXISTS collection_runs_started_idx ON collection_runs(started_at DESC);
-            """
-        )
-        connection.execute(
-            "INSERT INTO schema_meta(key,value) VALUES('schema_version',?) "
-            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (SCHEMA_VERSION,),
-        )
-    return target
-
-
-@contextmanager
-def database(path: Path | None = None) -> Iterator[sqlite3.Connection]:
-    initialize(path)
-    connection = _connect(path)
-    try:
-        yield connection
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
 
 
 def _text(value: Any) -> str:
@@ -351,61 +240,63 @@ MESSAGE_COLUMNS = (
 )
 
 
-def upsert_messages(records: list[dict[str, Any]], *, path: Path | None = None, seen_at: str | None = None) -> dict[str, int]:
+def upsert_messages(records: list[dict[str, Any]], *, seen_at: str | None = None) -> dict[str, int]:
     result = {"received": len(records), "inserted": 0, "updated": 0, "duplicates": 0}
-    with database(path) as connection:
+    with database() as connection:
+        # Serialize competing imports so deduplication counts and tag replacement stay atomic.
+        connection.execute("SELECT pg_advisory_xact_lock(71005)")
         for raw in records:
             item = normalize_message(raw, seen_at=seen_at)
             existing = connection.execute(
-                "SELECT public_id,content_hash FROM messages WHERE dedupe_key=?", (item["dedupe_key"],)
+                "SELECT public_id,content_hash FROM internal_messages WHERE dedupe_key=%s", (item["dedupe_key"],)
             ).fetchone()
             tag_rows = item.pop("tag_rows")
             if existing is None:
-                placeholders = ",".join("?" for _ in MESSAGE_COLUMNS)
+                placeholders = ",".join("%s" for _ in MESSAGE_COLUMNS)
                 connection.execute(
-                    f"INSERT INTO messages({','.join(MESSAGE_COLUMNS)}) VALUES({placeholders})",
+                    f"INSERT INTO internal_messages({','.join(MESSAGE_COLUMNS)}) VALUES({placeholders})",
                     tuple(item[column] for column in MESSAGE_COLUMNS),
                 )
                 result["inserted"] += 1
             else:
                 item["public_id"] = existing["public_id"]
                 item["first_seen_at"] = connection.execute(
-                    "SELECT first_seen_at FROM messages WHERE public_id=?", (existing["public_id"],)
+                    "SELECT first_seen_at FROM internal_messages WHERE public_id=%s", (existing["public_id"],)
                 ).fetchone()[0]
                 if existing["content_hash"] == item["content_hash"]:
                     connection.execute(
-                        "UPDATE messages SET last_seen_at=? WHERE public_id=?",
+                        "UPDATE internal_messages SET last_seen_at=%s WHERE public_id=%s",
                         (item["last_seen_at"], item["public_id"]),
                     )
                     result["duplicates"] += 1
                 else:
-                    assignments = ",".join(f"{column}=?" for column in MESSAGE_COLUMNS if column != "public_id")
+                    assignments = ",".join(f"{column}=%s" for column in MESSAGE_COLUMNS if column != "public_id")
                     connection.execute(
-                        f"UPDATE messages SET {assignments} WHERE public_id=?",
+                        f"UPDATE internal_messages SET {assignments} WHERE public_id=%s",
                         tuple(item[column] for column in MESSAGE_COLUMNS if column != "public_id") + (item["public_id"],),
                     )
                     result["updated"] += 1
-            connection.execute("DELETE FROM message_tags WHERE public_id=?", (item["public_id"],))
-            connection.executemany(
-                "INSERT OR IGNORE INTO message_tags(public_id,tag_name,tag_type,classification) VALUES(?,?,?,?)",
+            connection.execute("DELETE FROM internal_message_tags WHERE public_id=%s", (item["public_id"],))
+            connection.cursor().executemany(
+                "INSERT INTO internal_message_tags(public_id,tag_name,tag_type,classification) VALUES(%s,%s,%s,%s) ON CONFLICT DO NOTHING",
                 [(item["public_id"], tag["tag_name"], tag["tag_type"], tag["classification"]) for tag in tag_rows],
             )
     return result
 
 
-def record_run_start(run_id: str, *, path: Path | None = None, started_at: str | None = None) -> None:
-    with database(path) as connection:
+def record_run_start(run_id: str, *, started_at: str | None = None) -> None:
+    with database() as connection:
         connection.execute(
-            "INSERT INTO collection_runs(run_id,started_at,status) VALUES(?,?,?)",
+            "INSERT INTO internal_collection_runs(run_id,started_at,status) VALUES(%s,%s,%s)",
             (run_id, started_at or utc_now(), "running"),
         )
 
 
-def record_run_finish(run_id: str, result: dict[str, Any], *, path: Path | None = None) -> None:
-    with database(path) as connection:
+def record_run_finish(run_id: str, result: dict[str, Any]) -> None:
+    with database() as connection:
         connection.execute(
-            """UPDATE collection_runs SET finished_at=?,status=?,pages=?,received=?,inserted=?,updated=?,
-               duplicates=?,upstream_total=?,error_type=?,error_message=? WHERE run_id=?""",
+            """UPDATE internal_collection_runs SET finished_at=%s,status=%s,pages=%s,received=%s,inserted=%s,updated=%s,
+               duplicates=%s,upstream_total=%s,error_type=%s,error_message=%s WHERE run_id=%s""",
             (
                 utc_now(), result.get("status", "succeeded"), int(result.get("pages", 0)),
                 int(result.get("received", 0)), int(result.get("inserted", 0)), int(result.get("updated", 0)),
@@ -433,7 +324,7 @@ def _clip(value: str | None, limit: int = 500) -> tuple[str, bool]:
     return text[:limit], len(text) > limit
 
 
-def _public_message(row: sqlite3.Row, *, detail: bool) -> dict[str, Any]:
+def _public_message(row: Row, *, detail: bool) -> dict[str, Any]:
     abstract, abstract_truncated = _clip(row["content_abstract"])
     ai_short, ai_short_truncated = _clip(row["ai_short"])
     result = {
@@ -471,7 +362,7 @@ def _public_message(row: sqlite3.Row, *, detail: bool) -> dict[str, Any]:
 
 def search_messages(
     *, query: str = "", start: str = "", end: str = "", group_name: str = "", tag: str = "",
-    text_class: str = "", offset: int = 0, limit: int = 20, path: Path | None = None,
+    text_class: str = "", offset: int = 0, limit: int = 20,
 ) -> dict[str, Any]:
     _validate_date(start, "start")
     _validate_date(end, "end")
@@ -486,23 +377,23 @@ def search_messages(
     if query.strip():
         pattern = _like(query.strip())
         columns = ("title", "content_abstract", "ai_title", "ai_short", "ai_content", "primary_tag", "group_name")
-        clauses.append("(" + " OR ".join(f"{column} LIKE ? ESCAPE '\\'" for column in columns) + ")")
+        clauses.append("(" + " OR ".join(f"{column} ILIKE %s ESCAPE '\\'" for column in columns) + ")")
         params.extend([pattern] * len(columns))
     if start:
-        clauses.append("message_at>=?")
+        clauses.append("message_at>=%s")
         params.append(start + "T00:00:00+08:00")
     if end:
-        clauses.append("message_at<?")
+        clauses.append("message_at<%s")
         params.append((date.fromisoformat(end) + timedelta(days=1)).isoformat() + "T00:00:00+08:00")
     for column, value in (("group_name", group_name), ("primary_tag", tag), ("text_class", text_class)):
         if value.strip():
-            clauses.append(f"{column} LIKE ? ESCAPE '\\'")
+            clauses.append(f"{column} ILIKE %s ESCAPE '\\'")
             params.append(_like(value.strip()))
     where = " WHERE " + " AND ".join(clauses) if clauses else ""
-    with database(path) as connection:
-        total = connection.execute("SELECT COUNT(*) FROM messages" + where, params).fetchone()[0]
+    with database() as connection:
+        total = connection.execute("SELECT COUNT(*) FROM internal_messages" + where, params).fetchone()[0]
         rows = connection.execute(
-            "SELECT * FROM messages" + where + " ORDER BY COALESCE(message_at,last_seen_at) DESC,public_id LIMIT ? OFFSET ?",
+            "SELECT * FROM internal_messages" + where + " ORDER BY COALESCE(message_at,last_seen_at) DESC,public_id LIMIT %s OFFSET %s",
             [*params, limit, offset],
         ).fetchall()
     return {
@@ -518,25 +409,25 @@ def search_messages(
     }
 
 
-def get_message(public_id: str, *, path: Path | None = None) -> dict[str, Any] | None:
-    with database(path) as connection:
-        row = connection.execute("SELECT * FROM messages WHERE public_id=?", (public_id,)).fetchone()
+def get_message(public_id: str) -> dict[str, Any] | None:
+    with database() as connection:
+        row = connection.execute("SELECT * FROM internal_messages WHERE public_id=%s", (public_id,)).fetchone()
     return _public_message(row, detail=True) if row else None
 
 
-def message_stats(*, path: Path | None = None) -> dict[str, Any]:
-    with database(path) as connection:
-        total = connection.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
-        relevant = connection.execute("SELECT COUNT(*) FROM messages WHERE relevance_status='relevant'").fetchone()[0]
-        latest = connection.execute("SELECT MAX(message_at) FROM messages").fetchone()[0]
+def message_stats() -> dict[str, Any]:
+    with database() as connection:
+        total = connection.execute("SELECT COUNT(*) FROM internal_messages").fetchone()[0]
+        relevant = connection.execute("SELECT COUNT(*) FROM internal_messages WHERE relevance_status='relevant'").fetchone()[0]
+        latest = connection.execute("SELECT MAX(message_at) FROM internal_messages").fetchone()[0]
         run = connection.execute(
-            "SELECT * FROM collection_runs ORDER BY started_at DESC LIMIT 1"
+            "SELECT * FROM internal_collection_runs ORDER BY started_at DESC LIMIT 1"
         ).fetchone()
         classes = [dict(row) for row in connection.execute(
-            "SELECT COALESCE(text_class,'未分类') AS name,COUNT(*) AS count FROM messages GROUP BY text_class ORDER BY count DESC LIMIT 20"
+            "SELECT COALESCE(text_class,'未分类') AS name,COUNT(*) AS count FROM internal_messages GROUP BY text_class ORDER BY count DESC LIMIT 20"
         )]
         tags = [dict(row) for row in connection.execute(
-            "SELECT tag_name AS name,COUNT(*) AS count FROM message_tags GROUP BY tag_name ORDER BY count DESC LIMIT 20"
+            "SELECT tag_name AS name,COUNT(*) AS count FROM internal_message_tags GROUP BY tag_name ORDER BY count DESC LIMIT 20"
         )]
     return {
         "configured": bool(os.getenv("HT_MACRO_BASE_URL", "").strip()),

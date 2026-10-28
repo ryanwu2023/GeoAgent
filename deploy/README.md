@@ -1,4 +1,8 @@
+PostgreSQL setup and migration are required before using this deployment: [instructions](POSTGRESQL.md).
+
 # Sealos deployment
+
+Current release (2026-10-28): form login plus collector fixes, image `crpi-pkfixdfs4f7qepax.cn-shanghai.personal.cr.aliyuncs.com/stocklink-base/geoagent@sha256:ed4b0d35c58b4a490bb9ace32663e3c41f07acbc62fb6cec65881eb2ca7e57fa`. See [release validation and rollback](LOGIN-AND-COLLECTOR-FIX-20261028.md). The dated entries below describe earlier deployments.
 
 Prepared on 2026-10-08 from main commit `65bd31995bae0f6aaf2612954e61f885ba2f7ce7`.
 
@@ -15,18 +19,18 @@ The manifest pins this digest. Rebuild and update the digest when source or depe
 
 ## Storage and access
 
-- One replica, Recreate updates; do not enable horizontal scaling with this SQLite deployment.
-- 5 GiB ReadWriteOnce PVC mounted at `/app/data` retains SQLite, collector output and archives.
+- One replica, Recreate updates; do not enable horizontal scaling until collector locking and file storage support multiple hosts.
+- 5 GiB ReadWriteOnce PVC mounted at `/app/data` retains collector output, model settings and archives; PostgreSQL is external.
 - Container and Service port: 8000. CPU limit: 0.5 core; memory limit: 1 GiB. Verify namespace quota and pricing before applying.
 - The deployed manifest reuses the existing `stocklinkes-mcp` ACR pull secret in `ns-d40dap45`. Other namespaces require their own pull secret. Do not commit credentials.
-- Public HTTPS: https://geoagentd40d.sealosgzg.site (enabled 2026-10-09). An Nginx sidecar protects all pages and API routes with Basic authentication. The password hash is mounted from `geoagent-web-auth`; local credentials are stored in git-ignored `data/deployment/public-access.json`.
-- Use `kubectl --kubeconfig <file> -n <namespace> port-forward svc/geoagent 8000:8000`, then open http://127.0.0.1:8000.
+- Public HTTPS: https://geoagentd40d.sealosgzg.site (enabled 2026-10-09). The application serves `/login` and enforces PostgreSQL-backed sessions on business routes. Existing password hashes are mounted read-only from `geoagent-web-auth` into the application container; MCP uses independent Bearer authentication.
+- Use `kubectl --kubeconfig <file> -n <namespace> port-forward svc/geoagent 8000:8000`, for diagnostics. Browser login uses the public HTTPS domain because production session cookies require HTTPS.
 - `GEOAGENT_ALLOWED_ORIGINS` allows the exact public origin for browser writes. Unknown origins remain forbidden. `sealos-ingress.yaml` permits inbound port 8080 through the namespace's existing default-deny policy; port 8000 stays isolated. Existing egress restrictions remain in effect (live collection requires a separately scoped egress policy).
 
 The public image is `geoagent:65bd319-public-20261009` in the same ACR repository, pinned by the deployment to `sha256:b3f7d99efa8b7b1994772fc70fc83e37f6e1a3520b1efb32871866784fea211c`.
 
 Custom domain bound on 2026-10-09: `geoagent.lhotsetech.com`, using `deploy/sealos-custom-domain.yaml` and the existing wildcard certificate Secret `pi-chat-lhotsetech-tls`. The certificate covers `*.lhotsetech.com` and expires on 2026-10-29. Public DNS now confirms `geoagent CNAME geoagentd40d.sealosgzg.site`. TLS and authentication were verified against the public DNS address with normal certificate verification enabled: anonymous 401, authenticated status succeeds with the existing working snapshot. This workstation's normal resolver/proxy path initially failed TLS after the DNS change, while the resolved public address worked. The original Sealos address remains available. Both exact HTTPS origins are allowed for browser writes, and access credentials are unchanged.
-Create/update the `geoagent-gateway` ConfigMap using `--from-file=default.conf=deploy/gateway.conf` and ensure `geoagent-web-auth` exists before applying the deployment and ingress manifests. Authentication is enforced by the sidecar, independently of ingress authentication annotations.
+Create the versioned `geoagent-gateway-login-v1` ConfigMap using `--from-file=default.conf=deploy/gateway.conf`; ensure `geoagent-web-auth` exists and `GEO_WEB_AUTH_ENABLED=true` is set. Switch image, authentication mount, readiness probe and gateway reference together. Never remove Basic auth from a running old gateway before the matching session-protected app is deployed.
 
 After verifying the target namespace and creating the pull secret:
 

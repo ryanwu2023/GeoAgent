@@ -37,7 +37,7 @@ def snapshot_provenance(snapshot: dict[str, Any], *, working_snapshot_id: str | 
         "is_working_snapshot": bool(snapshot_id and snapshot_id == working_snapshot_id),
         "is_latest_snapshot": bool(snapshot_id and snapshot_id == latest_snapshot_id),
         "rule_version": RULE_VERSION,
-        "source": "GeoAgent research.sqlite3",
+        "source": "GeoAgent PostgreSQL",
     }
 
 
@@ -46,5 +46,5 @@ def list_provenance(*, working_snapshot_id: str | None, latest_snapshot_id: str 
         "working_snapshot_id": working_snapshot_id,
         "latest_snapshot_id": latest_snapshot_id,
         "rule_version": RULE_VERSION,
-        "source": "GeoAgent research.sqlite3",
+        "source": "GeoAgent PostgreSQL",
     }

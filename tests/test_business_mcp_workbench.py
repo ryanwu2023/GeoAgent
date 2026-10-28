@@ -56,9 +56,9 @@ def test_map_invalid_filters_and_region_scope_are_explicit(business_client):
 def test_brief_compare_real_archived_text_and_missing_id(business_client):
     client, _ = business_client
     with store.db() as conn:
-        conn.execute('INSERT INTO snapshots(id,created_at,payload) VALUES(?,?,?)', ('snap', '2026-10-03', '{}'))
+        conn.execute('INSERT INTO snapshots(id,created_at,payload) VALUES(%s,%s,%s)', ('snap', '2026-10-03', '{}'))
         for bid, content in [('before', '# 观察\n价格上涨\n100 USD'), ('after', '# 观察\n价格回落\n110 USD')]:
-            conn.execute('INSERT INTO briefs(id,snapshot_id,created_at,mode,markdown) VALUES(?,?,?,?,?)',
+            conn.execute('INSERT INTO briefs(id,snapshot_id,created_at,mode,markdown) VALUES(%s,%s,%s,%s,%s)',
                          (bid, 'snap', '2026-10-03', 'rules', content))
     payload = call(client, 'geo_brief_compare', {'before': 'before', 'after': 'after'})
     assert payload['ok']
@@ -70,7 +70,7 @@ def test_brief_compare_real_archived_text_and_missing_id(business_client):
     detail = call(client, 'geo_brief_get', {'brief_id': 'after'})
     assert detail['data']['brief']['markdown'].endswith('110 美元')
     with store.db() as conn:
-        assert conn.execute('SELECT markdown FROM briefs WHERE id=?', ('after',)).fetchone()[0].endswith('110 USD')
+        assert conn.execute('SELECT markdown FROM briefs WHERE id=%s', ('after',)).fetchone()[0].endswith('110 USD')
     truncated = call(client, 'geo_brief_compare', {'before': 'before', 'after': 'after', 'max_bytes': 10})
     assert truncated['data']['truncated']
     assert len(truncated['data']['diff'].encode()) <= 10

@@ -28,13 +28,7 @@ def test_long_running_integration_checks_preserve_gateway_auth_contract():
     integration = location(config, "/api/integrations")
     public_api = location(config, "/")
     mcp = location(config, "= /mcp")
-    server_directives = config[:config.index("location")]
-    assert 'auth_basic "GeoAgent";' in server_directives
-    assert "auth_basic_user_file /etc/geoagent-auth/auth;" in server_directives
-    assert "auth_basic off;" not in integration
-    assert "auth_basic off;" not in public_api
-    assert "proxy_set_header X-GeoAgent-Gateway-User $remote_user;" in integration
-    assert 'proxy_set_header X-GeoAgent-Gateway-User "";' in public_api
-    assert "auth_basic off;" in mcp
-    assert 'proxy_set_header X-GeoAgent-Gateway-User "";' in mcp
-    assert "proxy_pass http://127.0.0.1:8000;" in integration
+    assert "auth_basic" not in config
+    for block in (integration, public_api, mcp):
+        assert 'proxy_set_header X-GeoAgent-Gateway-User "";' in block
+        assert "proxy_pass http://127.0.0.1:8000;" in block

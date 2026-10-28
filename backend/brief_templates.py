@@ -67,16 +67,17 @@ def _validate(config):
 
 def _ensure_default():
     with db() as conn:
-        row = conn.execute("SELECT version FROM brief_templates WHERE id=?", (DEFAULT_TEMPLATE["id"],)).fetchone()
+        conn.execute("SELECT pg_advisory_xact_lock(71005)")
+        row = conn.execute("SELECT version FROM brief_templates WHERE id=%s", (DEFAULT_TEMPLATE["id"],)).fetchone()
         if not row:
             timestamp = now()
             conn.execute(
-                "INSERT INTO brief_templates VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT INTO brief_templates VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
                 (DEFAULT_TEMPLATE["id"], DEFAULT_TEMPLATE["name"], DEFAULT_TEMPLATE["version"], 1, 1, canonical(DEFAULT_TEMPLATE), timestamp, timestamp),
             )
         elif int(row["version"]) < DEFAULT_TEMPLATE["version"]:
             conn.execute(
-                "UPDATE brief_templates SET name=?,version=?,config=?,updated_at=? WHERE id=?",
+                "UPDATE brief_templates SET name=%s,version=%s,config=%s,updated_at=%s WHERE id=%s",
                 (DEFAULT_TEMPLATE["name"], DEFAULT_TEMPLATE["version"], canonical(DEFAULT_TEMPLATE), now(), DEFAULT_TEMPLATE["id"]),
             )
 
@@ -84,6 +85,7 @@ def _ensure_default():
 def list_templates():
     _ensure_default()
     with db() as conn:
+        conn.execute("SELECT pg_advisory_xact_lock(71005)")
         rows = conn.execute("SELECT * FROM brief_templates ORDER BY is_default DESC,is_system DESC,updated_at DESC").fetchall()
     return [{**json.loads(row["config"]), "id": row["id"], "name": row["name"], "version": row["version"], "is_default": bool(row["is_default"]), "is_system": bool(row["is_system"]), "updated_at": row["updated_at"]} for row in rows]
 
@@ -100,7 +102,8 @@ def save_template(config, template_id=""):
     _ensure_default()
     timestamp = now()
     with db() as conn:
-        existing = conn.execute("SELECT * FROM brief_templates WHERE id=?", (template_id,)).fetchone() if template_id else None
+        conn.execute("SELECT pg_advisory_xact_lock(71005)")
+        existing = conn.execute("SELECT * FROM brief_templates WHERE id=%s", (template_id,)).fetchone() if template_id else None
         if template_id and not existing:
             raise KeyError("模板不存在")
         if existing and existing["is_system"]:
@@ -112,9 +115,9 @@ def save_template(config, template_id=""):
         if is_default:
             conn.execute("UPDATE brief_templates SET is_default=0")
         if existing:
-            conn.execute("UPDATE brief_templates SET name=?,version=?,is_default=?,config=?,updated_at=? WHERE id=?", (value["name"], version, int(is_default), canonical(value), timestamp, tid))
+            conn.execute("UPDATE brief_templates SET name=%s,version=%s,is_default=%s,config=%s,updated_at=%s WHERE id=%s", (value["name"], version, int(is_default), canonical(value), timestamp, tid))
         else:
-            conn.execute("INSERT INTO brief_templates VALUES (?,?,?,?,?,?,?,?)", (tid, value["name"], version, int(is_default), 0, canonical(value), timestamp, timestamp))
+            conn.execute("INSERT INTO brief_templates VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", (tid, value["name"], version, int(is_default), 0, canonical(value), timestamp, timestamp))
     return get_template(tid)
 
 
@@ -122,7 +125,8 @@ def set_default(template_id):
     if not get_template(template_id):
         raise KeyError("模板不存在")
     with db() as conn:
-        conn.execute("UPDATE brief_templates SET is_default=CASE WHEN id=? THEN 1 ELSE 0 END", (template_id,))
+        conn.execute("SELECT pg_advisory_xact_lock(71005)")
+        conn.execute("UPDATE brief_templates SET is_default=CASE WHEN id=%s THEN 1 ELSE 0 END", (template_id,))
     return get_template(template_id)
 
 
@@ -134,7 +138,8 @@ def delete_template(template_id):
         raise PermissionError("系统默认模板不可删除")
     was_default = template["is_default"]
     with db() as conn:
-        conn.execute("DELETE FROM brief_templates WHERE id=?", (template_id,))
+        conn.execute("SELECT pg_advisory_xact_lock(71005)")
+        conn.execute("DELETE FROM brief_templates WHERE id=%s", (template_id,))
         if was_default:
-            conn.execute("UPDATE brief_templates SET is_default=1 WHERE id=?", (DEFAULT_TEMPLATE["id"],))
+            conn.execute("UPDATE brief_templates SET is_default=1 WHERE id=%s", (DEFAULT_TEMPLATE["id"],))
     return {"deleted": template_id}

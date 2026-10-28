@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -158,7 +159,8 @@ def main():
         print("[selftest] ukraine-opinion-monitor: ok (offline)")
         return 0
     result = collect(__file__)
-    print({"collection_status": result["collection_status"], "observations": len(result["observations"])})
+    status = json.loads((output_root(__file__) / "_source_status.json").read_text(encoding="utf-8"))
+    print(json.dumps({"collection_status": result["collection_status"], "observations": len(result["observations"]), "sources": status["sources"]}, ensure_ascii=False))
     return 0 if result["collection_status"] == "ok" else 1
 
 

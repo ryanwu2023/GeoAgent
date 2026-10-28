@@ -35,5 +35,6 @@ def test_import_collector_output_creates_snapshot_from_published_tree(tmp_path, 
     assert result["snapshot_id"]
     assert result["records"] == 1
     assert get_working_snapshot_id() == result["snapshot_id"]
-    assert (tmp_path / "data" / "research.sqlite3").is_file()
+    from backend.store import snapshots
+    assert snapshots()
     assert (tmp_path / "data" / "archive").is_dir()

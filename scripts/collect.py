@@ -22,6 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from backend.paths import collector_data_root, collector_source_root
 from backend.collector_ledger import service_lock
 from scripts.integrate_collectors import load_registry
+from backend.collector_logs import redact
 
 
 def serialize_for_console(value) -> str:
@@ -45,6 +46,41 @@ def select_collectors(
         and (not wanted or item["id"] in wanted)
         and (not topic or topic in item.get("topics", []))
     ]
+
+
+SOURCE_DIAGNOSTICS = ("_source_status.json", "_fetch_stats.json", "_source_health.json")
+
+def _source_diagnostics(output: Path) -> dict:
+    """Retain bounded, redacted failure evidence before staging cleanup."""
+    def scrub(value):
+        if isinstance(value, str):
+            return redact(value)
+        if isinstance(value, list):
+            return [scrub(item) for item in value]
+        if isinstance(value, dict):
+            return {key: "[REDACTED]" if any(word in key.lower() for word in ("password", "token", "api_key", "authorization", "cookie")) else scrub(item) for key, item in value.items()}
+        return value
+    files = {}
+    for name in SOURCE_DIAGNOSTICS:
+        path = output / name
+        try:
+            if path.is_file() and path.stat().st_size <= 256 * 1024:
+                files[name] = scrub(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            continue
+    return files
+
+
+def _collector_environment(item: dict, env: dict) -> dict:
+    result = dict(env)
+    result["GEO_COLLECTOR_MANAGED"] = "true"
+    # Only reviewed domestic sources bypass the egress proxy, within this child.
+    hosts = item.get("direct_hosts", [])
+    if hosts:
+        entries = [x for x in (env.get("NO_PROXY", "") + "," + env.get("no_proxy", "")).split(",") if x]
+        value = ",".join(dict.fromkeys([*entries, *hosts]))
+        result["NO_PROXY"] = result["no_proxy"] = value
+    return result
 
 
 def _copy_missing(source: Path, target: Path) -> None:
@@ -219,6 +255,7 @@ def _run_one_unlocked(
             "COLLECTOR_OUTPUT_ROOT": str(output_stage),
             "COLLECTOR_STATE_ROOT": str(data_root / item["id"] / "state"),
         }
+        env = _collector_environment(item, env)
         started = datetime.now(timezone.utc).isoformat()
         first_started = first_started or started
         try:
@@ -270,11 +307,15 @@ def _run_one_unlocked(
                 "stderr_tail": attempt_record["stderr_tail"],
             }
             history.append(attempt_record)
+        last_result["source_diagnostics"] = _source_diagnostics(output_stage)
+        # Configuration errors do not become valid by repeating the same request.
+        if last_result.get("returncode") == 2 and "configuration_required" in last_result.get("stdout_tail", ""):
+            break
         if attempt < max_attempts:
             sleep(max(0.0, backoff_factor) * (2 ** (attempt - 1)))
     if collector_stage.exists():
         shutil.rmtree(collector_stage)
-    last_result.update({"attempts": max_attempts, "max_attempts": max_attempts, "attempt_history": history, "published": False})
+    last_result.update({"attempts": len(history), "max_attempts": max_attempts, "attempt_history": history, "published": False})
     return last_result
 
 

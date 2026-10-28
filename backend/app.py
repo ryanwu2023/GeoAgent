@@ -57,6 +57,8 @@ from .geo_mcp.server import create_app as create_mcp_app
 from .geo_mcp.auth import AuthConfig, BearerAuthMiddleware
 from starlette.routing import Route
 
+from .web_auth import router as web_auth_router, WebAuthMiddleware, enabled as web_auth_enabled, users as web_auth_users
+
 mcp_config = AuthConfig.from_env()
 
 class ProjectMCP:
@@ -65,6 +67,8 @@ class ProjectMCP:
 
 @asynccontextmanager
 async def lifespan(app):
+    if web_auth_enabled():
+        web_auth_users()
     recover_interrupted_runs()
     start_translation()
     mcp_app = create_mcp_app(auth_config=mcp_config, managed_keys=True, project_transport=True)
@@ -75,6 +79,8 @@ async def lifespan(app):
 app = FastAPI(title="地缘政治研究接口", version="0.6.1",lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(BearerAuthMiddleware, config=mcp_config, managed_keys=True)
+app.add_middleware(WebAuthMiddleware)
+app.include_router(web_auth_router)
 app.include_router(integrations_router)
 from .model_routes import router as model_router, test_translation
 app.include_router(model_router)
@@ -84,6 +90,21 @@ from .mcp_workbench import router as workbench_router
 app.include_router(workbench_router)
 # Delegate at the native path, with a fresh SDK session manager per lifecycle.
 app.router.routes.append(Route("/mcp", endpoint=ProjectMCP()))
+
+@app.get("/login", include_in_schema=False)
+def login_page():
+    index = ROOT / "dist" / "index.html"
+    if not index.is_file():
+        raise HTTPException(503, "前端尚未构建")
+    return FileResponse(index)
+
+@app.get("/readyz", include_in_schema=False)
+def readiness():
+    if web_auth_enabled():
+        web_auth_users()
+    with db() as connection:
+        connection.execute("SELECT 1")
+    return {"status": "ok"}
 
 @app.get("/healthz")
 def mcp_health():
@@ -269,12 +290,12 @@ def status(snapshot_id: str | None = None):
 @app.get("/api/collector/snapshots")
 def collector_snapshots():
     """Expose snapshot version statistics without returning the full payload."""
-    return {"snapshots": snapshot_summaries(), "source": "research-sqlite-snapshot-projection"}
+    return {"snapshots": snapshot_summaries(), "source": "research-postgresql-snapshot-projection"}
 
 @app.get("/api/workspace-selection")
 def workspace_selection():
     snapshot_id = get_working_snapshot_id()
-    return {"snapshot_id": snapshot_id, "available": bool(snapshot_id), "source": "research-sqlite-workspace-state"}
+    return {"snapshot_id": snapshot_id, "available": bool(snapshot_id), "source": "research-postgresql-workspace-state"}
 
 @app.put("/api/workspace-selection")
 def update_workspace_selection(request: WorkspaceSelectionRequest):
@@ -282,7 +303,7 @@ def update_workspace_selection(request: WorkspaceSelectionRequest):
         snapshot_id = set_working_snapshot_id(request.snapshot_id)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
-    return {"snapshot_id": snapshot_id, "available": True, "source": "research-sqlite-workspace-state"}
+    return {"snapshot_id": snapshot_id, "available": True, "source": "research-postgresql-workspace-state"}
 
 @app.get("/api/collector/summary")
 def collector_summary():
@@ -439,18 +460,16 @@ def _find_collector_run(run_id: str) -> dict | None:
 
 
 def _collector_ledger() -> CollectorLedger:
-    return CollectorLedger(data_dir() / "collection-runs" / "ledger.sqlite3")
+    return CollectorLedger()
 
 
 def _review_projection(run_id: str) -> dict:
-    ledger_path = data_dir() / "collection-runs" / "ledger.sqlite3"
-    saved = {}
-    if ledger_path.is_file():
-        saved = {item["item_id"]: item for item in CollectorLedger(ledger_path).reviews(run_id)}
+    ledger = CollectorLedger()
+    saved = {item["item_id"]: item for item in ledger.reviews(run_id)}
     items = []
     for item_id, label in REVIEW_ITEMS:
         items.append({"item_id": item_id, "label": label, **saved.get(item_id, {"status": "pending", "reviewer": None, "reason": "", "updated_at": None})})
-    return {"available": ledger_path.is_file(), "source": "collector-ledger-review", "run_id": run_id, "items": items}
+    return {"available": ledger.run(run_id) is not None, "source": "collector-ledger-review", "run_id": run_id, "items": items}
 
 
 @app.get("/api/collector/runs/{run_id}/review")
@@ -1219,13 +1238,13 @@ def qa_tool_call_detail(run_id: str, call_id: str):
 def answers(snapshot_id: str, compact: bool = False):
     snapshot_or_404(snapshot_id)
     with db() as c:
-        rows = c.execute("SELECT payload FROM answers WHERE snapshot_id=? ORDER BY created_at DESC LIMIT 30", (snapshot_id,)).fetchall()
+        rows = c.execute("SELECT payload FROM answers WHERE snapshot_id=%s ORDER BY created_at DESC LIMIT 30", (snapshot_id,)).fetchall()
     return [present_answer(json.loads(r[0]), compact=compact) for r in rows]
 
 @app.get("/api/answers/{answer_id}/report.html")
 async def answer_html_report(answer_id: str):
     with db() as c:
-        row = c.execute("SELECT payload FROM answers WHERE id=?", (answer_id,)).fetchone()
+        row = c.execute("SELECT payload FROM answers WHERE id=%s", (answer_id,)).fetchone()
     if row is None:
         raise HTTPException(404, "问答记录不存在")
     answer_payload = present_answer(json.loads(row[0]))
@@ -1308,7 +1327,7 @@ def briefs(snapshot_id: str = ""):
                                    m.template_id,m.template_version,m.model,m.window_start,m.window_end,
                                    m.payload AS metadata_payload
                             FROM briefs b LEFT JOIN brief_metadata m ON m.brief_id=b.id
-                            WHERE (?='' OR b.snapshot_id=?) ORDER BY b.created_at DESC""", (snapshot_id, snapshot_id)).fetchall()
+                            WHERE (%s='' OR b.snapshot_id=%s) ORDER BY b.created_at DESC""", (snapshot_id, snapshot_id)).fetchall()
     result = []
     for row in rows:
         item = dict(row)
@@ -1327,7 +1346,7 @@ def brief_detail(bid: str):
         row = c.execute("""SELECT b.*,m.template_id,m.template_version,m.model,m.window_start,m.window_end,
                                   m.payload AS metadata_payload
                            FROM briefs b LEFT JOIN brief_metadata m ON m.brief_id=b.id
-                           WHERE b.id=?""", (bid,)).fetchone()
+                           WHERE b.id=%s""", (bid,)).fetchone()
     if not row:
         raise HTTPException(404)
     item = dict(row)
@@ -1343,7 +1362,7 @@ def brief_detail(bid: str):
 @app.get("/api/briefs/{bid}/download")
 def download(bid: str):
     with db() as c:
-        row = c.execute("SELECT markdown FROM briefs WHERE id=?", (bid,)).fetchone()
+        row = c.execute("SELECT markdown FROM briefs WHERE id=%s", (bid,)).fetchone()
     if not row:
         raise HTTPException(404)
     return PlainTextResponse(localize_brief_markdown(row[0]), headers={"Content-Disposition": f'attachment; filename="geo-brief-{bid}.md"'})
@@ -1351,8 +1370,8 @@ def download(bid: str):
 @app.get("/api/brief-diff")
 def brief_diff(before: str, after: str):
     with db() as c:
-        a = c.execute("SELECT markdown FROM briefs WHERE id=?", (before,)).fetchone()
-        b = c.execute("SELECT markdown FROM briefs WHERE id=?", (after,)).fetchone()
+        a = c.execute("SELECT markdown FROM briefs WHERE id=%s", (before,)).fetchone()
+        b = c.execute("SELECT markdown FROM briefs WHERE id=%s", (after,)).fetchone()
     if not a or not b:
         raise HTTPException(404)
     from .chinese import compare_brief_markdown
@@ -1377,7 +1396,7 @@ class ReviewInput(BaseModel):
 def review_history(rid: str,snapshot_id:str):
     evidence(rid,snapshot_id)
     with db() as c:
-        return [dict(r) for r in c.execute("SELECT * FROM reviews WHERE snapshot_id=? AND record_id=? ORDER BY version DESC",(snapshot_id,rid))]
+        return [dict(r) for r in c.execute("SELECT * FROM reviews WHERE snapshot_id=%s AND record_id=%s ORDER BY version DESC",(snapshot_id,rid))]
 
 @app.post("/api/reviews/{rid}")
 def save_review(rid: str,snapshot_id:str,body:ReviewInput):
@@ -1386,11 +1405,11 @@ def save_review(rid: str,snapshot_id:str,body:ReviewInput):
         raise HTTPException(422,"请填写研究员姓名与判断依据")
     from .store import now
     with db() as c:
-        c.execute("BEGIN IMMEDIATE")
-        version=c.execute("SELECT COALESCE(MAX(version),0) FROM reviews WHERE snapshot_id=? AND record_id=?",(snapshot_id,rid)).fetchone()[0]
+        c.execute("SELECT pg_advisory_xact_lock(71003)")
+        version=c.execute("SELECT COALESCE(MAX(version),0) FROM reviews WHERE snapshot_id=%s AND record_id=%s",(snapshot_id,rid)).fetchone()[0]
         if version!=body.version:
             raise HTTPException(409,"该记录已被更新，请重新打开详情后再提交")
-        c.execute("INSERT INTO reviews VALUES (?,?,?,?,?,?,?)",(snapshot_id,rid,version+1,body.signal,body.reviewer.strip(),body.reason.strip(),now()))
+        c.execute("INSERT INTO reviews VALUES (%s,%s,%s,%s,%s,%s,%s)",(snapshot_id,rid,version+1,body.signal,body.reviewer.strip(),body.reason.strip(),now()))
     return evidence(rid,snapshot_id)
 
 if (ROOT / "dist").exists():

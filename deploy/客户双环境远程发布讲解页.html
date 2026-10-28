@@ -1,0 +1,498 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="客户提供VPN、堡垒机与测试/正式两台虚拟机；各安装GitLab与Runner，远程推送代码触发CI/CD部署、验收和回滚。"><title>GeoAgent · 客户双环境远程发布方案</title><style>
+:root{--ink:#203333;--muted:#617370;--accent:#287c6a;--paper:#f4f5f0;--line:#dce3dc;--amber:#9b612b}*{box-sizing:border-box}body{margin:0;font:15px/1.8 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);background:var(--paper)}button,a{touch-action:manipulation}button{font:inherit;cursor:pointer}button:focus-visible,a:focus-visible{outline:3px solid #bb8b38;outline-offset:3px}button:disabled{opacity:.4;cursor:default}a{color:var(--accent)}.shell{display:grid;grid-template-columns:218px minmax(0,1fr)}aside{position:sticky;top:0;height:100vh;background:#203b37;color:#eff5ee;padding:28px 18px;display:flex;flex-direction:column;gap:24px}.brand{font-size:23px;font-weight:650}.sub{font-size:12px;color:#acc8be}nav{display:grid;gap:6px}nav button{background:transparent;border:0;color:#bed3c8;text-align:left;border-radius:7px;padding:11px;font-size:14px}nav button.active{background:#37594d;color:white}nav button span{display:inline-block;width:27px;font-size:12px;color:#8fbfa9}.footnote{margin-top:auto;color:#acc8be;font-size:12px;border-top:1px solid #49655a;padding-top:16px}main{min-width:0}.toolbar{padding:15px 30px;background:#fff;border-bottom:1px solid var(--line);display:flex;gap:9px;align-items:center;flex-wrap:wrap}.toolbar .label{margin-right:auto;font-size:13px;color:var(--muted)}button,.toolbar a{background:white;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px 13px;font-size:13px;text-decoration:none}.toolbar a:hover,button:hover{border-color:var(--accent)}.content{max-width:1250px;margin:auto;padding:32px}.chapter[hidden]{display:none}.eyebrow{font-size:12px;letter-spacing:1.5px;color:var(--accent);font-weight:650}.hero{display:flex;align-items:center;justify-content:space-between;gap:30px;margin:26px 0}.hero h1{font-size:clamp(32px,4vw,49px);line-height:1.3;letter-spacing:-1.5px;margin:12px 0 18px}.hero p{max-width:620px;font-size:18px;color:var(--muted)}.stamp{width:140px;height:140px;flex:0 0 auto;display:flex;align-items:center;gap:10px;border-radius:50%;background:#e4eadb;padding:20px}.stamp b{font-size:70px;line-height:1;font-weight:500}.stamp span{font-size:12px;line-height:1.6}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin:24px 0 32px}.stats>div{padding:18px;background:white;border-top:3px solid #80a08a;border-radius:0 0 8px 8px}.stats b{display:block;font-size:21px}.stats span{display:block;color:var(--muted);font-size:12px;margin-top:8px}h2{font-size:27px;line-height:1.4;margin:28px 0 20px}h3{font-size:20px;line-height:1.5;margin:30px 0 14px}p{margin:14px 0}ul,ol{padding-left:25px}li{padding-left:5px;margin:10px 0}strong{font-weight:650}.table-scroll{overflow-x:auto;background:white;border:1px solid var(--line);border-radius:10px;margin:20px 0}table{width:100%;border-collapse:collapse;font-size:14px;min-width:660px}th,td{text-align:left;padding:14px 16px;vertical-align:top;border-bottom:1px solid var(--line)}th{background:#e9eee5;font-weight:600;font-size:13px}tr:last-child td{border:0}pre{background:#213a36;color:#e4eee6;padding:20px;border-radius:9px;overflow-x:auto;font-size:13px;line-height:1.85}code{font-family:ui-monospace,monospace;font-size:.9em}p code,li code{background:#e7ece3;padding:2px 5px;border-radius:4px}.callout{border-left:4px solid var(--accent);padding:18px 22px;margin:20px 0;background:#e8f0e6}.tabs{display:flex;gap:10px;margin:24px 0 15px}.tabs .selected,.accent{background:var(--accent);color:white;border-color:var(--accent)}.topology{display:grid;grid-template-columns:1fr .4fr 1.4fr .5fr 1.4fr;align-items:center;gap:8px;background:white;padding:26px 18px;border:1px solid var(--line);border-radius:12px}.box{border:1px solid #b8cdbb;border-radius:9px;padding:20px 14px;min-height:210px;display:flex;flex-direction:column;justify-content:center;background:#f4f8f1}.box small{font-size:11px;color:var(--muted)}.box b{font-size:18px;margin:9px 0}.box p{font-size:13px;line-height:1.8}.arrow{text-align:center;color:var(--accent);font-size:12px}.badge{background:#deebdd;color:#326644;padding:4px 7px;font-size:11px;border-radius:5px;align-self:flex-start}.topology.emergency .mainbox{background:#f4eee8;border-color:#d8c2aa;color:#77695b}.topology.emergency .backupbox{border:2px solid var(--accent);background:#e8f3e7}.recovery{background:#fff;border:1px solid var(--line);border-radius:12px;padding:26px;margin:24px 0}.recovery-head{display:flex;align-items:center;gap:20px}.recovery-head>span{font-size:27px;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}.recovery-head h3{margin:18px 0}.recovery>p{min-height:75px;font-size:17px}.bar{height:5px;background:#e7eee6;margin:24px 0}.bar i{display:block;background:var(--accent);height:100%;transition:width .2s}.controls{display:flex;justify-content:space-between}.pager{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:25px 32px 40px;max-width:1250px;margin:auto}.pager span{font-size:13px;color:var(--muted)}.all .chapter{display:block!important;border-bottom:2px solid var(--line);padding-bottom:40px;margin-bottom:50px}.all .pager{display:none}.print-note{font-size:12px;color:var(--muted);margin-top:30px}.diagram-caption{font-size:12px;color:var(--muted)}@media(max-width:1000px){.shell{grid-template-columns:180px minmax(0,1fr)}.content{padding:24px}.stamp{display:none}.topology{grid-template-columns:1fr}.box{min-height:0}.arrow{padding:3px}.stats{grid-template-columns:1fr}.stats>div{display:flex;align-items:center;justify-content:space-between;gap:12px}.stats span{margin:0}.hero h1{font-size:38px}}@media(max-width:650px){.shell{display:block}aside{height:auto;position:relative;padding:16px;gap:12px}.brand{font-size:20px}.sub,.footnote{display:none}nav{display:flex;overflow-x:auto}nav button{white-space:nowrap;padding:8px}nav button span{display:none}.toolbar{padding:12px 16px;gap:6px}.toolbar .label{display:none}.content{padding:22px 16px}.hero h1{font-size:34px}.hero p{font-size:16px}.stats b{font-size:18px}.stats span{font-size:11px}.pager{padding:20px 16px}.pager span{font-size:11px}h2{font-size:24px}h3{font-size:18px}.recovery{padding:18px}.recovery>p{font-size:15px}.recovery-head>span{font-size:22px}.recovery-head{gap:12px}}@media print{@page{size:A4 landscape;margin:12mm}aside,.toolbar,.pager,.tabs,.controls{display:none!important}.shell{display:block}.content{padding:0;max-width:none}.chapter,.chapter[hidden]{display:block!important;break-before:page}.chapter:first-child{break-before:auto}body{background:#fff;font-size:11px;print-color-adjust:exact}h2{font-size:23px}h3{font-size:17px}table{font-size:10px;min-width:0}th,td{padding:8px}pre{font-size:10px}.table-scroll,.topology,.recovery{break-inside:avoid}.topology{grid-template-columns:1fr .4fr 1.4fr .5fr 1.4fr}.stats{grid-template-columns:repeat(3,1fr)}.stats>div{display:block}.hero h1{font-size:35px}.print-note{font-size:10px}}
+.memory-bar{display:flex;height:34px;border-radius:8px;overflow:hidden;margin:25px 0 15px;gap:2px}.memory-legend{display:flex;flex-wrap:wrap;gap:12px 22px;margin-bottom:28px}.memory-legend span{display:flex;align-items:center;gap:7px;font-size:13px}.memory-legend i{width:12px;height:12px;border-radius:3px}.diagram{background:white;border:1px solid var(--line);border-radius:12px;padding:24px;margin:24px 0}.outside{text-align:center;background:#eaf0e5;padding:14px;border-radius:8px}.outside small,.node small{display:block;color:var(--muted);font-size:13px}.vm{border:2px solid var(--accent);border-radius:10px;padding:20px}.vm-label{font-weight:650;margin-bottom:18px}.flow{display:flex;align-items:center;gap:16px}.node{flex:1;background:#f2f5ef;border:1px solid var(--line);border-radius:8px;padding:16px}.vm p{font-size:13px;text-align:center}.diagram>.arrow{padding:10px}@media(max-width:650px){.flow{flex-direction:column}.node{width:100%}.vm{padding:12px}.diagram{padding:12px}}.route{display:flex;align-items:center;gap:12px}.dnode{border:1px solid #bdd0c3;background:#f5f8f2;border-radius:9px;padding:16px;flex:1;min-width:0}.dnode b{display:block;font-size:16px}.dnode small{display:block;color:var(--muted);font-size:13px;line-height:1.7;margin-top:6px}.arr{color:var(--accent);font-size:22px}.bridge,.down{text-align:center;color:var(--accent);font-size:13px;padding:10px 2px}.envgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.env{padding:18px;border:2px solid;border-radius:12px}.env.test{border-color:#76a2b2;background:#f1f7f8}.env.prod{border-color:#4b846c;background:#f2f7ef}.envhead{font-size:19px;font-weight:650;margin-bottom:18px}.envhead span{display:block;font-size:13px;font-weight:400;color:var(--muted)}.transfer{margin-top:20px;border:1px dashed #a78350;padding:18px;border-radius:9px;background:#faf5ea}.transfer p{margin:8px 0}.transfer small{color:#7c633f}.flowgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:25px 0}.flowstep{display:flex;gap:16px;padding:20px;background:white;border:1px solid var(--line);border-radius:10px}.flowstep>span{font-size:28px;color:var(--accent);line-height:1.3}.flowstep b{font-size:17px}.flowstep p{font-size:14px;color:var(--muted);margin:8px 0 0}.decision{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0}.decision>div{padding:20px;background:#e7f0e3;border-radius:10px}.decision>div+div{background:#f3eadd}.decision p{margin:8px 0 0}.runnergrid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin:20px 0}.runnergrid .test{background:#eaf3f6;border-color:#87adb9}.runnergrid .prod{background:#eaf2e5}.rollback{background:white;padding:24px;border:1px solid var(--line);border-radius:12px;margin:24px 0}.rollbacktop{background:#203b37;color:white;border-radius:8px;padding:16px}.chapter td:first-child{min-width:135px}.chapter th{white-space:normal}nav button{font-size:13px}@media(max-width:850px){.route{flex-direction:column;align-items:stretch}.arr{text-align:center;transform:rotate(90deg)}.envgrid,.flowgrid,.decision,.runnergrid{grid-template-columns:1fr}}@media print{.envgrid,.flowgrid,.decision{grid-template-columns:1fr 1fr}.runnergrid{grid-template-columns:repeat(3,1fr)}.route{flex-direction:row}.arr{transform:none}.diagram,.env,.flowstep,.rollback{break-inside:avoid}.dnode{padding:10px}.env{padding:12px}.dnode b{font-size:13px}.dnode small{font-size:11px}}.route{display:flex;align-items:center;gap:12px}.dnode{border:1px solid #bdd0c3;background:#f5f8f2;border-radius:9px;padding:16px;flex:1;min-width:0}.dnode b{display:block;font-size:16px}.dnode small{display:block;color:var(--muted);font-size:13px;line-height:1.7;margin-top:6px}.arr{color:var(--accent);font-size:22px}.bridge,.down{text-align:center;color:var(--accent);font-size:13px;padding:10px 2px}.envgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.env{padding:18px;border:2px solid;border-radius:12px}.env.test{border-color:#76a2b2;background:#f1f7f8}.env.prod{border-color:#4b846c;background:#f2f7ef}.envhead{font-size:19px;font-weight:650;margin-bottom:18px}.envhead span{display:block;font-size:13px;font-weight:400;color:var(--muted)}.transfer{margin-top:20px;border:1px dashed #a78350;padding:18px;border-radius:9px;background:#faf5ea}.transfer p{margin:8px 0}.transfer small{color:#7c633f}.flowgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:25px 0}.flowstep{display:flex;gap:16px;padding:20px;background:white;border:1px solid var(--line);border-radius:10px}.flowstep>span{font-size:28px;color:var(--accent);line-height:1.3}.flowstep b{font-size:17px}.flowstep p{font-size:14px;color:var(--muted);margin:8px 0 0}.decision{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0}.decision>div{padding:20px;background:#e7f0e3;border-radius:10px}.decision>div+div{background:#f3eadd}.decision p{margin:8px 0 0}.runnergrid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin:20px 0}.runnergrid .test{background:#eaf3f6;border-color:#87adb9}.runnergrid .prod{background:#eaf2e5}.rollback{background:white;padding:24px;border:1px solid var(--line);border-radius:12px;margin:24px 0}.rollbacktop{background:#203b37;color:white;border-radius:8px;padding:16px}.chapter td:first-child{min-width:135px}.chapter th{white-space:normal}nav button{font-size:13px}@media(max-width:850px){.route{flex-direction:column;align-items:stretch}.arr{text-align:center;transform:rotate(90deg)}.envgrid,.flowgrid,.decision,.runnergrid{grid-template-columns:1fr}}@media print{.envgrid,.flowgrid,.decision{grid-template-columns:1fr 1fr}.runnergrid{grid-template-columns:repeat(3,1fr)}.route{flex-direction:row}.arr{transform:none}.diagram,.env,.flowstep,.rollback{break-inside:avoid}.dnode{padding:10px}.env{padding:12px}.dnode b{font-size:13px}.dnode small{font-size:11px}}</style></head><body><div class="shell"><aside><div><div class="brand">GeoAgent</div><div class="sub">测试 ＋ 正式 · 客户准备手册</div></div><nav aria-label="讲解章节"></nav><div class="footnote">正式 8 核 / 32GB<br>测试 6 核 / 24GB<br>各装 GitLab 与 Runner<br><br>远程接入 → 推送 → 发布<br>无额外备份/应急机器</div></aside><main><div class="toolbar"><span class="label">客户方案 / 双环境远程交付</span><button id="all">查看完整长页</button><button id="print">打印 / 保存 PDF</button><a download href="客户双环境远程发布讲解页.html">离线 HTML</a><a download href="客户测试与正式双环境远程发布方案.md">下载完整方案</a><a download href="客户接入与服务器准备清单.md">客户准备清单</a><a href="https://geoagent-customer-deployment-20261027.mossyhill9.chatgpt.site">原多节点方案 ↗</a></div><div class="content"><section class="chapter" id="chapter0"><span class="eyebrow">01 / 客户要提供什么</span><div class="hero"><div><h1>人不用到现场，<br>代码能发布到客户内网。</h1><p>客户提供两台 VM 与受审计接入通道。我们安装两套 GitLab / Runner，打通测试、正式发布与回滚。</p></div><div class="stamp"><b>2</b><span>台虚拟机<br>测试 ＋ 正式</span></div></div><div class="stats"><div><b>正式 · 8核32GB</b><span>系统盘100GB + 数据盘300GB</span></div><div><b>测试 · 6核24GB</b><span>系统盘70GB + 数据盘210GB</span></div><div><b>各自 GitLab / Runner</b><span>客户无需预先安装 · 无额外备份机器</span></div></div><h2>这次需要客户提供什么</h2>
+<p><strong>两台虚拟机、可用的远程接入通道、安装与发布权限。客户无需已有 GitLab：我们分别在测试机和正式机上安装 GitLab、镜像仓库和 Runner。</strong></p>
+<p>研发人员在自己的电脑上操作，通过客户 VPN 和堡垒机批准的通道，把代码推送到客户内网 GitLab。测试侧自动构建、测试、部署；验收后，把相同提交推送到正式 GitLab，由正式流水线发布同一份已验证镜像。平时发布、验证和应用版本回滚无需人员到现场。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>客户提供</th>
+<th>我们完成</th>
+<th>交付时怎样确认</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 台正式 VM、1 台测试 VM</td>
+<td>安装 GitLab、Registry、Runner、GeoAgent、PostgreSQL、入口代理</td>
+<td>两套 GitLab、应用地址均可访问，数据库和配置分别独立</td>
+</tr>
+<tr>
+<td>VPN 账号与接入说明</td>
+<td>在研发电脑配置接入</td>
+<td>外部网络上的研发电脑可登录 VPN</td>
+</tr>
+<tr>
+<td>堡垒机账号、目标资产授权、原生 Git/HTTPS 转发能力</td>
+<td>配置本地代码推送、网页验证和受审计运维路径</td>
+<td>不仅能打开终端，还能实际 git push、访问 GitLab 和测试页面</td>
+</tr>
+<tr>
+<td>内网 IP、域名、证书及网络规则</td>
+<td>配置域名入口、双环境流水线和镜像交付</td>
+<td>Runner 拉取任务、镜像、回传报告均成功</td>
+</tr>
+<tr>
+<td>初装管理权限与长期受限发布权限</td>
+<td>安装组件、配置部署/回滚脚本、完成验收</td>
+<td>VPN 断开后已触发任务仍在内网执行；再次接入能查看结果</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>两套 GitLab 独立，不会因安装完成就自动同步代码和镜像。</strong> 同一提交、测试报告和镜像指纹如何进入正式环境，必须按后文流程落地。堡垒机复用客户现有设备，不在上面安装 GitLab、业务数据库或构建工具。</p>
+</section><section class="chapter" id="chapter1" hidden><span class="eyebrow">02 / 两台机器与内存</span><h2>两台虚拟机与组件内存</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>配置</th>
+<th>PROD01 正式环境</th>
+<th>TEST01 测试环境</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数量</td>
+<td>1 台</td>
+<td>1 台</td>
+</tr>
+<tr>
+<td>CPU</td>
+<td><strong>8 vCPU</strong></td>
+<td><strong>6 vCPU</strong></td>
+</tr>
+<tr>
+<td>内存</td>
+<td><strong>32GB</strong></td>
+<td><strong>24GB</strong></td>
+</tr>
+<tr>
+<td>系统盘</td>
+<td><strong>100GB SSD</strong></td>
+<td><strong>70GB SSD</strong></td>
+</tr>
+<tr>
+<td>数据盘</td>
+<td><strong>300GB SSD</strong></td>
+<td><strong>210GB SSD</strong></td>
+</tr>
+<tr>
+<td>GitLab + Registry</td>
+<td>独立安装一套，保存正式代码和批准的镜像</td>
+<td>独立安装一套，保存测试代码、构建镜像和报告</td>
+</tr>
+<tr>
+<td>Runner</td>
+<td>正式专用，只接受批准的发布、检查、回滚任务</td>
+<td>构建/测试 Runner 与测试部署 Runner，逻辑隔离、资源串行控制</td>
+</tr>
+<tr>
+<td>应用与数据库</td>
+<td>正式 GeoAgent + 独立业务 PostgreSQL</td>
+<td>常驻测试 GeoAgent + 独立测试业务 PostgreSQL</td>
+</tr>
+<tr>
+<td>GPU</td>
+<td><strong>不需要配置</strong></td>
+<td><strong>不需要配置</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>原方案没有 GPU。这里按 CPU、内存、存储约减少 30%：8×70%=5.6 核、32×70%=22.4GB，向上取整为 6 核/24GB，实际减少 25%；磁盘按 70% 配置。两台合计 14 vCPU、56GB 内存、170GB 系统盘和 510GB 数据盘。模型推理使用客户可达的外部或既有服务，本地 GPU 大模型不在预算内。</p>
+<h3>正式 32GB、测试 24GB 分给谁</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>正式预算</th>
+<th>测试预算</th>
+<th>包含与使用方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GitLab 服务整体</td>
+<td>8GB</td>
+<td>8GB</td>
+<td>包含自身 Web、后台作业、Gitaly、内部 PostgreSQL、Redis；这些内部组件不重复算。测试侧不机械缩小 GitLab 的基础预算</td>
+</tr>
+<tr>
+<td>Registry 镜像仓库</td>
+<td>1GB</td>
+<td>1GB</td>
+<td>镜像接收、分发；镜像内容主要占磁盘。若与 GitLab 同一安装包，整组按 9GB 管理</td>
+</tr>
+<tr>
+<td>Runner 管理进程</td>
+<td>0.5GB</td>
+<td>0.5GB</td>
+<td>正式发布 Runner；测试侧两个逻辑 Runner 的管理进程合计，不包含作业容器</td>
+</tr>
+<tr>
+<td>CI/CD 作业空间</td>
+<td>4GB</td>
+<td>4GB</td>
+<td>测试侧构建、单元测试、一次性测试库分阶段共用；正式侧用于镜像导入、发布检查等，不重复构建候选版本。空闲可不占用</td>
+</tr>
+<tr>
+<td>GeoAgent 在线应用</td>
+<td>4GB</td>
+<td>2GB</td>
+<td>含 Web/MCP 与缓存，按整组进程控制；测试侧只作功能验收，不能据此承诺正式吞吐量</td>
+</tr>
+<tr>
+<td>GeoAgent 业务 PostgreSQL</td>
+<td>4GB</td>
+<td>2GB</td>
+<td>独立于各自 GitLab 内部数据库；正式和测试账号、数据卷、连接串分开</td>
+</tr>
+<tr>
+<td>采集/翻译/MCP 同步任务</td>
+<td>2GB</td>
+<td>1GB</td>
+<td>限制并发，测试默认使用样例或脱敏副本，外部写入目标隔离</td>
+</tr>
+<tr>
+<td>Nginx/入口代理</td>
+<td>0.5GB</td>
+<td>0.5GB</td>
+<td>TLS、认证、转发，不包含客户现有 VPN/堡垒机</td>
+</tr>
+<tr>
+<td>系统、Docker、基础日志</td>
+<td>3GB</td>
+<td>2GB</td>
+<td>操作系统和运行时基础开销，日志轮转</td>
+</tr>
+<tr>
+<td>未分配余量/缓存空间</td>
+<td>5GB</td>
+<td>3GB</td>
+<td>保留给短时峰值与可回收缓存，不预先再启动一套环境</td>
+</tr>
+<tr>
+<td><strong>合计</strong></td>
+<td><strong>32GB</strong></td>
+<td><strong>24GB</strong></td>
+<td><strong>预算，非固定占用；以锁定版本和真实数据压测确认</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>GitLab 的 8GB 属于受限环境的节省资源配置；官方当前单节点基线为 16GB。需按小团队调优并复测升级，不保证任意默认安装都满足 8GB。<a href="https://docs.gitlab.com/install/requirements/">GitLab 安装要求</a></p>
+<p>数据库的 4GB/2GB 包含缓冲、连接、查询及维护开销，不应全部设置为 <code>shared_buffers</code>。查询工作内存会随查询节点、连接和并行进程放大。<a href="https://www.postgresql.org/docs/17/runtime-config-resource.html">PostgreSQL 内存说明</a></p>
+<p>两台不承担主备关系。测试环境不是正式备机，不自动接管正式数据，也不配置额外备份机器。</p>
+</section><section class="chapter" id="chapter2" hidden><span class="eyebrow">03 / 远程接入拓扑</span><h2>远程接入与双环境拓扑</h2>
+<div class="diagram"><div class="route"><div class="dnode "><b>研发本地电脑</b><small>写代码 · 推送 · 验收</small></div><span class="arr">→</span><div class="dnode "><b>客户 VPN</b><small>实名账号 · MFA</small></div><span class="arr">→</span><div class="dnode "><b>客户堡垒机</b><small>批准的 Git / HTTPS 通道</small></div></div><p class="bridge">↓ 可达两套 GitLab 和授权的业务页面；需实际验证 git push，而不只验证终端登录</p><div class="envgrid"><div class="env test"><div class="envhead">TEST01 · 测试机 <span>6 核 / 24GB</span></div><div class="dnode "><b>测试 GitLab + Registry</b><small>接收测试代码，保存报告和候选镜像</small></div><div class="down">↑ Runner 主动领取任务和拉取代码</div><div class="dnode "><b>测试 Runner</b><small>构建 → 测试 → 部署 → 回滚演练</small></div><div class="down">↓ 本机固定部署脚本</div><div class="dnode "><b>测试 GeoAgent + PostgreSQL</b><small>测试账号、测试数据、测试入口独立</small></div></div><div class="env prod"><div class="envhead">PROD01 · 正式机 <span>8 核 / 32GB</span></div><div class="dnode "><b>正式 GitLab + Registry</b><small>接收批准版本，保存正式镜像</small></div><div class="down">↑ Runner 主动领取批准任务</div><div class="dnode "><b>正式 Runner</b><small>镜像导入 → 部署 → 检查 → 受控回滚</small></div><div class="down">↓ 本机固定部署脚本</div><div class="dnode "><b>正式 GeoAgent + PostgreSQL</b><small>正式数据独立，测试机不能直连数据库</small></div></div></div><div class="transfer"><b>镜像交付：测试 → 正式</b><p>A：正式发布任务通过客户批准的只读通道取测试镜像和报告。<br>B：禁止直连时，通过批准的制品交换区或本机受审计转运。</p><small>二选一落实；没有交付通道，两套 GitLab 不会自己同步。</small></div></div><p>两条路径要分别打通：</p>
+<ul>
+<li><strong>人的路径：</strong> 研发电脑 → VPN → 堡垒机批准的 Git/HTTPS 通道 → 两套 GitLab、测试页面及授权的正式页面。代码推送和网页访问不依赖到现场。</li>
+<li><strong>机器的路径：</strong> 各 Runner 主动连接对应 GitLab 获取任务，在所在环境执行部署并回传结果。任务触发后，不依赖研发电脑持续联网，也不要求 GitLab 通过堡垒机 SSH 到服务器。</li>
+</ul>
+<p>GitLab/Runner 都部署在客户内网。生产数据库只允许所在业务网络的应用访问，不向研发电脑或测试机开放数据库端口。测试机不能直接 SSH 登录正式机；正式部署由正式 Runner 本地执行。</p>
+</section><section class="chapter" id="chapter3" hidden><span class="eyebrow">04 / 网络与账号清单</span><h2>客户网络与账号准备清单</h2>
+<h3>必须先确认堡垒机能力</h3>
+<p>“VPN 能连上堡垒机”不等于“本地 Git 能推代码”。客户须提供可运行原生 Git 的审计接入方式，例如堡垒机客户端代理、经批准的 TCP 转发/SSH 隧道或 HTTPS 应用代理。仅有网页 SSH 终端、禁止文件传输和端口转发的模式，不满足本机直接推送与网页验收要求。</p>
+<p>具体采用客户支持的方式，不私自绕过审计。若使用隧道，仍需正确处理内网域名、TLS 主机名和证书信任，不能靠关闭证书校验来连通。</p>
+<h3>请客户逐项提供</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>类别</th>
+<th>需要提供的内容</th>
+<th>可执行验收</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>VM</td>
+<td>PROD01 8核32GB/100+300GB；TEST01 6核24GB/70+210GB，固定内网 IP，统一已验收 Linux 版本/架构</td>
+<td>两机可经堡垒机受控登录，磁盘和内存核对一致</td>
+</tr>
+<tr>
+<td>VPN</td>
+<td>研发/运维实名账号、MFA、客户端、有效期、允许的源网段与路由</td>
+<td>从公司或家中网络实际连接</td>
+</tr>
+<tr>
+<td>堡垒机</td>
+<td>两台资产授权、初装会话、Git/HTTPS 通道、文件传输策略、会话时长、审计要求</td>
+<td>本地终端执行 git ls-remote / git push；本地浏览器打开测试站</td>
+</tr>
+<tr>
+<td>IP/DNS</td>
+<td>两机 IP；测试/正式 GitLab、Registry、GeoAgent 各自域名；内外接入解析方式</td>
+<td>VPN 和 Runner 内分别解析正确地址</td>
+</tr>
+<tr>
+<td>TLS</td>
+<td>与域名匹配的证书及内网 CA 分发方式</td>
+<td>本机、Runner、容器运行时均正常验证 HTTPS</td>
+</tr>
+<tr>
+<td>初次安装</td>
+<td>经堡垒机授予的限时 sudo/安装权限，允许安装 Docker/Compose、GitLab、Runner 与服务</td>
+<td>完成安装、挂载数据卷、开机自启和重启验证</td>
+</tr>
+<tr>
+<td>长期发布</td>
+<td>专用服务账号，仅批准固定部署、状态检查、日志和回滚脚本所需权限</td>
+<td>Runner 能更新指定应用，普通构建任务没有生产权限</td>
+</tr>
+<tr>
+<td>双 GitLab 身份</td>
+<td>分别创建研发账号、部署管理账号、项目权限、受保护分支/标签、Runner 注册权限</td>
+<td>测试可推送；正式只能由指定发布身份推进已批准版本</td>
+</tr>
+<tr>
+<td>内网安装源</td>
+<td>OS/Python/npm/镜像源，或批准的离线包与版本校验流程</td>
+<td>无公网时也能安装、构建、拉取固定镜像</td>
+</tr>
+<tr>
+<td>跨环境镜像交付</td>
+<td>下面两种方式中选定一种，并开通相关通道/账号</td>
+<td>正式端能取得与测试通过版本完全一致的镜像</td>
+</tr>
+<tr>
+<td>模型/MCP</td>
+<td>批准的服务地址、证书、访问凭据和代理/数据交换路径</td>
+<td>测试访问只读源并隔离副作用，正式按业务授权调用</td>
+</tr>
+<tr>
+<td>运维约定</td>
+<td>维护窗口、发布与验收人、回滚负责人、告警接收人、账号续期负责人</td>
+<td>演练发布及失败处置全流程</td>
+</tr>
+</tbody>
+</table></div>
+<p>示例域名仅表示用途：<code>gitlab-test.&lt;客户内网域&gt;</code>、<code>registry-test.&lt;客户内网域&gt;</code>、<code>geo-test.&lt;客户内网域&gt;</code>，正式对应 <code>gitlab-prod</code>、<code>registry-prod</code>、<code>geo-prod</code>。由客户提供实际域名，不把示例当成现成地址。</p>
+<h3>防火墙/连通矩阵</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>来源 → 目标</th>
+<th>协议/端口</th>
+<th>目的与边界</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>研发电脑 → 客户 VPN</td>
+<td>客户 VPN 指定端口</td>
+<td>认证、接入批准网段</td>
+</tr>
+<tr>
+<td>VPN 用户 → 堡垒机</td>
+<td>客户堡垒机指定入口端口</td>
+<td>受审计访问；不是开放全部内网</td>
+</tr>
+<tr>
+<td>堡垒机批准的通道 → 双 GitLab、双应用</td>
+<td>HTTPS 443</td>
+<td>Git over HTTPS、网页操作、查看流水线及验收</td>
+</tr>
+<tr>
+<td>堡垒机 → 两台 VM 管理入口</td>
+<td>SSH 22 或客户指定端口</td>
+<td>初装与授权排障；Git SSH 若另启用需单独列端口</td>
+</tr>
+<tr>
+<td>TEST Runner → TEST GitLab/Registry</td>
+<td>HTTPS 443</td>
+<td>拉代码/任务、推构建镜像、上传报告</td>
+</tr>
+<tr>
+<td>PROD Runner → PROD GitLab/Registry</td>
+<td>HTTPS 443</td>
+<td>拉正式任务、拉正式镜像、记录发布结果</td>
+</tr>
+<tr>
+<td>PROD 发布任务 → TEST GitLab/Registry</td>
+<td>HTTPS 443，限定源/目标</td>
+<td>方式 A：只读获取指定发布报告和镜像；测试机不需要登录正式机</td>
+</tr>
+<tr>
+<td>各环境任务 → 批准的依赖源/MCP/模型</td>
+<td>客户明确的 HTTPS 路径</td>
+<td>安装依赖与业务访问，不开放任意出网</td>
+</tr>
+<tr>
+<td>GeoAgent → 本环境业务 PG</td>
+<td>容器内部网络 5432</td>
+<td>不开放给研发电脑、另一环境或普通用户</td>
+</tr>
+</tbody>
+</table></div>
+<p>同机服务也应以配置好的域名、证书和容器路由验证，不能只凭“在一台机器上”省略连通检查。Registry 如使用 5050 等其他端口，以最终安装配置替换矩阵中的 443。</p>
+</section><section class="chapter" id="chapter4" hidden><span class="eyebrow">05 / 推代码到正式发布</span><h2>推代码后，CI/CD 怎样跑</h2>
+<div class="flowgrid"><div class="flowstep"><span>01</span><div><b>本机推测试代码</b><p>经 VPN / 堡垒机进入 TEST GitLab</p></div></div><div class="flowstep"><span>02</span><div><b>自动构建与测试</b><p>TEST Runner 生成候选镜像和报告</p></div></div><div class="flowstep"><span>03</span><div><b>部署测试环境</b><p>远程验收功能，并演练 A→B→A 回滚</p></div></div><div class="flowstep"><span>04</span><div><b>推送同一正式候选</b><p>同一提交 SHA + 已验收发布清单进入 PROD GitLab</p></div></div><div class="flowstep"><span>05</span><div><b>导入同一镜像</b><p>校验测试报告及 digest，保存到正式 Registry</p></div></div><div class="flowstep"><span>06</span><div><b>远程放行与正式部署</b><p>指定发布人放行，PROD Runner 执行部署和检查</p></div></div></div><div class="decision"><div><b>✓ 验收通过</b><p>记录正式版本、开放访问。</p></div><div><b>↩ 检查失败</b><p>阻断发布，按数据库兼容条件回滚或人工处置。</p></div></div><div class="callout">代码推送触发流水线 ≠ 普通提交立即覆盖正式环境。正式放行可以远程完成，无需到现场。</div><div class="table-scroll"><table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>谁执行、在哪里执行</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>① 推测试代码</td>
+<td>研发电脑通过批准通道 git push 到 TEST GitLab 的测试分支</td>
+<td>TEST GitLab 按 rules 自动建立流水线</td>
+</tr>
+<tr>
+<td>② 检查并构建</td>
+<td>TEST 构建 Runner，单个重作业</td>
+<td>单元测试、迁移测试、构建候选镜像；失败停止，不触碰正式</td>
+</tr>
+<tr>
+<td>③ 保存发布候选</td>
+<td>TEST Runner → TEST Registry/GitLab</td>
+<td>绑定代码 SHA、镜像 digest、测试报告和配置/数据库版本要求</td>
+</tr>
+<tr>
+<td>④ 部署测试环境</td>
+<td>TEST 部署 Runner 调用测试部署脚本</td>
+<td>用候选镜像更新常驻测试应用；测试数据/账号独立</td>
+</tr>
+<tr>
+<td>⑤ 自动验证与人工验收</td>
+<td>TEST Runner + 研发/客户测试人员远程访问 geo-test</td>
+<td>登录、查询、问答、MCP、重启、数据库迁移及回滚演练通过</td>
+</tr>
+<tr>
+<td>⑥ 推送正式候选</td>
+<td>发布人在本机将已验收的同一 Git 提交及发布清单推至 PROD GitLab</td>
+<td>正式流水线自动启动检查；代码不是重新复制后生成另一个提交</td>
+</tr>
+<tr>
+<td>⑦ 获取已验证镜像</td>
+<td>PROD 发布任务通过批准的交付通道取得镜像</td>
+<td>核对 SHA/digest/报告后保存 PROD Registry；不能只相信可变 latest 标签</td>
+</tr>
+<tr>
+<td>⑧ 放行正式部署</td>
+<td>指定发布人在 PROD GitLab 执行批准的发布动作</td>
+<td>前置检查通过、维护窗口就绪后进入部署；普通提交不自动替换正式服务</td>
+</tr>
+<tr>
+<td>⑨ 更新正式应用</td>
+<td>PROD Runner 本地调用受限脚本</td>
+<td>记录旧版本 → 检查恢复点和迁移兼容性 → 更新固定镜像 → 执行健康检查</td>
+</tr>
+<tr>
+<td>⑩ 检查或回滚</td>
+<td>PROD Runner + 发布负责人</td>
+<td>检查通过才完成发布；失败按兼容性条件回到上一稳定镜像并再次检查</td>
+</tr>
+</tbody>
+</table></div>
+<p>正式部署“需要指定人放行”不等于“需要到现场”：所有放行、日志查看和验收都在远程浏览器完成。普通开发提交只部署测试，正式库和正式凭据不提供给普通测试作业。</p>
+<h3>两套 GitLab 之间交付什么</h3>
+<p>代码按原提交 SHA 推送；构建后生成的发布清单与验收报告作为制品传递，不为添加清单而修改已验收的代码提交。</p>
+<p>每次正式发布至少携带：代码提交 SHA、测试通过的流水线/报告标识、不可变镜像 digest、版本清单、配置与数据库兼容要求，以及上一稳定版本。正式流水线要核对这些对应关系，不仅检查一个文本文件写着“通过”。</p>
+<ul>
+<li><strong>方式 A：客户允许受控跨环境读取。</strong> 正式发布任务通过只读凭据访问测试 GitLab 的验收记录与测试 Registry 中的指定 digest；校验后把镜像复制到正式 Registry，保持 OCI manifest digest 一致，再发布。不开放测试机对正式机的 SSH/数据库访问。这是默认规划路径，需客户批准矩阵中的对应规则。</li>
+<li><strong>方式 B：禁止环境间直连。</strong> 提供批准的制品交换区；或由本机发布工具经堡垒机下载验收报告与镜像包，上传到正式 GitLab/内网制品区，再触发正式流水线。使用适配大文件的限额、完整性校验与留痕；整个过程可由一条已验收的发布命令执行。需要本机在线直到转运结束，后续正式任务独立运行。</li>
+</ul>
+<p>不能把整个镜像 tar 提交进 Git 仓库，也不能在正式环境重新构建另一份镜像后直接沿用测试镜像的验收结论。若客户禁止一切跨环境读取、文件转运和制品交换，则无法实现测试产物远程进入正式环境，必须先解决交付通道。</p>
+</section><section class="chapter" id="chapter5" hidden><span class="eyebrow">06 / Runner 分工</span><h2>Runner 如何部署、测试和回滚</h2>
+<div class="runnergrid"><div class="dnode test"><b>TEST build</b><small>注册到测试 GitLab<br>构建 / 单元测试 / 迁移测试</small></div><div class="dnode test"><b>TEST deploy</b><small>注册到测试 GitLab<br>测试部署 / 验收 / 回滚演练</small></div><div class="dnode prod"><b>PROD deploy</b><small>注册到正式 GitLab<br>批准的部署 / 检查 / 回滚</small></div></div><p class="diagram-caption">三个逻辑身份，运行在两台 VM 上，不新增 Runner 服务器。各 Runner 主动取任务，任务可在研发 VPN 断开后继续运行。</p><div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Runner/任务</th>
+<th>部署位置</th>
+<th>允许执行</th>
+<th>不应拥有</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TEST build</td>
+<td>测试机，注册到 TEST GitLab</td>
+<td>拉测试代码、构建、单元/迁移测试、写测试 Registry</td>
+<td>正式凭据、正式文件卷、正式 Docker socket</td>
+</tr>
+<tr>
+<td>TEST deploy</td>
+<td>测试机，注册到 TEST GitLab</td>
+<td>固定脚本部署测试应用、自动验收、测试回滚</td>
+<td>正式 SSH/数据库权限</td>
+</tr>
+<tr>
+<td>PROD deploy</td>
+<td>正式机，注册到 PROD GitLab</td>
+<td>已批准镜像导入、本地正式发布、健康检查、受控回滚</td>
+<td>任意分支的构建任务、未经审核的临时脚本</td>
+</tr>
+</tbody>
+</table></div>
+<p>三个是逻辑 Runner 身份，分别在两台 VM 上运行，不新增 Runner 虚拟机。TEST 的构建与部署串行协调，避免部署时另一个构建耗尽资源；PROD 同时只允许一项部署或回滚。</p>
+<p>流水线用 tags 路由，生产 Runner 锁定项目、禁止无标签任务并只接受受保护引用。tags 本身不是权限控制；还需限制谁能推正式引用、修改 CI 定义、使用生产凭据，以及谁能修改 Runner 执行的部署脚本。生产只允许固定目标服务和受信发布代码，不将宿主 Docker socket 暴露给普通测试作业。<a href="https://docs.gitlab.com/ci/runners/configure_runners/">Runner 配置说明</a></p>
+<p>发布与回滚共享同一部署锁（例如 <code>resource_group</code>），防止新旧流水线互相覆盖。更细的环境保护/部署审批能力要按客户选定 GitLab 版本与许可确认；基础方案不假设免费版包含全部高级审批功能。<a href="https://docs.gitlab.com/ci/environments/deployment_safety/">GitLab 部署安全说明</a></p>
+</section><section class="chapter" id="chapter6" hidden><span class="eyebrow">07 / 回滚怎样验证</span><h2>回滚测试要验收哪些操作</h2>
+<div class="rollback"><div class="rollbacktop">候选 B 发布检查失败 → 暂停后续发布，记录错误与版本</div><h3>数据库是否仍兼容上一版本 A？</h3><div class="decision"><div><b>兼容，并且已演练</b><p>Runner 恢复 A 的镜像与配置<br>↓<br>验证页面 / MCP / 数据读写<br>↓<br>通过后恢复服务，失败继续处置</p></div><div><b>不兼容或尚不明确</b><p>停止自动镜像回退<br>↓<br>由负责人评估向前修复或数据恢复<br>↓<br>不能直接把正式库替换成旧库</p></div></div></div><h3>测试环境：上线前先演练</h3>
+<ol>
+<li>部署稳定版本 A 并记录数据基线、镜像指纹和配置版本。</li>
+<li>部署候选 B，验证功能与数据迁移；在可控测试场景制造健康检查失败。</li>
+<li>执行测试回滚任务，恢复 A 的已保留镜像及兼容配置。</li>
+<li>检查页面、MCP、数据库读写和重启后的数据；如果 B 的数据库变更不兼容 A，须调整迁移设计或验证恢复流程，不能伪造回滚成功。</li>
+<li>发布报告记录 B 的验收、回滚条件、实际耗时；恢复至要验收的候选版本后，才允许正式推进。</li>
+</ol>
+<h3>正式环境：应用回滚和数据恢复分开</h3>
+<p>正式任务在更新前记录上一镜像、配置和 schema 版本。若只改变兼容的应用代码，失败后可由受限回滚任务重新部署上一镜像并验证；是否自动执行由已验收的策略决定，不假定 GitLab 自带自动处理所有情况。<a href="https://docs.gitlab.com/ci/environments/deployments/">GitLab 回滚行为</a></p>
+<p>如果数据库已做不兼容修改，或切换后已产生新业务数据，先停止进一步发布并由负责人处理，不能简单恢复旧库或旧 SQLite。数据库恢复涉及数据取舍，须有独立可用副本和明确恢复点。本轮只修改方案，部署/回滚脚本和保护条件仍须实施。</p>
+<p>两台 VM 的角色是测试和正式，不是备份主备；测试库不能作为正式数据恢复副本。客户已有 NAS/对象存储/虚拟化备份可另接入，但本配置不新增备份机器，也不宣称现成存在备份能力。正式机整体故障时，其 GitLab 和 Registry 也会不可用，CI/CD 不能替代修复主机。</p>
+</section><section class="chapter" id="chapter7" hidden><span class="eyebrow">08 / 交付验收</span><h2>初次交付与最终验收</h2>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>客户配合</th>
+<th>我们交付/验收标准</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>接入联调</td>
+<td>VM、VPN、堡垒机账号、网络/域名/证书</td>
+<td>在客户现场以外的研发电脑完成两套 GitLab 的 ls-remote 与一次可审计 push</td>
+</tr>
+<tr>
+<td>软件安装</td>
+<td>初装权限、内网依赖/镜像来源</td>
+<td>两套 GitLab/Registry、Runner 与应用/数据库启动并验证开机自启</td>
+</tr>
+<tr>
+<td>测试自动化</td>
+<td>测试账号、样例/脱敏数据、测试业务入口</td>
+<td>本机推代码后自动构建、部署测试、生成报告；失败不影响正式</td>
+</tr>
+<tr>
+<td>正式通道</td>
+<td>指定发布身份、批准镜像转运方式</td>
+<td>同一 SHA/digest 进入正式 GitLab/Registry；生产只处理批准版本</td>
+</tr>
+<tr>
+<td>回滚演练</td>
+<td>测试窗口、验收人员</td>
+<td>测试 A→B→A 成功；明确数据库不兼容时的阻断条件</td>
+</tr>
+<tr>
+<td>首次正式上线</td>
+<td>确认维护窗口、正式数据和恢复点</td>
+<td>数据迁移先演练；正式发布后验收。SQLite 首迁 PG 不使用普通镜像回滚处理</td>
+</tr>
+<tr>
+<td>远程独立运行</td>
+<td>账号有效期与后续支持联系人</td>
+<td>已触发任务在断开研发 VPN 后继续执行，重新接入可查看结果并完成下一次发布</td>
+</tr>
+<tr>
+<td>容量验收</td>
+<td>接受测试资源较小的边界</td>
+<td>正式按 5/10 并发测试；两机记录内存峰值、OOM、磁盘余量和任务耗时</td>
+</tr>
+</tbody>
+</table></div>
+<p>交付物：两机安装清单、实际 IP/域名与网络矩阵、GitLab 项目/Runner 映射、受控流水线、部署与回滚脚本、版本清单、测试报告、操作手册及故障联系人。真实密码、密钥通过客户指定安全渠道交接，不写进本说明。</p>
+<p><strong>完成定义：我们在自己的电脑上，经批准通道推一次代码，测试环境自动更新；验收后远程发布正式并执行受控回滚验证，全过程不需要人员到现场，也不需要每次让客户手工拷贝源码或敲部署命令。</strong></p>
+<p>原多节点方案继续保留；此前单机和“主机＋备份机”方案是历史版本。当前以本版“测试＋正式、各自 GitLab/Runner、无额外备份机器”为准。资源、网络与流水线均为待实施方案，并不表示线上服务已经变更。</p>
+</section><p class="print-note">2026-10-27 · 待实施方案：图表、规格与流水线需在客户环境逐项验收。本页更新未更改正式应用。</p></div><footer class="pager"><button id="prev">← 上一步</button><span id="position"></span><button class="accent" id="next">下一步 →</button></footer></main></div><script>const names=["客户要提供什么", "两台机器与内存", "远程接入拓扑", "网络与账号清单", "推代码到正式发布", "Runner 分工", "回滚怎样验证", "交付验收"];const chapters=[...document.querySelectorAll('.chapter')];let index=0,full=false;const nav=document.querySelector('nav');chapters.forEach((s,i)=>{const b=document.createElement('button');b.innerHTML='<span>'+String(i+1).padStart(2,'0')+'</span>'+names[i];b.onclick=()=>{full=false;document.body.classList.remove('all');document.getElementById('all').textContent='查看完整长页';show(i)};nav.append(b)});function show(i){index=Math.max(0,Math.min(chapters.length-1,i));chapters.forEach((s,k)=>s.hidden=!full&&k!==index);[...nav.children].forEach((b,k)=>{b.classList.toggle('active',k===index);b.setAttribute('aria-current',k===index?'step':'false')});document.getElementById('prev').disabled=index===0;document.getElementById('next').disabled=index===chapters.length-1;document.getElementById('position').textContent=(index+1)+' / '+chapters.length+' · '+names[index];window.scrollTo(0,0)}document.getElementById('prev').onclick=()=>show(index-1);document.getElementById('next').onclick=()=>show(index+1);document.getElementById('all').onclick=()=>{full=!full;document.body.classList.toggle('all',full);document.getElementById('all').textContent=full?'恢复分步讲解':'查看完整长页';show(index)};document.getElementById('print').onclick=()=>window.print();show(0);</script></body></html>

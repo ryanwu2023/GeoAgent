@@ -135,7 +135,7 @@ def analysis(snapshot, topic="all", dimension="", start="", end=""):
         scenario['gaps']='已接入报道线索；尚缺统一事件时间轴、前期基准及逐条独立核验。'
     scope = canonical([topic, dimension, start, end, RULE_VERSION])
     with db() as c:
-        rows = c.execute("SELECT payload,created_at FROM analyses WHERE snapshot_id=? AND scope=? ORDER BY created_at DESC LIMIT 2", (snapshot.get("id", ""), scope)).fetchall()
+        rows = c.execute("SELECT payload,created_at FROM analyses WHERE snapshot_id=%s AND scope=%s ORDER BY created_at DESC LIMIT 2", (snapshot.get("id", ""), scope)).fetchall()
     if rows:
         current = json.loads(rows[0]["payload"])
         previous = json.loads(rows[1]["payload"]) if len(rows) > 1 else None
@@ -433,7 +433,7 @@ def _page_metric_material(item):
 
 def _page_summary_cache(cache_key: str):
     with db() as c:
-        row = c.execute("SELECT payload FROM page_summaries WHERE cache_key=?", (cache_key,)).fetchone()
+        row = c.execute("SELECT payload FROM page_summaries WHERE cache_key=%s", (cache_key,)).fetchone()
     if not row:
         return None
     result = json.loads(row[0])
@@ -447,7 +447,7 @@ async def page_summary(snapshot, page, topic="all", dimension="", start="", end=
         raise ValueError("不支持的研究页面")
     with db() as c:
         review_row = c.execute(
-            "SELECT COALESCE(MAX(created_at),'') FROM reviews WHERE snapshot_id=?",
+            "SELECT COALESCE(MAX(created_at),'') FROM reviews WHERE snapshot_id=%s",
             (snapshot["id"],),
         ).fetchone()
     review_revision = review_row[0] if review_row else ""
@@ -510,9 +510,9 @@ async def page_summary(snapshot, page, topic="all", dimension="", start="", end=
                 SELECT r.record_id,r.signal,r.reviewer,r.reason,r.created_at
                 FROM reviews r JOIN (
                     SELECT record_id,MAX(version) version FROM reviews
-                    WHERE snapshot_id=? GROUP BY record_id
+                    WHERE snapshot_id=%s GROUP BY record_id
                 ) latest ON latest.record_id=r.record_id AND latest.version=r.version
-                WHERE r.snapshot_id=?
+                WHERE r.snapshot_id=%s
             """, (snapshot["id"], snapshot["id"])).fetchall()
         reviews = {row["record_id"]: dict(row) for row in review_rows}
         evidence = []
@@ -576,7 +576,7 @@ async def page_summary(snapshot, page, topic="all", dimension="", start="", end=
             }
             with db() as c:
                 c.execute(
-                    "INSERT OR REPLACE INTO page_summaries VALUES (?,?,?,?,?,?,?)",
+                    "INSERT INTO page_summaries VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(cache_key) DO UPDATE SET snapshot_id=excluded.snapshot_id,page=excluded.page,scope=excluded.scope,created_at=excluded.created_at,model=excluded.model,payload=excluded.payload",
                     (cache_key, snapshot["id"], page, scope, result_payload["created_at"], used_model, canonical(result_payload)),
                 )
             return result_payload
@@ -618,7 +618,7 @@ async def answer(snapshot, query, topic="all", dimension="", start="", end="", u
     followup_query = bool(re.search(r"^(?:那|那么|上述|其中|这个|这些|它|其|继续|再|进一步|为什么|如何|还有|是否|具体|展开|补充)|追问|接着", query.strip()))
     if previous_answer_id and followup_query:
         with db() as c:
-            row=c.execute("SELECT payload FROM answers WHERE id=? AND snapshot_id=?",(previous_answer_id,snapshot["id"])).fetchone()
+            row=c.execute("SELECT payload FROM answers WHERE id=%s AND snapshot_id=%s",(previous_answer_id,snapshot["id"])).fetchone()
         previous=json.loads(row[0]) if row else None
         # An ambiguous follow-up submitted from the cross-topic view inherits
         # the frozen topic of the answer it references.  An explicit topic in
@@ -683,7 +683,7 @@ async def answer(snapshot, query, topic="all", dimension="", start="", end="", u
     # an unanswered question into an apparently supported conclusion.
     if not citations and not facts and not any(k in query for k in ['资产', '情景', '简报', '关联']):
         with db() as c:
-            c.execute("INSERT INTO answers VALUES (?,?,?,?,?)", (base["id"], snapshot["id"], original_query, base["created_at"], canonical(base)))
+            c.execute("INSERT INTO answers VALUES (%s,%s,%s,%s,%s)", (base["id"], snapshot["id"], original_query, base["created_at"], canonical(base)))
         return base
     assessment_requested = any(k in query for k in ['资产','情景','简报','关联'])
     if assessment_requested:
@@ -1138,7 +1138,7 @@ async def answer(snapshot, query, topic="all", dimension="", start="", end="", u
                     assessments[kind].append(safe)
             if any(assessments.values()):
                 with db() as c:
-                    c.execute("INSERT INTO analyses VALUES (?,?,?,?,?)", (base["id"], snapshot["id"], canonical([topic, dimension, start, end, RULE_VERSION]), now(), canonical(assessments)))
+                    c.execute("INSERT INTO analyses VALUES (%s,%s,%s,%s,%s)", (base["id"], snapshot["id"], canonical([topic, dimension, start, end, RULE_VERSION]), now(), canonical(assessments)))
                 base["assessments"] = assessments
             final_check = f"最终答案引用 {len(summary_ids)} 条证据，已完成引用范围与新增数字检查。"
             if validation_warnings:
@@ -1214,7 +1214,7 @@ async def answer(snapshot, query, topic="all", dimension="", start="", end="", u
         base["mode"] = "本地证据总结"
         base["message"] = "尚未配置可用模型；已根据本地检索证据生成基础回答。"
     with db() as c:
-        c.execute("INSERT INTO answers VALUES (?,?,?,?,?)", (base["id"], snapshot["id"], original_query, base["created_at"], canonical(base)))
+        c.execute("INSERT INTO answers VALUES (%s,%s,%s,%s,%s)", (base["id"], snapshot["id"], original_query, base["created_at"], canonical(base)))
     return base
 
 def _brief_time(value):
@@ -1340,7 +1340,7 @@ def _brief_evidence(snapshot, topic, template):
     with db() as conn:
         previous = conn.execute(
             """SELECT s.created_at FROM briefs b JOIN snapshots s ON s.id=b.snapshot_id
-               WHERE s.created_at < ? ORDER BY s.created_at DESC LIMIT 1""",
+               WHERE s.created_at < %s ORDER BY s.created_at DESC LIMIT 1""",
             (snapshot.get("created_at", ""),),
         ).fetchone()
     start = _brief_time(previous[0]) if previous else end - timedelta(hours=template["lookback_hours"])
@@ -1678,8 +1678,8 @@ async def _create_brief_uncached(snapshot, use_model, template, generation_key):
         "cited_ids": sorted(summary_ids),
     }
     with db() as c:
-        c.execute("INSERT INTO briefs VALUES (?,?,?,?,?)", (bid, snapshot["id"], timestamp, mode, markdown))
-        c.execute("INSERT INTO brief_metadata VALUES (?,?,?,?,?,?,?,?)", (bid, template["id"], template["version"], canonical(template), ", ".join(model_names) or None, window_start, window_end, canonical(metadata)))
+        c.execute("INSERT INTO briefs VALUES (%s,%s,%s,%s,%s)", (bid, snapshot["id"], timestamp, mode, markdown))
+        c.execute("INSERT INTO brief_metadata VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", (bid, template["id"], template["version"], canonical(template), ", ".join(model_names) or None, window_start, window_end, canonical(metadata)))
     return {"id": bid, "snapshot_id": snapshot["id"], "created_at": timestamp, "mode": mode, "markdown": markdown, "template_id": template["id"], "template_version": template["version"], "model": ", ".join(model_names) or None, "window_start": window_start, "window_end": window_end, "reused": False, "generation_status": generation_status}
 
 

@@ -58,7 +58,7 @@ def persisted_answer(summary=True):
     }
     with db() as conn:
         conn.execute(
-            "INSERT INTO answers VALUES (?,?,?,?,?)",
+            "INSERT INTO answers VALUES (%s,%s,%s,%s,%s)",
             (answer["id"], snapshot_id, answer["query"], answer["created_at"], canonical(answer)),
         )
     return answer, record
