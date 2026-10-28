@@ -1,3 +1,5 @@
+客户本地部署使用：[当前双环境配置方案](客户测试与正式双环境远程发布方案.md) · [图文讲解页](客户双环境远程发布讲解页.html) · [客户准备清单](客户接入与服务器准备清单.md)。
+
 PostgreSQL setup and migration are required before using this deployment: [instructions](POSTGRESQL.md).
 
 # Sealos deployment

@@ -8,13 +8,7 @@ React / TypeScript + MapLibre GL / deck.gl + FastAPI / PostgreSQL。双主题、
 
 [客户 MCP 数据下载与同步协议](deploy/mcp-data-sync.md)：客户自行决定拉取频率，服务端提供冻结采集数据的版本检查、分块下载与完整性校验。
 
-[客户内网生产部署、灰度上线与数据恢复方案](deploy/本地部署硬件与境外数据MCP同步方案.md)：硬件与环境隔离、应用多活、独立 PostgreSQL、测试灰度、备份恢复和 MCP 接收。
-
-[客户部署互动讲解页（离线 HTML）](deploy/客户部署讲解页.html)：最终选择 GitLab + 构建测试 Runner + 独立生产发布 Runner，生产数据库选两台 PostgreSQL 一主一备、Patroni 自动切换；按九步讲解服务器配置、中文拓扑、灰度、备用切换与验收。下载后用浏览器打开，无需联网。
-
-[双虚拟机集中部署与应急恢复方案](deploy/双虚拟机集中部署与应急恢复方案.md) · [精简版离线讲解页](deploy/双虚拟机精简讲解页.html)：独立替代方案，一台集中运行 GitLab、Runner、GeoAgent 和业务 PG，另一台 4 核/8GB 保存备份并人工恢复基础业务访问；原多节点方案保留。
-
-[客户内网远程发布方式对比与环境准备清单](deploy/客户内网远程发布方式对比与环境准备清单.md)：比较 Ansible、Semaphore、Jenkins、GitLab CI、GitOps 等路线，明确跳板机接入、无人到场发布和客户需准备的条件。
+[客户配置与远程发布方案（当前版本）](deploy/客户测试与正式双环境远程发布方案.md) · [中文拓扑与流程讲解页](deploy/客户双环境远程发布讲解页.html) · [客户准备清单](deploy/客户接入与服务器准备清单.md)：正式 8 核/32GB、测试 6 核/24GB，各自安装 GitLab、Runner、GeoAgent 和 PostgreSQL；通过 VPN 与堡垒机远程推送代码、测试、发布与回滚，无额外备份或应急虚拟机。
 
 [构建、正式发布与回滚](docs/发布与回滚.md)
 
