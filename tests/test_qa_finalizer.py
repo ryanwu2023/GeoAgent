@@ -1,5 +1,9 @@
-from backend.qa_finalizer import deterministic_fallback, normalize_markdown_lists
+from backend.qa_claims import (
+    ClaimDependency, ClaimLedger, ClaimRecord, ClaimSpan, EvidenceRelation, NumericProvenance,
+)
+from backend.qa_finalizer import deterministic_fallback, normalize_markdown_lists, validate_and_repair
 from backend.qa_harness_state import HarnessScope
+from backend.qa_synthesizer import DraftAnswer
 
 
 def test_deterministic_fallback_always_returns_chinese_answer_and_separates_internal_messages():
@@ -175,3 +179,92 @@ def test_numeric_failure_matches_exact_values_and_scientific_notation():
     assert "1E+1" not in result.text
     assert "第9项" not in result.text
     assert "2029年仍需持续观察" in result.text
+
+
+def _claim(ledger, text, *, nature="media_report", supported=True, evidence="e1"):
+    numeric = []
+    if nature == "program_calculation":
+        numeric = [NumericProvenance(
+            value="5.0", unit="%", observed_at="2026-10-31", statistical_scope="收盘",
+            input_series=["x:t", "x:t-1"], formula="(t/t-1-1)*100", result="5.0",
+        )]
+    item = ledger.upsert_claim(ClaimRecord.create(
+        text=text, information_nature=nature, scope_version="research-scope/v1",
+        numeric_provenance=numeric,
+    ))
+    if supported:
+        ledger.add_relation(EvidenceRelation.create(
+            claim_id=item.claim_id, evidence_id=evidence, relation="supports",
+            evidence_nature=nature, origin_group=evidence,
+            span=ClaimSpan(0, 2, f"{evidence}-v1", "证据", content_kind="structured_value" if nature == "program_calculation" else "full_text"),
+        ))
+    return item
+
+
+def _draft(text, claim_quotes, **kwargs):
+    version = DraftAnswer.content_version(text)
+    spans = {}
+    for claim_id, quote in claim_quotes.items():
+        start = text.index(quote)
+        spans[claim_id] = [ClaimSpan(start, start + len(quote), version, quote)]
+    return DraftAnswer(
+        markdown=text, claim_spans=spans, citation_map=kwargs.get("citation_map", []),
+        gaps=[], stage_version="stage-1", business_lead=kwargs.get("business_lead", ""),
+        business_lead_claim_ids=kwargs.get("business_lead_claim_ids", []),
+    )
+
+
+def test_claim_level_repair_removes_only_unsupported_duplicate_number_claim():
+    ledger = ClaimLedger()
+    supported = _claim(ledger, "程序显示指标上升5.0%", nature="program_calculation", evidence="metric-1")
+    unsupported = _claim(ledger, "媒体称开战概率为5.0%", supported=False)
+    text = "## 核心判断\n\n程序显示指标上升5.0%。媒体称开战概率为5.0%。后续仍需观察。"
+    final = validate_and_repair(_draft(text, {
+        supported.claim_id: "程序显示指标上升5.0%",
+        unsupported.claim_id: "媒体称开战概率为5.0%",
+    }), ledger, deadline=9999999999)
+    assert "程序显示指标上升5.0%" in final.text
+    assert "开战概率" not in final.text
+    assert "后续仍需观察" in final.text
+    assert final.evidence_ids == ["metric-1"]
+
+
+def test_rejected_premise_also_removes_dependent_inference():
+    ledger = ClaimLedger()
+    premise = _claim(ledger, "航运已经完全中断", supported=False)
+    inference = _claim(ledger, "因此油价必然持续上涨", nature="model_inference", supported=False)
+    ledger.add_dependency(ClaimDependency(premise.claim_id, inference.claim_id))
+    text = "航运已经完全中断。因此油价必然持续上涨。外交接触仍在继续。"
+    final = validate_and_repair(_draft(text, {
+        premise.claim_id: premise.text, inference.claim_id: inference.text,
+    }), ledger, deadline=9999999999)
+    assert "航运已经完全中断" not in final.text
+    assert "油价必然持续上涨" not in final.text
+    assert "外交接触仍在继续" in final.text
+
+
+def test_invalid_citation_mapping_does_not_clear_supported_body():
+    ledger = ClaimLedger()
+    claim = _claim(ledger, "外交接触仍在继续", evidence="e1")
+    text = "## 核心判断\n\n外交接触仍在继续。"
+    draft = _draft(text, {claim.claim_id: claim.text}, citation_map=[{
+        "anchor": "S9", "claim_ids": [claim.claim_id], "evidence_ids": ["invented"],
+    }])
+    final = validate_and_repair(draft, ledger, deadline=9999999999)
+    assert "外交接触仍在继续" in final.text
+    assert final.citation_map[0]["evidence_ids"] == ["e1"]
+
+
+def test_business_lead_is_repaired_with_same_claim_version_as_body():
+    ledger = ClaimLedger()
+    claim = _claim(ledger, "外交接触持续但军事行动未获确认", evidence="e1")
+    text = "## 核心判断\n\n外交接触持续但军事行动未获确认。\n\n## 依据\n正文。"
+    draft = _draft(
+        text, {claim.claim_id: claim.text},
+        business_lead="外交接触持续但军事行动未获确认",
+        business_lead_claim_ids=[claim.claim_id],
+    )
+    final = validate_and_repair(draft, ledger, deadline=9999999999)
+    assert final.business_lead == "外交接触持续但军事行动未获确认"
+    assert final.business_lead_claim_ids == [claim.claim_id]
+    assert final.stage_version == "stage-1"

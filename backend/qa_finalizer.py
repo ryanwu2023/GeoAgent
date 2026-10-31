@@ -5,6 +5,9 @@ from dataclasses import dataclass, field
 import re
 from typing import Any, Callable
 
+from .qa_claims import ClaimLedger, ClaimSpan
+from .qa_synthesizer import DraftAnswer
+
 
 @dataclass
 class FinalAnswer:
@@ -15,6 +18,10 @@ class FinalAnswer:
     gaps: list[str] = field(default_factory=list)
     status: str = "completed"
     degraded_reason: str = ""
+    business_lead: str = ""
+    business_lead_claim_ids: list[str] = field(default_factory=list)
+    stage_version: str = ""
+    claim_ids: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -25,6 +32,10 @@ class FinalAnswer:
             "gaps": self.gaps,
             "status": self.status,
             "degraded_reason": self.degraded_reason,
+            "business_lead": self.business_lead,
+            "business_lead_claim_ids": self.business_lead_claim_ids,
+            "stage_version": self.stage_version,
+            "claim_ids": self.claim_ids,
         }
 
 
@@ -36,6 +47,166 @@ def finalize_validated(
         text=value["text"], annotated_text=value.get("annotated_text") or value["text"],
         citation_map=value.get("citation_map", []), evidence_ids=value.get("evidence_ids", []),
         gaps=value.get("gaps", []),
+    )
+
+
+def _valid_span(span: ClaimSpan, body: str, version: str) -> bool:
+    try:
+        return bool(span.extract(body, version))
+    except ValueError:
+        return False
+
+
+def _claim_support(claim_id: str, ledger: ClaimLedger, memo: dict[str, bool]) -> bool:
+    if claim_id in memo:
+        return memo[claim_id]
+    claim = ledger.claims.get(claim_id)
+    if claim is None or not claim.valid or claim.verification == "invalidated":
+        memo[claim_id] = False
+        return False
+    supports = [
+        item for item in ledger.relations_for(claim_id)
+        if item.relation == "supports" and item.span is not None
+        and item.span.content_kind in {"full_text", "structured_value"}
+    ]
+    if claim.information_nature == "model_inference":
+        premises = [
+            item.premise_claim_id for item in ledger.dependencies
+            if item.dependent_claim_id == claim_id
+        ]
+        # Mark temporarily to break accidental cycles in malformed legacy data.
+        memo[claim_id] = False
+        valid = bool(premises) and all(_claim_support(item, ledger, memo) for item in premises)
+        memo[claim_id] = valid
+        return valid
+    valid = bool(supports)
+    if claim.information_nature == "program_calculation":
+        valid = valid and bool(claim.numeric_provenance) and all(
+            item.calculation_complete for item in claim.numeric_provenance
+        )
+    memo[claim_id] = valid
+    return valid
+
+
+def _dependent_closure(ledger: ClaimLedger, rejected: set[str]) -> set[str]:
+    value = set(rejected)
+    changed = True
+    while changed:
+        changed = False
+        for dependency in ledger.dependencies:
+            if dependency.premise_claim_id in value and dependency.dependent_claim_id not in value:
+                value.add(dependency.dependent_claim_id)
+                changed = True
+    return value
+
+
+def _remove_claim_spans(body: str, spans: list[ClaimSpan]) -> str:
+    value = body
+    for span in sorted(spans, key=lambda item: (item.start, item.end), reverse=True):
+        value = value[:span.start] + value[span.end:]
+    value = re.sub(r"[。；]{2,}", "。", value)
+    value = re.sub(r"(?m)^\s*[。；]\s*$", "", value)
+    return re.sub(r"\n{3,}", "\n\n", value).strip()
+
+
+def _first_business_paragraph(text: str) -> str:
+    for paragraph in re.split(r"\n\s*\n", str(text or "")):
+        cleaned = re.sub(r"^#{1,6}\s*", "", paragraph.strip())
+        if cleaned in {"核心判断", "结论", "结论摘要", "主要进展", "判断依据"}:
+            continue
+        if cleaned and re.search(r"[\u4e00-\u9fff]", cleaned):
+            return cleaned
+    return "当前证据不足以支持原草稿中的关键判断。"
+
+
+def validate_and_repair(
+    draft: DraftAnswer,
+    claims: ClaimLedger,
+    *,
+    deadline: float,
+) -> FinalAnswer:
+    """按主张局部删除无支持内容；引用异常不能清空其余正文。"""
+    del deadline  # 校验为确定性本地操作，即使进入收尾预留也必须完成。
+    body = str(draft.markdown or "").strip()
+    version = DraftAnswer.content_version(body)
+    valid_spans: dict[str, list[ClaimSpan]] = {}
+    invalid_span_claims: set[str] = set()
+    for claim_id, spans in draft.claim_spans.items():
+        kept = [span for span in spans if _valid_span(span, body, version)]
+        if kept:
+            valid_spans[claim_id] = kept
+        elif spans:
+            invalid_span_claims.add(claim_id)
+
+    memo: dict[str, bool] = {}
+    rejected = {
+        claim_id for claim_id in valid_spans
+        if not _claim_support(claim_id, claims, memo)
+    }
+    rejected.update(invalid_span_claims)
+    rejected = _dependent_closure(claims, rejected)
+    remove = [
+        span for claim_id in rejected for span in valid_spans.get(claim_id, [])
+    ]
+    text = _remove_claim_spans(body, remove) if remove else body
+    if not re.search(r"[\u4e00-\u9fff]", text):
+        text = "当前证据不足以支持原草稿中的关键判断，暂不能形成可靠结论。"
+
+    kept_claim_ids = [
+        claim_id for claim_id in valid_spans
+        if claim_id not in rejected and _claim_support(claim_id, claims, memo)
+    ]
+    mapping: list[dict[str, Any]] = []
+    for claim_id in kept_claim_ids:
+        evidence_ids = list(dict.fromkeys(
+            relation.evidence_id
+            for relation in claims.relations_for(claim_id)
+            if relation.relation == "supports" and relation.span is not None
+            and relation.span.content_kind in {"full_text", "structured_value"}
+        ))
+        if evidence_ids:
+            mapping.append({
+                "anchor": f"S{len(mapping) + 1}",
+                "claim_ids": [claim_id],
+                "evidence_ids": evidence_ids,
+            })
+    annotated = text
+    for item in mapping:
+        claim_id = item["claim_ids"][0]
+        quote = next(
+            (span.quote for span in valid_spans.get(claim_id, []) if span.quote in annotated),
+            "",
+        )
+        if quote:
+            annotated = annotated.replace(
+                quote, f"{quote}〔{item['anchor']}〕", 1,
+            )
+
+    lead_ids = [
+        claim_id for claim_id in draft.business_lead_claim_ids
+        if claim_id in kept_claim_ids
+    ]
+    business_lead = draft.business_lead.strip() if (
+        draft.business_lead.strip()
+        and bool(draft.business_lead_claim_ids)
+        and set(draft.business_lead_claim_ids).issubset(set(kept_claim_ids))
+    ) else _first_business_paragraph(text)
+    gaps = list(draft.gaps)
+    if rejected:
+        gaps.append("已删除缺少有效证据、正文位置或前提支持的局部主张。")
+    return FinalAnswer(
+        text=normalize_markdown_lists(text),
+        annotated_text=normalize_markdown_lists(annotated),
+        citation_map=mapping,
+        evidence_ids=list(dict.fromkeys(
+            evidence_id for item in mapping for evidence_id in item["evidence_ids"]
+        )),
+        gaps=list(dict.fromkeys(gaps))[:12],
+        status="completed",
+        business_lead=business_lead,
+        business_lead_claim_ids=lead_ids,
+        stage_version=draft.stage_version,
+        claim_ids=kept_claim_ids,
     )
 
 
