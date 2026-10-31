@@ -25,7 +25,7 @@ def test_manual_job_manager_returns_run_and_updates_background_status(tmp_path, 
 
 def test_startup_recovery_marks_orphaned_runs_abandoned(tmp_path):
     root = tmp_path / "collection-runs"
-    ledger = CollectorLedger(root / "ledger.sqlite3")
+    ledger = CollectorLedger()
     ledger.run_started(run_id="orphan", run_kind="scheduled-service", started_at="2026-10-15T01:00:00+00:00", topic=None, timeout_sec=30)
 
     recovered = recover_interrupted_runs(report_root=root, finished_at="2026-10-15T01:05:00+00:00")
@@ -36,7 +36,7 @@ def test_startup_recovery_marks_orphaned_runs_abandoned(tmp_path):
 
 def test_startup_recovery_preserves_live_collector_owner(tmp_path):
     root = tmp_path / "collection-runs"
-    ledger = CollectorLedger(root / "ledger.sqlite3")
+    ledger = CollectorLedger()
     ledger.run_started(run_id="active", run_kind="scheduled-service", started_at="2026-10-15T01:00:00+00:00", topic=None, timeout_sec=30)
 
     with service_lock(root / ".collector-service.lock"):

@@ -3,7 +3,7 @@
 The bundled local model handles the bulk English/Persian pass.  This worker is
 for records the local language detector/model could not safely finish, such as
 Cyrillic, Arabic and mixed-script headlines.  It is resumable because every
-accepted translation is committed to the shared SQLite cache immediately.
+accepted translation is committed to the shared PostgreSQL cache immediately.
 """
 import asyncio
 import os

@@ -71,6 +71,45 @@ def test_model_failure_returns_deterministic_non_empty_answer(tmp_path, monkeypa
     assert outcome["final"]["evidence_ids"] == ["r1"]
 
 
+def test_cost_limit_still_returns_answer_without_calling_model(tmp_path, monkeypatch):
+    from backend.qa_agent_settings import save_settings
+
+    monkeypatch.setenv("GEO_DATA_DIR", str(tmp_path))
+    save_settings({
+        "per_agent_timeout_seconds": 70,
+        "total_timeout_seconds": 150,
+        "max_parallel": 2,
+        "input_price_per_million": 1000,
+        "output_price_per_million": 1000,
+        "max_cost_cny": 0.000001,
+    })
+    calls = 0
+
+    async def complete(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return "不应调用", "test-model"
+
+    outcome = asyncio.run(run_local_harness(
+        question="最新美伊进展", plan=plan(), tools=FakeTools(), complete=complete,
+        publish=lambda item: _capture([], item), run_id="qa-cost-limit", store=HarnessStore(),
+    ))
+    assert calls == 0
+    assert outcome["final"]["text"]
+    assert outcome["status"] == "degraded"
+    assert outcome["cost_estimate"]["limit_enabled"] is True
+    assert "美伊局势" in outcome["final"]["text"]
+
+
+def test_system_prompt_requires_question_focused_conclusion():
+    from backend.qa_harness import _system_prompt
+
+    prompt = _system_prompt("usiran")
+    assert "首句必须围绕用户原始问题" in prompt
+    assert "不得用记录数" in prompt
+    assert "只能放在口径与限制" in prompt
+
+
 def test_non_retryable_model_http_error_falls_back_without_duplicate_call(tmp_path, monkeypatch):
     monkeypatch.setenv("GEO_DATA_DIR", str(tmp_path))
     tools = FakeTools()

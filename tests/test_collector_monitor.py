@@ -162,7 +162,7 @@ def test_load_runs_uses_ledger_terminal_status_when_state_file_is_stale(tmp_path
         }),
         encoding="utf-8",
     )
-    ledger = CollectorLedger(root / "ledger.sqlite3")
+    ledger = CollectorLedger()
     ledger.run_started(
         run_id="interrupted",
         run_kind="scheduled-service",
@@ -210,7 +210,7 @@ def test_load_runs_sorts_by_batch_start_time_not_live_file_mtime(tmp_path):
 
 def test_ledger_projection_exposes_runs_and_filtered_events(tmp_path):
     root = tmp_path / "collection-runs"
-    ledger = CollectorLedger(root / "ledger.sqlite3")
+    ledger = CollectorLedger()
     ledger.run_started(
         run_id="run-1",
         run_kind="scheduled-service",
@@ -232,7 +232,7 @@ def test_ledger_projection_exposes_runs_and_filtered_events(tmp_path):
 
 
 def test_ledger_events_limit_returns_latest_events_in_chronological_order(tmp_path):
-    ledger = CollectorLedger(tmp_path / "collection-runs" / "ledger.sqlite3")
+    ledger = CollectorLedger()
     ledger.run_started(
         run_id="run-1",
         run_kind="scheduled-service",

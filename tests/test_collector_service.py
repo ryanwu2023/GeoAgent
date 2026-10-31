@@ -33,10 +33,9 @@ def test_execute_once_writes_running_then_finished_report(tmp_path):
     saved = json.loads((report_dir / "results.json").read_text())
     assert saved["failed"] == 1
     assert len(saved["results"]) == 2
-    ledger_path = tmp_path / "ledger.sqlite3"
     from backend.collector_ledger import CollectorLedger
 
-    events = CollectorLedger(ledger_path).events(report["run_id"])
+    events = CollectorLedger().events(report["run_id"])
     assert [event["event_type"] for event in events] == [
         "run_started",
         "collector_finished",
@@ -90,7 +89,7 @@ def test_execute_once_records_runner_exception_in_ledger(tmp_path):
 
     from backend.collector_ledger import CollectorLedger
 
-    ledger = CollectorLedger(tmp_path / "ledger.sqlite3")
+    ledger = CollectorLedger()
     assert ledger.events(report["run_id"])[-1]["event_type"] == "run_failed"
 
 
@@ -116,7 +115,7 @@ def test_execute_once_imports_only_after_full_collection_success(tmp_path):
     assert report["import_status"] == "succeeded"
     assert report["snapshot_id"] == "snapshot-1"
     assert imported
-    ledger = CollectorLedger(tmp_path / "ledger.sqlite3")
+    ledger = CollectorLedger()
     row = ledger.run(report["run_id"])
     assert row["import_status"] == "succeeded"
     assert row["snapshot_id"] == "snapshot-1"
@@ -198,29 +197,24 @@ def test_execute_once_records_import_failure_separately(tmp_path):
     assert report["status"] == "success"
     assert report["import_status"] == "failed"
     assert report["import_error_type"] == "ValueError"
-    ledger = CollectorLedger(tmp_path / "ledger.sqlite3")
+    ledger = CollectorLedger()
     row = ledger.run(report["run_id"])
     assert row["status"] == "success"
     assert row["import_status"] == "failed"
     assert ledger.events(report["run_id"])[-2]["event_type"] == "import_failed"
 
 
-def test_ledger_migrates_import_columns_for_existing_database(tmp_path):
-    import sqlite3
-
-    path = tmp_path / "old-ledger.sqlite3"
-    with sqlite3.connect(path) as connection:
-        connection.execute(
-            "CREATE TABLE collector_runs (run_id TEXT PRIMARY KEY, run_kind TEXT NOT NULL, status TEXT NOT NULL, started_at TEXT NOT NULL)"
-        )
-    ledger = CollectorLedger(path)
-    columns = {row[1] for row in sqlite3.connect(path).execute("PRAGMA table_info(collector_runs)")}
+def test_ledger_schema_includes_import_columns():
+    from backend.store import db
+    ledger = CollectorLedger()
+    with db() as connection:
+        columns = {row[0] for row in connection.execute("SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='collector_runs'")}
     assert {"import_status", "snapshot_id", "import_error_type", "import_error_message"} <= columns
     assert ledger.runs() == []
 
 
 def test_ledger_marks_interrupted_runs_as_abandoned(tmp_path):
-    ledger = CollectorLedger(tmp_path / "ledger.sqlite3")
+    ledger = CollectorLedger()
     ledger.run_started(
         run_id="old-run",
         run_kind="scheduled-service",
@@ -236,3 +230,17 @@ def test_ledger_marks_interrupted_runs_as_abandoned(tmp_path):
     assert row["error_type"] == "SERVICE_INTERRUPTED"
     assert row["import_status"] == "not_attempted_interrupted"
     assert ledger.events("old-run")[-1]["event_type"] == "run_abandoned"
+
+
+def test_failed_run_archive_never_borrows_previous_success(tmp_path):
+    from scripts.collector_service import _archive_source_artifacts
+    import json
+    live=tmp_path/'data'/'demo'/'output';live.mkdir(parents=True)
+    (live/'_source_status.json').write_text('{"collection_status":"ok","run_at":"old"}')
+    report=tmp_path/'runs'/'new'
+    _archive_source_artifacts(report,[{'id':'demo','published':False}],tmp_path/'data')
+    target=report/'demo'/'source-status'
+    assert not (target/'_source_status.json').exists()
+    assert json.loads((target/'_source_artifact.json').read_text())['status']=='missing'
+    _archive_source_artifacts(report,[{'id':'demo','published':False,'source_diagnostics':{'_source_status.json':{'collection_status':'failed','run_at':'new'}}}],tmp_path/'data')
+    assert json.loads((target/'_source_status.json').read_text())['run_at']=='new'

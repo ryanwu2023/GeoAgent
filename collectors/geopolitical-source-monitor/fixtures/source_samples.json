@@ -1,0 +1,21 @@
+{
+  "schema_version": "geopolitical-source-fixtures/1",
+  "classification_examples": [
+    {
+      "title": "Iran and the United States resume mediated nuclear talks",
+      "summary": "Oman hosts negotiations on sanctions and a ceasefire framework",
+      "topic": "usiran",
+      "dimension": "diplomacy"
+    },
+    {
+      "title": "Russia launches missile strike on Ukraine",
+      "summary": "Energy infrastructure was damaged and civilians were wounded",
+      "topic": "ukraine",
+      "dimension": "frontline"
+    }
+  ],
+  "html": {
+    "json_ld_article": "<html><head><script type=\"application/ld+json\">{\"@type\":\"NewsArticle\",\"headline\":\"Ukraine ceasefire talks resume\",\"description\":\"Delegations meet for negotiations\",\"datePublished\":\"2026-10-31T08:00:00Z\",\"articleBody\":\"The parties discussed a ceasefire agreement.\"}</script></head><body></body></html>",
+    "restricted": "<html><head><meta property=\"og:title\" content=\"Iran update\"><meta name=\"description\" content=\"Public summary\"></head><body>Please sign in to continue your subscription</body></html>"
+  }
+}

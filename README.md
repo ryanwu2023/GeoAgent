@@ -1,16 +1,22 @@
 # 地缘政治智能体 · 研究工作台 V6
 
-React / TypeScript + MapLibre GL / deck.gl + FastAPI / SQLite。双主题、十三维度、五类资产、冻结快照、引用问答和简报档案。
+React / TypeScript + MapLibre GL / deck.gl + FastAPI / PostgreSQL。双主题、十三维度、五类资产、冻结快照、引用问答和简报档案。
 
 [产品设计文档 V6](docs/design-v6.md) · [适配器协议](docs/adapter-contract.md)
 
 [抓取说明与采集器维护手册](docs/抓取说明/README.md)
+
+[客户 MCP 数据下载与同步协议](deploy/mcp-data-sync.md)：客户自行决定拉取频率，服务端提供冻结采集数据的版本检查、分块下载与完整性校验。
+
+[客户配置与远程发布方案（当前版本）](deploy/客户测试与正式双环境远程发布方案.md) · [中文拓扑与流程讲解页](deploy/客户双环境远程发布讲解页.html) · [客户准备清单](deploy/客户接入与服务器准备清单.md)：正式 8 核/32GB、测试 6 核/24GB，各自安装 GitLab、Runner、GeoAgent 和 PostgreSQL；通过 VPN 与堡垒机远程推送代码、测试、发布与回滚，无额外备份或应急虚拟机。
 
 [构建、正式发布与回滚](docs/发布与回滚.md)
 
 页面恢复 V5 原型的顶部主题切换、中央地图与功能页签、右侧常驻研判布局。支持全球/主题聚焦、图层开关和点位到证据联动；地图在桌面首屏完整显示。综合研判默认展示资产关联矩阵。
 
 ## 运行
+
+从旧 SQLite 版本升级时，先完成 [本地 SQLite → PostgreSQL 迁移](deploy/LOCAL-SQLITE-TO-POSTGRES.md)，再启动应用。手册包含 Windows/Linux/macOS 命令、可选本地 PostgreSQL 容器、完整数据目录备份和迁移后逐表复核。
 
 Windows PowerShell，在本目录执行：
 
@@ -71,7 +77,7 @@ Windows `start.ps1` 正常启动会在后台按注册表顺序逐个执行全部
 - `defense-spend-monitor/output/ALL-records.jsonl` 及最新日期目录下的 `metrics-*.json`
 - `readiness-monitor/output/ALL-records.jsonl` 及 `_source_status.json`
 
-数据存于 `data/research.sqlite3`；原始文件按内容归档至 `data/archive`。相同输入复用快照，变化产生新快照，旧快照不变。备份整个 `data` 目录即可保留历史、问答和简报。
+业务数据、采集账本、翻译、配置和 MCP 审计统一存于 PostgreSQL，通过 `GEO_DATABASE_URL` 连接。原始文件按内容归档至 `data/archive`。相同输入复用快照，变化产生新快照，旧快照不变。数据库使用 `pg_dump` 备份，`data` 文件目录单独备份。首次启动和旧数据导入见 [PostgreSQL 部署与迁移](deploy/POSTGRESQL.md)。
 
 地图底图已本地打包，无需外部瓦片或地图密钥。地点标记来自爬虫公开记录，默认只表示文章提及，不证明部署。
 
@@ -85,7 +91,7 @@ Windows `start.ps1` 正常启动会在后台按注册表顺序逐个执行全部
 
 MCP 已随主后端启动：开发页面地址为 `http://127.0.0.1:8010/mcp`，后端直连为 `http://127.0.0.1:8011/mcp`；单进程发布后为 `https://<项目域名>/mcp`。在页面创建 MCP Key 后，把地址和 Bearer Token 配到可信 Agent 的 MCP 来源中。Key 授权本项目全部只读工具/快照；仅创建时显示原文，数据库只存 SHA-256 哈希，撤销立即生效。`/healthz` 返回 MCP 健康信息，但协议验收应使用带 Key 的 initialize、tools/list、tools/call。
 
-独立公网部署需设置强随机 `GEOAGENT_SETTINGS_TOKEN`，页面输入管理口令后加载/保存。Sealos 单用户部署沿用网关 Basic 登录：显式启用 `GEOAGENT_TRUST_AUTHENTICATED_GATEWAY=true`，仅信任 loopback 网关覆盖写入的身份头；应用端口必须隔离，使用 `scripts.serve` 禁用代理客户端地址改写。未启用这两种方式时，管理只允许无转发头的本机请求。网关仅对 `/mcp` 取消 Basic 登录，后端仍强制 Bearer Key；其他路径继续保护。PiChat 用户身份签发不等同于管理权限。配置与 Key 存于 `GEO_DATA_DIR/research.sqlite3`，务必持久挂载该数据目录、限制文件权限，并随数据备份保护其中的 PiChat 应用密钥（服务端存储，不加密）。
+Sealos 通过独立 `/login` 页面登录，沿用 `geoagent-web-auth` 中的原账号密码哈希。正式部署必须设置 `GEO_WEB_AUTH_ENABLED=true` 并将认证文件只读挂载到应用的 `/etc/geoagent-auth/auth`；所有业务 API 由后端校验 PostgreSQL 会话，不能依靠页面隐藏或网关身份头代替认证。Cookie 使用 HttpOnly、Secure、SameSite，退出可撤销会话。`/mcp` 独立使用 Bearer Key，网页登录不能代替 MCP 授权。首次迁移和回滚必须同步切换应用与网关，见 [登录与采集修复记录](deploy/LOGIN-AND-COLLECTOR-FIX-20261028.md)。本地开发可关闭网页登录；公网部署必须显式开启。PiChat 身份签发不等同于站点登录权限，配置与 Key 仍需随 PostgreSQL 备份保护。
 
 本项目外网预期 MCP 地址为 `https://geoagentd40d.sealosgzg.site/mcp`，PiChat 服务根地址配置为 `https://chat.lhotsetech.com`。部署网关必须允许 Agent 的 Bearer 请求到达 `/mcp`，不能用前端 SPA 回退或交互式登录页替代 MCP 响应。PiChat 应用还需允许 GeoAgent 外网域名作为嵌入来源，并配置相应 entry/用户权限。
 
@@ -124,7 +130,7 @@ MCP 结果会先保存原始响应，再转换成统一记录并直接生成新�
 
 ## 华泰宏观内部消息源
 
-项目可通过内部 HTTP 接口每天三次采集宏观群消息，并在本地 SQLite 中稳定去重。真实账号和密码只写入本地 `.env`；参考 `.env.example` 中的 `HT_MACRO_*` 配置。`start.bat` 会同时启动长驻消息服务，服务启动后立即补采，之后按北京时间 `08:00、14:00、20:00` 抓取消息列表，并每 27 分钟刷新访问令牌。运行状态可通过 `GET /api/internal-messages/status` 查看。
+项目可通过内部 HTTP 接口每天三次采集宏观群消息，并在统一 PostgreSQL 数据库中稳定去重。真实账号和密码只写入本地 `.env`；参考 `.env.example` 中的 `HT_MACRO_*` 配置。`start.bat` 会同时启动长驻消息服务，服务启动后立即补采，之后按北京时间 `08:00、14:00、20:00` 抓取消息列表，并每 27 分钟刷新访问令牌。运行状态可通过 `GET /api/internal-messages/status` 查看。
 
 外部 Agent 使用原有 GeoAgent MCP 地址和 Bearer Key，通过以下只读工具访问本地数据：
 

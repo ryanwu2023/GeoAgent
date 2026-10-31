@@ -1,0 +1,20 @@
+# Run from repository root with --env-file .env. Only binds to this computer.
+services:
+  postgres:
+    image: postgres:17.11
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: geoagent
+      POSTGRES_USER: geoagent
+      POSTGRES_PASSWORD: ${GEO_LOCAL_PG_PASSWORD:?Set GEO_LOCAL_PG_PASSWORD in the root .env file}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - geoagent_postgres_local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geoagent -d geoagent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+volumes:
+  geoagent_postgres_local:

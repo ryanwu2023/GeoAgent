@@ -38,7 +38,7 @@ if args[0]=="run":
              "CI_COMMIT_TAG": "", "CI_COMMIT_REF_PROTECTED": "false"})
     assert result.returncode == 0, result.stderr.decode()
     commands = [json.loads(line) for line in log.read_text().splitlines()]
-    run = next(command for command in commands if command[0] == "run")
+    run = next(command for command in commands if command[0] == "run" and "--entrypoint" in command)
     mounts = [run[index + 1] for index, value in enumerate(run) if value == "--mount"]
     assert mounts == [
         f"type=bind,source={tmp_path}/release,target=/reports",

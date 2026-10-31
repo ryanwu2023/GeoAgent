@@ -210,3 +210,40 @@ def test_run_one_rejects_concurrent_collector_lock(tmp_path, monkeypatch):
     with service_lock(lock):
         with pytest.raises(RuntimeError, match="lock is held"):
             run_one(item, timeout=10)
+
+
+def test_failed_source_diagnostics_survive_cleanup_without_replacing_live(tmp_path, monkeypatch):
+    source_root, data_root = tmp_path/'sources', tmp_path/'data'
+    item = _write_collector_script(source_root, 'demo', '''
+import os,json,sys
+from pathlib import Path
+p=Path(os.environ['COLLECTOR_OUTPUT_ROOT'])
+(p/'_source_status.json').write_text(json.dumps({'sources':[{'state':'failed','error':'network timed out','api_key':'do-not-retain'}]}))
+sys.exit(1)
+''')
+    monkeypatch.setattr('scripts.collect.collector_source_root',lambda:source_root)
+    monkeypatch.setattr('scripts.collect.collector_data_root',lambda:data_root)
+    result=run_one(item,timeout=10)
+    status=result['source_diagnostics']['_source_status.json']['sources'][0]
+    assert status['state']=='failed' and status['error']=='network timed out'
+    assert status['api_key']=='[REDACTED]'
+    assert result['published'] is False
+
+
+def test_configuration_required_does_not_retry(tmp_path, monkeypatch):
+    source_root, data_root = tmp_path/'sources', tmp_path/'data'
+    item=_write_collector_script(source_root,'demo',"import sys;print('configuration_required: missing API key');sys.exit(2)")
+    monkeypatch.setattr('scripts.collect.collector_source_root',lambda:source_root)
+    monkeypatch.setattr('scripts.collect.collector_data_root',lambda:data_root)
+    result=run_one(item,timeout=10,max_attempts=3,sleep=lambda _:pytest.fail('permanent error must not retry'))
+    assert result['attempts']==1 and result['returncode']==2
+
+
+def test_domestic_proxy_bypass_is_per_collector():
+    from scripts.collect import _collector_environment
+    env={'HTTPS_PROXY':'http://127.0.0.1:3128','NO_PROXY':'localhost','no_proxy':'.svc'}
+    direct=_collector_environment({'direct_hosts':['www.stcn.com']},env)
+    assert direct['HTTPS_PROXY']==env['HTTPS_PROXY']
+    assert direct['NO_PROXY']==direct['no_proxy']=='localhost,.svc,www.stcn.com'
+    assert _collector_environment({},env)['NO_PROXY']=='localhost'
+    assert env['NO_PROXY']=='localhost'

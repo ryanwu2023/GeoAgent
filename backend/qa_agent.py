@@ -632,6 +632,28 @@ def normalize_final(value: dict[str, Any], tools: LocalGeoTools) -> dict[str, An
     valid_ids = set(tools.full_text_ids)
     raw_map = value.get("citation_map") if isinstance(value.get("citation_map"), list) else []
     proposed = _citation_map(raw_map, valid_ids)
+    # Smaller OpenAI-compatible models often inline the transport mapping as
+    # ``〔S1：<record_id>〕`` instead of returning citation_map separately.
+    # Accept it only when the record was actually read in this run; this is a
+    # syntax repair, not permission to cite search-only or invented IDs.
+    inline_pattern = re.compile(
+        r"[〔\[]([A-Za-z][A-Za-z0-9_-]{0,23})\s*[：:]\s*([A-Za-z0-9_-]{8,80})[〕\]]"
+    )
+    inline_mappings: list[dict[str, Any]] = []
+    for match in inline_pattern.finditer(text):
+        anchor, record_id = match.group(1), match.group(2)
+        if record_id in valid_ids:
+            inline_mappings.append({"anchor": anchor, "evidence_ids": [record_id]})
+    if inline_mappings:
+        by_anchor = {item["anchor"]: item for item in proposed}
+        for item in inline_mappings:
+            current = by_anchor.setdefault(item["anchor"], {"anchor": item["anchor"], "evidence_ids": []})
+            current["evidence_ids"] = list(dict.fromkeys([*current["evidence_ids"], *item["evidence_ids"]]))
+        proposed = list(by_anchor.values())
+        text = inline_pattern.sub(
+            lambda match: f"〔{match.group(1)}〕" if match.group(2) in valid_ids else "",
+            text,
+        )
     evidence_to_anchors: dict[str, list[str]] = {}
     for item in proposed:
         for rid in item["evidence_ids"]:
@@ -665,6 +687,7 @@ def normalize_final(value: dict[str, Any], tools: LocalGeoTools) -> dict[str, An
         re.sub(r"[^A-Za-z0-9_-]", "", str(item.get("anchor") or ""))[:24]
         for item in raw_map if isinstance(item, dict)
     }
+    raw_anchors.update(item["anchor"] for item in inline_mappings)
     raw_anchors.discard("")
     referenced = set(re.findall(r"[〔\[]([A-Za-z0-9_-]+)[〕\]]", text))
     mapping = [item for item in proposed if item["anchor"] in referenced]

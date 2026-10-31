@@ -45,7 +45,7 @@ def fetch(
     request_headers = {"User-Agent": UA, "Accept": "application/json,text/html,application/xml,text/xml,*/*"}
     request_headers.update(headers or {})
     curl = "curl.exe" if os.name == "nt" else "curl"
-    command = [curl, "-L", "--fail", "--silent", "--show-error", "--max-time", str(timeout)]
+    command = [curl, "--compressed", "-L", "--fail", "--silent", "--show-error", "--max-time", str(timeout)]
     if ca_cert is not None:
         if not ca_cert.is_file():
             raise FileNotFoundError(f"TLS CA certificate not found: {ca_cert}")

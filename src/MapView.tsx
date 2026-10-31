@@ -1,3 +1,4 @@
+import {sessionFetch as fetch} from "./sessionFetch";
 import {useEffect,useMemo,useRef,useState} from 'react';
 import * as maplibregl from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';

@@ -28,7 +28,6 @@ def test_diagnostic_ref_gate(tmp_path, branch, protected):
 
 def test_diagnostic_never_emits_identity_or_exception_secrets(monkeypatch, capsys):
     monkeypatch.setattr(diagnose_identity, "integration_settings", lambda: {"origin": "https://example.test"})
-    monkeypatch.setattr(diagnose_identity.socket, "getaddrinfo", lambda *a, **k: [(None, None, None, None, ("1.2.3.4", 443))])
 
     class Client:
         def __init__(self, **kwargs): pass
@@ -40,7 +39,11 @@ def test_diagnostic_never_emits_identity_or_exception_secrets(monkeypatch, capsy
             raise httpx.ConnectTimeout("SECRET_EXCEPTION")
 
     monkeypatch.setattr(diagnose_identity.httpx, "AsyncClient", Client)
-    asyncio.run(diagnose_identity.main())
+    # Restore DNS before the PostgreSQL fixture connects to its Docker hostname
+    # during teardown; the diagnostic's fake address must not escape this call.
+    with monkeypatch.context() as dns_patch:
+        dns_patch.setattr(diagnose_identity.socket, "getaddrinfo", lambda *a, **k: [(None, None, None, None, ("1.2.3.4", 443))])
+        asyncio.run(diagnose_identity.main())
     output = capsys.readouterr().out
     assert "SECRET" not in output and "PRIVATE_USER" not in output
     rows = [json.loads(line) for line in output.splitlines()]

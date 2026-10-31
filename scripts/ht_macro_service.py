@@ -21,7 +21,6 @@ sys.path.insert(0, str(ROOT))
 
 from backend.internal_messages import (
     CHINA_TZ,
-    message_db_path,
     message_stats,
     next_scheduled_fetch,
     parse_fetch_times,
@@ -284,7 +283,7 @@ def run_service(settings: Settings, *, once: bool = False) -> int:
             time.sleep(60)
     api = MessageApi(settings)
     fetch_times = parse_fetch_times(settings.fetch_times)
-    status: dict[str, Any] = {"state": "starting", "started_at": utc_now(), "database": str(message_db_path())}
+    status: dict[str, Any] = {"state": "starting", "started_at": utc_now(), "database": "postgresql"}
     try:
         try:
             api.login()

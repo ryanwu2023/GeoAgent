@@ -12,9 +12,14 @@ function loadApi(fetch) {
   const output = ts.transpileModule(source, {
     compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
   }).outputText;
+  const sessionModule = {exports: {}};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/sessionFetch.ts'), 'utf8'), {
+    compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
+  }).outputText, {exports: sessionModule.exports, fetch});
   const moduleValue = {exports: {}};
   vm.runInNewContext(output, {
     module: moduleValue, exports: moduleValue.exports, fetch, TextDecoder, Uint8Array,
+    require: name => {assert.equal(name, "./sessionFetch");return sessionModule.exports;},
   }, {filename: 'api.js'});
   return moduleValue.exports;
 }

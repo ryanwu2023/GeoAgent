@@ -4,15 +4,17 @@ from __future__ import annotations
 import ast
 import html
 import json
+import os
 import re
-import sqlite3
+import sys
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit, unquote_plus
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from backend.store import db
 REGISTRY = ROOT / "collectors" / "collectors.json"
-DB = ROOT / "data" / "research.sqlite3"
 OUTPUT = ROOT / "docs" / "GeoAgent数据源与处理链路说明.html"
 KEYWORD_TRANSLATIONS = ROOT / "config" / "keyword-translations.json"
 SEARCH_QUERY_TRANSLATIONS = ROOT / "config" / "search-query-translations.json"
@@ -22,6 +24,10 @@ SEARCH_QUERY_TRANSLATIONS = ROOT / "config" / "search-query-translations.json"
 # separate from discovery keywords: it explains what the collector is meant to
 # observe, while the keyword section below shows the exact submitted queries.
 COLLECTOR_RESEARCH_SCOPE = {
+    "geopolitical-source-monitor": {
+        "dimensions": ["美伊·地区局势", "俄乌·外交与内政"],
+        "scope": "发现并采集多源地缘新闻，保留来源分类和受限访问状态；报道线索需交叉核验，不绕过来源访问限制。",
+    },
     "asset-transmission-monitor": {
         "dimensions": ["美伊·金融战线", "俄乌·军事/内政/外交", "跨主题·资产传导"],
         "scope": "汇集影响权益、利率债、信用债、商品和外汇的事件线索，重点识别能源与运输、通胀与政策、增长与贸易、风险偏好、财政与产业需求等传导渠道，并保留成立条件、反证和下一观察项。",
@@ -192,7 +198,7 @@ def safe_url(value: object) -> str:
 
 
 def latest_snapshot() -> dict:
-    if not DB.is_file():
+    if not os.getenv("GEO_DATABASE_URL"):
         # CI verifies the standalone explainer without mounting the private
         # research database.  Keep that documentation test deterministic and
         # clearly empty rather than failing on a runner-only filesystem path.
@@ -205,15 +211,16 @@ def latest_snapshot() -> dict:
             "cleaning": {},
             "observations": [],
         }
-    con = sqlite3.connect(DB)
-    con.row_factory = sqlite3.Row
-    row = con.execute("SELECT value FROM workspace_state WHERE key='working_snapshot_id'").fetchone()
-    if row:
-        sid = row[0]
-    else:
-        sid = con.execute("SELECT id FROM snapshots ORDER BY created_at DESC LIMIT 1").fetchone()[0]
-    snap = con.execute("SELECT payload,created_at FROM snapshots WHERE id=?", (sid,)).fetchone()
-    con.close()
+    with db() as con:
+        row = con.execute("SELECT value FROM workspace_state WHERE key='working_snapshot_id'").fetchone()
+        if row:
+            sid = row[0]
+        else:
+            latest = con.execute("SELECT id FROM snapshots ORDER BY created_at DESC LIMIT 1").fetchone()
+            if latest is None:
+                return {"id": "empty-snapshot", "created_at": "暂无研究快照", "projects": [], "sources": [], "records": [], "cleaning": {}, "observations": []}
+            sid = latest[0]
+        snap = con.execute("SELECT payload,created_at FROM snapshots WHERE id=%s", (sid,)).fetchone()
     payload = json.loads(snap["payload"])
     payload["id"], payload["created_at"] = sid, snap["created_at"]
     return payload

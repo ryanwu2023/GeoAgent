@@ -15,7 +15,7 @@ function load(file, dependencies = {}) {
 }
 const helpers = load("src/model_settings.ts");
 const {providerDraft, publicModelDraft, normalizeModelBaseUrl, canKeepModelKey, modelDraftError, initialModelSettings, modelSettingsReducer: reduce} = helpers;
-const {ModelSettingsForm} = load("src/ModelSettings.tsx", {"./model_settings": helpers});
+const {ModelSettingsForm} = load("src/ModelSettings.tsx", {"./model_settings": helpers, "./sessionFetch": load("src/sessionFetch.ts")});
 const config = {
   provider: "deepseek", base_url: "https://api.deepseek.com", model: "deepseek-flash",
   timeout_seconds: 90, api_key_configured: true, configured: true, source: "saved", protocol: "chat-completions",

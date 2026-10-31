@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import sqlite3
+from backend.database import connect
 import subprocess
 import sys
 import tempfile
@@ -77,10 +77,11 @@ def test_relative_week_uses_selected_snapshot_import_date():
 
 
 def test_workspace_counts_match_panel_scope_and_latest_reviews(monkeypatch):
-    connection = sqlite3.connect(":memory:")
-    connection.row_factory = sqlite3.Row
+    context = connect()
+    connection = context.__enter__()
+    connection.execute("DROP TABLE reviews")
     connection.execute("CREATE TABLE reviews(snapshot_id TEXT, record_id TEXT, version INTEGER, signal TEXT, created_at TEXT)")
-    connection.executemany("INSERT INTO reviews VALUES(?,?,?,?,?)", [
+    connection.cursor().executemany("INSERT INTO reviews VALUES(%s,%s,%s,%s,%s)", [
         ("snap", "a", 2, "easing", "2026-10-10T12:00:00Z"), ("snap", "a", 1, "sustain", "2026-10-09T12:00:00Z"),
         ("other", "b", 1, "easing", "2026-10-11T12:00:00Z"),
         ("snap", "e", 3, "sustain", "2026-10-12T12:00:00Z"),
@@ -134,7 +135,7 @@ def test_workspace_counts_match_panel_scope_and_latest_reviews(monkeypatch):
         assert computed["review_evidence"]["applied_records_count"] == 0
         assert computed["change_attribution"]["status"] == "not_established"
     finally:
-        connection.close()
+        context.__exit__(None, None, None)
 
 
 def auth_config(*, tools: set[str] | None = None) -> AuthConfig:
@@ -358,6 +359,9 @@ async def running_server(
 
 @pytest.mark.anyio
 async def test_official_mcp_client_can_initialize_list_and_call() -> None:
+    from backend.adapters import load_bundle
+    snapshot_id, _ = store.save_snapshot(load_bundle(store.ROOT / "examples/demo-data"))
+    store.set_working_snapshot_id(snapshot_id)
     async with running_server(tools="*") as base_url:
         async with httpx.AsyncClient(
             base_url=base_url,

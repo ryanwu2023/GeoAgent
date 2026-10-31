@@ -267,7 +267,7 @@ def discover(
                 errors.append({"channel": f"search:{keyword}", "error": f"{type(exc).__name__}: {str(exc)[:180]}"})
             page_counts[f"search:{keyword}"] = pages
     if not successful_channels:
-        raise RuntimeError("证券时报三个固定列表均不可用")
+        raise RuntimeError("证券时报三个固定列表均不可用：" + "; ".join(f"{item['channel']}: {item['error']}" for item in errors))
     return candidates, errors, page_counts
 
 

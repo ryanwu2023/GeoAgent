@@ -17,7 +17,7 @@ def save_translation(original, chinese, method='本地机器翻译（术语校�
     _translation_memory = None
     with db() as c:
         table(c)
-        c.execute('INSERT OR REPLACE INTO translations VALUES (?,?,?,?,?)',(digest(original),original,chinese,method,now()))
+        c.execute('INSERT INTO translations VALUES (%s,%s,%s,%s,%s) ON CONFLICT(hash) DO UPDATE SET original=excluded.original,chinese=excluded.chinese,method=excluded.method,created_at=excluded.created_at',(digest(original),original,chinese,method,now()))
 
 _translation_memory = None
 
@@ -380,6 +380,8 @@ def translation_running():
 
 def start_translation():
     global _worker, _worker_snapshot_id
+    if os.getenv('GEO_BACKGROUND_TASKS_ENABLED', 'true').lower() not in {'1', 'true', 'yes', 'on'}:
+        return
     # The workers currently consume the newest snapshot, not the user's older
     # selected context. Keep startup/import scheduling explicit about that.
     available = snapshots()

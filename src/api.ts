@@ -1,3 +1,4 @@
+import {sessionFetch as fetch} from "./sessionFetch";
 import type {MeetingDetail,MeetingListResponse,ToolTraceDetail} from "./types";
 
 export async function api<T>(path:string, body?:unknown, signal?:AbortSignal):Promise<T> {

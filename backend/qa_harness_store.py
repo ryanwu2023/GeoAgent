@@ -1,4 +1,4 @@
-"""SQLite persistence and redaction for local QA harness runs."""
+"""PostgreSQL persistence and redaction for local QA harness runs."""
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -100,7 +100,7 @@ class HarnessStore:
         payload = canonical(_redact(run.to_dict()))
         with db() as connection:
             connection.execute(
-                "INSERT INTO qa_runs VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO qa_runs VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                 (run_id, answer_id, scope.snapshot_id, scope.stable_hash(), run.phase.value,
                  run.status, timestamp, timestamp, payload),
             )
@@ -110,7 +110,7 @@ class HarnessStore:
         payload = canonical(_redact(asdict(event)))
         with db() as connection:
             connection.execute(
-                "INSERT OR REPLACE INTO qa_steps(run_id,sequence,created_at,payload) VALUES (?,?,?,?)",
+                "INSERT INTO qa_steps(run_id,sequence,created_at,payload) VALUES (%s,%s,%s,%s) ON CONFLICT(run_id,sequence) DO UPDATE SET created_at=EXCLUDED.created_at,payload=EXCLUDED.payload",
                 (run_id, event.sequence, now(), payload),
             )
 
@@ -119,8 +119,8 @@ class HarnessStore:
         payload = canonical(_redact(run.to_dict()))
         with db() as connection:
             cursor = connection.execute(
-                """UPDATE qa_runs SET answer_id=?,snapshot_id=?,scope_hash=?,phase=?,status=?,
-                   updated_at=?,payload=? WHERE run_id=?""",
+                """UPDATE qa_runs SET answer_id=%s,snapshot_id=%s,scope_hash=%s,phase=%s,status=%s,
+                   updated_at=%s,payload=%s WHERE run_id=%s""",
                 (run.answer_id, run.scope.snapshot_id, run.scope.stable_hash(), run.phase.value,
                  run.status, run.updated_at, payload, run.run_id),
             )
@@ -135,7 +135,7 @@ class HarnessStore:
         raw = canonical(safe_payload)
         with db() as connection:
             connection.execute(
-                "INSERT INTO qa_artifacts VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT INTO qa_artifacts VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
                 (artifact_id, run_id, call_id, now(), len(raw.encode("utf-8")), int(token_estimate),
                  canonical(_redact(preview)), raw),
             )
@@ -149,7 +149,7 @@ class HarnessStore:
         ids = list(dict.fromkeys(str(item) for item in artifact_ids if item))
         if not ids:
             return {}
-        placeholders = ",".join("?" for _ in ids)
+        placeholders = ",".join("%s" for _ in ids)
         with db() as connection:
             rows = connection.execute(
                 f"SELECT artifact_id,payload FROM qa_artifacts WHERE artifact_id IN ({placeholders})",
@@ -159,7 +159,7 @@ class HarnessStore:
 
     def load_run(self, run_id: str) -> HarnessRun | None:
         with db() as connection:
-            row = connection.execute("SELECT payload FROM qa_runs WHERE run_id=?", (run_id,)).fetchone()
+            row = connection.execute("SELECT payload FROM qa_runs WHERE run_id=%s", (run_id,)).fetchone()
         return HarnessRun.from_dict(json.loads(row["payload"])) if row else None
 
     def find_resumable_run(self, run_id: str, scope: HarnessScope) -> HarnessRun | None:
@@ -173,7 +173,7 @@ class HarnessStore:
     def list_steps(self, run_id: str) -> list[dict[str, Any]]:
         with db() as connection:
             rows = connection.execute(
-                "SELECT sequence,created_at,payload FROM qa_steps WHERE run_id=? ORDER BY sequence", (run_id,)
+                "SELECT sequence,created_at,payload FROM qa_steps WHERE run_id=%s ORDER BY sequence", (run_id,)
             ).fetchall()
         return [{**json.loads(row["payload"]), "created_at": row["created_at"]} for row in rows]
 
@@ -198,7 +198,7 @@ class HarnessStore:
                     """SELECT artifact_id,run_id,call_id,created_at,byte_count,token_estimate,
                               preview,payload
                        FROM qa_artifacts
-                       WHERE artifact_id=? AND run_id=? AND call_id=?""",
+                       WHERE artifact_id=%s AND run_id=%s AND call_id=%s""",
                     (state.artifact_id, run_id, call_id),
                 ).fetchone()
             if row is not None:

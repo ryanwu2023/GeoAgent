@@ -28,6 +28,8 @@ from .qa_tool_cache import SharedToolCache
 from .qa_query import compile_query
 from .qa_readiness import evaluate_readiness, select_faceted_reads
 from .qa_metrics import select_metric_series
+from .qa_agent_settings import effective_settings
+from .qa_cost import QaCostLedger, QaCostLimitExceeded
 
 
 def _parse_json(content: str) -> dict[str, Any]:
@@ -147,13 +149,15 @@ def _system_prompt(topic: str = "all") -> str:
         '"citation_map":[{"anchor":"S1","evidence_ids":["已检索公开证据ID"]}],"gaps":["缺口"]}。'
         "先检查research_memory.readiness；只有ready=true时才能输出final。若ready=false，必须针对follow_up_tasks调用工具，"
         "不能用泛化文字绕过覆盖门禁。research_memory.ledger是主张级证据台账，最终关键判断应优先使用其中已读全文的主张。"
-        "复杂局势问题的最终回答必须按以下结构写作：一、结论摘要（先用一句加粗判断概括当前状态）；"
+        "复杂局势问题的最终回答必须按以下结构写作：一、结论摘要（首句必须围绕用户原始问题，"
+        "直接概括当前状态、最新变化和基本判断；不得用记录数、来源数、工具调用数、候选证据数或分类占比开头）；"
         "二、三至五条事件主线（优先使用最近日期，每条写明日期、来源、来源层级和证据ID）；"
         "三、量化指标与资产传导（用Markdown表格列最新值、前值或变动、观测日期，并解释传导边界）；"
         "四、反证与不确定性；五、未来一至两周可验证观察点。"
         "必须回答当前发生了什么、相较此前改变了什么、为什么这样判断。"
         "有更新证据时不得让较早报道主导‘最新进展’；计划、表态、报道和已发生行动必须分别措辞。"
         "报道数量不是概率，媒体转述不是官方确认，价格同步变化不能单独证明因果。"
+        "记录数、来源数、信号分类计数和工具调用过程只能放在口径与限制或分析过程，不得主导核心结论。"
         "华泰内部消息必须单列为内部补充，不得放进公开citation_map。不要展示隐藏思维链。"
         "不得把工具预算已用尽、重复结果被去重或本轮未继续检索写成‘数据库没有资料’。"
         "结论截至日期使用研究计划end或快照日期；不能把某条较旧证据的日期当作全局截至日期。"
@@ -169,6 +173,8 @@ def _system_prompt(topic: str = "all") -> str:
 
 
 def _model_failure(exc: BaseException) -> tuple[str, str, bool]:
+    if isinstance(exc, QaCostLimitExceeded):
+        return "cost_limit", "单次问答估算费用已达到配置上限", False
     response = getattr(exc, "response", None)
     status_code = getattr(response, "status_code", None)
     if status_code:
@@ -445,6 +451,28 @@ async def run_local_harness(
     run_id: str | None = None, answer_id: str = "", store: HarnessStore | None = None,
 ) -> dict[str, Any]:
     from .qa_agent import TOOL_GUIDE, TOOL_NAMES, normalize_final
+
+    runtime_settings = effective_settings(strict=False)
+    cost_ledger = QaCostLedger(
+        input_price_per_million=runtime_settings.get("input_price_per_million"),
+        output_price_per_million=runtime_settings.get("output_price_per_million"),
+        max_cost_cny=runtime_settings.get("max_cost_cny"),
+    )
+
+    async def budgeted_complete(messages, **kwargs):
+        input_tokens = estimate_tokens(messages)
+        reservation = await cost_ledger.reserve(input_tokens, 2200)
+        try:
+            content, model = await complete(messages, **kwargs)
+        except asyncio.CancelledError:
+            await cost_ledger.settle(reservation, output_tokens=0)
+            raise
+        except Exception:
+            # 服务失败时仍可能产生输入费用，按零输出结算，避免重试绕过费用上限。
+            await cost_ledger.settle(reservation, output_tokens=0)
+            raise
+        await cost_ledger.settle(reservation, output_tokens=estimate_tokens(content))
+        return content, model
 
     store = store or HarnessStore()
     run_id = run_id or f"qa-{uuid4().hex}"
@@ -935,20 +963,20 @@ async def run_local_harness(
             for task in run.agent_tasks.values()
             if task.status == "completed" and isinstance(task.memo, dict)
         }
-        specialist_budget = SpecialistBudget.from_environment()
+        specialist_budget = SpecialistBudget.from_settings(runtime_settings)
         multi_budget = plan.get("multi_agent", {}).get("budget", {})
         specialist_budget = SpecialistBudget(
-            max_parallel=min(specialist_budget.max_parallel, int(multi_budget.get("max_parallel", 3))),
+            max_parallel=specialist_budget.max_parallel,
             per_agent_tool_calls=min(specialist_budget.per_agent_tool_calls, int(multi_budget.get("per_task_tool_calls", 4))),
             total_tool_calls=min(specialist_budget.total_tool_calls, int(multi_budget.get("specialist_tool_calls", 12))),
             per_agent_seconds=specialist_budget.per_agent_seconds,
             per_agent_context_tokens=specialist_budget.per_agent_context_tokens,
             total_context_tokens=specialist_budget.total_context_tokens,
-            total_seconds=min(specialist_budget.total_seconds, float(multi_budget.get("wall_seconds", 90))),
+            total_seconds=specialist_budget.total_seconds,
         )
         specialist_result = await run_specialists(
             question=question, plan=plan, scope=asdict(scope),
-            execute_tools=specialist_execute, complete=complete,
+            execute_tools=specialist_execute, complete=budgeted_complete,
             budget=specialist_budget, on_status=specialist_status,
             existing_memos=prior_memos,
         )
@@ -1161,7 +1189,7 @@ async def run_local_harness(
             break
         messages = context.render_messages(stage="reviewing")
         try:
-            content, model = await complete(messages, model_role="reasoning")
+            content, model = await budgeted_complete(messages, model_role="reasoning")
             used_model = model or used_model
             try:
                 action = _parse_json(content)
@@ -1254,7 +1282,7 @@ async def run_local_harness(
                 "先按发布时间核对最近三天材料是否进入结论，再按结论摘要、事件主线、量化指标与资产传导、"
                 "反证与不确定性、未来观察点完成回答；不要用较早报道替代已有的更新材料。"
             )})
-            content, model = await complete(messages, model_role="reasoning")
+            content, model = await budgeted_complete(messages, model_role="reasoning")
             used_model = model or used_model
             try:
                 final_value = _parse_json(content)
@@ -1273,10 +1301,14 @@ async def run_local_harness(
             raise ValueError(last_error or "模型未生成最终回答")
         if isinstance(final_value, dict) and isinstance(final_value.get("answer_markdown"), str):
             final_value = dict(final_value)
-            metric_block = context.memory.get("metric_block")
-            block_metrics = metric_block.get("metrics", []) if isinstance(metric_block, dict) else []
+            # The answer table must use the same latest-vs-previous-period
+            # semantics as the quantitative indicator page.  metric_block is
+            # a window summary and may carry first/last values; using it here
+            # previously rewrote "previous" into the window start and then
+            # failed the numeric validator.  Tool receipts are the canonical
+            # current/previous/delta/pct ledger.
             final_value["answer_markdown"] = _replace_model_metric_table(
-                final_value["answer_markdown"], block_metrics or context.memory.get("metrics", []),
+                final_value["answer_markdown"], _fallback_metrics(context),
             )
         final = finalize_validated(
             draft=final_value,
@@ -1315,6 +1347,7 @@ async def run_local_harness(
             "attempts_used": run.tool_attempts_used,
             "max_total_attempts": run.budget.max_total_tool_attempts,
         },
+        "cost_estimate": cost_ledger.snapshot(),
     }
     run.model = used_model
     run.research_memory = {**context.research_memory(), "final_outcome": {

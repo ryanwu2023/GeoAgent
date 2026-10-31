@@ -32,11 +32,9 @@ def _report_item(report_path: Path, collector_id: str) -> dict[str, Any] | None:
     return next((item for item in results if isinstance(item, dict) and str(item.get("id")) == collector_id), None)
 
 
-def _event_item(ledger_path: Path, run_id: str, collector_id: str) -> dict[str, Any] | None:
-    if not ledger_path.is_file():
-        return None
+def _event_item(run_id: str, collector_id: str) -> dict[str, Any] | None:
     try:
-        events = CollectorLedger(ledger_path).events(run_id, limit=500)
+        events = CollectorLedger().events(run_id, limit=500)
     except (OSError, ValueError):
         return None
     for event in reversed(events):
@@ -77,7 +75,7 @@ def read_log_tail(
     item = _report_item(report_path, collector_id) if report_path.is_file() else None
     source = "results-tail"
     if item is None:
-        item = _event_item(Path(runs_root) / "ledger.sqlite3", run_id, collector_id)
+        item = _event_item(run_id, collector_id)
         source = "ledger-event"
     content = item.get(f"{stream}_tail") if item else None
     if not isinstance(content, str):

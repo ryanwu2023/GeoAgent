@@ -1,5 +1,7 @@
+import {sessionFetch as fetch} from "./sessionFetch";
 import { useEffect, useState } from "react";
 import ModelSettings from "./ModelSettings";
+import AgentSettings from "./AgentSettings";
 
 type Config = {
   origin: string;
@@ -10,10 +12,11 @@ type Config = {
   app_key_configured: boolean;
 };
 type Key = { id: string; label: string; created_at: string; revoked_at: string | null };
-type Section = "embed" | "model" | "mcp";
+type Section = "embed" | "model" | "agent" | "mcp";
 const sections: { id: Section; title: string }[] = [
   { id: "embed", title: "PiChat 嵌入连接" },
   { id: "model", title: "后台模型（翻译/摘要）" },
+  { id: "agent", title: "智能问答 Agent" },
   { id: "mcp", title: "GeoAgent 对外 MCP" },
 ];
 
@@ -53,7 +56,7 @@ export default function IntegrationSettings({
 }: {
   onClose: () => void;
   onSaved: () => void;
-  initialSection?: "embed" | "model";
+  initialSection?: Section;
 }) {
   const [section, setSection] = useState<Section>(initialSection);
   const [config, setConfig] = useState<Config | null>(null);
@@ -113,7 +116,7 @@ export default function IntegrationSettings({
         <h2>连接与 MCP 配置</h2>
         <button onClick={onClose} aria-label="关闭配置">×</button>
       </header>
-      <p>三类连接各自独立：右侧问答的嵌入身份、GeoAgent 后台模型、供外部 Agent 读取的 MCP。</p>
+      <p>四类配置各自独立：右侧问答的嵌入身份、GeoAgent 后台模型、本地问答 Agent 运行预算、供外部 Agent 读取的 MCP。</p>
       <div className="mcp-tabs" role="tablist" aria-label="连接类型">
         {sections.map((item, index) => <button
           key={item.id}
@@ -176,6 +179,10 @@ export default function IntegrationSettings({
 
       {section === "model" ? <div id="integration-section-model" role="tabpanel" aria-labelledby="integration-tab-model">
         <ModelSettings onSaved={onSaved}/>
+      </div> : null}
+
+      {section === "agent" ? <div id="integration-section-agent" role="tabpanel" aria-labelledby="integration-tab-agent">
+        <AgentSettings onSaved={onSaved}/>
       </div> : null}
 
       {section === "mcp" ? <div id="integration-section-mcp" role="tabpanel" aria-labelledby="integration-tab-mcp">

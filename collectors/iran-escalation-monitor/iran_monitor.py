@@ -55,6 +55,8 @@
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import argparse
 import gzip
 import hashlib
@@ -572,6 +574,8 @@ def proxy_candidates():
         u = env.get(k)
         if isinstance(u, str) and u.startswith("http") and u not in out:
             out.append(u)
+    if os.getenv("GEO_COLLECTOR_MANAGED") == "true" and out:
+        return out + [None]
     for port in (7897, 7890, 10809, 1080, 8080, 8888, 4780, 2080, 20171, 33210):
         u = "http://127.0.0.1:%d" % port
         if u not in out:
@@ -634,6 +638,11 @@ def live_proxies():
     now = time.time()
     if _EGRESS_CACHE["ok"] and now - _EGRESS_CACHE["at"] < 600:
         return list(_EGRESS_CACHE["ok"])
+    if os.getenv("GEO_COLLECTOR_MANAGED") == "true":
+        # Server deployment already supplies a reviewed egress endpoint. Do not
+        # repeatedly probe unrelated localhost ports/Yahoo/Google per source.
+        configured = [u for u in proxy_candidates() if u is None or u in urllib.request.getproxies().values()]
+        return configured or [None]
     scored = []
     for u in proxy_candidates():
         if not _proxy_alive(u):
@@ -699,6 +708,9 @@ def _opener(tls_verify: bool = True):
 def http_get(url: str, *, json_mode: bool = False, tls_verify: bool = True,
              timeout: int = 30, retries: int = 3,
              backoff: float = 2.0) -> Dict[str, Any]:
+    if os.getenv("GEO_COLLECTOR_MANAGED") == "true":
+        timeout = min(timeout, 20)
+        retries = 1
     last = ""
     last_info: Optional[Dict[str, Any]] = None
     # ★ 出口轮换：403 在很多站上是「这个出口 IP 被风控」，不是「源拒绝了我们」。
@@ -4017,7 +4029,7 @@ def main() -> int:
 
     all_recs: List[Dict[str, Any]] = []
     statuses: List[Dict[str, Any]] = []
-    for i, src in enumerate(sources):
+    def collect_one(src):
         try:
             recs, st = collect_source(src, quiet=args.quiet, from_file=args.from_file)
         except Exception as e:  # noqa: BLE001
@@ -4030,15 +4042,20 @@ def main() -> int:
                             "note": f"未捕获异常: {type(e).__name__}: {e}",
                             "url_used": src.get("url"), "tls": "verified",
                             "attempts": 0}
-        all_recs.extend(recs)
-        statuses.append(st)
-        icon = STATUS_ICON.get(st["state"], "❓")
-        log(f"  {icon} [{st['party']:5}] {st['id']:22} status={st['http_status']} "
-            f"entries={st['entries']:3} 命中={len(recs):3} "
-            f"最新={(st['latest'] or '')[:10] or '—'}"
-            + (f"  ⚠️ {st['note'][:60]}" if st["note"] and st["state"].startswith("fail") else ""))
-        if i < len(sources) - 1:
-            time.sleep(float(REQ.get("delay_between_sources_sec", 1.2)))
+        return recs, st
+
+    workers = 3 if os.getenv("GEO_COLLECTOR_MANAGED") == "true" else 1
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for i, (recs, st) in enumerate(pool.map(collect_one, sources)):
+            all_recs.extend(recs)
+            statuses.append(st)
+            icon = STATUS_ICON.get(st["state"], "❓")
+            log(f"  {icon} [{st['party']:5}] {st['id']:22} status={st['http_status']} "
+                f"entries={st['entries']:3} 命中={len(recs):3} "
+                f"最新={(st['latest'] or '')[:10] or '—'}"
+                + (f"  ⚠️ {st['note'][:60]}" if st["note"] and st["state"].startswith("fail") else ""))
+            if workers == 1 and i < len(sources) - 1:
+                time.sleep(float(REQ.get("delay_between_sources_sec", 1.2)))
 
     # 去重（同一 id 只留一条）
     dedup: Dict[str, Dict[str, Any]] = {}

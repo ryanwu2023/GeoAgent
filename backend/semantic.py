@@ -69,7 +69,7 @@ def interval_change(metric, start, end):
 
 def review_index(snapshot_id):
     with store.db() as conn:
-        rows = conn.execute('SELECT * FROM reviews WHERE snapshot_id=? ORDER BY version', (snapshot_id,)).fetchall()
+        rows = conn.execute('SELECT * FROM reviews WHERE snapshot_id=%s ORDER BY version', (snapshot_id,)).fetchall()
     return {row['record_id']: dict(row) for row in rows}
 
 

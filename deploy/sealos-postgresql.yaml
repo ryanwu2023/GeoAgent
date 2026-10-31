@@ -1,0 +1,128 @@
+# GeoAgent only; credentials are generated separately into geoagent-postgresql.
+# Image pinned to the verified PostgreSQL 17.11 release.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: geoagent-postgresql-data
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: openebs-lvmpv
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: geoagent-postgresql-backups
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: openebs-lvmpv
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: geoagent-postgresql
+spec:
+  type: ClusterIP
+  selector:
+    app: geoagent-postgresql
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: geoagent-postgresql
+spec:
+  serviceName: geoagent-postgresql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: geoagent-postgresql
+  template:
+    metadata:
+      labels:
+        app: geoagent-postgresql
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      imagePullSecrets:
+        - name: stocklinkes-mcp
+      containers:
+        - name: postgres
+          image: crpi-pkfixdfs4f7qepax.cn-shanghai.personal.cr.aliyuncs.com/stocklink-base/geoagent@sha256:2cd2c0f809604aaeff6f0ec8f40aecbd025613107561015c69369a1a7f1d3416
+          args:
+            - postgres
+            - -c
+            - shared_buffers=1GB
+            - -c
+            - effective_cache_size=3GB
+            - -c
+            - work_mem=8MB
+            - -c
+            - maintenance_work_mem=256MB
+            - -c
+            - max_connections=60
+            - -c
+            - max_wal_size=2GB
+            - -c
+            - min_wal_size=256MB
+            - -c
+            - idle_in_transaction_session_timeout=60s
+            - -c
+            - log_min_duration_statement=2000
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: geoagent-postgresql
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_INITDB_ARGS
+              value: --auth-host=scram-sha-256 --auth-local=trust
+          ports:
+            - name: postgres
+              containerPort: 5432
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+              ephemeral-storage: 1Gi
+          startupProbe:
+            exec:
+              command: [pg_isready, -U, postgres]
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, postgres]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: [pg_isready, -U, postgres]
+            periodSeconds: 20
+            failureThreshold: 6
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: geoagent-postgresql-data
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi

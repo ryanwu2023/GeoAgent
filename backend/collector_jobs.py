@@ -32,13 +32,10 @@ def recover_interrupted_runs(*, report_root: Path | None = None, finished_at: st
     collector owns the pipeline. A live owner leaves the ledger untouched.
     """
     root = report_root or data_dir() / "collection-runs"
-    ledger_path = root / "ledger.sqlite3"
-    if not ledger_path.is_file():
-        return []
     try:
         with service_lock(root / ".collector-service.lock"):
             timestamp = finished_at or datetime.now(timezone.utc).isoformat()
-            return CollectorLedger(ledger_path).recover_unfinished(finished_at=timestamp)
+            return CollectorLedger().recover_unfinished(finished_at=timestamp)
     except RuntimeError:
         return []
 

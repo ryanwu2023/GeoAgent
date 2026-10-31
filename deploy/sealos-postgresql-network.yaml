@@ -1,0 +1,49 @@
+# The namespace has a default-deny policy. Grant only GeoAgent database traffic.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: geoagent-postgresql-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: geoagent-postgresql
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [geoagent, geoagent-pg-rehearsal, geoagent-pg-migration, geoagent-postgresql-backup]
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: geoagent-postgresql-client-egress
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [geoagent, geoagent-pg-rehearsal, geoagent-pg-migration, geoagent-postgresql-backup]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: geoagent-postgresql
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

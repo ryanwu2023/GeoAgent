@@ -51,8 +51,12 @@ def _archive_source_artifacts(report_dir: Path, results: list[dict], data_root: 
         artifact_dir.mkdir(parents=True, exist_ok=True)
         copied: list[str] = []
         for filename in source_files:
+            diagnostic = item.get("source_diagnostics", {}).get(filename)
             source = live_output / filename
-            if source.is_file():
+            if diagnostic is not None:
+                _write_json(artifact_dir / filename, diagnostic)
+                copied.append(filename)
+            elif item.get("published") is True and source.is_file():
                 shutil.copy2(source, artifact_dir / filename)
                 copied.append(filename)
         _write_json(
@@ -90,7 +94,6 @@ def execute_once(
     runner: Callable[..., list[dict]] = run_collectors,
     registry: list[dict] | None = None,
     now: datetime | None = None,
-    ledger_path: Path | None = None,
     lock_path: Path | None = None,
     retry_attempts: int = 2,
     retry_backoff_sec: float = 1.0,
@@ -105,7 +108,6 @@ def execute_once(
     started = now or utc_now()
     report_root = report_root or project_root() / "data" / "collection-runs"
     report_root.mkdir(parents=True, exist_ok=True)
-    ledger_path = ledger_path or report_root / "ledger.sqlite3"
     lock_path = lock_path or report_root / ".collector-service.lock"
     with service_lock(lock_path):
         report_name = run_id_override or run_id(started)
@@ -130,7 +132,7 @@ def execute_once(
             "snapshot_id": None,
         }
         _write_json(state_path, state)
-        ledger = CollectorLedger(ledger_path)
+        ledger = CollectorLedger()
         ledger.recover_unfinished(finished_at=state["started_at"], exclude_run_id=report_dir.name)
         ledger.run_started(
             run_id=report_dir.name,
@@ -349,7 +351,6 @@ def service_loop(
     runner: Callable[..., list[dict]] = run_collectors,
     registry: list[dict] | None = None,
     sleep: Callable[[float], None] = time.sleep,
-    ledger_path: Path | None = None,
     lock_path: Path | None = None,
     retry_attempts: int = 2,
     retry_backoff_sec: float = 1.0,
@@ -365,7 +366,6 @@ def service_loop(
             report_root=report_root,
             runner=runner,
             registry=registry,
-            ledger_path=ledger_path,
             lock_path=lock_path,
             retry_attempts=retry_attempts,
             retry_backoff_sec=retry_backoff_sec,
@@ -386,7 +386,6 @@ def main() -> int:
     parser.add_argument("--topic", help="只运行指定主题")
     parser.add_argument("--timeout", type=int, default=900, help="单采集器超时秒数")
     parser.add_argument("--report-root", type=Path, help="运行报告根目录")
-    parser.add_argument("--ledger-path", type=Path, help="SQLite 账本路径")
     parser.add_argument("--lock-path", type=Path, help="服务锁路径")
     parser.add_argument("--retry-attempts", type=int, default=2, help="单采集器最大尝试次数")
     parser.add_argument("--retry-backoff-sec", type=float, default=1.0, help="重试指数退避初始秒数")
@@ -401,7 +400,6 @@ def main() -> int:
         timeout=args.timeout,
         once=args.once,
         report_root=args.report_root,
-        ledger_path=args.ledger_path,
         lock_path=args.lock_path,
         retry_attempts=args.retry_attempts,
         retry_backoff_sec=args.retry_backoff_sec,

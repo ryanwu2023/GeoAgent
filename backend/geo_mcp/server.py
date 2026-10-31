@@ -2,7 +2,7 @@
 
 The MCP business projections remain separate from the REST API. It exposes
 small, read-only projections over immutable snapshots and never exposes the
-SQLite database, collector directory, or the existing REST routes.
+PostgreSQL database, collector directory, or the existing REST routes.
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ def _workspace_counts(snapshot: dict[str, Any], topic: str, dimension: str, star
     records = research.filtered_records(snapshot, topic, dimension, start, end)
     with store.db() as connection:
         rows = connection.execute(
-            "SELECT record_id, signal, version, created_at FROM reviews WHERE snapshot_id=? ORDER BY version",
+            "SELECT record_id, signal, version, created_at FROM reviews WHERE snapshot_id=%s ORDER BY version",
             (snapshot["id"],),
         ).fetchall()
     latest_reviews = {row["record_id"]: row for row in rows}
@@ -300,7 +300,7 @@ def _context_principal(ctx: Context) -> Any:
 
 
 async def _run_tool(*, ctx: Context, tool: str, handler: Callable) -> str:
-    # SQLite reads, JSON snapshot decoding and research projections are sync.
+    # PostgreSQL reads, JSON snapshot decoding and research projections are sync.
     # Keep them off the ASGI loop so health/identity/MCP requests can progress.
     return await run_in_threadpool(_execute_tool, ctx=ctx, tool=tool, handler=handler)
 
@@ -397,6 +397,8 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False) if project_transport else None,
     )
     server._geo_auth_config = auth_config  # type: ignore[attr-defined]
+    from .sync import register_sync_tools
+    register_sync_tools(server, _run_tool)
 
     @server.custom_route("/healthz", methods=["GET"], include_in_schema=False)
     async def healthz(_: Request) -> JSONResponse:
@@ -803,7 +805,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             with store.db() as connection:
                 if snapshot_id:
                     rows = connection.execute(
-                        "SELECT id,snapshot_id,created_at,mode,markdown FROM briefs WHERE snapshot_id=? ORDER BY created_at DESC",
+                        "SELECT id,snapshot_id,created_at,mode,markdown FROM briefs WHERE snapshot_id=%s ORDER BY created_at DESC",
                         (snapshot_id,),
                     ).fetchall()
                 else:
@@ -836,7 +838,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
                 raise MCPError("GEO_LIMIT_EXCEEDED", f"max_bytes 必须在 1 到 {MAX_BRIEF_BYTES} 之间", {"maximum": MAX_BRIEF_BYTES})
             with store.db() as connection:
                 row = connection.execute(
-                    "SELECT id,snapshot_id,created_at,mode,markdown FROM briefs WHERE id=?",
+                    "SELECT id,snapshot_id,created_at,mode,markdown FROM briefs WHERE id=%s",
                     (brief_id,),
                 ).fetchone()
             if row is None:
@@ -1081,7 +1083,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             briefs = []
             for bid in (before, after):
                 with store.db() as conn:
-                    row = conn.execute('SELECT id,snapshot_id,created_at,mode,markdown FROM briefs WHERE id=?', (bid,)).fetchone()
+                    row = conn.execute('SELECT id,snapshot_id,created_at,mode,markdown FROM briefs WHERE id=%s', (bid,)).fetchone()
                 if row is None:
                     raise MCPError('GEO_BRIEF_NOT_FOUND', '研究简报不存在', {'brief_id': bid})
                 scoped_snapshot(principal, 'geo_brief_compare', row['snapshot_id'])
