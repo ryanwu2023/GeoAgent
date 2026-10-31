@@ -13,6 +13,8 @@ COLLECTOR = ROOT / "collectors" / "geopolitical-source-monitor"
 
 def load_module(name: str):
     path = COLLECTOR / f"{name}.py"
+    if str(COLLECTOR) not in sys.path:
+        sys.path.insert(0, str(COLLECTOR))
     spec = importlib.util.spec_from_file_location(f"geo_source_{name}", path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -178,4 +180,97 @@ def test_discovery_and_article_parser_distinguish_fulltext_and_restricted_pages(
     assert restricted.content_access == "restricted_metadata_only"
     empty = web.parse_public_article("<html><body></body></html>", "https://example.com/empty", source)
     assert empty.error_type == "parse_error"
+
+
+class FakeClient:
+    def __init__(self, responses):
+        self.responses = responses
+        self.calls = []
+
+    def fetch(self, url, source):
+        self.calls.append((url, source["id"]))
+        return self.responses[url]
+
+
+def test_collection_isolates_source_failures_and_writes_auditable_outputs(tmp_path):
+    filtering = load_module("filtering")
+    web = load_module("web")
+    monitor = load_module("geopolitical_source_monitor")
+    config = filtering.load_config(COLLECTOR / "config.json")
+    config["request"].update({"rate_limit_seconds": 0, "max_candidates_per_source": 10})
+    config["sources"] = [
+        {
+            "id": "full", "name_zh": "官方全文", "publisher": "Official", "tier": "T1", "language": "en",
+            "entry_urls": ["https://full.example/list"], "allowed_hosts": ["full.example"],
+            "discovery_mode": "listing", "content_policy": "public_fulltext",
+        },
+        {
+            "id": "meta", "name_zh": "受限媒体", "publisher": "Media", "tier": "T3", "language": "en",
+            "entry_urls": ["https://meta.example/list"], "allowed_hosts": ["meta.example"],
+            "discovery_mode": "public_metadata", "content_policy": "metadata_only",
+        },
+        {
+            "id": "failed", "name_zh": "失败来源", "publisher": "Failed", "tier": "T1", "language": "en",
+            "entry_urls": ["https://failed.example/list"], "allowed_hosts": ["failed.example"],
+            "discovery_mode": "listing", "content_policy": "public_fulltext",
+        },
+    ]
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+    listing_full = '<a href="/story?utm_source=list">Iran missile strike raises regional conflict risk</a>'
+    listing_meta = '<a href="/item">Russia sanctions restrict oil exports during Ukraine war</a>'
+    article = """
+      <html><head><meta property="og:title" content="Iran missile strike raises regional conflict risk">
+      <meta name="description" content="An official statement reports a new military operation.">
+      <meta property="article:published_time" content="2026-10-31T08:00:00Z"></head>
+      <body><article><p>Officials said the missile strike formed part of a wider military operation near Iran and the Persian Gulf.</p>
+      <p>The statement records the issuing authority's account and does not provide independent verification of damage.</p></article></body></html>
+    """
+    responses = {
+        "https://full.example/list": web.FetchResult(200, listing_full, "https://full.example/list", {}),
+        "https://full.example/story": web.FetchResult(200, article, "https://full.example/story", {}),
+        "https://meta.example/list": web.FetchResult(200, listing_meta, "https://meta.example/list", {}),
+        "https://failed.example/list": web.FetchResult(403, "", "https://failed.example/list", {}, "http_403"),
+    }
+    output = tmp_path / "output"
+    report = monitor.run_collection(config_path, output, FakeClient(responses))
+    assert report["collection_status"] == "partial"
+    assert report["records"] == 2
+    assert report["sources"]["full"]["state"] == "ok"
+    assert report["sources"]["meta"]["state"] == "ok"
+    assert report["sources"]["failed"]["state"] == "failed"
+    payload = json.loads((output / "geo-v6.json").read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "geo.v6/1"
+    assert {item["content_access"] for item in payload["records"]} == {"public_fulltext", "public_metadata"}
+    assert all(item["topics"] for item in payload["records"])
+    assert all("taiwan" not in json.dumps(item).lower() for item in payload["records"])
+    source_status = json.loads((output / "_source_status.json").read_text(encoding="utf-8"))
+    assert source_status["collection_status"] == "partial"
+    assert len(source_status["sources"]) == 3
+    assert list((output / "raw").rglob("*.html"))
+
+
+def test_merge_records_revalidates_history_and_merges_aliases():
+    filtering = load_module("filtering")
+    monitor = load_module("geopolitical_source_monitor")
+    config = filtering.load_config(COLLECTOR / "config.json")
+    polluted = {
+        "id": "old-sport", "title": "Iran wins volleyball championship", "summary": "Sports victory",
+        "link": "https://old.example/sport", "published": "2026-10-31", "source_id": "old", "topics": ["usiran"],
+        "dimensions": {"usiran": "regional"},
+    }
+    first = {
+        "id": "a", "title": "Russia launches missile strike on Ukraine", "summary": "Civilian casualties reported",
+        "link": "https://one.example/story?utm_source=x", "published": "2026-10-31T01:00:00Z", "source_id": "wire-a",
+        "topics": ["ukraine"], "dimensions": {"ukraine": "frontline"}, "content_access": "public_summary",
+    }
+    mirror = {
+        **first, "id": "b", "link": "https://two.example/mirror", "source_id": "wire-b", "content_access": "public_fulltext",
+        "summary": "Civilian casualties reported after the missile strike; independent verification remains pending.",
+    }
+    merged = monitor.merge_records([polluted], [first, mirror], config)
+    assert len(merged) == 1
+    assert merged[0]["content_access"] == "public_fulltext"
+    assert set(merged[0]["aliases"]) == {"https://one.example/story", "https://two.example/mirror"}
+    assert {item["source_id"] for item in merged[0]["source_mentions"]} == {"wire-a", "wire-b"}
 
