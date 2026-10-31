@@ -1,0 +1,15 @@
+{
+  "version": "qa-benchmark-manifest/v1",
+  "description": "GeoAgent 本地智能问答固定回归集。固定题目与评分规则；快照冻结后再填入逐条审阅声明。",
+  "config_file": "config/qa-benchmark.json",
+  "gold_file": "tests/fixtures/qa_gold.json",
+  "claims_file": "tests/fixtures/qa_claims.json",
+  "variants": ["legacy", "graph", "graph-no-replan", "graph-single-worker"],
+  "runs_per_variant": 3,
+  "deadline_seconds": 300,
+  "release_gate": {
+    "min_average_gain": 8,
+    "category_must_not_decline": true,
+    "hard_failures_must_be_zero": true
+  }
+}

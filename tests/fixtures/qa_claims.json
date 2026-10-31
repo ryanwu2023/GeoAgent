@@ -1,0 +1,34 @@
+{
+  "__meta__": {
+    "version": "qa-claims/v1",
+    "review_status": "待冻结快照后逐条审阅",
+    "description": "这里仅保存人工审阅后的核心声明与允许引用。当前未冻结基准快照，因此不伪造时点性事实；先启用跨快照稳定的禁止断言。"
+  },
+  "usiran-latest": {
+    "forbidden_claims": [
+      {"id": "usiran-war-approved", "all_terms": ["正式批准", "全面战争"]},
+      {"id": "usiran-strike-confirmed-without-boundary", "all_terms": ["打击计划", "已经执行"]}
+    ]
+  },
+  "hormuz": {
+    "forbidden_claims": [
+      {"id": "hormuz-zero-means-blockade", "all_terms": ["计数为零", "已经封锁"]},
+      {"id": "hormuz-low-count-means-closure", "all_terms": ["艘次较低", "已经断航"]}
+    ]
+  },
+  "post-election-strike": {
+    "forbidden_claims": [
+      {"id": "plan-equals-action", "all_terms": ["筹划", "行动已经发生"]}
+    ]
+  },
+  "ukraine-talks-execution": {
+    "forbidden_claims": [
+      {"id": "talks-equals-ceasefire", "all_terms": ["启动会谈", "停火已经执行"]}
+    ]
+  },
+  "internal-public-cross-check": {
+    "forbidden_claims": [
+      {"id": "internal-is-official", "all_terms": ["内部消息", "官方确认"]}
+    ]
+  }
+}

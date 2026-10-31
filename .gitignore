@@ -13,6 +13,7 @@ data/
 .superpowers/
 .gstack/
 .tmp*
+artifacts/qa-baseline/
 collectors/*/output/
 collectors/**/__pycache__/
 collectors/**/*.pyc

@@ -1,4 +1,4 @@
-from scripts.evaluate_qa import evaluate_thresholds, score
+from scripts.evaluate_qa import evaluate_suite, evaluate_thresholds, load_benchmark_inputs, score
 
 
 def _answer(text, *, citations=None, citation_map=None, as_of="2026-10-26T02:00:00Z"):
@@ -114,3 +114,113 @@ def test_threshold_policy_returns_executable_failure_reasons():
     assert verdict["passed"] is False
     assert "quality_score:69.0<70.0" in verdict["failures"]
     assert "citation_support_rate:0.5<0.8" in verdict["failures"]
+
+
+def test_explicit_answer_topic_mismatch_is_hard_failure():
+    answer = _answer("## 结论\n美伊谈判仍待核验。")
+    answer["topic"] = "ukraine"
+    result = score(answer, {"topic": "usiran", "expected_facets": []}, {
+        **GOLD, "fact_groups": [], "requires_assets": False, "requires_metrics": False,
+    })
+    assert "topic_mismatch" in result["hard_failures"]
+
+
+def test_forbidden_core_claim_is_hard_failure():
+    result = score(
+        _answer("## 结论\n美国已经正式批准对伊朗发动全面战争。"),
+        {"topic": "usiran", "expected_facets": []},
+        {
+            **GOLD,
+            "fact_groups": [],
+            "forbidden_claims": [{"id": "f1", "all_terms": ["正式批准", "全面战争"]}],
+            "requires_assets": False,
+            "requires_metrics": False,
+        },
+    )
+    assert "forbidden_core_claim:f1" in result["hard_failures"]
+
+
+def test_claim_support_requires_allowed_evidence_not_only_existing_id():
+    citations = [
+        {"id": "r1", "published_at": "2026-10-25T01:00:00Z", "topics": ["usiran"]},
+        {"id": "r2", "published_at": "2026-10-25T02:00:00Z", "topics": ["usiran"]},
+    ]
+    result = score(
+        _answer(
+            "## 结论\n谈判尚未形成正式协议。[S1]",
+            citations=citations,
+            citation_map=[{"anchor": "S1", "evidence_ids": ["r2"]}],
+        ),
+        {"topic": "usiran", "expected_facets": []},
+        {
+            **GOLD,
+            "fact_groups": [],
+            "required_claims": [{
+                "id": "c1", "all_terms": ["谈判", "尚未", "正式协议"],
+                "evidence_ids": ["r1"], "review_status": "reviewed",
+            }],
+            "requires_assets": False,
+            "requires_metrics": False,
+        },
+    )
+    assert result["claim_support_rate"] == 0.0
+    assert "unsupported_required_claim:c1" in result["hard_failures"]
+
+
+def test_syndicated_citations_do_not_count_as_independent_confirmation():
+    citations = [
+        {"id": "r1", "origin_id": "wire-a", "topics": ["usiran"]},
+        {"id": "r2", "origin_id": "wire-a", "topics": ["usiran"]},
+    ]
+    result = score(
+        _answer(
+            "## 结论\n设施受损已获多方确认。[S1]",
+            citations=citations,
+            citation_map=[{"anchor": "S1", "evidence_ids": ["r1", "r2"]}],
+        ),
+        {"topic": "usiran", "expected_facets": []},
+        {
+            **GOLD,
+            "fact_groups": [],
+            "required_claims": [{
+                "id": "c2", "all_terms": ["设施受损", "多方确认"],
+                "evidence_ids": ["r1", "r2"], "min_independent_sources": 2,
+                "review_status": "reviewed",
+            }],
+            "requires_assets": False,
+            "requires_metrics": False,
+        },
+    )
+    assert "insufficient_independent_sources:c2" in result["hard_failures"]
+
+
+def test_timeout_with_explicit_degraded_answer_is_not_fact_hard_failure():
+    answer = _answer("## 结论\n工具超时；当前只能确认谈判仍待核验，资料存在缺口。")
+    answer["run_status"] = "degraded"
+    answer["analysis_trace"] = [{"status": "degraded", "error": {"kind": "tool_timeout"}}]
+    result = score(answer, {"topic": "usiran", "expected_facets": []}, {
+        **GOLD, "fact_groups": [], "requires_assets": False, "requires_metrics": False,
+    })
+    assert result["hard_failures"] == []
+
+
+def test_suite_gate_checks_average_and_each_category_without_dropping_failures():
+    current = [
+        {"id": "a", "category": "最新局势", "score": {"quality_score": 82, "hard_failures": []}},
+        {"id": "b", "category": "资产影响", "score": {"quality_score": 75, "hard_failures": []}},
+    ]
+    baseline = [
+        {"id": "a", "category": "最新局势", "score": {"quality_score": 75, "hard_failures": []}},
+        {"id": "b", "category": "资产影响", "score": {"quality_score": 76, "hard_failures": []}},
+    ]
+    verdict = evaluate_suite(current, baseline, {"min_average_gain": 5, "category_must_not_decline": True})
+    assert verdict["passed"] is False
+    assert "category_declined:资产影响" in verdict["failures"]
+
+
+def test_benchmark_manifest_dry_load_has_fixed_ids_categories_and_gold():
+    benchmark = load_benchmark_inputs(manifest_path="tests/fixtures/qa_benchmark_manifest.json")
+    assert benchmark["validation"]["passed"] is True
+    assert benchmark["validation"]["questions"] == 15
+    assert "最新局势" in benchmark["validation"]["categories"]
+    assert benchmark["validation"]["claims_review_status"] == "待冻结快照后逐条审阅"
