@@ -274,3 +274,25 @@ def test_merge_records_revalidates_history_and_merges_aliases():
     assert set(merged[0]["aliases"]) == {"https://one.example/story", "https://two.example/mirror"}
     assert {item["source_id"] for item in merged[0]["source_mentions"]} == {"wire-a", "wire-b"}
 
+
+def test_collector_is_registered_and_documented():
+    registry = json.loads((ROOT / "collectors" / "collectors.json").read_text(encoding="utf-8"))
+    matches = [item for item in registry["collectors"] if item["id"] == "geopolitical-source-monitor"]
+    assert len(matches) == 1
+    item = matches[0]
+    assert item == {
+        "id": "geopolitical-source-monitor",
+        "name_zh": "多源地缘新闻监测",
+        "topics": ["usiran", "ukraine"],
+        "entrypoint": "geopolitical_source_monitor.py",
+        "selftest_args": ["--selftest"],
+        "output_kind": "geo-v6",
+        "enabled": True,
+    }
+    assert (COLLECTOR / item["entrypoint"]).is_file()
+    assert (COLLECTOR / "run.bat").is_file()
+    readme = (COLLECTOR / "README.md").read_text(encoding="utf-8")
+    config = load_module("filtering").load_config(COLLECTOR / "config.json")
+    assert all(source["name_zh"] in readme for source in config["sources"])
+    assert "付费墙" in readme and "标题级线索" in readme
+

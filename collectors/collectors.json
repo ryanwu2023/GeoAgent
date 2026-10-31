@@ -94,6 +94,20 @@
       "enabled": true
     },
     {
+      "id": "geopolitical-source-monitor",
+      "name_zh": "多源地缘新闻监测",
+      "topics": [
+        "usiran",
+        "ukraine"
+      ],
+      "entrypoint": "geopolitical_source_monitor.py",
+      "selftest_args": [
+        "--selftest"
+      ],
+      "output_kind": "geo-v6",
+      "enabled": true
+    },
+    {
       "id": "iran-domestic-monitor",
       "name_zh": "伊朗内政监测",
       "topics": [
