@@ -226,7 +226,7 @@ class ContextManager:
                     "metric": {
                         key: metric.get(key) for key in (
                             "series", "name", "unit", "frequency", "freshness",
-                            "current", "scope", "boundary",
+                            "current", "previous", "delta", "pct", "scope", "boundary",
                         )
                     },
                     "history": [

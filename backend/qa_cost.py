@@ -33,6 +33,16 @@ class QaCostLedger:
         self._reservations: dict[str, CostReservation] = {}
         self._lock = asyncio.Lock()
 
+    def restore(self, snapshot: dict[str, object] | None) -> None:
+        """Restore settled usage after a resumable run; in-flight holds expire."""
+        value = snapshot if isinstance(snapshot, dict) else {}
+        estimated = value.get("estimated_cost_cny")
+        self._estimated = max(0.0, float(estimated or 0.0)) if self.can_estimate else 0.0
+        self._input_tokens = max(0, int(value.get("input_tokens") or 0))
+        self._output_tokens = max(0, int(value.get("output_tokens") or 0))
+        self._reserved = 0.0
+        self._reservations.clear()
+
     @property
     def can_estimate(self) -> bool:
         return self.input_price is not None and self.output_price is not None

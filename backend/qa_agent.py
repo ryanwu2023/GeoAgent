@@ -29,7 +29,7 @@ TOOL_NAMES = {
 
 TOOL_GUIDE = [
     {"name": "geo_workspace_summary", "purpose": "读取当前范围记录数、信号分布、来源数和重要指标概览", "arguments": {}},
-    {"name": "geo_evidence_search", "purpose": "混合检索证据摘要", "arguments": {"q": "检索词", "limit": "1-20", "source_tiers": "可选T1/T2/T3数组"}},
+    {"name": "geo_evidence_search", "purpose": "混合检索证据摘要", "arguments": {"q": "检索词", "limit": "1-20", "source_tiers": "可选T1/T2/T3数组", "start": "可选开始日期", "end": "可选结束日期"}},
     {"name": "geo_evidence_get", "purpose": "读取一条已检索证据的完整正文和来源信息", "arguments": {"record_id": "证据ID"}},
     {"name": "geo_metric_catalog", "purpose": "列出当前范围可用指标及最新观测", "arguments": {"limit": "1-20"}},
     {"name": "geo_metric_series", "purpose": "读取指定指标有界历史", "arguments": {"series": "指标series", "max_points": "2-50"}},
@@ -45,6 +45,24 @@ def _compact(value: Any, maximum: int = 9000) -> str:
     if len(text) <= maximum:
         return text
     return text[:maximum] + "…[结果已按上下文预算截断]"
+
+
+def _records_in_window(records: list[dict[str, Any]], start: str, end: str) -> list[dict[str, Any]]:
+    """Apply an optional publication-date sub-window inside the fixed run scope."""
+    lower, upper = str(start or "")[:10], str(end or "")[:10]
+    if not lower and not upper:
+        return records
+    selected = []
+    for record in records:
+        stamp = str(record.get("published_at") or record.get("event_at") or "")[:10]
+        if not stamp:
+            continue
+        if lower and stamp < lower:
+            continue
+        if upper and stamp > upper:
+            continue
+        selected.append(record)
+    return selected
 
 
 def _parse_json(content: str) -> dict[str, Any]:
@@ -405,7 +423,10 @@ class LocalGeoTools:
             # IDs, then enforce this call's public limit. Otherwise a useful
             # follow-up could incorrectly report zero merely because its top
             # ranked page had already been seen.
-            overfetch = min(len(self.records), max(limit, limit + retrieved_count))
+            search_start = str(args.get("start") or self.start)
+            search_end = str(args.get("end") or self.end)
+            scoped_records = _records_in_window(self.records, search_start, search_end)
+            overfetch = min(len(scoped_records), max(limit, limit + retrieved_count))
             query = str(args.get("q") or "")
             facet = (
                 "market" if re.search(r"原油|黄金|美债|汇率|市场|资产|oil|gold|market", query, re.I)
@@ -415,12 +436,12 @@ class LocalGeoTools:
                 else "event"
             )
             query_spec = FacetQuery.for_topic(
-                self.topic, query, facet=facet, start=self.start, end=self.end,
+                self.topic, query, facet=facet, start=search_start, end=search_end,
                 lane="any" if facet == "market" else "core",
                 expected_role="counterevidence" if facet == "counterevidence" else "support",
             )
             matches = hybrid_retrieve(
-                self.records, str(args.get("q") or ""), limit=overfetch,
+                scoped_records, str(args.get("q") or ""), limit=overfetch,
                 source_tiers=source_tiers, query_spec=query_spec,
             )
             matched_total = len(matches)
@@ -441,6 +462,7 @@ class LocalGeoTools:
                 remaining_after = max(0, self.budget["evidence"] - len(self.retrieved_ids))
             result = {
                 "query": str(args.get("q") or ""),
+                "query_scope": {"start": search_start, "end": search_end},
                 "records": [
                     {**self._record_summary(record), "topic_lane": classify_topic_lane(record, query_spec)}
                     for record in matches

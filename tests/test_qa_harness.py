@@ -3,7 +3,10 @@ import json
 
 import httpx
 
-from backend.qa_harness import run_local_harness
+from backend.qa_harness import (
+    _readiness_call_id, _record_counterevidence_receipt, record_window_receipt,
+    run_local_harness,
+)
 from backend.qa_harness_store import HarnessStore
 
 
@@ -431,7 +434,7 @@ def test_completed_resume_restores_cached_internal_sources(tmp_path, monkeypatch
     assert second_tools.calls == []
 
 
-def test_stream_failure_checkpoints_completed_batch_before_resume(tmp_path, monkeypatch):
+def test_stream_failure_does_not_abort_research_and_resume_reuses_final(tmp_path, monkeypatch):
     monkeypatch.setenv("GEO_DATA_DIR", str(tmp_path))
     store = HarnessStore()
     first_tools = FakeTools()
@@ -446,18 +449,17 @@ def test_stream_failure_checkpoints_completed_batch_before_resume(tmp_path, monk
         if item.get("kind") == "tool":
             raise RuntimeError("stream disconnected")
 
-    try:
-        asyncio.run(run_local_harness(
-            question="最新美伊进展", plan=plan(), tools=first_tools, complete=complete,
-            publish=broken_publish, run_id="qa-stream-resume", store=store,
-        ))
-    except RuntimeError as exc:
-        assert "disconnected" in str(exc)
-    else:
-        raise AssertionError("expected progress stream failure")
+    first_outcome = asyncio.run(run_local_harness(
+        question="最新美伊进展", plan=plan(), tools=first_tools, complete=complete,
+        publish=broken_publish, run_id="qa-stream-resume", store=store,
+    ))
+    assert first_outcome["final"]["text"]
 
     checkpoint = store.load_run("qa-stream-resume")
     assert checkpoint is not None
+    assert checkpoint.final_answer["text"]
+    assert checkpoint.finalized_at
+    assert any(item.get("kind") == "progress_publish" for item in checkpoint.errors)
     assert checkpoint.tool_calls["bootstrap-workspace"].status == "completed"
     assert checkpoint.tool_calls["bootstrap-search-1"].status == "completed"
 
@@ -589,3 +591,35 @@ def test_runtime_attempt_budget_covers_bootstrap_reads_and_specialists(tmp_path,
 
 async def _capture(target, item):
     target.append(item)
+
+
+def test_window_receipts_only_mark_the_window_actually_queried():
+    memory = {}
+    record_window_receipt(
+        memory, query="美伊 最新进展", start="2026-10-19", end="2026-10-25", result_count=0,
+    )
+    assert memory["checked_windows"] == ["7d"]
+    assert memory["window_receipts"][0]["result_count"] == 0
+    record_window_receipt(
+        memory, query="美伊 最新进展", start="2026-10-23", end="2026-10-25", result_count=2,
+    )
+    assert memory["checked_windows"] == ["7d", "48h"]
+
+
+def test_zero_result_counter_search_is_not_valid_counterevidence():
+    memory = {}
+    _record_counterevidence_receipt(memory, result_count=0)
+    assert memory["counterevidence_state"] == {
+        "searched": True,
+        "candidate_found": False,
+        "full_text_read": False,
+        "valid_counterevidence": False,
+    }
+
+
+def test_readiness_call_id_changes_by_pass_plan_and_payload():
+    first = _readiness_call_id({"version": "v2"}, 1, "military", "search", "军事 打击")
+    second = _readiness_call_id({"version": "v2"}, 2, "military", "search", "军事 打击")
+    other = _readiness_call_id({"version": "v3"}, 1, "military", "search", "军事 打击")
+    changed_query = _readiness_call_id({"version": "v2"}, 1, "military", "search", "军事 部署")
+    assert len({first, second, other, changed_query}) == 4

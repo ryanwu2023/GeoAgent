@@ -161,6 +161,10 @@ class HarnessRun:
     last_valid_draft: str = ""
     model: str = ""
     errors: list[dict[str, Any]] = field(default_factory=list)
+    cost_snapshot: dict[str, Any] = field(default_factory=dict)
+    deadline_at: str = ""
+    final_answer: dict[str, Any] | None = None
+    finalized_at: str = ""
     version: int = 1
     created_at: str = ""
     updated_at: str = ""

@@ -41,3 +41,16 @@ def test_specialist_budget_uses_saved_timeouts():
     assert budget.max_parallel == 3
     assert budget.per_agent_seconds == 123
     assert budget.total_seconds == 456
+
+
+def test_cost_ledger_restores_settled_usage_without_stale_reservations():
+    ledger = QaCostLedger(input_price_per_million=10, output_price_per_million=20, max_cost_cny=1)
+    ledger.restore({
+        "estimated_cost_cny": 0.12, "reserved_cost_cny": 0.4,
+        "input_tokens": 4000, "output_tokens": 4000,
+    })
+    snapshot = ledger.snapshot()
+    assert snapshot["estimated_cost_cny"] == 0.12
+    assert snapshot["reserved_cost_cny"] == 0.0
+    assert snapshot["input_tokens"] == 4000
+    assert snapshot["output_tokens"] == 4000

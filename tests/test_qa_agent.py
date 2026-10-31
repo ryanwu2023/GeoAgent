@@ -4,7 +4,7 @@ import json
 import threading
 from types import SimpleNamespace
 
-from backend.qa_agent import LocalGeoTools, normalize_final, run_agent
+from backend.qa_agent import LocalGeoTools, _records_in_window, normalize_final, run_agent
 from backend.qa_planner import build_question_plan, deterministic_plan
 from backend.qa_retrieval import evidence_budget, hybrid_retrieve
 from backend.research import validate_citation_mapped_markdown
@@ -27,6 +27,15 @@ def record(rid, title, text, date, source, tier="T2"):
         "dimension_candidates": {"usiran": ["diplomacy"]},
         "url": f"https://example.test/{rid}",
     }
+
+
+def test_evidence_search_subwindow_filters_by_publication_date():
+    rows = [
+        record("old", "旧消息", "旧消息", "2026-10-20T10:00:00Z", "A"),
+        record("new", "新消息", "新消息", "2026-10-25T10:00:00Z", "B"),
+    ]
+    selected = _records_in_window(rows, "2026-10-23", "2026-10-25")
+    assert [item["id"] for item in selected] == ["new"]
 
 
 def test_normalize_final_does_not_bind_all_full_text_to_synthetic_s1():

@@ -145,6 +145,7 @@ def _series_row(result: dict[str, Any]) -> dict[str, Any] | None:
         if point:
             by_date[point["date"]] = point
     current = _point(metric.get("current"))
+    previous = _point(metric.get("previous"))
     if current:
         by_date[current["date"]] = current
     points = sorted(by_date.values(), key=lambda item: item["date"])
@@ -156,6 +157,8 @@ def _series_row(result: dict[str, Any]) -> dict[str, Any] | None:
             "frequency": metric.get("frequency"),
             "freshness": metric.get("freshness"),
             "first": None, "latest": None, "minimum": None, "maximum": None,
+            "current": current, "previous": previous,
+            "delta": _number(metric.get("delta")), "pct": _number(metric.get("pct")),
             "observations": 0, "change": None, "change_pct": None,
             "lag_days": None, "scope": metric.get("scope"), "boundary": metric.get("boundary"),
         }
@@ -174,6 +177,12 @@ def _series_row(result: dict[str, Any]) -> dict[str, Any] | None:
         "freshness": metric.get("freshness"),
         "first": first,
         "latest": latest,
+        "current": current or latest,
+        # A missing official previous-period value remains missing.  The first
+        # point of a requested window is a path anchor, not a substitute.
+        "previous": previous,
+        "delta": _number(metric.get("delta")),
+        "pct": _number(metric.get("pct")),
         "minimum": minimum,
         "maximum": maximum,
         "observations": len(points),

@@ -44,3 +44,7 @@ def test_tool_trace_v1_fields_have_safe_defaults_and_old_runs_still_load():
     restored = HarnessRun.from_dict(run.to_dict())
     assert restored.tool_calls["c1"].mcp_server == "geoagent"
     assert restored.tool_calls["c1"].evidence_ids == []
+    assert restored.cost_snapshot == {}
+    assert restored.deadline_at == ""
+    assert restored.final_answer is None
+    assert restored.finalized_at == ""

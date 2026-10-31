@@ -15,12 +15,20 @@ def test_store_round_trip_and_scope_isolation(tmp_path, monkeypatch):
     store.append_step("run-1", HarnessEvent(1, "planning", "stage", "completed", summary="完成"))
     artifact_id = store.save_artifact("run-1", "call-1", {"records": ["中文\n内容"]}, {"records": 1}, 8)
     run.research_memory = {"facts": ["事实"]}
+    run.cost_snapshot = {"estimated_cost_cny": 0.12, "input_tokens": 1200, "output_tokens": 300}
+    run.deadline_at = "2026-10-24T00:05:00+00:00"
+    run.final_answer = {"text": "最终回答", "status": "completed"}
+    run.finalized_at = "2026-10-24T00:04:30+00:00"
     store.save_checkpoint(run)
 
     recovered = HarnessStore().find_resumable_run("run-1", scope)
     assert recovered.research_memory == {
         "facts": ["事实"], "ledger": {"version": 1, "entries": []},
     }
+    assert recovered.cost_snapshot["estimated_cost_cny"] == 0.12
+    assert recovered.deadline_at.endswith("+00:00")
+    assert recovered.final_answer["text"] == "最终回答"
+    assert recovered.finalized_at.endswith("+00:00")
     assert store.load_artifact(artifact_id) == {"records": ["中文\n内容"]}
     assert store.load_artifacts([artifact_id, "missing", artifact_id]) == {
         artifact_id: {"records": ["中文\n内容"]},

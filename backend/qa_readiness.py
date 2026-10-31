@@ -148,7 +148,12 @@ def evaluate_readiness(
         follow_up.append("补查最新时间层：完成最近 48 小时与最近 7 天检索。")
 
     needs_counter = "counterevidence" in required
-    if needs_counter and not tool_state.get("counter_search_done") and not exhausted:
+    counter_state = tool_state.get("counterevidence_state")
+    counter_searched = bool(
+        counter_state.get("searched") if isinstance(counter_state, dict)
+        else tool_state.get("counter_search_done")
+    )
+    if needs_counter and not counter_searched and not exhausted:
         follow_up.append("补查反证：搜索相反报道、来源冲突和未执行条件。")
 
     if plan.get("needs_metrics") and not tool_state.get("metric_series") and not exhausted:

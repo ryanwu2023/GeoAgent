@@ -8,7 +8,7 @@ import json
 import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
@@ -197,11 +197,59 @@ def _model_failure(exc: BaseException) -> tuple[str, str, bool]:
     return "model_unavailable", "模型调用失败", True
 
 
-async def _safe_publish(publish, event: HarnessEvent) -> None:
+async def _safe_publish(publish, event: HarnessEvent) -> bool:
     payload = asdict(event)
     payload["round"] = event.sequence
     payload["stage"] = event.phase
-    await publish(payload)
+    try:
+        await publish(payload)
+        return True
+    except Exception:
+        # Progress streaming is a notification channel, not the transaction
+        # boundary.  Browser disconnects must not cancel persisted research.
+        return False
+
+
+def record_window_receipt(
+    memory: dict[str, Any], *, query: str, start: str, end: str, result_count: int,
+) -> None:
+    """Record only a time window that was actually sent to the search tool."""
+    receipt = {
+        "query": str(query or ""), "start": str(start or ""), "end": str(end or ""),
+        "result_count": max(0, int(result_count or 0)),
+    }
+    receipts = [item for item in memory.get("window_receipts", []) if isinstance(item, dict)]
+    key = (receipt["query"], receipt["start"], receipt["end"])
+    if key not in {(item.get("query"), item.get("start"), item.get("end")) for item in receipts}:
+        receipts.append(receipt)
+    memory["window_receipts"] = receipts
+    try:
+        start_day = datetime.fromisoformat(receipt["start"][:10]).date()
+        end_day = datetime.fromisoformat(receipt["end"][:10]).date()
+    except ValueError:
+        return
+    span = max(0, (end_day - start_day).days)
+    label = "48h" if span <= 2 else "7d" if span <= 7 else ""
+    if label:
+        labels = [str(item) for item in memory.get("checked_windows", []) if isinstance(item, str)]
+        memory["checked_windows"] = list(dict.fromkeys([*labels, label]))
+
+
+def _record_counterevidence_receipt(memory: dict[str, Any], *, result_count: int) -> None:
+    state = dict(memory.get("counterevidence_state") or {})
+    state["searched"] = True
+    state["candidate_found"] = bool(state.get("candidate_found") or result_count > 0)
+    state.setdefault("full_text_read", False)
+    state.setdefault("valid_counterevidence", False)
+    memory["counterevidence_state"] = state
+    memory["counter_search_done"] = True
+
+
+def _readiness_call_id(plan: dict[str, Any], call_no: int, facet: str, action: str, payload: str) -> str:
+    plan_key = str(plan.get("version") or plan.get("basis") or "v1")
+    plan_digest = hashlib.sha256(plan_key.encode("utf-8")).hexdigest()[:8]
+    payload_digest = hashlib.sha256(str(payload).encode("utf-8")).hexdigest()[:10]
+    return f"gate-{plan_digest}-p{max(1, int(call_no))}-{facet}-{action}-{payload_digest}"
 
 
 def _advance(run: HarnessRun, target: HarnessPhase) -> None:
@@ -462,16 +510,24 @@ async def run_local_harness(
     async def budgeted_complete(messages, **kwargs):
         input_tokens = estimate_tokens(messages)
         reservation = await cost_ledger.reserve(input_tokens, 2200)
+        run.cost_snapshot = cost_ledger.snapshot()
+        store.save_checkpoint(run)
         try:
             content, model = await complete(messages, **kwargs)
         except asyncio.CancelledError:
             await cost_ledger.settle(reservation, output_tokens=0)
+            run.cost_snapshot = cost_ledger.snapshot()
+            store.save_checkpoint(run)
             raise
         except Exception:
             # 服务失败时仍可能产生输入费用，按零输出结算，避免重试绕过费用上限。
             await cost_ledger.settle(reservation, output_tokens=0)
+            run.cost_snapshot = cost_ledger.snapshot()
+            store.save_checkpoint(run)
             raise
         await cost_ledger.settle(reservation, output_tokens=estimate_tokens(content))
+        run.cost_snapshot = cost_ledger.snapshot()
+        store.save_checkpoint(run)
         return content, model
 
     store = store or HarnessStore()
@@ -489,6 +545,7 @@ async def run_local_harness(
     cached_payloads: dict[str, Any] = {}
     if existing:
         run = existing
+        cost_ledger.restore(run.cost_snapshot)
         cached_payloads = store.load_artifacts([
             state.artifact_id for state in run.tool_calls.values() if state.artifact_id
         ])
@@ -521,6 +578,11 @@ async def run_local_harness(
             run_id=run_id, answer_id=answer_id or run_id, scope=scope, question=question,
             plan=plan, budget=budget, model="",
         )
+        run.deadline_at = (
+            datetime.now(timezone.utc) + timedelta(seconds=float(runtime_settings.get("total_timeout_seconds") or 150))
+        ).isoformat()
+        run.cost_snapshot = cost_ledger.snapshot()
+        store.save_checkpoint(run)
 
     prior_steps = store.list_steps(run_id)
     trace: list[dict[str, Any]] = [
@@ -563,7 +625,13 @@ async def run_local_harness(
         item["round"] = event.sequence
         item["stage"] = event.phase
         trace.append(item)
-        await _safe_publish(publish, event)
+        delivered = await _safe_publish(publish, event)
+        if not delivered:
+            run.errors.append({
+                "kind": "progress_publish", "message": "进度推送失败；研究继续并已保存检查点。",
+                "retryable": True, "sequence": sequence,
+            })
+            store.save_checkpoint(run)
         return event
 
     context = ContextManager(
@@ -627,7 +695,6 @@ async def run_local_harness(
             pending.append(request)
         if not pending:
             return returned
-        publish_errors: list[Exception] = []
         for request in pending:
             started_at = _utc_now()
             arguments_summary = summarize_arguments(request.arguments)
@@ -662,7 +729,7 @@ async def run_local_harness(
             except Exception as exc:
                 # A browser disconnect must not prevent already-scheduled
                 # read-only work from reaching its persisted checkpoint.
-                publish_errors.append(exc)
+                run.errors.append({"kind": "progress_publish", "message": str(exc), "retryable": True})
         results = await execute_batch(
             pending, tools, max_concurrency=4, retry_attempts=run.budget.max_retries,
             claim_attempt=claim_tool_attempt,
@@ -697,10 +764,15 @@ async def run_local_harness(
                         context.memory["latest_any_source_at"] = result.result["latest_any_source_at"]
                     if result.result.get("stale_warning"):
                         context.memory["stale_warning"] = result.result["stale_warning"]
-                    if plan.get("time_windows"):
-                        context.memory["checked_windows"] = ["48h", "7d"]
+                    record_window_receipt(
+                        context.memory,
+                        query=str(result.arguments.get("q") or ""),
+                        start=str(result.arguments.get("start") or ""),
+                        end=str(result.arguments.get("end") or ""),
+                        result_count=result_count,
+                    )
                     if facet == "counterevidence":
-                        context.memory["counter_search_done"] = True
+                        _record_counterevidence_receipt(context.memory, result_count=result_count)
                 elif result.tool == "geo_evidence_get":
                     record = result.result.get("record")
                     if isinstance(record, dict):
@@ -710,6 +782,13 @@ async def run_local_harness(
                         update = _ledger_entry_from_record(record, facet)
                         if update:
                             context.apply_ledger_updates([update])
+                        if facet == "counterevidence":
+                            state = dict(context.memory.get("counterevidence_state") or {})
+                            state["searched"] = True
+                            state["candidate_found"] = True
+                            state["full_text_read"] = True
+                            state.setdefault("valid_counterevidence", False)
+                            context.memory["counterevidence_state"] = state
                 elif result.tool == "geo_metric_series":
                     metric = result.result.get("metric") if isinstance(result.result.get("metric"), dict) else result.result
                     series = str(metric.get("series") or result.arguments.get("series") or "") if isinstance(metric, dict) else ""
@@ -763,9 +842,9 @@ async def run_local_harness(
                     parent_agent_id=parent_agent_id,
                 )
             except Exception as exc:
-                publish_errors.append(exc)
-        if publish_errors:
-            raise publish_errors[0]
+                run.errors.append({"kind": "progress_publish", "message": str(exc), "retryable": True})
+        if run.errors:
+            store.save_checkpoint(run)
         return returned
 
     await emit(
@@ -796,11 +875,36 @@ async def run_local_harness(
         }
         if spec.get("preferred_tiers"):
             arguments["source_tiers"] = list(spec["preferred_tiers"])
+        if spec.get("start"):
+            arguments["start"] = str(spec["start"])
+        if spec.get("end"):
+            arguments["end"] = str(spec["end"])
         call_id = f"bootstrap-search-{index}"
         call_facets[call_id] = str(spec.get("facet") or _facet_from_text(spec.get("query")))
         bootstrap.append(ToolRequest(
             call_id, "geo_evidence_search", arguments,
         ))
+    # Latest-situation questions require a genuinely executed 48-hour lane.
+    # The regular query specs normally cover seven days; do not claim the
+    # narrower window unless this separate tool request is actually sent.
+    latest_48h = next((
+        item for item in plan.get("time_windows", [])
+        if isinstance(item, dict) and item.get("name") == "latest_48h"
+    ), None)
+    if latest_48h and planned_queries:
+        first = planned_queries[0]
+        window_query = str(first.get("query") or (queries[0] if queries else question))
+        bootstrap.append(ToolRequest(
+            "bootstrap-window-latest-48h", "geo_evidence_search",
+            {
+                "q": window_query, "limit": balanced_page,
+                "start": str(latest_48h.get("start") or ""),
+                "end": str(latest_48h.get("end") or ""),
+            },
+        ))
+        call_facets["bootstrap-window-latest-48h"] = str(
+            first.get("facet") or _facet_from_text(window_query)
+        )
     if plan.get("needs_metrics"):
         bootstrap.append(ToolRequest("bootstrap-metrics", "geo_metric_catalog", {"limit": 20}))
     if plan.get("needs_internal_messages"):
@@ -1078,6 +1182,7 @@ async def run_local_harness(
             "searched_facets": context.memory.get("searched_facets", []),
             "checked_windows": context.memory.get("checked_windows", []),
             "counter_search_done": context.memory.get("counter_search_done", False),
+            "counterevidence_state": context.memory.get("counterevidence_state", {}),
             "metric_series": context.memory.get("metric_series", []),
             "latest_high_confidence_at": context.memory.get("latest_high_confidence_at"),
             "latest_any_source_at": context.memory.get("latest_any_source_at"),
@@ -1102,7 +1207,7 @@ async def run_local_harness(
         requests: list[ToolRequest] = []
         for facet in report.missing_facets[:2]:
             query = f"{topic_anchor} {label.get(facet, facet)}".strip()
-            call_id = f"gate-{facet}-search"
+            call_id = _readiness_call_id(plan, call_no, facet, "search", query)
             call_facets[call_id] = facet
             requests.append(ToolRequest(call_id, "geo_evidence_search", {"q": query, "limit": 8}))
         if requests:
@@ -1120,7 +1225,7 @@ async def run_local_harness(
             if not candidates:
                 continue
             rid = candidates[0]
-            call_id = f"gate-{facet}-read-{rid}"
+            call_id = _readiness_call_id(plan, call_no, facet, "read", rid)
             call_facets[call_id] = facet
             reads.append(ToolRequest(call_id, "geo_evidence_get", {"record_id": rid}))
         if reads:
@@ -1326,14 +1431,6 @@ async def run_local_harness(
         transition(run, HarnessPhase.DEGRADED)
     else:
         transition(run, HarnessPhase.COMPLETED)
-    await emit(
-        "synthesis", "final", run.status, "最终复核与结论", final.text,
-        details=[
-            f"实际调用工具 {len(tools.calls)} 次，检索候选证据 {len(tools.retrieved_ids)} 条，读取完整正文 {len(tools.full_text_ids)} 条。",
-            *( [f"降级原因：{final.degraded_reason}"] if final.degraded_reason else [] ),
-        ],
-        evidence_ids=final.evidence_ids,
-    )
     final_ids = set(final.evidence_ids)
     focused_citations = [item for item in tools.citations() if item.get("id") in final_ids]
     outcome = {
@@ -1350,8 +1447,27 @@ async def run_local_harness(
         "cost_estimate": cost_ledger.snapshot(),
     }
     run.model = used_model
+    run.cost_snapshot = cost_ledger.snapshot()
+    run.final_answer = final.to_dict()
+    run.finalized_at = _utc_now()
     run.research_memory = {**context.research_memory(), "final_outcome": {
         key: value for key, value in outcome.items() if key not in {"citations", "internal_sources"}
     }}
+    # The durable final answer is the transaction boundary.  Notify the
+    # browser only after this checkpoint succeeds, so a disconnected stream
+    # can resume the finished answer without repeating tools or model calls.
+    store.save_checkpoint(run)
+    await emit(
+        "synthesis", "final", run.status, "最终复核与结论", final.text,
+        details=[
+            f"实际调用工具 {len(tools.calls)} 次，检索候选证据 {len(tools.retrieved_ids)} 条，读取完整正文 {len(tools.full_text_ids)} 条。",
+            *( [f"降级原因：{final.degraded_reason}"] if final.degraded_reason else [] ),
+        ],
+        evidence_ids=final.evidence_ids,
+    )
+    outcome["completed_steps"] = len(trace)
+    run.research_memory["final_outcome"] = {
+        key: value for key, value in outcome.items() if key not in {"citations", "internal_sources"}
+    }
     store.save_checkpoint(run)
     return outcome

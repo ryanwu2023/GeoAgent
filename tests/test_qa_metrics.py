@@ -99,3 +99,23 @@ def test_metric_block_deduplicates_dates_and_rejects_non_finite_values():
     row = block["metrics"][0]
     assert row["observations"] == 1
     assert row["latest"]["value"] == 2.0
+
+
+def test_metric_block_never_uses_window_first_as_missing_previous_period():
+    block = build_metric_block([{
+        "metric": {
+            "series": "yield", "name": "收益率", "unit": "%",
+            "current": {"date": "2026-10-24", "value": 4.9},
+            "previous": None, "delta": None, "pct": None,
+        },
+        "history": [
+            {"date": "2026-10-01", "value": 4.2},
+            {"date": "2026-10-24", "value": 4.9},
+        ],
+    }])
+    row = block["metrics"][0]
+    assert row["first"] == {"date": "2026-10-01", "value": 4.2}
+    assert row["current"] == {"date": "2026-10-24", "value": 4.9}
+    assert row["previous"] is None
+    assert row["delta"] is None
+    assert row["pct"] is None
