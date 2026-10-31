@@ -24,6 +24,10 @@ SEARCH_QUERY_TRANSLATIONS = ROOT / "config" / "search-query-translations.json"
 # separate from discovery keywords: it explains what the collector is meant to
 # observe, while the keyword section below shows the exact submitted queries.
 COLLECTOR_RESEARCH_SCOPE = {
+    "geopolitical-source-monitor": {
+        "dimensions": ["美伊·地区局势", "俄乌·外交与内政"],
+        "scope": "发现并采集多源地缘新闻，保留来源分类和受限访问状态；报道线索需交叉核验，不绕过来源访问限制。",
+    },
     "asset-transmission-monitor": {
         "dimensions": ["美伊·金融战线", "俄乌·军事/内政/外交", "跨主题·资产传导"],
         "scope": "汇集影响权益、利率债、信用债、商品和外汇的事件线索，重点识别能源与运输、通胀与政策、增长与贸易、风险偏好、财政与产业需求等传导渠道，并保留成立条件、反证和下一观察项。",

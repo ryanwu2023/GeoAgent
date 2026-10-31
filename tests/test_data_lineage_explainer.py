@@ -11,7 +11,7 @@ def test_every_enabled_collector_has_business_scope() -> None:
         if item.get("enabled", True)
     }
 
-    assert len(enabled_ids) == 27
+    assert len(enabled_ids) == 28
     assert enabled_ids == set(explainer.COLLECTOR_RESEARCH_SCOPE)
     for collector_id in enabled_ids:
         item = explainer.COLLECTOR_RESEARCH_SCOPE[collector_id]
