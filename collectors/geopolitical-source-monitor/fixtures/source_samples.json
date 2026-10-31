@@ -14,5 +14,8 @@
       "dimension": "frontline"
     }
   ],
-  "html": {}
+  "html": {
+    "json_ld_article": "<html><head><script type=\"application/ld+json\">{\"@type\":\"NewsArticle\",\"headline\":\"Ukraine ceasefire talks resume\",\"description\":\"Delegations meet for negotiations\",\"datePublished\":\"2026-10-31T08:00:00Z\",\"articleBody\":\"The parties discussed a ceasefire agreement.\"}</script></head><body></body></html>",
+    "restricted": "<html><head><meta property=\"og:title\" content=\"Iran update\"><meta name=\"description\" content=\"Public summary\"></head><body>Please sign in to continue your subscription</body></html>"
+  }
 }
