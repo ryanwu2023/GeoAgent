@@ -16,6 +16,9 @@ class ToolRequest:
     tool: str
     arguments: dict[str, Any]
     timeout_seconds: float = 30.0
+    attempt_id: str = ""
+    execution_lease: str = ""
+    dedupe_key: str = ""
 
 
 @dataclass
@@ -36,6 +39,9 @@ class ToolExecutionResult:
     attempts: int = 1
     duration_ms: int = 0
     cache_reused: bool = False
+    attempt_id: str = ""
+    execution_lease: str = ""
+    dedupe_key: str = ""
 
 
 _BEARER = re.compile(r"Bearer\s+[A-Za-z0-9._~+/=-]+", re.I)
@@ -107,6 +113,8 @@ async def execute_one(
                 request.call_id, request.tool, request.arguments, True, result=result,
                 attempts=attempts, duration_ms=round((time.perf_counter() - started) * 1000),
                 cache_reused=cache_reused,
+                attempt_id=request.attempt_id, execution_lease=request.execution_lease,
+                dedupe_key=request.dedupe_key,
             )
         except BaseException as exc:  # converted to a tool result by design
             if isinstance(exc, (KeyboardInterrupt, SystemExit, asyncio.CancelledError)):
@@ -128,6 +136,8 @@ async def execute_one(
     return ToolExecutionResult(
         request.call_id, request.tool, request.arguments, False, error=last_error,
         attempts=attempts, duration_ms=round((time.perf_counter() - started) * 1000),
+        attempt_id=request.attempt_id, execution_lease=request.execution_lease,
+        dedupe_key=request.dedupe_key,
     )
 
 

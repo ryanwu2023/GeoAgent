@@ -17,6 +17,23 @@ def test_canonical_tool_key_is_scope_and_argument_stable():
     assert left != canonical_tool_key({**scope, "topic": "ukraine"}, "geo_evidence_search", {"q": "伊朗", "limit": 8})
 
 
+def test_cache_key_includes_permissions_scope_version_and_data_version():
+    base = {
+        "snapshot_id": "s1", "topic": "usiran", "start": "2026-10-01", "end": "2026-11-01",
+        "scope_hash": "scope-a", "version": "research-scope/v1",
+        "source_permissions": ["public"], "data_version": "snapshot-v1",
+    }
+    key = canonical_tool_key(base, "geo_evidence_search", {"q": "Iran"})
+    for field, value in (
+        ("source_permissions", ["public", "internal"]),
+        ("scope_hash", "scope-b"), ("version", "research-scope/v2"),
+        ("data_version", "snapshot-v2"),
+    ):
+        assert canonical_tool_key(
+            {**base, field: value}, "geo_evidence_search", {"q": "Iran"},
+        ) != key
+
+
 def test_shared_cache_coalesces_concurrent_calls_and_marks_reuse():
     async def scenario():
         calls = 0

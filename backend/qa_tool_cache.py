@@ -11,11 +11,13 @@ from typing import Any, Awaitable, Callable
 
 def canonical_tool_key(scope: dict[str, Any], tool: str, arguments: dict[str, Any]) -> str:
     """Return a stable cache key without exposing argument text in traces."""
+    scope_fields = (
+        "snapshot_id", "topic", "topics", "dimension", "start", "end",
+        "version", "scope_hash", "source_permissions", "data_version", "index_version",
+        "recent", "background",
+    )
     value = {
-        "scope": {
-            key: scope.get(key, "")
-            for key in ("snapshot_id", "topic", "dimension", "start", "end")
-        },
+        "scope": {key: scope.get(key, "") for key in scope_fields},
         "tool": str(tool),
         "arguments": arguments if isinstance(arguments, dict) else {},
     }

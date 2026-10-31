@@ -104,3 +104,15 @@ def test_parallel_calls_compete_for_one_atomic_attempt_budget():
     assert rejected.error is not None
     assert rejected.error.kind == "budget_exhausted"
     assert rejected.attempts == 0
+
+
+def test_attempt_identity_is_kept_separate_from_call_and_dedupe_identity():
+    request = ToolRequest(
+        "model-call-1", "fast", {}, attempt_id="attempt-7",
+        execution_lease="lease-a", dedupe_key="dedupe-z",
+    )
+    result = asyncio.run(execute_one(request, FakeTools(), retry_attempts=0))
+    assert result.call_id == "model-call-1"
+    assert result.attempt_id == "attempt-7"
+    assert result.execution_lease == "lease-a"
+    assert result.dedupe_key == "dedupe-z"

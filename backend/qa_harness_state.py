@@ -81,6 +81,10 @@ class ToolCallState:
     agent_id: str = "coordinator-agent"
     agent_role: str = "coordinator"
     parent_agent_id: str = ""
+    attempt_id: str = ""
+    execution_lease: str = ""
+    dedupe_key: str = ""
+    late_result: bool = False
 
 
 @dataclass
@@ -167,6 +171,10 @@ class HarnessRun:
     final_answer: dict[str, Any] | None = None
     finalized_at: str = ""
     version: int = 1
+    plan_revision: int = 1
+    config_version: str = "default"
+    model_role_version: str = "default"
+    tool_schema_version: str = "default"
     created_at: str = ""
     updated_at: str = ""
 

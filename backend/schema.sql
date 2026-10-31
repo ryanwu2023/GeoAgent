@@ -99,6 +99,57 @@ CREATE TABLE IF NOT EXISTS qa_artifacts(
 CREATE INDEX IF NOT EXISTS idx_qa_steps_run ON qa_steps(run_id,sequence);
 CREATE INDEX IF NOT EXISTS idx_qa_artifacts_run_call ON qa_artifacts(run_id,call_id);
 
+CREATE TABLE IF NOT EXISTS qa_graph_runs(
+    run_id TEXT PRIMARY KEY,
+    revision INTEGER NOT NULL,
+    scope_json TEXT NOT NULL,
+    config_version TEXT NOT NULL,
+    deadline_at TEXT NOT NULL,
+    plan_json TEXT NOT NULL,
+    cost_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    result_json TEXT NOT NULL DEFAULT '{}',
+    tool_schema_version TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS qa_graph_nodes(
+    run_id TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    task_id TEXT NOT NULL,
+    execution_lease TEXT NOT NULL,
+    status TEXT NOT NULL,
+    result_json TEXT NOT NULL DEFAULT '{}',
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(run_id,revision,task_id)
+);
+CREATE TABLE IF NOT EXISTS qa_graph_attempts(
+    attempt_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    execution_lease TEXT NOT NULL,
+    dedupe_key TEXT NOT NULL,
+    tool TEXT NOT NULL,
+    arguments_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    artifact_id TEXT,
+    error_json TEXT NOT NULL DEFAULT '{}',
+    cache_reused INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_qa_graph_attempts_run_task
+    ON qa_graph_attempts(run_id,task_id,updated_at);
+CREATE TABLE IF NOT EXISTS qa_graph_events(
+    run_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    PRIMARY KEY(run_id,sequence)
+);
+CREATE INDEX IF NOT EXISTS idx_qa_graph_events_run
+    ON qa_graph_events(run_id,sequence);
+
 CREATE TABLE IF NOT EXISTS qa_evidence_embeddings(
     record_id TEXT NOT NULL,
     content_hash TEXT NOT NULL,

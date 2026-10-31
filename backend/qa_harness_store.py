@@ -251,6 +251,156 @@ class HarnessStore:
         self.save_checkpoint(run)
 
 
+class GraphResearchStore:
+    """ResearchGraph 的独立持久化边界；保留旧 Harness 表以便迁移期并行。"""
+
+    def start_run(self, **value: Any) -> None:
+        timestamp = now()
+        with db() as connection:
+            connection.execute(
+                """INSERT INTO qa_graph_runs(
+                       run_id,revision,scope_json,config_version,deadline_at,plan_json,
+                       cost_json,status,result_json,tool_schema_version,created_at,updated_at
+                   ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT(run_id) DO UPDATE SET
+                       revision=EXCLUDED.revision,scope_json=EXCLUDED.scope_json,
+                       config_version=EXCLUDED.config_version,deadline_at=EXCLUDED.deadline_at,
+                       plan_json=EXCLUDED.plan_json,cost_json=EXCLUDED.cost_json,
+                       tool_schema_version=EXCLUDED.tool_schema_version,updated_at=EXCLUDED.updated_at""",
+                (
+                    value["run_id"], int(value.get("revision") or 1),
+                    canonical(_redact(value.get("scope") or {})),
+                    str(value.get("config_version") or "default"),
+                    str(value.get("deadline_at") or ""),
+                    canonical(_redact(value.get("plan") or {})),
+                    canonical(_redact(value.get("cost") or {})),
+                    str(value.get("status") or "running"), "{}",
+                    str(value.get("tool_schema_version") or "default"), timestamp, timestamp,
+                ),
+            )
+
+    def save_node(self, **value: Any) -> None:
+        with db() as connection:
+            connection.execute(
+                """INSERT INTO qa_graph_nodes(
+                       run_id,revision,task_id,execution_lease,status,result_json,updated_at
+                   ) VALUES (%s,%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT(run_id,revision,task_id) DO UPDATE SET
+                       execution_lease=EXCLUDED.execution_lease,status=EXCLUDED.status,
+                       result_json=EXCLUDED.result_json,updated_at=EXCLUDED.updated_at
+                   WHERE qa_graph_nodes.execution_lease=EXCLUDED.execution_lease
+                      OR EXCLUDED.status='running'""",
+                (
+                    value["run_id"], int(value.get("revision") or 1), value["task_id"],
+                    str(value.get("execution_lease") or ""), str(value.get("status") or "pending"),
+                    canonical(_redact(value.get("result") or {})), now(),
+                ),
+            )
+
+    def save_attempt(self, **value: Any) -> None:
+        timestamp = now()
+        error = value.get("error")
+        error_value = error if isinstance(error, dict) else ({"message": str(error)} if error else {})
+        with db() as connection:
+            connection.execute(
+                """INSERT INTO qa_graph_attempts(
+                       attempt_id,run_id,task_id,execution_lease,dedupe_key,tool,
+                       arguments_json,status,artifact_id,error_json,cache_reused,created_at,updated_at
+                   ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT(attempt_id) DO UPDATE SET
+                       status=EXCLUDED.status,artifact_id=EXCLUDED.artifact_id,
+                       error_json=EXCLUDED.error_json,cache_reused=EXCLUDED.cache_reused,
+                       updated_at=EXCLUDED.updated_at""",
+                (
+                    value["attempt_id"], value["run_id"], value["task_id"],
+                    str(value.get("execution_lease") or ""), str(value.get("dedupe_key") or ""),
+                    str(value.get("tool") or ""), canonical(_redact(value.get("arguments") or {})),
+                    str(value.get("status") or "unknown"), value.get("artifact_id"),
+                    canonical(_redact(error_value)), int(bool(value.get("cache_reused"))),
+                    timestamp, timestamp,
+                ),
+            )
+
+    def append_event(self, **value: Any) -> None:
+        with db() as connection:
+            connection.execute(
+                """INSERT INTO qa_graph_events(run_id,sequence,created_at,payload)
+                   VALUES (%s,%s,%s,%s)
+                   ON CONFLICT(run_id,sequence) DO NOTHING""",
+                (value["run_id"], int(value["sequence"]), now(), canonical(_redact(value))),
+            )
+
+    def save_artifact(self, **value: Any) -> str:
+        payload = _redact(value.get("payload"))
+        preview = {"tool": value.get("tool"), "stored": True}
+        raw = canonical(payload)
+        artifact_id = f"qa-art-{uuid4().hex}"
+        with db() as connection:
+            connection.execute(
+                "INSERT INTO qa_artifacts VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                (
+                    artifact_id, value["run_id"], value["attempt_id"], now(),
+                    len(raw.encode("utf-8")), max(1, len(raw) // 4),
+                    canonical(preview), raw,
+                ),
+            )
+        return artifact_id
+
+    def finalize_run(self, **value: Any) -> None:
+        with db() as connection:
+            cursor = connection.execute(
+                """UPDATE qa_graph_runs SET status=%s,result_json=%s,cost_json=%s,updated_at=%s
+                   WHERE run_id=%s""",
+                (
+                    str(value.get("status") or "degraded"),
+                    canonical(_redact(value.get("results") or {})),
+                    canonical(_redact(value.get("cost") or {})), now(), value["run_id"],
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError("图式研究运行不存在")
+
+    def load_run(self, run_id: str) -> dict[str, Any] | None:
+        with db() as connection:
+            run = connection.execute(
+                "SELECT * FROM qa_graph_runs WHERE run_id=%s", (run_id,),
+            ).fetchone()
+            if run is None:
+                return None
+            nodes = connection.execute(
+                "SELECT * FROM qa_graph_nodes WHERE run_id=%s ORDER BY revision,task_id", (run_id,),
+            ).fetchall()
+            attempts = connection.execute(
+                "SELECT * FROM qa_graph_attempts WHERE run_id=%s ORDER BY created_at,attempt_id", (run_id,),
+            ).fetchall()
+            events = connection.execute(
+                "SELECT sequence,payload FROM qa_graph_events WHERE run_id=%s ORDER BY sequence", (run_id,),
+            ).fetchall()
+        node_values = []
+        for item in nodes:
+            value = dict(item)
+            value["result"] = json.loads(value.pop("result_json") or "{}")
+            node_values.append(value)
+        attempt_values = []
+        for item in attempts:
+            value = dict(item)
+            value["arguments"] = json.loads(value.pop("arguments_json") or "{}")
+            value["error"] = json.loads(value.pop("error_json") or "{}")
+            value["cache_reused"] = bool(value.get("cache_reused"))
+            attempt_values.append(value)
+        return {
+            "run_id": str(run["run_id"]), "revision": int(run["revision"]),
+            "scope": json.loads(run["scope_json"]), "config_version": str(run["config_version"]),
+            "deadline_at": str(run["deadline_at"]), "plan": json.loads(run["plan_json"]),
+            "cost": json.loads(run["cost_json"]), "status": str(run["status"]),
+            "results": json.loads(run["result_json"]),
+            "tool_schema_version": str(run["tool_schema_version"]),
+            "nodes": node_values,
+            "attempts": attempt_values,
+            "events": [json.loads(item["payload"]) for item in events],
+        }
+
+
 _default_store = HarnessStore()
 
 
