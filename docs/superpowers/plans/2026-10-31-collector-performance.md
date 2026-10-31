@@ -36,5 +36,13 @@
 **Files:** scripts/ci/assert_collectors_idle.py, scripts/ci/sealos-release.sh, tests/test_collector_performance.py, docs validation evidence
 **Interfaces:** production idle check nonzero on busy/unknown; old Pod holds shared collector lock during rollout.
 - [x] 测试 running、lock、查询失败阻止发布，idle 放行。
-- [ ] 当前采集自然结束后，合并 GitLab、标签发布（现有 CI），验证健康/MCP。
-- [ ] 在线运行全范围批次，记录总秒数、每源耗时、失败项和导入结果，不将 partial 称为全成功。
+- [x] 当前采集自然结束后，合并 GitLab、标签发布（现有 CI），验证健康/MCP。
+- [x] 在线运行全范围批次，记录总秒数、每源耗时、失败项和导入结果，不将 partial 称为全成功。
+
+### Task 4: 实测追加的两个串行瓶颈
+**依据：** v1.0.30 全量验证超过旧批次 2477 秒；以色列、中东仍在执行。源码确认分别 26/40 个来源逐个抓取，超时重试没有复用已成功 HTTP 响应。
+**Files:** scripts/collector_http_runtime.py, collectors/israel-monitor/israel_monitor.py, collectors/mideast-monitor/mideast_monitor.py, tests/test_legacy_collector_performance.py
+**Design:** 复用已有 ResponseCache，只在同一 run_id 复用成功响应；每个采集器来源并发 3，同主机互斥保持原限速/重试，代理池加锁、opener 按线程隔离；来源结果仍按配置顺序归并。托管输出使用 staging 并接续上轮输出；保留全部来源、候选、窗口及失败语义，不改变代理候选和超时配置。
+- [x] RED：同批重试缓存/新批刷新/错误不缓存、来源数与顺序不变、跨主机重叠/同主机串行、历史输出保留。
+- [x] 实现并定向与全量回归；审查并修复空/无效 RSS 响应缓存。
+- [ ] 等 v1.0.30 验证自然结束后发布补充版本；重新全范围实测并报告完整结果。
