@@ -393,6 +393,9 @@ def test_explicit_new_question_does_not_inherit_previous_answer(monkeypatch):
 
 def test_model_new_numbers_rejected(monkeypatch):
     s=stored();rid=s["records"][0]["id"]
+    # Snapshot time is included in numeric context. Keep 50 out of that
+    # context even when this test runs at minute/second 50 on the CI clock.
+    s["created_at"] = "2026-01-01T00:00:00+00:00"
     fake_model(monkeypatch,{"inferences":[{"text":"上涨50%","evidence_ids":[rid]}]})
     result=asyncio.run(answer(s,"Iran supply"))
     assert "校验降级" in result["mode"] and result["summary"]
