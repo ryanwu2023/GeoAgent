@@ -105,3 +105,29 @@ def test_ledger_round_trip_and_legacy_empty_payload():
     assert restored.to_dict() == ledger.to_dict()
     assert ResearchLedger.from_dict(None).to_dict() == {"version": 1, "entries": []}
 
+
+def test_legacy_single_facet_is_migrated_to_multi_label_facets():
+    ledger = ResearchLedger.from_dict({"version": 1, "entries": [{
+        "facet": "diplomacy", "claim": "仍存在接触窗口",
+        "claim_type": "media_report", "status": "reported",
+    }]})
+    entry = ledger.entries[0]
+    assert entry.facet == "diplomacy"
+    assert entry.facets == ["diplomacy"]
+
+    restored = ResearchLedger.from_dict(ledger.to_dict())
+    assert restored.entries[0].facets == ["diplomacy"]
+
+
+def test_ledger_merges_multiple_facets_without_duplicating_labels():
+    ledger = ResearchLedger()
+    ledger.merge_entry({
+        "facet": "diplomacy", "facets": ["diplomacy", "military"],
+        "claim": "接触与战备并行", "claim_type": "media_report", "status": "reported",
+    })
+    merged = ledger.merge_entry({
+        "facet": "diplomacy", "facets": ["market", "military"],
+        "claim": "接触与战备并行", "claim_type": "media_report", "status": "reported",
+    })
+    assert merged.facets == ["diplomacy", "military", "market"]
+

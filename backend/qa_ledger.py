@@ -61,12 +61,16 @@ class LedgerEntry:
     confidence: str = "limited"
     agent_role: str = ""
     open_questions: list[str] = field(default_factory=list)
+    facets: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "LedgerEntry":
         if not isinstance(value, dict):
             raise ValueError("ledger_entry_not_object")
-        facet, claim = _text(value.get("facet")), _text(value.get("claim"))
+        facets = _strings(value.get("facets"))
+        facet = _text(value.get("facet")) or (facets[0] if facets else "")
+        facets = _merge([facet] if facet else [], facets)
+        claim = _text(value.get("claim"))
         claim_type, status = _text(value.get("claim_type")), _text(value.get("status"))
         if not facet or not claim:
             raise ValueError("ledger_entry_missing_claim")
@@ -95,6 +99,7 @@ class LedgerEntry:
             confidence=_text(value.get("confidence")) or "limited",
             agent_role=_text(value.get("agent_role")),
             open_questions=_strings(value.get("open_questions")),
+            facets=facets,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -137,6 +142,7 @@ class ResearchLedger:
             current.syndicated_sources, incoming.syndicated_sources, len(current.syndicated_source_ids),
         )
         current.open_questions = _merge(current.open_questions, incoming.open_questions)
+        current.facets = _merge(current.facets, incoming.facets)
         current.event_at = max(filter(None, (current.event_at, incoming.event_at)), default=None)
         current.published_at = max(filter(None, (current.published_at, incoming.published_at)), default=None)
         if current.conflicting_ids or incoming.status == "conflicted":

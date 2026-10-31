@@ -189,6 +189,9 @@ class HarnessRun:
         }
         research_memory = data.get("research_memory") if isinstance(data.get("research_memory"), dict) else {}
         research_memory.setdefault("ledger", {"version": 1, "entries": []})
+        research_memory.setdefault("claim_ledger", {
+            "version": 1, "claims": [], "relations": [], "dependencies": [],
+        })
         data["research_memory"] = research_memory
         return cls(**data)
 
