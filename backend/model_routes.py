@@ -41,6 +41,11 @@ class ModelSettingsInput(BaseModel):
     base_url: str = Field(default="", max_length=1000)
     model: str = Field(default="", max_length=200)
     timeout_seconds: float = Field(default=90, ge=5, le=300)
+    reasoning_mode: Literal["auto", "enabled", "disabled"] | None = None
+    supports_tools: bool = True
+    context_tokens: int = Field(default=128_000, ge=4096, le=2_000_000)
+    max_output_tokens: int = Field(default=8_000, ge=1, le=131_072)
+    temperature: float | None = Field(default=None, ge=0, le=2)
     api_key: SecretStr = SecretStr("")
 
     def private_payload(self):

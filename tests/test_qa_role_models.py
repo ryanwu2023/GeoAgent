@@ -63,3 +63,31 @@ def test_data_classification_and_context_permissions_cannot_expand_on_fallback()
             "worker", ModelRequirements(min_context_tokens=16000, data_classification="internal"),
             QaCostLedger(max_cost_cny=None),
         )
+
+
+def test_resolver_builds_roles_from_frozen_settings_without_exposing_secret():
+    settings = {
+        "config_version": "cfg-2",
+        "input_price_per_million": 2,
+        "output_price_per_million": 8,
+        "role_models": {
+            "planner": {
+                "enabled": True, "provider": "inherit", "base_url": "",
+                "model": "planner-override", "key_ref": "backend_default",
+                "supports_tools": True, "max_context_tokens": 64_000,
+                "data_classifications": ["public", "internal"],
+                "reasoning_mode": "auto", "input_price_per_million": None,
+                "output_price_per_million": None, "price_version": "default",
+            }
+        },
+    }
+    resolver = RoleModelResolver.from_settings(settings, {
+        "provider": "openai-compatible", "base_url": "https://models.example/v1",
+        "model": "backend-model", "api_key": "must-not-leak", "supports_tools": True,
+        "context_tokens": 128_000, "reasoning_mode": "auto",
+    })
+    resolved = resolver.resolve("planner", ModelRequirements(supports_tools=True), QaCostLedger(max_cost_cny=1))
+    assert resolved.model == "planner-override"
+    assert resolved.context_tokens == 64_000
+    assert resolved.config_version == "cfg-2"
+    assert "must-not-leak" not in repr(resolved)

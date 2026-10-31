@@ -54,6 +54,71 @@ class RoleModelResolver:
         self.default_models = [dict(item) for item in (default_models or [])]
         self.config_version = str(config_version or "default")
 
+    @classmethod
+    def from_settings(
+        cls, settings: Mapping[str, Any], backend_model: Mapping[str, Any],
+    ) -> "RoleModelResolver":
+        """把公开角色策略与后端私有连接合并；结果仍只携带密钥引用。"""
+        config_version = str(settings.get("config_version") or "default")
+        default_model = {
+            "provider": backend_model.get("provider") or "openai-compatible",
+            "base_url": backend_model.get("base_url") or "",
+            "model": backend_model.get("model") or "",
+            "key_ref": "backend_default",
+            "supports_tools": bool(backend_model.get("supports_tools", True)),
+            "context_tokens": int(backend_model.get("context_tokens") or 0),
+            "data_classifications": ["public", "internal"],
+            "reasoning": backend_model.get("reasoning_mode") == "enabled",
+            "input_price_per_million": settings.get("input_price_per_million"),
+            "output_price_per_million": settings.get("output_price_per_million"),
+            "price_version": config_version,
+        }
+        roles: dict[str, dict[str, Any]] = {}
+        for role, raw_value in (settings.get("role_models") or {}).items():
+            if not isinstance(raw_value, Mapping) or not raw_value.get("enabled", True):
+                continue
+            value = dict(raw_value)
+            inherited = value.get("provider") in {None, "", "inherit"}
+            reasoning_mode = str(value.get("reasoning_mode") or "auto")
+            roles[str(role)] = {
+                "provider": default_model["provider"] if inherited else value.get("provider"),
+                "base_url": value.get("base_url") or default_model["base_url"],
+                "model": value.get("model") or default_model["model"],
+                "key_ref": value.get("key_ref") or "backend_default",
+                "supports_tools": bool(value.get("supports_tools", True)) and (
+                    default_model["supports_tools"] if inherited else True
+                ),
+                "context_tokens": min(
+                    int(value.get("max_context_tokens") or default_model["context_tokens"]),
+                    default_model["context_tokens"] or int(value.get("max_context_tokens") or 0),
+                ),
+                "data_classifications": list(value.get("data_classifications") or ["public"]),
+                "reasoning": (
+                    reasoning_mode == "enabled"
+                    or (reasoning_mode == "auto" and bool(default_model["reasoning"]))
+                ),
+                "input_price_per_million": (
+                    value.get("input_price_per_million")
+                    if value.get("input_price_per_million") is not None
+                    else default_model["input_price_per_million"]
+                ),
+                "output_price_per_million": (
+                    value.get("output_price_per_million")
+                    if value.get("output_price_per_million") is not None
+                    else default_model["output_price_per_million"]
+                ),
+                "price_version": value.get("price_version") or config_version,
+            }
+        reasoning_candidates = [
+            roles[name] for name in ("worker_reasoning", "synthesizer") if name in roles
+        ]
+        return cls(
+            role_models=roles,
+            reasoning_models=reasoning_candidates,
+            default_models=[default_model],
+            config_version=config_version,
+        )
+
     def _candidate(self, value: dict[str, Any], selected_from: str) -> ResolvedModel | None:
         model = str(value.get("model") or "").strip()
         provider = str(value.get("provider") or "openai-compatible").strip()

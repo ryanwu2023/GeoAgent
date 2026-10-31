@@ -580,7 +580,7 @@ async def run_local_harness(
         )
         run.research_scope = dict(plan.get("research_scope") or {})
         run.deadline_at = str((plan.get("research_scope") or {}).get("deadline_at") or "") or (
-            datetime.now(timezone.utc) + timedelta(seconds=float(runtime_settings.get("total_timeout_seconds") or 150))
+            datetime.now(timezone.utc) + timedelta(seconds=float(runtime_settings.get("run_deadline_seconds") or 300))
         ).isoformat()
         run.cost_snapshot = cost_ledger.snapshot()
         store.save_checkpoint(run)

@@ -36,7 +36,7 @@ def test_hot_config_and_discovery(tmp_path,monkeypatch):
     assert llm.config()['LLM_MODEL']=='explicit'
     assert 'changed' not in str(llm.status())
 
-def test_openai_compatible_deepseek_disables_hidden_reasoning(tmp_path, monkeypatch):
+def test_model_name_does_not_implicitly_disable_reasoning(tmp_path, monkeypatch):
     monkeypatch.setattr(llm, 'ROOT', tmp_path)
     (tmp_path/'.env').write_text(
         'LLM_PROVIDER=openai-compatible\n'
@@ -47,11 +47,74 @@ def test_openai_compatible_deepseek_disables_hidden_reasoning(tmp_path, monkeypa
     )
     def handler(request):
         payload=json.loads(request.content)
-        assert payload['thinking']=={'type':'disabled'}
+        assert 'thinking' not in payload
         return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'连接成功'}}]})
     real=httpx.AsyncClient
     monkeypatch.setattr(llm.httpx,'AsyncClient',lambda **kw:real(transport=httpx.MockTransport(handler),**kw))
     assert asyncio.run(llm.complete([{'role':'user','content':'测试'}]))==('连接成功','deepseek-v4.1-flash-1017')
+
+def test_explicit_reasoning_and_transport_controls(tmp_path, monkeypatch):
+    monkeypatch.setattr(llm, 'ROOT', tmp_path)
+    settings = {
+        'provider': 'openai-compatible', 'base_url': 'https://provider.example/v1',
+        'api_key': 'test-only', 'model': 'custom-model', 'timeout_seconds': 90,
+        'reasoning_mode': 'disabled', 'supports_tools': True,
+        'context_tokens': 64000, 'max_output_tokens': 8000,
+    }
+    def handler(request):
+        payload=json.loads(request.content)
+        assert payload['thinking']=={'type':'disabled'}
+        assert payload['max_tokens']==321
+        assert payload['temperature']==0.25
+        return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'ok'}}]})
+    real=httpx.AsyncClient
+    monkeypatch.setattr(llm.httpx,'AsyncClient',lambda **kw:real(transport=httpx.MockTransport(handler),**kw))
+    assert asyncio.run(llm.complete(
+        [{'role':'user','content':'test'}], settings_override=settings,
+        max_output_tokens=321, temperature=0.25,
+    )) == ('ok', 'custom-model')
+
+def test_complete_response_accepts_native_tool_only_reply(tmp_path, monkeypatch):
+    monkeypatch.setattr(llm, 'ROOT', tmp_path)
+    settings = {
+        'provider': 'openai-compatible', 'base_url': 'https://provider.example/v1',
+        'api_key': 'test-only', 'model': 'tool-model', 'timeout_seconds': 90,
+        'reasoning_mode': 'auto', 'supports_tools': True,
+        'context_tokens': 64000, 'max_output_tokens': 8000,
+    }
+    def handler(request):
+        payload=json.loads(request.content)
+        assert payload['tools'][0]['function']['name']=='geo_evidence_search'
+        assert payload['tool_choice']=='auto'
+        return httpx.Response(200,json={
+            'id':'req-1','model':'tool-model','usage':{'prompt_tokens':17,'completion_tokens':4},
+            'choices':[{'finish_reason':'tool_calls','message':{'content':None,'tool_calls':[
+                {'id':'call-1','type':'function','function':{'name':'geo_evidence_search','arguments':'{}'}}
+            ]}}],
+        })
+    real=httpx.AsyncClient
+    monkeypatch.setattr(llm.httpx,'AsyncClient',lambda **kw:real(transport=httpx.MockTransport(handler),**kw))
+    reply=asyncio.run(llm.complete_response(
+        [{'role':'user','content':'search'}], settings_override=settings,
+        tools=[{'type':'function','function':{'name':'geo_evidence_search'}}],
+        max_output_tokens=256,
+    ))
+    assert reply.text=='' and reply.finish_reason=='tool_calls'
+    assert reply.tool_calls[0]['id']=='call-1'
+    assert reply.usage=={'input_tokens':17,'output_tokens':4,'estimated':False}
+
+def test_legacy_complete_still_rejects_truncated_text(tmp_path, monkeypatch):
+    monkeypatch.setattr(llm, 'ROOT', tmp_path)
+    settings = {
+        'provider':'openai-compatible','base_url':'https://provider.example/v1',
+        'api_key':'test-only','model':'text-model','timeout_seconds':90,
+    }
+    def handler(request):
+        return httpx.Response(200,json={'choices':[{'finish_reason':'length','message':{'content':'partial'}}]})
+    real=httpx.AsyncClient
+    monkeypatch.setattr(llm.httpx,'AsyncClient',lambda **kw:real(transport=httpx.MockTransport(handler),**kw))
+    with pytest.raises(ValueError, match='未完整'):
+        asyncio.run(llm.complete([{'role':'user','content':'test'}],settings_override=settings))
 
 def test_safe_errors_hide_provider_body():
     response=httpx.Response(401,request=httpx.Request('POST','https://example.org'),text='secret')

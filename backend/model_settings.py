@@ -16,10 +16,14 @@ ENV_KEYS = (
     "PICHAT_BASE_URL", "PICHAT_API_KEY", "PICHAT_TIMEOUT",
     "LLM_BASE_URL", "LLM_MODEL", "LLM_API_KEY", "LLM_TIMEOUT",
     "LLM_FAST_MODEL", "LLM_REASONING_MODEL", "LLM_AGENT_MODE",
+    "LLM_REASONING_MODE", "LLM_SUPPORTS_TOOLS", "LLM_CONTEXT_TOKENS",
+    "LLM_MAX_OUTPUT_TOKENS", "LLM_TEMPERATURE",
 )
 PUBLIC_KEYS = (
     "provider", "base_url", "model", "timeout_seconds",
     "api_key_configured", "configured", "source", "protocol",
+    "reasoning_mode", "supports_tools", "context_tokens",
+    "max_output_tokens", "temperature",
 )
 
 
@@ -103,6 +107,44 @@ def _timeout(value, *, legacy=False):
     return result
 
 
+def _integer(value, name, *, minimum, maximum, default):
+    if value in (None, ""):
+        return default
+    if isinstance(value, bool):
+        raise ValueError(f"{name}须为{minimum}到{maximum}之间的整数")
+    try:
+        result = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name}须为{minimum}到{maximum}之间的整数") from None
+    if not minimum <= result <= maximum:
+        raise ValueError(f"{name}须为{minimum}到{maximum}之间的整数")
+    return result
+
+
+def _optional_temperature(value):
+    if value in (None, ""):
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        raise ValueError("模型温度须为0到2之间的数值") from None
+    if isinstance(value, bool) or not math.isfinite(result) or not 0 <= result <= 2:
+        raise ValueError("模型温度须为0到2之间的数值")
+    return result
+
+
+def _boolean(value, default=True):
+    if value in (None, ""):
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    if isinstance(value, str) and value.strip().lower() in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError("工具调用能力配置须为布尔值")
+
+
 def validate_settings(payload, *, source="saved", allow_auto_model=False, allow_legacy_http=False):
     """Validate a complete private configuration without inheriting any key."""
     if not isinstance(payload, dict):
@@ -111,10 +153,29 @@ def validate_settings(payload, *, source="saved", allow_auto_model=False, allow_
     if not isinstance(provider, str) or provider not in PROVIDERS:
         raise ValueError("后台模型提供方无效")
     timeout = _timeout(payload.get("timeout_seconds", 90), legacy=allow_auto_model)
+    reasoning_mode = payload.get("reasoning_mode")
+    if reasoning_mode in (None, ""):
+        reasoning_mode = "disabled" if provider == "deepseek" else "auto"
+    reasoning_mode = _text(reasoning_mode, "推理模式", maximum=20)
+    if reasoning_mode not in {"auto", "enabled", "disabled"}:
+        raise ValueError("推理模式须为auto、enabled或disabled")
+    supports_tools = _boolean(payload.get("supports_tools"), default=provider != "pichat")
+    context_tokens = _integer(
+        payload.get("context_tokens"), "上下文长度", minimum=4096,
+        maximum=2_000_000, default=128_000,
+    )
+    max_output_tokens = _integer(
+        payload.get("max_output_tokens"), "最大输出Token", minimum=1,
+        maximum=131_072, default=8_000,
+    )
+    temperature = _optional_temperature(payload.get("temperature"))
     if provider == "disabled":
         return {
             "provider": "disabled", "base_url": "", "model": "",
             "timeout_seconds": timeout, "api_key": "", "source": source,
+            "reasoning_mode": "auto", "supports_tools": False,
+            "context_tokens": context_tokens, "max_output_tokens": max_output_tokens,
+            "temperature": temperature,
         }
     base = normalize_base_url(payload.get("base_url", ""), provider, allow_legacy_http=allow_legacy_http)
     model = "" if provider == "pichat" else _text(payload.get("model", ""), "模型", maximum=200)
@@ -126,6 +187,9 @@ def validate_settings(payload, *, source="saved", allow_auto_model=False, allow_
     return {
         "provider": provider, "base_url": base, "model": model,
         "timeout_seconds": timeout, "api_key": key, "source": source,
+        "reasoning_mode": reasoning_mode, "supports_tools": supports_tools,
+        "context_tokens": context_tokens, "max_output_tokens": max_output_tokens,
+        "temperature": temperature,
     }
 
 
@@ -159,6 +223,11 @@ def _environment_settings(env_root=None):
         "model": values["LLM_MODEL"] if not pichat else "",
         "api_key": values["PICHAT_API_KEY"] if pichat else values["LLM_API_KEY"],
         "timeout_seconds": (values["PICHAT_TIMEOUT"] if pichat else values["LLM_TIMEOUT"]) or 90,
+        "reasoning_mode": values["LLM_REASONING_MODE"],
+        "supports_tools": values["LLM_SUPPORTS_TOOLS"],
+        "context_tokens": values["LLM_CONTEXT_TOKENS"],
+        "max_output_tokens": values["LLM_MAX_OUTPUT_TOKENS"],
+        "temperature": values["LLM_TEMPERATURE"],
     }, source="environment", allow_auto_model=True, allow_legacy_http=True)
 
 
@@ -187,6 +256,11 @@ def public_view(settings):
         "api_key_configured": bool(settings.get("api_key")) and provider != "disabled",
         "configured": configured,
         "source": settings["source"],
+        "reasoning_mode": settings.get("reasoning_mode", "auto"),
+        "supports_tools": bool(settings.get("supports_tools")),
+        "context_tokens": int(settings.get("context_tokens") or 0),
+        "max_output_tokens": int(settings.get("max_output_tokens") or 0),
+        "temperature": settings.get("temperature"),
         "protocol": (
             "Pi Chat /api/v1/chat" if provider == "pichat"
             else "兼容 Chat Completions" if provider != "disabled" else "未启用"
