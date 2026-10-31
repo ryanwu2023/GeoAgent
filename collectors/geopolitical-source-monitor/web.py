@@ -21,6 +21,7 @@ RESTRICTED_MARKERS = (
     "please sign in", "sign in to continue", "subscribe to continue", "subscription required",
     "already a subscriber", "enable javascript and cookies", "verify you are human",
     "access denied", "captcha", "请登录", "订阅后继续", "访问验证",
+    "transferring to the website",
 )
 
 
@@ -60,6 +61,12 @@ class ParsedArticle:
     published: str
     content_access: str
     error_type: str = ""
+
+
+def is_restricted_document(html_text: str) -> bool:
+    """识别登录墙、反自动化验证页和只负责循环跳转的网关页。"""
+    lowered = str(html_text or "").casefold()
+    return any(marker.casefold() in lowered for marker in RESTRICTED_MARKERS)
 
 
 def canonicalize_url(url: str) -> str:

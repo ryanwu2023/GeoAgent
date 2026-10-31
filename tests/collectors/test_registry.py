@@ -21,7 +21,7 @@ KNOWN_OUTPUT_KINDS = {
 
 def test_registry_is_well_formed_and_complete():
     registry = load_registry(REGISTRY_PATH)
-    assert len(registry) == 27
+    assert len(registry) == 28
     ids = [item["id"] for item in registry]
     assert len(ids) == len(set(ids))
 

@@ -182,6 +182,17 @@ def test_discovery_and_article_parser_distinguish_fulltext_and_restricted_pages(
     assert empty.error_type == "parse_error"
 
 
+def test_restricted_listing_detection_covers_gateway_and_login_pages():
+    web = load_module("web")
+    assert web.is_restricted_document(
+        "<html><h2>Transferring to the website...</h2><script>location.reload()</script></html>"
+    )
+    assert web.is_restricted_document("<html>Please sign in to continue your subscription</html>")
+    assert not web.is_restricted_document(
+        "<html><a href='/story'>Iran and US resume nuclear talks</a></html>"
+    )
+
+
 class FakeClient:
     def __init__(self, responses):
         self.responses = responses
@@ -210,6 +221,11 @@ def test_collection_isolates_source_failures_and_writes_auditable_outputs(tmp_pa
             "discovery_mode": "public_metadata", "content_policy": "metadata_only",
         },
         {
+            "id": "restricted", "name_zh": "访问受限来源", "publisher": "Restricted", "tier": "T1", "language": "en",
+            "entry_urls": ["https://restricted.example/list"], "allowed_hosts": ["restricted.example"],
+            "discovery_mode": "listing", "content_policy": "public_fulltext",
+        },
+        {
             "id": "failed", "name_zh": "失败来源", "publisher": "Failed", "tier": "T1", "language": "en",
             "entry_urls": ["https://failed.example/list"], "allowed_hosts": ["failed.example"],
             "discovery_mode": "listing", "content_policy": "public_fulltext",
@@ -230,7 +246,8 @@ def test_collection_isolates_source_failures_and_writes_auditable_outputs(tmp_pa
         "https://full.example/list": web.FetchResult(200, listing_full, "https://full.example/list", {}),
         "https://full.example/story": web.FetchResult(200, article, "https://full.example/story", {}),
         "https://meta.example/list": web.FetchResult(200, listing_meta, "https://meta.example/list", {}),
-        "https://failed.example/list": web.FetchResult(403, "", "https://failed.example/list", {}, "http_403"),
+        "https://restricted.example/list": web.FetchResult(403, "", "https://restricted.example/list", {}, "http_403"),
+        "https://failed.example/list": web.FetchResult(0, "", "https://failed.example/list", {}, "urlerror"),
     }
     output = tmp_path / "output"
     report = monitor.run_collection(config_path, output, FakeClient(responses))
@@ -238,6 +255,7 @@ def test_collection_isolates_source_failures_and_writes_auditable_outputs(tmp_pa
     assert report["records"] == 2
     assert report["sources"]["full"]["state"] == "ok"
     assert report["sources"]["meta"]["state"] == "ok"
+    assert report["sources"]["restricted"]["state"] == "restricted"
     assert report["sources"]["failed"]["state"] == "failed"
     payload = json.loads((output / "geo-v6.json").read_text(encoding="utf-8"))
     assert payload["schema_version"] == "geo.v6/1"
@@ -246,8 +264,31 @@ def test_collection_isolates_source_failures_and_writes_auditable_outputs(tmp_pa
     assert all("taiwan" not in json.dumps(item).lower() for item in payload["records"])
     source_status = json.loads((output / "_source_status.json").read_text(encoding="utf-8"))
     assert source_status["collection_status"] == "partial"
-    assert len(source_status["sources"]) == 3
+    assert len(source_status["sources"]) == 4
     assert list((output / "raw").rglob("*.html"))
+
+
+def test_collection_marks_http_200_challenge_as_restricted(tmp_path):
+    filtering = load_module("filtering")
+    web = load_module("web")
+    monitor = load_module("geopolitical_source_monitor")
+    config = filtering.load_config(COLLECTOR / "config.json")
+    config["request"].update({"rate_limit_seconds": 0, "max_candidates_per_source": 10})
+    config["sources"] = [{
+        "id": "challenge", "name_zh": "中转验证页", "publisher": "Gateway", "tier": "T1", "language": "en",
+        "entry_urls": ["https://challenge.example/list"], "allowed_hosts": ["challenge.example"],
+        "discovery_mode": "listing", "content_policy": "public_fulltext",
+    }]
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+    challenge = "<html><h2>Transferring to the website...</h2><script>location.reload()</script></html>"
+    responses = {
+        "https://challenge.example/list": web.FetchResult(200, challenge, "https://challenge.example/list", {}),
+    }
+    report = monitor.run_collection(config_path, tmp_path / "output", FakeClient(responses))
+    assert report["collection_status"] == "ok"
+    assert report["sources"]["challenge"]["state"] == "restricted"
+    assert report["sources"]["challenge"]["error"] == "access_challenge"
 
 
 def test_merge_records_revalidates_history_and_merges_aliases():

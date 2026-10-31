@@ -6,6 +6,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -17,7 +18,15 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 from filtering import classify_candidate, load_config  # noqa: E402
-from web import Candidate, FetchResult, PolicyHttpClient, canonicalize_url, discover_candidates, parse_public_article  # noqa: E402
+from web import (  # noqa: E402
+    Candidate,
+    FetchResult,
+    PolicyHttpClient,
+    canonicalize_url,
+    discover_candidates,
+    is_restricted_document,
+    parse_public_article,
+)
 
 
 ACCESS_RANK = {
@@ -144,6 +153,15 @@ def _verification(source: dict[str, Any], content_access: str) -> str:
     return "媒体公开内容已采集，报道内容待交叉核验"
 
 
+def _source_error_state(result: FetchResult) -> str:
+    """将访问策略/网关限制与采集器自身技术故障分开。"""
+    if result.error_type == "robots_disallowed":
+        return "restricted"
+    if result.status in {401, 403} or 300 <= result.status < 400:
+        return "restricted"
+    return "failed"
+
+
 def _raw_write(output_dir: Path, run_tag: str, source_id: str, name: str, body: str) -> str:
     relative = Path("raw") / run_tag / source_id / name
     target = output_dir / relative
@@ -219,7 +237,7 @@ def run_collection(
     http = client or PolicyHttpClient(user_agent=config["user_agent"])
     incoming: list[dict[str, Any]] = []
     statuses: dict[str, dict[str, Any]] = {}
-    counts = {"candidates": 0, "accepted": 0, "excluded": 0, "errors": 0}
+    counts = {"candidates": 0, "accepted": 0, "excluded": 0, "errors": 0, "restricted": 0}
 
     for configured in config["sources"]:
         source = {**defaults, **configured}
@@ -232,11 +250,16 @@ def run_collection(
             listing = http.fetch(entry_url, source)
             status["http_statuses"].append(listing.status)
             if listing.error_type:
-                counts["errors"] += 1
                 status["error"] = listing.error_type
-                status["state"] = "restricted" if source["content_policy"] == "metadata_only" and listing.status in {401, 403} else "failed"
+                status["state"] = _source_error_state(listing)
+                counts["restricted" if status["state"] == "restricted" else "errors"] += 1
                 continue
             listing_ref = _raw_write(output_dir, run_tag, source["id"], f"listing-{entry_index}.html", listing.body)
+            if is_restricted_document(listing.body):
+                status["state"] = "restricted"
+                status["error"] = "access_challenge"
+                counts["restricted"] += 1
+                continue
             candidates = discover_candidates(listing.body, listing.final_url or entry_url, source)
             candidates = candidates[: int(source.get("max_candidates_per_source", 80))]
             status["candidates"] += len(candidates)
@@ -352,7 +375,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true")
     parser.add_argument("--config", type=Path, default=HERE / "config.json")
-    parser.add_argument("--output", type=Path, default=HERE / "output")
+    parser.add_argument("--output", type=Path, default=Path(os.getenv("COLLECTOR_OUTPUT_ROOT", HERE / "output")))
     args = parser.parse_args()
     if args.selftest:
         return selftest()
