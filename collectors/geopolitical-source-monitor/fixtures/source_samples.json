@@ -1,0 +1,18 @@
+{
+  "schema_version": "geopolitical-source-fixtures/1",
+  "classification_examples": [
+    {
+      "title": "Iran and the United States resume mediated nuclear talks",
+      "summary": "Oman hosts negotiations on sanctions and a ceasefire framework",
+      "topic": "usiran",
+      "dimension": "diplomacy"
+    },
+    {
+      "title": "Russia launches missile strike on Ukraine",
+      "summary": "Energy infrastructure was damaged and civilians were wounded",
+      "topic": "ukraine",
+      "dimension": "frontline"
+    }
+  ],
+  "html": {}
+}

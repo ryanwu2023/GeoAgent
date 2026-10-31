@@ -1,0 +1,184 @@
+{
+  "schema_version": "geopolitical-source-monitor/1",
+  "name": "多源地缘新闻监测",
+  "topics": ["usiran", "ukraine"],
+  "user_agent": "GeoAgentResearchCollector/1.0 (+local-research; public-content-only)",
+  "lookback_days": 14,
+  "max_workers": 4,
+  "request": {
+    "timeout_seconds": 25,
+    "rate_limit_seconds": 1.5,
+    "max_retries": 2,
+    "max_pages_per_source": 3,
+    "max_candidates_per_source": 80
+  },
+  "topic_terms": {
+    "usiran": {
+      "anchors": [
+        "美伊", "伊朗", "德黑兰", "革命卫队", "哈梅内伊", "佩泽希齐扬", "阿拉格齐",
+        "霍尔木兹", "波斯湾", "胡塞", "也门", "红海", "曼德海峡", "真主党", "伊拉克民兵",
+        "Iran", "Iranian", "Tehran", "IRGC", "Revolutionary Guard", "Khamenei", "Pezeshkian",
+        "Araghchi", "US-Iran", "Israel-Iran", "Strait of Hormuz", "Hormuz", "Persian Gulf",
+        "Houthi", "Yemen", "Red Sea", "Bab el-Mandeb", "Hezbollah",
+        "ایران", "تهران", "سپاه", "خلیج فارس", "تنگه هرمز", "آمریکا", "اسرائیل"
+      ],
+      "strong_anchors": [
+        "美伊", "US-Iran", "Israel-Iran", "霍尔木兹", "Strait of Hormuz", "Hormuz",
+        "革命卫队", "IRGC", "胡塞", "Houthi", "曼德海峡", "Bab el-Mandeb"
+      ]
+    },
+    "ukraine": {
+      "anchors": [
+        "俄乌", "乌克兰", "俄罗斯", "基辅", "莫斯科", "顿巴斯", "顿涅茨克", "卢甘斯克",
+        "克里米亚", "黑海", "泽连斯基", "普京", "Ukraine", "Ukrainian", "Russia", "Russian",
+        "Kyiv", "Moscow", "Donbas", "Donetsk", "Luhansk", "Crimea", "Black Sea", "Zelenskyy", "Putin",
+        "Украина", "Россия", "Киев", "Москва", "Донбасс", "Донецк", "Крым", "Зеленский", "Путин"
+      ],
+      "strong_anchors": ["俄乌", "Russia-Ukraine", "Russo-Ukrainian", "顿巴斯", "Donbas", "克里米亚", "Crimea"]
+    }
+  },
+  "categories": {
+    "military": [
+      "战争", "冲突", "袭击", "打击", "空袭", "导弹", "无人机", "拦截", "交火", "部署", "增援", "军演", "封锁", "军舰", "战机",
+      "war", "conflict", "attack", "strike", "airstrike", "missile", "drone", "intercept", "clash", "deployment", "reinforcement", "military exercise", "blockade", "warship", "fighter jet"
+    ],
+    "diplomacy": [
+      "谈判", "会谈", "斡旋", "停火", "协议", "最后通牒", "代表团", "联合声明", "外交接触",
+      "talks", "negotiation", "mediation", "ceasefire", "agreement", "ultimatum", "delegation", "joint statement", "diplomatic contact"
+    ],
+    "sanctions": [
+      "制裁", "次级制裁", "资产冻结", "出口管制", "技术限制", "关税", "实体清单", "禁运",
+      "sanction", "secondary sanction", "asset freeze", "export control", "technology restriction", "tariff", "entity list", "embargo"
+    ],
+    "defense_spending": [
+      "国防预算", "军费", "军事援助", "武器交付", "弹药", "军工产能", "采购合同",
+      "defense budget", "military spending", "military aid", "weapons delivery", "ammunition", "production capacity", "procurement contract"
+    ],
+    "economy_livelihood": [
+      "通胀", "汇率", "财政赤字", "能源短缺", "限电", "食品价格", "失业", "生活成本",
+      "inflation", "exchange rate", "fiscal deficit", "energy shortage", "power outage", "food price", "unemployment", "cost of living"
+    ],
+    "energy_transport": [
+      "原油出口", "油轮", "航道", "港口", "管道", "炼厂", "航运保险", "粮食出口", "能源设施",
+      "oil export", "tanker", "shipping lane", "port", "pipeline", "refinery", "shipping insurance", "grain export", "energy infrastructure"
+    ],
+    "humanitarian": [
+      "死亡", "受伤", "平民伤亡", "撤离", "难民", "战俘", "人道走廊", "基础设施受损",
+      "killed", "wounded", "civilian casualties", "evacuation", "refugees", "prisoners of war", "humanitarian corridor", "infrastructure damage"
+    ],
+    "nuclear_strategic": [
+      "核设施", "浓缩铀", "国际原子能机构", "核武器", "弹道导弹", "远程打击", "战略威慑",
+      "nuclear facility", "enriched uranium", "IAEA", "nuclear weapon", "ballistic missile", "long-range strike", "strategic deterrence"
+    ],
+    "aid_support": [
+      "援助", "拨款", "贷款", "情报共享", "防空系统", "实际交付",
+      "aid", "assistance", "disbursement", "loan", "intelligence sharing", "air defense", "delivery"
+    ]
+  },
+  "exclusion_terms": [
+    "体育", "足球", "篮球", "排球", "摔跤", "奥运", "娱乐", "电影", "音乐", "旅游", "文化节", "时装",
+    "sports", "football", "soccer", "basketball", "volleyball", "wrestling", "olympic", "entertainment", "movie", "music", "tourism", "cultural festival", "fashion"
+  ],
+  "sources": [
+    {
+      "id": "white-house", "name_zh": "美国白宫", "publisher": "The White House", "tier": "T1", "language": "en",
+      "entry_urls": ["https://www.whitehouse.gov/news/"], "allowed_hosts": ["www.whitehouse.gov", "whitehouse.gov"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext"
+    },
+    {
+      "id": "us-state", "name_zh": "美国国务院", "publisher": "U.S. Department of State", "tier": "T1", "language": "en",
+      "entry_urls": ["https://www.state.gov/press-releases/"], "allowed_hosts": ["www.state.gov", "state.gov"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext"
+    },
+    {
+      "id": "us-defense", "name_zh": "美国国防部", "publisher": "U.S. Department of Defense", "tier": "T1", "language": "en",
+      "entry_urls": ["https://www.defense.gov/News/"], "allowed_hosts": ["www.defense.gov", "defense.gov"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext"
+    },
+    {
+      "id": "centcom", "name_zh": "美国中央司令部", "publisher": "U.S. Central Command", "tier": "T1", "language": "en",
+      "entry_urls": ["https://www.centcom.mil/MEDIA/PRESS-RELEASES/"], "allowed_hosts": ["www.centcom.mil", "centcom.mil"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["usiran"]
+    },
+    {
+      "id": "iran-mfa", "name_zh": "伊朗外交部", "publisher": "Ministry of Foreign Affairs of Iran", "tier": "T1", "language": "en",
+      "entry_urls": ["https://en.mfa.ir/"], "allowed_hosts": ["en.mfa.ir", "mfa.gov.ir", "en.mfa.gov.ir"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["usiran"]
+    },
+    {
+      "id": "khamenei", "name_zh": "伊朗最高领袖官网", "publisher": "Khamenei.ir", "tier": "T1", "language": "en",
+      "entry_urls": ["https://english.khamenei.ir/"], "allowed_hosts": ["english.khamenei.ir", "khamenei.ir"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["usiran"]
+    },
+    {
+      "id": "irna", "name_zh": "伊朗伊斯兰共和国通讯社", "publisher": "IRNA", "tier": "T2", "language": "en",
+      "entry_urls": ["https://en.irna.ir/"], "allowed_hosts": ["en.irna.ir", "irna.ir"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["usiran"]
+    },
+    {
+      "id": "sepah-news", "name_zh": "伊朗革命卫队新闻", "publisher": "Sepah News", "tier": "T1", "language": "fa",
+      "entry_urls": ["https://www.sepahnews.ir/"], "allowed_hosts": ["www.sepahnews.ir", "sepahnews.ir"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["usiran"]
+    },
+    {
+      "id": "china-mfa", "name_zh": "中国外交部", "publisher": "中华人民共和国外交部", "tier": "T1", "language": "zh",
+      "entry_urls": ["https://www.fmprc.gov.cn/"], "allowed_hosts": ["www.fmprc.gov.cn", "fmprc.gov.cn", "www.mfa.gov.cn", "mfa.gov.cn"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext"
+    },
+    {
+      "id": "reuters-world", "name_zh": "路透社世界新闻", "publisher": "Reuters", "tier": "T2", "language": "en",
+      "entry_urls": ["https://www.reuters.com/world/"], "allowed_hosts": ["www.reuters.com", "reuters.com"],
+      "discovery_mode": "public_metadata", "content_policy": "metadata_only", "licensed_api_env": "REUTERS_CONNECT_API_KEY"
+    },
+    {
+      "id": "ap-world", "name_zh": "美联社世界新闻", "publisher": "Associated Press", "tier": "T2", "language": "en",
+      "entry_urls": ["https://apnews.com/hub/world-news"], "allowed_hosts": ["apnews.com", "www.apnews.com"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext", "licensed_api_env": "AP_MEDIA_API_KEY"
+    },
+    {
+      "id": "new-york-times", "name_zh": "纽约时报", "publisher": "The New York Times", "tier": "T3", "language": "en",
+      "entry_urls": ["https://www.nytimes.com/"], "allowed_hosts": ["www.nytimes.com", "nytimes.com"],
+      "discovery_mode": "public_metadata", "content_policy": "metadata_only", "licensed_api_env": "NYT_API_KEY"
+    },
+    {
+      "id": "xinhua-english", "name_zh": "新华社英文网", "publisher": "Xinhua", "tier": "T2", "language": "en",
+      "entry_urls": ["https://english.news.cn/world/"], "allowed_hosts": ["english.news.cn", "news.cn", "www.news.cn"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext"
+    },
+    {
+      "id": "wall-street-journal", "name_zh": "华尔街日报", "publisher": "The Wall Street Journal", "tier": "T3", "language": "en",
+      "entry_urls": ["https://www.wsj.com/news/world"], "allowed_hosts": ["www.wsj.com", "wsj.com"],
+      "discovery_mode": "public_metadata", "content_policy": "metadata_only", "licensed_api_env": "DOW_JONES_API_KEY"
+    },
+    {
+      "id": "russia-mfa", "name_zh": "俄罗斯外交部", "publisher": "Ministry of Foreign Affairs of Russia", "tier": "T1", "language": "en",
+      "entry_urls": ["https://mid.ru/en/"], "allowed_hosts": ["mid.ru", "www.mid.ru"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["ukraine"]
+    },
+    {
+      "id": "kremlin", "name_zh": "克里姆林宫", "publisher": "President of Russia", "tier": "T1", "language": "en",
+      "entry_urls": ["http://en.kremlin.ru/events/president/news"], "allowed_hosts": ["en.kremlin.ru", "kremlin.ru"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["ukraine"]
+    },
+    {
+      "id": "caixin", "name_zh": "财新网", "publisher": "财新", "tier": "T3", "language": "zh",
+      "entry_urls": ["https://www.caixin.com/"], "allowed_hosts": ["www.caixin.com", "caixin.com", "international.caixin.com"],
+      "discovery_mode": "public_metadata", "content_policy": "metadata_only"
+    },
+    {
+      "id": "financial-times", "name_zh": "金融时报", "publisher": "Financial Times", "tier": "T3", "language": "en",
+      "entry_urls": ["https://www.ft.com/world"], "allowed_hosts": ["www.ft.com", "ft.com"],
+      "discovery_mode": "public_metadata", "content_policy": "metadata_only", "licensed_api_env": "FT_CONTENT_API_KEY"
+    },
+    {
+      "id": "afp", "name_zh": "法新社", "publisher": "Agence France-Presse", "tier": "T2", "language": "en",
+      "entry_urls": ["https://www.afp.com/en/news-hub"], "allowed_hosts": ["www.afp.com", "afp.com"],
+      "discovery_mode": "public_metadata", "content_policy": "metadata_only", "licensed_api_env": "AFP_CONTENT_API_KEY"
+    },
+    {
+      "id": "eu-council-sanctions", "name_zh": "欧盟理事会制裁政策", "publisher": "Council of the European Union", "tier": "T1", "language": "en",
+      "entry_urls": ["https://www.consilium.europa.eu/en/policies/sanctions/"], "allowed_hosts": ["www.consilium.europa.eu", "consilium.europa.eu"],
+      "discovery_mode": "listing", "content_policy": "public_fulltext"
+    }
+  ]
+}
