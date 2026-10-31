@@ -13,6 +13,7 @@ from .internal_messages import search_messages as search_internal_messages
 from .internal_messages import internal_query_terms, message_topic_lane
 from .qa_retrieval import hybrid_retrieve
 from .qa_query import FacetQuery, classify_topic_lane, freshness_metadata
+from .qa_scope import ResearchScope
 
 
 TOOL_NAMES = {
@@ -113,6 +114,7 @@ class LocalGeoTools:
         metrics: Callable[..., list[dict[str, Any]]],
         analysis: Callable[..., dict[str, Any]],
         event_metadata: Callable[[dict[str, Any]], dict[str, Any]],
+        research_scope: ResearchScope | None = None,
     ):
         self.snapshot = snapshot
         self.topic = topic
@@ -124,6 +126,7 @@ class LocalGeoTools:
         self._metrics = metrics
         self._analysis = analysis
         self._event_metadata = event_metadata
+        self.research_scope = research_scope
         self.records = filtered_records(snapshot, topic, dimension, start, end)
         self.record_by_id = {record["id"]: record for record in self.records}
         self.retrieved_ids: list[str] = []
@@ -346,6 +349,8 @@ class LocalGeoTools:
         if name not in TOOL_NAMES:
             raise ValueError("不允许的工具")
         args = arguments if isinstance(arguments, dict) else {}
+        if self.research_scope is not None:
+            args = self.research_scope.validate_arguments(name, args)
         if name == "geo_internal_message_stats":
             result = internal_message_stats()
         elif name == "geo_internal_message_search":

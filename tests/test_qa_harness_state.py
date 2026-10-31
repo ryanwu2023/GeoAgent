@@ -48,3 +48,4 @@ def test_tool_trace_v1_fields_have_safe_defaults_and_old_runs_still_load():
     assert restored.deadline_at == ""
     assert restored.final_answer is None
     assert restored.finalized_at == ""
+    assert restored.research_scope == {}

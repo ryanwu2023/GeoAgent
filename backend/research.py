@@ -17,6 +17,8 @@ from .events import event_metadata
 from .qa_agent import LocalGeoTools, run_agent
 from .qa_finalizer import normalize_markdown_lists
 from .qa_planner import build_question_plan
+from .qa_harness_state import HarnessScope
+from .qa_scope import ResearchScope
 
 def filtered_records(snapshot, topic="all", dimension="", start="", end=""):
     records = snapshot["records"]
@@ -608,7 +610,10 @@ def resolve_question_scope(query: str, topic: str, dimension: str = "") -> tuple
     return topic, dimension
 
 
-async def answer(snapshot, query, topic="all", dimension="", start="", end="", use_model=True, previous_answer_id="", progress=None, run_id=""):
+async def answer(
+    snapshot, query, topic="all", dimension="", start="", end="", use_model=True,
+    previous_answer_id="", progress=None, run_id="", research_scope: ResearchScope | None = None,
+):
     async def publish(item):
         if progress is not None:
             await progress(item)
@@ -629,6 +634,21 @@ async def answer(snapshot, query, topic="all", dimension="", start="", end="", u
                 dimension = (previous.get("filters") or {}).get("dimension", "")
         if previous and previous.get("topic")==topic and (previous.get("filters") or {}).get("dimension","")==dimension and (previous.get("filters") or {}).get("start","")==start and (previous.get("filters") or {}).get("end","")==end:
             query=previous["query"][:400]+"；追问："+query
+    started_at = (
+        datetime.fromisoformat(research_scope.run_started_at.replace("Z", "+00:00"))
+        if research_scope is not None else datetime.now(timezone.utc)
+    )
+    scope_view = research_scope.view_scope if research_scope is not None else HarnessScope(
+        str(snapshot.get("id") or ""), topic, dimension, start, end,
+    )
+    if not ResearchScope.question_topics(original_query) and research_scope is not None and topic != research_scope.primary_topic:
+        scope_view = HarnessScope(str(snapshot.get("id") or ""), topic, dimension, start, end)
+    research_scope = ResearchScope.from_question(
+        original_query,
+        view_scope=scope_view,
+        snapshot_created_at=str(snapshot.get("created_at") or ""), now=started_at,
+    )
+    topic, dimension = research_scope.primary_topic, research_scope.dimension
     if not start and not end and "本周" in query:
         anchor = datetime.fromisoformat(snapshot["created_at"].replace("Z", "+00:00")).date()
         start, end = (anchor - timedelta(days=anchor.weekday())).isoformat(), anchor.isoformat()
@@ -674,7 +694,7 @@ async def answer(snapshot, query, topic="all", dimension="", start="", end="", u
     ref_ids = set(r["id"] for r in found) | {s for f in facts for s in f["evidence_ids"]}
     citations = [r for r in snapshot["records"] if r["id"] in ref_ids]
     initial_metric_evidence = len(ref_ids - {record["id"] for record in found})
-    base = {"id": digest([snapshot["id"], query, now()]), "snapshot_id": snapshot["id"], "as_of": snapshot["created_at"], "query": original_query, "topic": topic, "filters": {"dimension": dimension, "start": start, "end": end}, "retrieval_window": {"recent_after": recent_after or None}, "created_at": now(), "mode": "本地证据检索", "summary": None, "facts": facts, "citations": citations, "inferences": [],
+    base = {"id": digest([snapshot["id"], query, now()]), "snapshot_id": snapshot["id"], "as_of": snapshot["created_at"], "query": original_query, "topic": topic, "filters": {"dimension": dimension, "start": start, "end": end}, "research_scope": research_scope.to_dict(), "retrieval_window": {"recent_after": recent_after or None}, "created_at": now(), "mode": "本地证据检索", "summary": None, "facts": facts, "citations": citations, "inferences": [],
             "message": "已检索到相关材料。以下为原始片段，未完成语义核验或资产方向判定。" if citations else "当前筛选范围没有足够证据回答这个问题。请补充数据或扩大检索范围。",
             "gaps": ["来源等级不等于事实核验结果", "市场观测仅供对照，尚未完成冲突因果验证，不生成价格目标或资产收益预测"],
             "steps": ["范围与快照锁定", "检索证据", "程序计算", "引用检查"]}
@@ -724,6 +744,7 @@ async def answer(snapshot, query, topic="all", dimension="", start="", end="", u
             # A planner may derive a relative lookback window, but that must
             # not make the same submitted request appear to have a new scope.
             plan["request_scope"] = {"start": start, "end": end}
+            plan["research_scope"] = research_scope.to_dict()
             tool_start = plan.get("start") or start
             tool_end = plan.get("end") or end
             agent_tools = LocalGeoTools(
@@ -737,6 +758,7 @@ async def answer(snapshot, query, topic="all", dimension="", start="", end="", u
                 metrics=metrics,
                 analysis=analysis,
                 event_metadata=event_metadata,
+                research_scope=research_scope,
             )
             outcome = await run_agent(
                 question=query,

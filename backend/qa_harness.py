@@ -578,7 +578,8 @@ async def run_local_harness(
             run_id=run_id, answer_id=answer_id or run_id, scope=scope, question=question,
             plan=plan, budget=budget, model="",
         )
-        run.deadline_at = (
+        run.research_scope = dict(plan.get("research_scope") or {})
+        run.deadline_at = str((plan.get("research_scope") or {}).get("deadline_at") or "") or (
             datetime.now(timezone.utc) + timedelta(seconds=float(runtime_settings.get("total_timeout_seconds") or 150))
         ).isoformat()
         run.cost_snapshot = cost_ledger.snapshot()
@@ -600,6 +601,7 @@ async def run_local_harness(
         "dimension": scope.dimension,
         "start": scope.start,
         "end": scope.end,
+        "research_scope": (plan.get("research_scope") or {}).get("scope_hash"),
     }
     call_facets: dict[str, str] = {}
 

@@ -149,6 +149,7 @@ class HarnessRun:
     phase: HarnessPhase = HarnessPhase.PLANNING
     status: str = "running"
     plan: dict[str, Any] = field(default_factory=dict)
+    research_scope: dict[str, Any] = field(default_factory=dict)
     budget: HarnessBudget = field(default_factory=HarnessBudget)
     tool_calls: dict[str, ToolCallState] = field(default_factory=dict)
     agent_tasks: dict[str, AgentTaskState] = field(default_factory=dict)

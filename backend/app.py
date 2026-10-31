@@ -38,6 +38,7 @@ from .answer_business_lead import generate_business_lead
 from .meeting_export import filter_meetings, meeting_export_filename, render_meeting_workbook
 from .internal_messages import message_stats as internal_message_stats, status_path as internal_message_status_path
 from .qa_harness_state import HarnessScope
+from .qa_scope import ResearchScope
 from .qa_harness_store import HarnessStore, ScopeMismatchError
 
 logger = logging.getLogger(__name__)
@@ -1119,9 +1120,18 @@ async def ask(body: Ask):
     validate_range(body.start, body.end)
     snapshot = working_snapshot_or_409(body.snapshot_id)
     effective_topic, effective_dimension = resolve_question_scope(body.question, body.topic, body.dimension)
+    research_scope = ResearchScope.from_question(
+        body.question,
+        view_scope=HarnessScope(body.snapshot_id, body.topic, body.dimension, body.start, body.end),
+        snapshot_created_at=str(snapshot.get("created_at") or ""), now=datetime.now(timezone.utc),
+    )
+    effective_topic, effective_dimension = research_scope.primary_topic, research_scope.dimension
     kwargs = {"run_id": body.run_id} if body.run_id else {}
     return present_answer(
-        await answer(snapshot, body.question, effective_topic, effective_dimension, body.start, body.end, body.use_model, body.previous_answer_id, **kwargs),
+        await answer(
+            snapshot, body.question, effective_topic, effective_dimension, body.start, body.end,
+            body.use_model, body.previous_answer_id, research_scope=research_scope, **kwargs,
+        ),
         compact=body.compact,
     )
 
@@ -1131,6 +1141,12 @@ async def ask_stream(body: Ask):
     validate_range(body.start, body.end)
     snapshot = working_snapshot_or_409(body.snapshot_id)
     effective_topic, effective_dimension = resolve_question_scope(body.question, body.topic, body.dimension)
+    research_scope = ResearchScope.from_question(
+        body.question,
+        view_scope=HarnessScope(body.snapshot_id, body.topic, body.dimension, body.start, body.end),
+        snapshot_created_at=str(snapshot.get("created_at") or ""), now=datetime.now(timezone.utc),
+    )
+    effective_topic, effective_dimension = research_scope.primary_topic, research_scope.dimension
     local_harness = bool(
         body.use_model and model_status().get("configured")
         and model_status().get("provider") != "pichat" and llm.agent_mode() == "tools"
@@ -1157,7 +1173,11 @@ async def ask_stream(body: Ask):
             if run_id:
                 await queue.put({"event": "run", "data": {"run_id": run_id, "phase": "planning", "status": "running"}})
             kwargs = {"run_id": run_id} if run_id else {}
-            result = await answer(snapshot, body.question, effective_topic, effective_dimension, body.start, body.end, body.use_model, body.previous_answer_id, progress=report, **kwargs)
+            result = await answer(
+                snapshot, body.question, effective_topic, effective_dimension, body.start, body.end,
+                body.use_model, body.previous_answer_id, progress=report,
+                research_scope=research_scope, **kwargs,
+            )
             await queue.put({"event": "answer", "data": present_answer(result, compact=body.compact)})
         except Exception:
             logger.exception("qa_stream_run_failed", extra={"run_id": run_id})
