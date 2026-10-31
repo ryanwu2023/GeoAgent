@@ -7,12 +7,13 @@ from pathlib import Path
 import sys
 import threading
 import time
+import types
 from urllib.error import HTTPError
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 VALID_FEED = b'<rss><channel><item><title>Fresh</title><link>https://example.test/article</link></item></channel></rss>'
-COLLECTORS = [('israel-monitor', 'israel_monitor.py'), ('mideast-monitor', 'mideast_monitor.py')]
+COLLECTORS = [('asset-transmission-monitor', 'asset_transmission_monitor.py'), ('diplomacy-monitor', 'diplomacy_monitor.py'), ('eu-domestic-monitor', 'eu_domestic_monitor.py'), ('iran-domestic-monitor', 'iran_domestic_monitor.py'), ('israel-monitor', 'israel_monitor.py'), ('mideast-monitor', 'mideast_monitor.py'), ('opinion-monitor', 'opinion_monitor.py'), ('ru-diplomacy-monitor', 'ru_diplomacy_monitor.py'), ('russia-domestic-monitor', 'russia_domestic_monitor.py'), ('ua-front-monitor', 'ua_front_monitor.py'), ('ukraine-aid-monitor', 'ukraine_aid_monitor.py')]
 
 
 def load(pair, suffix):
@@ -75,8 +76,17 @@ def test_main_fetches_every_enabled_source_with_bounded_parallelism(pair, tmp_pa
         return [], {'status': 200}
     monkeypatch.setattr(mod, 'fetch_source', fetch)
     monkeypatch.setattr(mod, 'live_proxies', lambda: [])
+    yield_calls = []
+    if pair[0] == 'ukraine-aid-monitor':
+        def collect_yields(path, today):
+            yield_calls.append(path)
+            return {'collection_status': 'success', 'observations': []}
+        monkeypatch.setitem(sys.modules, 'european_yields',
+                            types.SimpleNamespace(collect_and_write=collect_yields))
     monkeypatch.setattr(sys, 'argv', ['collector', '--out-dir', str(tmp_path)])
     mod.main()
+    if pair[0] == 'ukraine-aid-monitor':
+        assert yield_calls == [tmp_path]
     assert sorted(visited) == sorted(x['id'] for x in enabled)
     assert 1 < peak <= 3
     stats = json.loads((tmp_path / '_fetch_stats.json').read_text())
