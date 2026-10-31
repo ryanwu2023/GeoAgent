@@ -1,4 +1,5 @@
-from backend.qa_readiness import evaluate_readiness, select_faceted_reads
+from backend.qa_plan_schema import TaskEvaluation
+from backend.qa_readiness import evaluate_evaluation_readiness, evaluate_readiness, select_faceted_reads
 
 
 def _entry(facet, rid, *, status="reported", full=True, conflicting=False):
@@ -125,3 +126,24 @@ def test_faceted_reads_reserve_space_for_each_required_facet():
     ]
     selected = select_faceted_reads(records, ["event", "diplomacy", "military", "counterevidence"], limit=4)
     assert {item["facet"] for item in selected} == {"event", "diplomacy", "military", "counterevidence"}
+
+
+def test_evaluation_readiness_treats_conflict_as_preserved_terminal_not_supported_fact():
+    report = evaluate_evaluation_readiness([
+        TaskEvaluation("T1", "c1", "satisfied", claim_ids=["a"]),
+        TaskEvaluation(
+            "T2", "c2", "conflicted", claim_ids=["b"],
+            evidence_ids=["support", "denial"], conflicts=["口径相反"],
+        ),
+    ])
+    assert report["ready"] is True
+    assert report["has_conflicts"] is True
+    assert report["conflict_claim_ids"] == ["b"]
+
+
+def test_evaluation_readiness_rejects_incomplete_even_if_search_was_executed():
+    report = evaluate_evaluation_readiness([
+        TaskEvaluation("T1", "c1", "incomplete", gaps=["未读正文"]),
+    ])
+    assert report["ready"] is False
+    assert report["incomplete_task_ids"] == ["T1"]

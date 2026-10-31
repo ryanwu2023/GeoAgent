@@ -246,6 +246,7 @@ class ResearchGraph:
     evidence_ids: list[str] = field(default_factory=list)
     gaps: list[str] = field(default_factory=list)
     stage_answer_refs: list[str] = field(default_factory=list)
+    progress_fingerprint_keys: list[str] = field(default_factory=list)
     basis: str = "deterministic"
 
     def __post_init__(self) -> None:
@@ -262,6 +263,7 @@ class ResearchGraph:
         self.evidence_ids = _unique(self.evidence_ids)
         self.gaps = _unique(self.gaps)
         self.stage_answer_refs = _unique(self.stage_answer_refs)
+        self.progress_fingerprint_keys = _unique(self.progress_fingerprint_keys)
         self.cumulative_tool_calls = int(self.cumulative_tool_calls)
         self.cumulative_seconds = int(self.cumulative_seconds)
         self.cumulative_cost_cny = float(self.cumulative_cost_cny)

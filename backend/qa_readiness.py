@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any, Iterable
 
+from .qa_plan_schema import TaskEvaluation
+
 
 _FOCUS_FACETS = {
     "事件主线": "event",
@@ -203,4 +205,27 @@ def select_faceted_reads(
         if len(selected) >= max(0, limit):
             break
     return selected
+
+
+def evaluate_evaluation_readiness(evaluations: Iterable[TaskEvaluation]) -> dict[str, Any]:
+    """冲突可带入综合，但不能伪装成已满足的单一事实。"""
+    values = list(evaluations)
+    incomplete = list(dict.fromkeys(
+        item.task_id for item in values
+        if item.result in {"incomplete", "blocked", "degraded"}
+    ))
+    conflicted = [item for item in values if item.result == "conflicted"]
+    return {
+        "ready": bool(values) and not incomplete,
+        "has_conflicts": bool(conflicted),
+        "incomplete_task_ids": incomplete,
+        "conflict_task_ids": list(dict.fromkeys(item.task_id for item in conflicted)),
+        "conflict_claim_ids": list(dict.fromkeys(
+            claim_id for item in conflicted for claim_id in item.claim_ids
+        )),
+        "conflict_evidence_ids": list(dict.fromkeys(
+            evidence_id for item in conflicted for evidence_id in item.evidence_ids
+        )),
+        "gaps": list(dict.fromkeys(gap for item in values for gap in item.gaps)),
+    }
 
