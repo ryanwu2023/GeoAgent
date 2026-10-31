@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
+import time
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -121,7 +123,12 @@ def merge_records(
             item.get("source_id", "") + "|" + item.get("link", ""): item
             for item in [*current.get("source_mentions", []), *record.get("source_mentions", []), _source_mention(record)]
         }
-        preferred = record if ACCESS_RANK.get(record.get("content_access", ""), 0) > ACCESS_RANK.get(current.get("content_access", ""), 0) else current
+        rank = ACCESS_RANK.get(record.get("content_access", ""), 0)
+        old_rank = ACCESS_RANK.get(current.get("content_access", ""), 0)
+        same_article = (record.get("source_id") == current.get("source_id")
+                        and record.get("link") == current.get("link"))
+        newer = str(record.get("fetched_at") or "") > str(current.get("fetched_at") or "")
+        preferred = record if rank > old_rank or (rank == old_rank and same_article and newer) else current
         combined = dict(preferred)
         combined["aliases"] = sorted(url for url in aliases if url)
         combined["source_mentions"] = list(mentions.values())
@@ -231,15 +238,23 @@ def run_collection(
     config = load_config(Path(config_path))
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    previous_root = Path(os.getenv("COLLECTOR_PREVIOUS_OUTPUT_ROOT", output_dir))
+    if previous_root.resolve() != output_dir.resolve() and (previous_root / "raw").is_dir():
+        from scripts.collect import _copy_missing
+        _copy_missing(previous_root / "raw", output_dir / "raw")
     stamp = utc_now()
     run_tag = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     defaults = config.get("request", {})
-    http = client or PolicyHttpClient(user_agent=config["user_agent"])
+    http = client or PolicyHttpClient(user_agent=config["user_agent"],
+        cache_dir=Path(os.getenv('COLLECTOR_STATE_ROOT', HERE / 'state')) / 'http-cache')
     incoming: list[dict[str, Any]] = []
     statuses: dict[str, dict[str, Any]] = {}
     counts = {"candidates": 0, "accepted": 0, "excluded": 0, "errors": 0, "restricted": 0}
 
-    for configured in config["sources"]:
+    def collect_source(configured):
+        started = time.monotonic()
+        counts = {"candidates": 0, "accepted": 0, "excluded": 0, "errors": 0, "restricted": 0}
+        print(f"[source:start] {configured['id']}", flush=True)
         source = {**defaults, **configured}
         status = {
             "id": source["id"], "publisher": source["publisher"], "state": "no_data",
@@ -308,10 +323,21 @@ def run_collection(
             status["error"] = None
         elif status["state"] not in {"failed", "restricted"}:
             status["state"] = "no_data"
-        incoming.extend(source_records)
-        statuses[source["id"]] = status
+        status['elapsed_sec'] = round(time.monotonic() - started, 3)
+        print(f"[source:done] {source['id']} state={status['state']} candidates={status['candidates']} accepted={status['accepted']} elapsed={status['elapsed_sec']}s", flush=True)
+        return source_records, status, counts
 
-    previous_path = output_dir / "geo-v6.json"
+    workers = max(1, min(4, int(defaults.get('source_workers', 3))))
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix='geo-source') as pool:
+        # map preserves configured ordering even when a later source finishes first.
+        for records_for_source, status, source_counts in pool.map(collect_source, config['sources']):
+            incoming.extend(records_for_source)
+            statuses[status['id']] = status
+            for key in counts:
+                counts[key] += source_counts[key]
+
+    previous_root = Path(os.getenv('COLLECTOR_PREVIOUS_OUTPUT_ROOT', output_dir))
+    previous_path = previous_root / "geo-v6.json"
     previous: list[dict[str, Any]] = []
     if previous_path.is_file():
         try:

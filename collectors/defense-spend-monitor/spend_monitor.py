@@ -43,6 +43,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import shutil
 import gzip
 import hashlib
 import io
@@ -66,8 +68,11 @@ VERSION = "1.2.0"
 ROOT = Path(__file__).resolve().parent
 CFG_PATH = ROOT / "config.json"
 FEED_DIR = ROOT / "feeds"
-STATE_DIR = ROOT / "state"
-OUTPUT_DIR = ROOT / "output"
+STATE_DIR = Path(os.getenv("COLLECTOR_STATE_ROOT", ROOT / "state"))
+OUTPUT_DIR = Path(os.getenv("COLLECTOR_OUTPUT_ROOT", ROOT / "output"))
+PREVIOUS_OUTPUT_DIR = Path(os.getenv("COLLECTOR_PREVIOUS_OUTPUT_ROOT", OUTPUT_DIR))
+sys.path.insert(0, str(ROOT.parents[1]))
+from scripts.collector_cache import ResponseCache
 SEEN_PATH = STATE_DIR / "seen.json"
 
 UA_FALLBACK = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -348,6 +353,7 @@ class Fetcher:
         self.direct = direct
         self.proxy = proxy
         self.robots_cache: Dict[str, List[str]] = {}
+        self.response_cache = ResponseCache(STATE_DIR / "http-cache", os.getenv("COLLECTOR_RUN_ID", ""))
         if direct or proxy:
             # 显式指定出口时，清掉环境变量里的代理，避免互相干扰
             for key in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY",
@@ -415,6 +421,13 @@ class Fetcher:
 
     def _request(self, url: str, body: Optional[bytes] = None,
                  verbose: bool = True) -> Optional[bytes]:
+        cache_key = self.response_cache.key(url, body, self.ua)
+        checkpoint = self.response_cache.get(cache_key)
+        if self.response_cache.same_run(checkpoint):
+            try:
+                return base64.b64decode(checkpoint['body'], validate=True)
+            except (KeyError, ValueError, TypeError):
+                pass
         last_err = ""
         is_post = body is not None
         for attempt in range(1, self.retries + 1):
@@ -426,7 +439,10 @@ class Fetcher:
                                              method="POST" if is_post else "GET")
                 with self._opener().open(req, timeout=self.timeout) as resp:
                     raw = resp.read()
-                    return self._decompress(raw, resp.headers.get("Content-Encoding", ""))
+                    decoded = self._decompress(raw, resp.headers.get("Content-Encoding", ""))
+                    if not any(x in resp.headers.get("Cache-Control", "").lower() for x in ("no-store", "private")):
+                        self.response_cache.put(cache_key, {'body': base64.b64encode(decoded).decode('ascii')})
+                    return decoded
             except urllib.error.HTTPError as e:
                 last_err = f"HTTP {e.code}"
                 # 403（风控挑战）与 410（永久移除）重试没有意义；
@@ -1540,11 +1556,11 @@ def fr_month_counts(fetcher: Fetcher, months: List[str], cache_path: Path,
 
     fetched = 0
     for ym in months:
-        if ym in cells and ym not in fresh_months:
-            continue
         g, l = month_bounds(ym)
-        row: Dict[str, int] = {}
+        row: Dict[str, int] = dict(cells.get(ym) or {})
         for term, _label in FR_HIST_TERMS:
+            if term in row and ym not in fresh_months:
+                continue
             params = [("per_page", "20"), ("conditions[term]", term),
                       ("conditions[publication_date][gte]", g),
                       ("conditions[publication_date][lte]", l),
@@ -1554,7 +1570,9 @@ def fr_month_counts(fetcher: Fetcher, months: List[str], cache_path: Path,
                               verbose=False)
             if raw:
                 try:
-                    row[term] = int(json.loads(raw).get("count") or 0)
+                    count = json.loads(raw).get("count")
+                    if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
+                        row[term] = count
                 except (json.JSONDecodeError, TypeError, ValueError):
                     pass
             fetched += 1
@@ -1564,10 +1582,12 @@ def fr_month_counts(fetcher: Fetcher, months: List[str], cache_path: Path,
         log(f"    联邦公报月计数：本次请求 {fetched} 次（月度缓存命中 "
             f"{len(months) - len(fresh_months)} 个月）")
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps(
+    temporary = cache_path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(
         {"fetched_at": datetime.now(timezone.utc).isoformat(),
          "terms": [t for t, _ in FR_HIST_TERMS], "cells": cells},
         ensure_ascii=False, indent=1), "utf-8")
+    temporary.replace(cache_path)
     return cells
 
 
@@ -1732,7 +1752,14 @@ def build_history(cfg: Dict[str, Any], metrics: Dict[str, Any],
     fr_cells: Dict[str, Dict[str, int]] = {}
     if fetcher is not None:
         try:
-            fr_cells = fr_month_counts(fetcher, months, hdir / "fr-monthly.json",
+            cache_file = (STATE_DIR / "history/fr-monthly.json"
+                          if os.getenv("COLLECTOR_STATE_ROOT") else hdir / "fr-monthly.json")
+            if not cache_file.exists():
+                old_cache = PREVIOUS_OUTPUT_DIR / hist_cfg.get("cache_dir", "history") / "fr-monthly.json"
+                if old_cache.is_file():
+                    cache_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(old_cache, cache_file)
+            fr_cells = fr_month_counts(fetcher, months, cache_file,
                                        verbose, refresh_all=backfill)
         except Exception as e:                                     # noqa: BLE001
             log(f"    [!] 联邦公报月计数失败：{type(e).__name__}: {e}")
@@ -3974,6 +4001,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                   if args.sources else None)
     from_dir = Path(args.from_file) if args.from_file else None
 
+    if PREVIOUS_OUTPUT_DIR != OUTPUT_DIR and PREVIOUS_OUTPUT_DIR.is_dir():
+        # Warm start preserves accumulated evidence as well as previous daily files.
+        from scripts.collect import _copy_missing
+        _copy_missing(PREVIOUS_OUTPUT_DIR, OUTPUT_DIR)
     records, report, metrics = collect(cfg, fetcher, source_ids, run_dt,
                                        from_dir, verbose)
 
