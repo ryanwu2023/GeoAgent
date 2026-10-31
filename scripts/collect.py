@@ -252,6 +252,9 @@ def _run_one_unlocked(
         env = {
             **os.environ,
             "PYTHONUTF8": "1",
+            "PYTHONUNBUFFERED": "1",
+            "COLLECTOR_RUN_ID": staging_root.name,
+            "COLLECTOR_PREVIOUS_OUTPUT_ROOT": str(data_root / item["id"] / "output"),
             "COLLECTOR_OUTPUT_ROOT": str(output_stage),
             "COLLECTOR_STATE_ROOT": str(data_root / item["id"] / "state"),
         }

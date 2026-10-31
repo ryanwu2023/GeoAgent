@@ -76,6 +76,10 @@ case ${1:-} in
     }
     [[ $(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}') == https://gzg.sealos.run:6443 ]] || exit 1
     kubectl --request-timeout=30s -n "$namespace" get deployment geoagent -o name
+    assert_collectors_idle() {
+      kubectl --request-timeout=30s -n "$namespace" exec -i deployment/geoagent -c geoagent -- python - < scripts/ci/assert_collectors_idle.py
+    }
+    assert_collectors_idle
     record="geoagent-release-${CI_PIPELINE_ID}"
     current_owner=$(kubectl -n "$namespace" get deployment geoagent -o jsonpath='{.metadata.annotations.geoagent-release-owner}')
     sequence=$(kubectl -n "$namespace" get deployment geoagent -o jsonpath='{.metadata.annotations.geoagent-release-sequence}')
@@ -143,6 +147,25 @@ case ${1:-} in
         patch="${patch%]},{\"op\":\"$operation\",\"path\":\"/spec/template/spec/containers/$index/env/$position\",\"value\":{\"name\":\"$setting\",\"value\":\"$value\"}}]"
       done
     fi
+    # Reserve the existing collector mutex in the exact old Pod. The guard
+    # survives the check-to-rollout interval; new manual/scheduled runs are busy.
+    guard_pod=$(kubectl -n "$namespace" get pods -l app=geoagent -o jsonpath='{.items[0].metadata.name}')
+    [[ -n $guard_pod ]] || exit 1
+    guard_token="release-${CI_PIPELINE_ID}-${CI_JOB_ID:-local}"
+    cleanup_release_guard() {
+      kubectl --request-timeout=15s -n "$namespace" exec -i "$guard_pod" -c geoagent -- python - --release "$guard_token" < scripts/ci/assert_collectors_idle.py >/dev/null 2>&1 || true
+      rm -rf -- "$job_tools"
+    }
+    trap cleanup_release_guard EXIT
+    kubectl -n "$namespace" exec -i "$guard_pod" -c geoagent -- python - --hold "$guard_token" < scripts/ci/assert_collectors_idle.py > "$job_tools/guard.log" 2>&1 &
+    guard_job=$!
+    for attempt in $(seq 1 30); do
+      if grep -q '^Collector deployment guard acquired$' "$job_tools/guard.log"; then break; fi
+      if ! kill -0 "$guard_job" 2>/dev/null; then cat "$job_tools/guard.log"; exit 1; fi
+      sleep 1
+    done
+    grep -q '^Collector deployment guard acquired$' "$job_tools/guard.log" || { cat "$job_tools/guard.log"; exit 1; }
+    kill -0 "$guard_job" 2>/dev/null || { echo 'Collector guard exited before rollout'; exit 1; }
     kubectl -n "$namespace" patch deployment geoagent --type=json -p "$patch"
     status=failed
     if kubectl -n "$namespace" rollout status deployment/geoagent --timeout=300s &&
