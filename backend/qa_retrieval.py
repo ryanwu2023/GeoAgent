@@ -9,8 +9,9 @@ from collections import Counter
 from datetime import datetime, timezone
 import math
 import re
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
+from .qa_aliases import ExpandedQuery
 from .qa_query import FacetQuery, classify_topic_lane
 
 
@@ -132,6 +133,27 @@ def _title_key(record: dict[str, Any]) -> str:
     return re.sub(r"[^a-z0-9\u4e00-\u9fff]+", "", title)[:120]
 
 
+def _stance_key(record: dict[str, Any]) -> str:
+    text = _record_text(record)
+    if re.search(r"否认|辟谣|不实|尚未|没有|未发生|deny|denial|false|not occurred", text, re.I):
+        return "denial"
+    return "report"
+
+
+def _origin_group(record: dict[str, Any]) -> str:
+    explicit = str(record.get("origin_id") or "").strip()
+    if explicit:
+        return explicit
+    title = _title_key(record)
+    return f"title:{title}:{_stance_key(record)}" if title else f"record:{record.get('id') or ''}"
+
+
+def _event_group(record: dict[str, Any]) -> str:
+    day = str(record.get("event_at") or record.get("published_at") or "")[:10]
+    title = _title_key(record)[:60]
+    return f"{day}:{title}:{_stance_key(record)}"
+
+
 def hybrid_retrieve(
     records: Iterable[dict[str, Any]],
     query: str,
@@ -140,6 +162,8 @@ def hybrid_retrieve(
     recent_after: str = "",
     source_tiers: set[str] | None = None,
     query_spec: FacetQuery | dict[str, Any] | None = None,
+    expanded_query: ExpandedQuery | None = None,
+    semantic_scores: Mapping[str, float] | None = None,
 ) -> list[dict[str, Any]]:
     """Return a diverse, reranked result set.
 
@@ -148,6 +172,7 @@ def hybrid_retrieve(
     ranking signal only and never treated as fact verification.
     """
     spec = FacetQuery.from_value(query_spec) if query_spec is not None else None
+    excluded = tuple(term.lower() for term in (expanded_query.exclude_terms if expanded_query else ()) if term)
     pool = [
         record for record in records
         if (not recent_after or str(record.get("published_at") or "")[:10] >= recent_after)
@@ -159,15 +184,18 @@ def hybrid_retrieve(
             or (spec.lane == "any" and classify_topic_lane(record, spec) != "rejected")
             or classify_topic_lane(record, spec) == spec.lane
         )
+        and not any(term in _record_text(record) for term in excluded)
     ]
     if not pool or limit <= 0:
         return []
 
-    query_tokens = _tokens(query)
+    retrieval_query = expanded_query.all_text() if expanded_query else query
+    query_tokens = _tokens(retrieval_query)
     ascii_only_query = bool(query_tokens) and all(re.fullmatch(r"[a-z][a-z0-9._-]*", token) for token in query_tokens)
     query_counts = Counter(query_tokens)
-    query_grams = _ngrams(query)
-    entities = _entity_terms(query)
+    query_grams = _ngrams(retrieval_query)
+    entities = _entity_terms(retrieval_query)
+    semantic_scores = semantic_scores or {}
     documents = [_record_text(record) for record in pool]
     document_tokens = [_tokens(text) for text in documents]
     document_frequency: Counter[str] = Counter()
@@ -178,7 +206,7 @@ def hybrid_retrieve(
     oldest = min((_published_timestamp(record.get("published_at")) for record in pool if _published_timestamp(record.get("published_at"))), default=newest)
     recent_intent = bool(re.search(r"最新|近期|最近|当前|目前|今天|今日|进展", query))
 
-    scored: list[tuple[float, float, dict[str, Any]]] = []
+    scored: list[tuple[float, float, dict[str, Any], dict[str, Any]]] = []
     total = len(pool)
     for record, text, tokens in zip(pool, documents, document_tokens):
         token_counts = Counter(tokens)
@@ -195,9 +223,10 @@ def hybrid_retrieve(
             bm25 += inverse * frequency * 2.2 / normalizer
         semantic = _cosine(query_grams, _ngrams(text))
         entity_hits = sum(1 for entity in entities if entity and entity in text)
-        if ascii_only_query and exact == 0 and entity_hits == 0:
+        vector_score = max(0.0, float(semantic_scores.get(str(record.get("id") or ""), 0.0) or 0.0))
+        if ascii_only_query and exact == 0 and entity_hits == 0 and vector_score <= 0:
             continue
-        relevance = exact + 2.4 * bm25 + 7.0 * semantic + 1.8 * entity_hits
+        relevance = exact + 2.4 * bm25 + 7.0 * semantic + 1.8 * entity_hits + 6.0 * vector_score
         if relevance <= 0.05:
             continue
         published = _published_timestamp(record.get("published_at"))
@@ -222,28 +251,48 @@ def hybrid_retrieve(
             # alone, while a near-equivalent fresh report usually leads.
             freshness = math.exp(-age_days / 7.0)
             score *= 0.08 + 0.92 * freshness
-        scored.append((score, published, record))
+        paths = []
+        if exact > 0 or bm25 > 0 or semantic > 0.05 or entity_hits > 0:
+            paths.append("keyword")
+        if vector_score > 0:
+            paths.append("semantic")
+        scored.append((score, published, record, {
+            "retrieval_paths": paths or ["keyword"],
+            "origin_group": _origin_group(record),
+            "event_group": _event_group(record),
+            "rank_reason": {
+                "lexical": round(exact + 2.4 * bm25, 4),
+                "character_similarity": round(semantic, 4),
+                "entity_hits": entity_hits,
+                "semantic": round(vector_score, 4),
+                "recency": round(recency, 4),
+                "source_quality": round(quality, 4),
+                "score": round(score, 4),
+            },
+        }))
 
     scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
     selected: list[dict[str, Any]] = []
-    seen_exact: set[tuple[str, str]] = set()
-    seen_titles: set[str] = set()
+    seen_origins: set[str] = set()
+    seen_title_stances: set[tuple[str, str]] = set()
     source_counts: Counter[str] = Counter()
-    for _, _, record in scored:
+    for _, _, record, diagnostic in scored:
         key = _origin_key(record)
         title_key = _title_key(record)
-        if key in seen_exact or (title_key and title_key in seen_titles):
+        origin_group = diagnostic["origin_group"]
+        title_stance = (title_key, _stance_key(record))
+        if origin_group in seen_origins or (title_key and title_stance in seen_title_stances):
             continue
         source = key[0]
         # Preserve source diversity while still allowing two genuinely distinct
         # reports from an authoritative source in a wider result set.
         if source and source_counts[source] >= (2 if limit >= 12 else 1):
             continue
-        seen_exact.add(key)
+        seen_origins.add(origin_group)
         if title_key:
-            seen_titles.add(title_key)
+            seen_title_stances.add(title_stance)
         source_counts[source] += 1
-        selected.append(record)
+        selected.append({**record, **diagnostic})
         if len(selected) >= limit:
             break
     return selected

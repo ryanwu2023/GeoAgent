@@ -99,6 +99,19 @@ CREATE TABLE IF NOT EXISTS qa_artifacts(
 CREATE INDEX IF NOT EXISTS idx_qa_steps_run ON qa_steps(run_id,sequence);
 CREATE INDEX IF NOT EXISTS idx_qa_artifacts_run_call ON qa_artifacts(run_id,call_id);
 
+CREATE TABLE IF NOT EXISTS qa_evidence_embeddings(
+    record_id TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    model_version TEXT NOT NULL,
+    dimensions INTEGER NOT NULL,
+    vector DOUBLE PRECISION[] NOT NULL,
+    scope_metadata TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(record_id,model_version)
+);
+CREATE INDEX IF NOT EXISTS idx_qa_embeddings_model_dimension
+    ON qa_evidence_embeddings(model_version,dimensions);
+
 -- Internal macro messages share the application PostgreSQL database.
 
 CREATE TABLE IF NOT EXISTS internal_schema_meta (

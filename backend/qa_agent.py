@@ -14,6 +14,7 @@ from .internal_messages import internal_query_terms, message_topic_lane
 from .qa_retrieval import hybrid_retrieve
 from .qa_query import FacetQuery, classify_topic_lane, freshness_metadata
 from .qa_scope import ResearchScope
+from .qa_aliases import expand_query
 
 
 TOOL_NAMES = {
@@ -445,9 +446,10 @@ class LocalGeoTools:
                 lane="any" if facet == "market" else "core",
                 expected_role="counterevidence" if facet == "counterevidence" else "support",
             )
+            expanded_query = expand_query(query, self.research_scope) if self.research_scope is not None else None
             matches = hybrid_retrieve(
                 scoped_records, str(args.get("q") or ""), limit=overfetch,
-                source_tiers=source_tiers, query_spec=query_spec,
+                source_tiers=source_tiers, query_spec=query_spec, expanded_query=expanded_query,
             )
             matched_total = len(matches)
             freshness = freshness_metadata(
@@ -467,6 +469,7 @@ class LocalGeoTools:
                 remaining_after = max(0, self.budget["evidence"] - len(self.retrieved_ids))
             result = {
                 "query": str(args.get("q") or ""),
+                "expanded_query": expanded_query.to_dict() if expanded_query is not None else None,
                 "query_scope": {"start": search_start, "end": search_end},
                 "records": [
                     {**self._record_summary(record), "topic_lane": classify_topic_lane(record, query_spec)}
