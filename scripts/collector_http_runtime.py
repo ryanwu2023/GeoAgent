@@ -54,6 +54,10 @@ def prepare_output(explicit, legacy):
         previous = Path(previous)
         if previous.is_dir() and previous.resolve() != target.resolve():
             for old in previous.rglob('*'):
+                # Preserve records and cumulative health, but a new batch must
+                # produce its own receipts (including when it times out).
+                if old.parent == previous and old.name in {'_fetch_stats.json', '_source_status.json'}:
+                    continue
                 if old.is_file() and not old.is_symlink():
                     new = target / old.relative_to(previous)
                     if not new.exists():

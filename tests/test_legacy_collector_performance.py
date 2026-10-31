@@ -133,6 +133,26 @@ def test_managed_output_copies_previous_without_overwriting_explicit_path(tmp_pa
     assert not (explicit / 'ALL-records.jsonl').exists()
 
 
+def test_retry_diagnostics_do_not_relabel_previous_run_as_current(tmp_path, monkeypatch):
+    from scripts.collector_http_runtime import prepare_output
+    from scripts.collect import _source_diagnostics
+    previous, stage = tmp_path / 'previous', tmp_path / 'stage'
+    previous.mkdir()
+    for name in ['_fetch_stats.json', '_source_status.json']:
+        (previous / name).write_text('{"run":"previous","status":"success"}')
+    (previous / '_source_health.json').write_text('{"source":{"consec_fail":2}}')
+    (previous / 'ALL-records.jsonl').write_text('{"id":"old"}\n')
+    monkeypatch.setenv('COLLECTOR_OUTPUT_ROOT', str(stage))
+    monkeypatch.setenv('COLLECTOR_PREVIOUS_OUTPUT_ROOT', str(previous))
+    prepare_output(None, tmp_path / 'legacy')
+    # A timeout before this batch writes receipts must not archive old success.
+    diagnostics = _source_diagnostics(stage)
+    assert '_fetch_stats.json' not in diagnostics
+    assert '_source_status.json' not in diagnostics
+    assert diagnostics['_source_health.json'] == {'source': {'consec_fail': 2}}
+    assert (stage / 'ALL-records.jsonl').read_text() == '{"id":"old"}\n'
+
+
 @pytest.mark.parametrize('pair', COLLECTORS)
 @pytest.mark.parametrize('failed_body', [b'', b'   ', b'<html>temporary challenge</html>'])
 def test_failed_feed_response_is_refetched_on_process_retry(pair, failed_body, tmp_path, monkeypatch):
