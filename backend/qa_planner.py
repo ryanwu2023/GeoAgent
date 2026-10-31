@@ -8,6 +8,8 @@ from typing import Any, Awaitable, Callable
 
 from .qa_retrieval import evidence_budget
 from .qa_query import FacetQuery, freshness_windows
+from .qa_plan_schema import QaPolicy, ResearchGraph, ResearchTask, TaskBudget, TaskProfile
+from .qa_scope import ResearchScope
 
 
 def _date(value: str) -> str:
@@ -210,6 +212,156 @@ def deterministic_plan(
         "budget": budget,
         "basis": "deterministic",
     }
+
+
+def _research_task(
+    task_id: str, task_type: str, objective: str, scope: ResearchScope, policy: QaPolicy,
+    *, depends_on: list[str] | None = None, categories: list[str] | None = None,
+    criteria: list[str] | None = None, tool_calls: int = 4, seconds: int = 45,
+) -> ResearchTask:
+    return ResearchTask(
+        task_id=task_id, task_type=task_type, objective=objective,
+        depends_on=list(depends_on or []),
+        allowed_tool_categories=list(categories or ["public_evidence"]),
+        acceptance_criteria=list(criteria or ["取得能够回答任务目标的可追溯证据"]),
+        budget=TaskBudget(
+            tool_calls=min(tool_calls, policy.max_tool_calls_per_task),
+            seconds=seconds,
+            context_tokens=min(16000, policy.max_context_tokens),
+        ),
+        scope_topics=list(scope.topics), dimension=scope.dimension,
+    )
+
+
+def _deterministic_graph(
+    question: str, profile: TaskProfile, scope: ResearchScope, policy: QaPolicy,
+) -> ResearchGraph:
+    tasks: list[ResearchTask] = []
+    internal = ["internal_research"] if profile.requires_internal_sources else []
+    if profile.suggested_mode == "fast":
+        categories = ["market_data"] if profile.requires_metrics else ["public_evidence"]
+        criteria = (
+            ["取得数值、单位、观测日期和数据来源"]
+            if profile.requires_metrics else ["取得直接回答问题的原始记录或结构化结果"]
+        )
+        tasks.append(_research_task(
+            "T1", "metric_lookup" if profile.requires_metrics else "direct_lookup",
+            "直接查询用户所问的数值、来源或原始材料。", scope, policy,
+            categories=categories, criteria=criteria, tool_calls=3, seconds=30,
+        ))
+    elif profile.suggested_mode == "standard":
+        tasks.extend([
+            _research_task(
+                "T1", "evidence_discovery", "检索与问题直接相关的候选证据。", scope, policy,
+                categories=["public_evidence", *internal],
+                criteria=["取得至少一条相关证据", "记录证据发布时间与信息性质"],
+            ),
+            _research_task(
+                "T2", "full_text_validation", "读取关键证据全文并核对主张边界。", scope, policy,
+                depends_on=["T1"], categories=["public_evidence", *internal],
+                criteria=["读取关键证据正文", "区分事实、声明和媒体转述"],
+            ),
+        ])
+        if profile.requires_counterevidence:
+            tasks.append(_research_task(
+                "T3", "counterevidence", "查找反证、否认和执行缺口。", scope, policy,
+                depends_on=["T2"], categories=["public_evidence", *internal],
+                criteria=["检查至少一项相反证据或明确未检得范围"],
+            ))
+    else:
+        tasks.append(_research_task(
+            "T1", "evidence_discovery", "宽检索近期事件与关键背景证据。", scope, policy,
+            categories=["workspace", "public_evidence", *internal],
+            criteria=["覆盖近期窗口", "记录原始来源与转载链", "筛选关键全文候选"],
+            tool_calls=6, seconds=55,
+        ))
+        assessment_id = "T2"
+        assessment_type = "capability_assessment" if profile.intent in {"scenario_analysis", "prediction"} else "event_assessment"
+        assessment_objective = (
+            "评估情景成立所需能力、意图、现实约束和反制条件。"
+            if assessment_type == "capability_assessment"
+            else "梳理事件主线并区分已确认行动、公开表态和待核验报道。"
+        )
+        tasks.append(_research_task(
+            assessment_id, assessment_type, assessment_objective, scope, policy,
+            depends_on=["T1"], categories=["public_evidence", *internal, "analysis"],
+            criteria=["形成主要变化主张", "区分信息性质", "记录不可观测缺口"],
+            tool_calls=6, seconds=60,
+        ))
+        last_assessment_ids = [assessment_id]
+        next_index = 3
+        if profile.requires_metrics:
+            metric_id = f"T{next_index}"
+            next_index += 1
+            tasks.append(_research_task(
+                metric_id, "market_assessment", "查询相关量化指标并核对日期、单位和统计口径。", scope, policy,
+                depends_on=["T1"], categories=["market_data", "analysis"],
+                criteria=["取得关键指标数值、日期、单位和来源", "区分市场表现与因果推断"],
+                tool_calls=5, seconds=45,
+            ))
+            transmission_id = f"T{next_index}"
+            next_index += 1
+            tasks.append(_research_task(
+                transmission_id, "asset_transmission", "评估事件到大类资产的条件传导和失效条件。", scope, policy,
+                depends_on=[assessment_id, metric_id], categories=["market_data", "analysis"],
+                criteria=["说明传导机制", "给出条件方向", "列出市场反证与失效条件"],
+                tool_calls=4, seconds=45,
+            ))
+            last_assessment_ids.append(transmission_id)
+        counter_id = f"T{next_index}"
+        next_index += 1
+        tasks.append(_research_task(
+            counter_id, "counterevidence", "独立查找反证、否认、来源冲突和判断失效条件。", scope, policy,
+            depends_on=[assessment_id], categories=["public_evidence", *internal, "analysis"],
+            criteria=["检查至少一项相反证据", "记录未解决冲突", "不得把未检得写成不存在"],
+            tool_calls=5, seconds=45,
+        ))
+        tasks.append(_research_task(
+            f"T{next_index}", "source_verification", "核对关键报道的原始来源与独立确认关系。", scope, policy,
+            depends_on=["T1", counter_id], categories=["public_evidence", "analysis"],
+            criteria=["同源转载不重复计数", "关键主张绑定原文位置与内容版本"],
+            tool_calls=4, seconds=40,
+        ))
+    return ResearchGraph.create(
+        question=question,
+        research_objective=f"围绕原始问题形成可追溯、含反证和边界的{profile.intent}结论。",
+        mode=profile.suggested_mode, scope=scope, tasks=tasks,
+    )
+
+
+def _model_graph(
+    question: str, profile: TaskProfile, scope: ResearchScope, policy: QaPolicy,
+    value: dict[str, Any],
+) -> ResearchGraph:
+    tasks = [ResearchTask.from_dict(item) for item in value.get("tasks") or []]
+    graph = ResearchGraph.create(
+        question=question,
+        research_objective=str(value.get("research_objective") or "围绕原始问题完成研究。"),
+        mode=profile.suggested_mode, scope=scope, tasks=tasks,
+        revision=int(value.get("revision") or 1),
+        parent_revision=value.get("parent_revision"),
+        basis="model+deterministic",
+    )
+    from .qa_plan_validator import validate_graph
+    validation = validate_graph(graph, policy)
+    if not validation.valid:
+        raise ValueError("invalid_model_graph:" + ";".join(validation.errors))
+    return graph
+
+
+def build_research_graph(
+    question: str, profile: TaskProfile, scope: ResearchScope, policy: QaPolicy,
+    *, model_graph: dict[str, Any] | None = None,
+) -> ResearchGraph:
+    """建立受范围和预算约束的任务图；模型图无效时回退确定性图。"""
+    fallback = _deterministic_graph(question, profile, scope, policy)
+    if model_graph is None:
+        return fallback
+    try:
+        return _model_graph(question, profile, scope, policy, model_graph)
+    except (TypeError, ValueError, KeyError):
+        fallback.basis = "deterministic_fallback"
+        return fallback
 
 
 async def build_question_plan(
