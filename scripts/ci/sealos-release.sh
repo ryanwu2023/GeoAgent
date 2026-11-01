@@ -31,11 +31,13 @@ case ${1:-} in
     docker network create "$pg_network"
     docker run -d --name "$pg_container" --network "$pg_network" --network-alias postgres \
       -e POSTGRES_PASSWORD=isolated-ci-only -e POSTGRES_DB=geoagent_test postgres:17
+    # The image's init phase runs a socket-only temporary server, then restarts it.
+    # Probe over TCP so only the final server counts as ready.
     for attempt in $(seq 1 60); do
-      docker exec "$pg_container" pg_isready -U postgres -d geoagent_test && break
+      docker exec "$pg_container" pg_isready -h 127.0.0.1 -U postgres -d geoagent_test && break
       sleep 1
     done
-    docker exec "$pg_container" pg_isready -U postgres -d geoagent_test
+    docker exec "$pg_container" pg_isready -h 127.0.0.1 -U postgres -d geoagent_test
     docker run --rm --network "$pg_network" --env GEO_TEST_DATABASE_URL=postgresql://postgres:isolated-ci-only@postgres/geoagent_test --user "$(id -u):$(id -g)" --env GEO_DATA_DIR=/tmp/geoagent-ci-data \
       --env COLLECTOR_DATA_ROOT=/tmp/geoagent-ci-data/collector-output --env HOME=/tmp \
       --mount "type=bind,source=$PWD/release,target=/reports" \
