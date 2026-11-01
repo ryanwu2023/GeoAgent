@@ -32,6 +32,7 @@ from backend.events import SIGNALS, CATEGORIES, event_metadata
 from backend.collector_monitor import load_ledger_events, load_runs
 from backend.paths import project_root
 from backend.internal_messages import get_message as get_internal_message, message_stats as internal_message_stats, search_messages as search_internal_messages
+from backend.meeting_export import filter_meetings
 from scripts.integrate_collectors import load_registry
 
 from .audit import record, request_id_from_context
@@ -65,6 +66,19 @@ InternalMessageLimit = Annotated[int, Field(ge=1, le=20, description="内部消�
 BriefId = Annotated[str, Field(description="已归档简报ID，从geo_brief_list获取；即时问答不是档案。")]
 MaxPoints = Annotated[int, Field(description="返回最近观测点上限1—50，截断标志见history_truncated；区间计算基于截断前有效点。")]
 MaxBytes = Annotated[int, Field(description="简报正文UTF-8字节上限1—30000；truncated=true时不能当成完整正文。")]
+MeetingId = Annotated[str, Field(max_length=120, description="会晤日历记录ID，从geo_meeting_list获取，必须属于指定快照。")]
+MeetingStart = Annotated[str, Field(description="会晤日期区间起点YYYY-MM-DD；空串时从快照导入日起算。")]
+MeetingEnd = Annotated[str, Field(description="会晤日期区间终点YYYY-MM-DD；空串时为快照导入日后120天。显式给出区间时排除日期未定的会晤。")]
+MEETING_BASIS = "冻结快照中的结构化会晤日历；计划、媒体报道和人工基线不等于会晤必然举行，地点是计划地点而非人物实时位置。"
+MEETING_SUMMARY_FIELDS = ("id", "title", "track", "topics", "date_start", "date_end", "date_raw", "precision",
+                          "location", "status", "status_label", "inactive", "non_meeting", "conflict", "evidence_id")
+
+
+def _meeting_summary(item: dict[str, Any]) -> dict[str, Any]:
+    """List rows stay small; claims, sources, updates and map points are read via geo_meeting_get."""
+    return {**{key: item.get(key) for key in MEETING_SUMMARY_FIELDS},
+            "persons": [{key: person.get(key) for key in ("name", "role", "country")} for person in item.get("persons", [])],
+            "source_count": len(item.get("sources") or [])}
 
 
 def _topic_ids() -> set[str]:
@@ -1011,6 +1025,39 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             return data, provenance, []
         return await _run_tool(ctx=ctx, tool='geo_risk_map', handler=handler)
 
+    @server.tool(description="回答近期/未来有哪些关键会晤、某人物或某轨道的会晤安排：读取快照内会晤日历，与看板会晤日历同一筛选口径，默认快照导入日起120天、不含已取消/失效。列表只含摘要，声明、来源与更新用geo_meeting_get读取；计划不等于必然举行。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    async def geo_meeting_list(snapshot_id: SnapshotId, topic: Topic = 'all', track: Annotated[str, Field(max_length=40, description="会晤轨道机器值，如us-ir美伊；空串不限。合法值见返回的tracks统计，不按名称猜测。")] = '', status: Annotated[str, Field(max_length=120, description="会晤状态机器值，多个用英文逗号分隔，如confirmed,scheduled；空串不限。合法值见返回的status_counts。")] = '', person: Annotated[str, Field(max_length=120, description="人物中文名或ID子串，如普京或putin；空串不限。")] = '', start: MeetingStart = '', end: MeetingEnd = '', include_inactive: Annotated[bool, Field(description="是否包含已取消、失效的会晤；默认false。")] = False, offset: Offset = 0, limit: Limit = 20, *, ctx: Context) -> str:
+        def handler(principal, _):
+            snapshot, provenance = scoped_snapshot(principal, 'geo_meeting_list', snapshot_id, topic, '', start, end)
+            if offset < 0:
+                raise MCPError('GEO_INVALID_OFFSET', 'offset不能为负数')
+            size = clamp_limit(limit)
+            rows, range_start, range_end = filter_meetings(snapshot, topic=topic, track=track, status=status, person=person,
+                                                           start=start, end=end, include_inactive=include_inactive)
+            status_counts: dict[str, int] = {}
+            tracks: dict[str, int] = {}
+            for item in rows:
+                status_counts[item.get('status') or 'unknown'] = status_counts.get(item.get('status') or 'unknown', 0) + 1
+                tracks[item.get('track') or 'unknown'] = tracks.get(item.get('track') or 'unknown', 0) + 1
+            page = rows[offset:offset + size]
+            return {'query_scope': {'snapshot_id': snapshot_id, 'topic': topic, 'track': track, 'status': status, 'person': person,
+                                    'start': range_start, 'end': range_end, 'include_inactive': include_inactive},
+                    'status_counts': status_counts, 'tracks': tracks,
+                    'meetings': [_meeting_summary(item) for item in page],
+                    'total': len(rows), 'offset': offset, 'limit': size, 'has_more': offset + size < len(rows),
+                    'basis': MEETING_BASIS}, provenance, []
+        return await _run_tool(ctx=ctx, tool='geo_meeting_list', handler=handler)
+
+    @server.tool(description="读取快照内单条会晤日历的完整记录：参会人物、计划地点、状态、各方声明、来源与更新、冲突标记及关联证据ID。声明和报道不是会晤已举行的证明；关联证据正文用geo_evidence_get读取。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
+    async def geo_meeting_get(snapshot_id: SnapshotId, meeting_id: MeetingId, *, ctx: Context) -> str:
+        def handler(principal, _):
+            snapshot, provenance = scoped_snapshot(principal, 'geo_meeting_get', snapshot_id)
+            item = next((row for row in snapshot.get('meetings', []) if row.get('id') == meeting_id), None)
+            if item is None:
+                raise MCPError('GEO_MEETING_NOT_FOUND', '会晤日历记录不在指定快照内', {'snapshot_id': snapshot_id, 'meeting_id': meeting_id})
+            return {'meeting': item, 'basis': MEETING_BASIS}, provenance, []
+        return await _run_tool(ctx=ctx, tool='geo_meeting_get', handler=handler)
+
     @server.tool(description="发现业务主题/跟踪维度中文名与机器值，以及看板到工具的问答路径；参数不明时先查此工具，不提供具体快照数值。", annotations={"readOnlyHint": True, "destructiveHint": False}, structured_output=False)
     async def geo_business_catalog(ctx: Context) -> str:
         def handler(principal, _):
@@ -1018,6 +1065,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
             return {'topics': [{'id': t['id'], 'name': t['name'], 'dimensions': [{'id': k, 'name': v} for k, v in t['dimensions']]} for t in TOPICS],
                     'questions': {'本周哪些指标发生变化': ['geo_metric_changes', 'geo_metric_series'],
                                   '地图主要事件与关联地区': ['geo_risk_map', 'geo_evidence_get'],
+                                  '近期有哪些关键会晤/某人物的会晤安排': ['geo_meeting_list', 'geo_meeting_get', 'geo_evidence_get'],
                                   '当前判断有哪些反证': ['geo_analysis_view', 'geo_evidence_search', 'geo_evidence_get'],
                                   '内部宏观群近期提到什么': ['geo_internal_message_search', 'geo_internal_message_get'],
                                   '还缺什么数据': ['geo_workspace_summary', 'geo_source_health', 'geo_metric_catalog'],

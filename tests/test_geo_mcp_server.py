@@ -375,7 +375,8 @@ async def test_official_mcp_client_can_initialize_list_and_call() -> None:
                     await session.initialize()
                     tools = await session.list_tools()
                     names = {tool.name for tool in tools.tools}
-                    assert {'geo_business_catalog', 'geo_metric_changes', 'geo_source_health', 'geo_collector_runs', 'geo_brief_compare', 'geo_risk_map'} <= names
+                    assert {'geo_business_catalog', 'geo_metric_changes', 'geo_source_health', 'geo_collector_runs', 'geo_brief_compare', 'geo_risk_map',
+                            'geo_meeting_list', 'geo_meeting_get'} <= names
                     for tool in tools.tools:
                         assert tool.annotations.readOnlyHint is True
                         for parameter in tool.inputSchema.get('properties', {}).values():
