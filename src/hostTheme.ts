@@ -22,9 +22,15 @@ export function hostThemeMessage(palette: Readonly<HostPalette> = GEO_HOST_PALET
   return {type: 'finance:theme:set', theme: 'dark' as const, palette: {...palette}};
 }
 
-/** Re-send after every panel (re)start: PiChat announces it with finance:chat:ready. */
-export function isPanelReady(data: unknown, agentId: string): boolean {
-  return !!data && typeof data === 'object'
-    && (data as {type?: unknown}).type === 'finance:chat:ready'
-    && (data as {agentId?: unknown}).agentId === agentId;
+/**
+ * When to (re)send the palette: on the panel's identity handshake
+ * (finance:auth:request, sent before PiChat has an agent, so it carries none)
+ * the loading screens already paint in our colors; on finance:chat:ready after
+ * every panel (re)start the chat keeps them.
+ */
+export function wantsHostTheme(data: unknown, agentId: string): boolean {
+  if (!data || typeof data !== 'object') return false;
+  const {type, agentId: from} = data as {type?: unknown; agentId?: unknown};
+  if (type === 'finance:auth:request') return from === undefined || from === agentId;
+  return type === 'finance:chat:ready' && from === agentId;
 }
