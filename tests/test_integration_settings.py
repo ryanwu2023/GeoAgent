@@ -141,8 +141,8 @@ def test_workbench_real_mcp_and_management_auth(client):
     assert client.get(url, headers={"X-GeoAgent-Admin": "bad"}).status_code == 200
     catalog = client.get(url)
     assert catalog.headers["cache-control"] == "no-store"
-    assert len(catalog.json()["tools"]) == 22
-    assert {"geo_sync_manifest", "geo_sync_chunk"} <= {tool["name"] for tool in catalog.json()["tools"]}
+    assert len(catalog.json()["tools"]) == 24
+    assert {"geo_sync_manifest", "geo_sync_chunk", "geo_meeting_list", "geo_meeting_get"} <= {tool["name"] for tool in catalog.json()["tools"]}
     assert "inputSchema" in catalog.json()["tools"][0]
     assert catalog.json()["instructions"]
     key = client.post("/api/integrations/mcp-keys", json={"label": "trial"}).json()
