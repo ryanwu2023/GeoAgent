@@ -103,6 +103,46 @@ def test_russia_and_eu_cover_sanctions_circumvention_and_funding():
     )
 
 
+def test_eu_domestic_covers_france_and_germany_public_spending_protests():
+    european = _engine("eu-domestic-monitor", "eu_domestic_monitor.py")
+    france = european.classify(
+        "French students and unions march in Paris for more public spending",
+        "Protesters demand school funding, higher wages and better public services.",
+    )
+    assert france is not None
+    assert "france_social_fiscal_pressure" in france["buckets"]
+    assert france["flags"].get("aid_capacity_candidate") is False
+
+    germany = european.classify(
+        "German youth protest social spending cuts and rearmament",
+        "Demonstrators demand investment in education and housing instead of defence spending and oppose conscription.",
+    )
+    assert germany is not None
+    assert "germany_social_fiscal_pressure" in germany["buckets"]
+    assert "defense_vs_public_spending" in germany["buckets"]
+    assert germany["flags"].get("anti_rearmament") is True
+    assert germany["flags"].get("anti_conscription") is True
+    assert germany["flags"].get("aid_capacity_candidate") is True
+
+
+def test_eu_domestic_rejects_non_fiscal_protests_and_sports_noise():
+    european = _engine("eu-domestic-monitor", "eu_domestic_monitor.py")
+    football = european.classify(
+        "France supporters march after football final",
+        "Fans celebrated the championship in Paris.",
+    )
+    assert football is None or not {
+        "france_social_fiscal_pressure", "germany_social_fiscal_pressure"
+    } & set(football.get("buckets") or [])
+    generic = european.classify(
+        "A demonstration was held in Berlin",
+        "Police closed one street after an unrelated local dispute.",
+    )
+    assert generic is None or not {
+        "france_social_fiscal_pressure", "germany_social_fiscal_pressure"
+    } & set(generic.get("buckets") or [])
+
+
 def test_asset_transmission_covers_gas_flows_and_black_sea_grain_route():
     engine = _engine("asset-transmission-monitor", "asset_transmission_monitor.py")
     _assert_buckets(

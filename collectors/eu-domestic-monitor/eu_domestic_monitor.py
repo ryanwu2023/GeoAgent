@@ -621,6 +621,11 @@ class Engine:
         text = text.replace(chr(0x2019), "'").replace(chr(0x2018), "'")
         for k, res in self.flag_res.items():
             fl[k] = any(rx.search(text) for rx in res)
+        # 社会抗议本身只进入财政压力候选，不能直接推导“对乌援助能力下降”。
+        # 只有报道明确出现国防/公共开支取舍，或直接出现乌克兰援助语境时才置真。
+        fl["aid_capacity_candidate"] = bool(
+            "defense_vs_public_spending" in buckets or fl.get("ukraine_aid_explicit")
+        )
         return fl
 
     def _event_done(self, text):
@@ -869,9 +874,14 @@ STANCE_LABEL = {"escalation_signal": "收缩/软化信号", "deescalation_signal
                 "mixed_signal": "双向混存", "unclassified": "未分类"}
 FLAG_LABEL = {"polling_data": "民调数据", "campaign_prep": "竞选筹备",
               "aid_commitment": "援助承诺/批准", "aid_restriction": "援助限制/反对",
-              "russia_engagement": "对俄接触/制裁松动"}
+              "russia_engagement": "对俄接触/制裁松动",
+              "anti_rearmament": "反对再武装", "anti_conscription": "反对征兵",
+              "ukraine_aid_explicit": "明确涉及对乌援助",
+              "aid_capacity_candidate": "援乌财政能力候选线索"}
 BUCKET_ORDER = ["france_2027", "italy_election", "ua_aid_attitude",
-                "russia_policy", "eu_politics", "china_xinhua"]
+                "russia_policy", "eu_politics", "china_xinhua",
+                "france_social_fiscal_pressure", "germany_social_fiscal_pressure",
+                "defense_vs_public_spending"]
 
 def _row_link(r):
     return f"[原文]({r['url']})" if r.get("url") else "—"
@@ -1374,7 +1384,7 @@ def run_selftest(cfg, eng):
     ck("excluded 不进快照", len(win2) == 0)
     # --- 配置不变量 ---
     ck("全桶 ≥2 维", all(len(b["require_all"]) >= 2 for b in cfg["buckets"].values()))
-    ck("全桶六桶齐备", set(cfg["buckets"].keys()) == set(BUCKET_ORDER))
+    ck("全桶与展示顺序一致", set(cfg["buckets"].keys()) == set(BUCKET_ORDER))
     ck("全桶有标签", all(b.get("label") for b in cfg["buckets"].values()))
     ck("每启用源 tier 合法", all(s.get("tier") in ("T1", "T2", "T3")
        for s in cfg["sources"] if s.get("enabled")))

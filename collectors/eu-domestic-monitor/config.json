@@ -198,6 +198,38 @@
       "note": "中欧关系/中国视角通道；出口依赖同上"
     },
     {
+      "id": "gn-france-public-spending-protest",
+      "url": "https://news.google.com/rss/search?q=France+(protest+OR+strike+OR+demonstration)+(%22public+spending%22+OR+%22public+services%22+OR+education+OR+wages)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "法国公共开支与社会财政压力专项发现通道"
+    },
+    {
+      "id": "gn-germany-spending-rearmament-protest",
+      "url": "https://news.google.com/rss/search?q=Germany+(protest+OR+demonstration)+(%22public+spending%22+OR+education+OR+housing+OR+rearmament+OR+conscription)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "德国公共开支、再武装与征兵争议专项发现通道"
+    },
+    {
+      "id": "tagesschau",
+      "url": "https://www.tagesschau.de/xml/rss2/",
+      "tier": "T3",
+      "publisher": "Tagesschau (DE)",
+      "enabled": true,
+      "note": "德国公共广播新闻 RSS；用于德国国内财政与社会抗议交叉核对"
+    },
+    {
+      "id": "dw-all",
+      "url": "https://rss.dw.com/rdf/rss-en-all",
+      "tier": "T3",
+      "publisher": "Deutsche Welle",
+      "enabled": true,
+      "note": "德国之声英文总流；用于德国财政、再武装与征兵争议补充"
+    },
+    {
       "id": "lemonde-une",
       "url": "https://www.lemonde.fr/rss/une.xml",
       "tier": "T3",
@@ -698,6 +730,30 @@
           "rx:\\bmosca\\b"
         ]
       ]
+    },
+    "france_social_fiscal_pressure": {
+      "label": "法国公共开支与社会财政压力",
+      "require_all": [
+        ["france", "french", "paris", "français", "française"],
+        ["protest", "demonstration", "march", "strike", "manifestation", "grève"],
+        ["public spending", "public services", "school funding", "education funding", "hospital funding", "higher wages", "social spending", "budget cuts", "austerity", "dépenses publiques", "services publics", "pouvoir d'achat"]
+      ]
+    },
+    "germany_social_fiscal_pressure": {
+      "label": "德国公共开支与社会财政压力",
+      "require_all": [
+        ["germany", "german", "berlin", "deutschland", "deutsche"],
+        ["protest", "demonstration", "march", "strike", "kundgebung", "streik"],
+        ["public spending", "public services", "education", "housing", "social spending", "budget cuts", "austerity", "öffentliche ausgaben", "sozialausgaben", "bildung", "wohnen"]
+      ]
+    },
+    "defense_vs_public_spending": {
+      "label": "国防开支与公共开支取舍",
+      "require_all": [
+        ["france", "french", "germany", "german", "paris", "berlin", "europe", "european"],
+        ["defence spending", "defense spending", "military spending", "rearmament", "armament", "conscription", "wehrpflicht", "aufrüstung"],
+        ["public spending", "public services", "education", "housing", "social spending", "budget", "instead of", "rather than", "cuts", "austerity"]
+      ]
     }
   },
   "flags": {
@@ -771,6 +827,28 @@
       "engagement with moscow",
       "rx:\\bnégociation\\w*",
       "rx:\\bdialogo\\b"
+    ],
+    "anti_rearmament": [
+      "against rearmament",
+      "oppose rearmament",
+      "anti-rearmament",
+      "instead of defence spending",
+      "instead of defense spending",
+      "gegen aufrüstung"
+    ],
+    "anti_conscription": [
+      "oppose conscription",
+      "against conscription",
+      "anti-conscription",
+      "gegen wehrpflicht",
+      "wehrpflicht ablehnen"
+    ],
+    "ukraine_aid_explicit": [
+      "ukraine aid",
+      "aid to ukraine",
+      "military aid to ukraine",
+      "support for ukraine",
+      "support kyiv"
     ]
   },
   "stance": {

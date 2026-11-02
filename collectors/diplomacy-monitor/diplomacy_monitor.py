@@ -461,7 +461,8 @@ class Engine:
         alts = ["iran(?:ian)?", "tehran", "farsi", "persian(?:s)?", "irgc", "pasdaran",
                 r"revolutionary\s+guards?", "araghchi", "pezeshkian", "khamenei",
                 "houthi", "ansar\\s+allah",
-                "trump", "rubio", "witkoff", r"white\s+house", "washington",
+                "trump", "rubio", "vance", "witkoff", "rezaei", "rezai",
+                r"white\s+house", "washington",
                 r"state\s+department", "pentagon", r"u\.s\.", r"united\s+states",
                 "american"]
         self.anchor = re.compile(r"\b(?:" + "|".join(alts) + r")\b", re.I)
@@ -498,6 +499,9 @@ class Engine:
         # 其正文会捎带 'amid Iran war' 语境词）：排除只看标题
         self.geo_excl = re.compile(
             r"\bgreenland\b|\bdenmark\b|\barctic\b", re.I)
+        self.proposal_excl = re.compile(
+            r"\bwithout\s+(?:any\s+)?iran(?:ian)?\s+(?:content\s+)?or\s+negotiat\w*"
+            r"|\bnot\s+(?:about|related\s+to)\s+iran\b", re.I)
         # ---- 桶级子信号（flags）----
         self.talk_open_re = re.compile(
             r"\b(?:open\s+to|openness|willing|ready\s+to|prepared\s+to|hopeful|"
@@ -511,6 +515,11 @@ class Engine:
         self.memo_breach_re = re.compile(
             r"\bcollaps\w+|\bbreach\w*|\bviolat\w+|\breneg\w+|walked\s+away|"
             r"\bderail\w*|\bsabotag\w+|\bshredd\w*", re.I)
+        self.proposal_flag_res = {
+            k: [re.compile(p, re.I) for p in cfg.get("flags", {}).get(k, [])]
+            for k in ("letter_received", "formal_reply_sent",
+                      "formal_reply_pending", "conditional_reopening_plan")
+        }
         self.meeting_re = re.compile(
             r"\bvisit(?:ed|s|ing)?|met|meeting|travel(?:ed|ling)?|arriv\w+|"
             r"\btrip\b|\bmission\b|delegation|talks?\s+with\b", re.I)
@@ -545,6 +554,8 @@ class Engine:
                 continue   # 纯新闻简报标题无信息量（事件在专门文章中另行捕获）
             if title and self.geo_excl.search(title):
                 continue   # Greenland/Denmark 交易不是美伊外交（全桶；俄制裁类靠伊朗语境词组门控）
+            if bid == "proposal_exchange" and self.proposal_excl.search(text):
+                continue   # 显式声明与伊朗/谈判无关的信件不进入提案交换桶
             if all(any(r.search(text) for r in g) for g in b["groups"]):
                 hits.append((bid, []))
         return hits
@@ -603,6 +614,12 @@ class Engine:
         if any(b in buckets for b in ("qatar_mediation", "oman_mediation",
                                       "pakistan_mediation", "other_mediators")):
             fl["meeting"] = bool(self.meeting_re.search(text))
+        if "proposal_exchange" in buckets:
+            for key, res in self.proposal_flag_res.items():
+                fl[key] = any(rx.search(text) for rx in res)
+            # 否定/待回复口径优先，防止“has not responded”被宽泛 reply 词误标为已回复。
+            if fl.get("formal_reply_pending"):
+                fl["formal_reply_sent"] = False
         return fl
 
     def _event_done(self, text):

@@ -355,6 +355,48 @@
           "enforcement"
         ]
       ]
+    },
+    "proposal_exchange": {
+      "label": "美伊提案、信件与条件交换",
+      "require_all": [
+        [
+          "iran",
+          "iranian",
+          "tehran",
+          "rezaei",
+          "rezai",
+          "araghchi",
+          "hormuz"
+        ],
+        [
+          "vance letter",
+          "letter",
+          "proposal",
+          "counterproposal",
+          "counter-proposal",
+          "response",
+          "reply",
+          "seven conditions",
+          "7 conditions",
+          "two-day plan",
+          "two day plan",
+          "day one",
+          "day two"
+        ],
+        [
+          "united states",
+          "u.s.",
+          "washington",
+          "vance",
+          "qatar",
+          "qatari",
+          "doha",
+          "negotiation",
+          "talks",
+          "hormuz",
+          "reopen"
+        ]
+      ]
     }
   },
   "entities": {
@@ -424,6 +466,12 @@
       "Rubio": [
         "marco rubio",
         "rubio"
+      ],
+      "Vance": [
+        "jd vance",
+        "j.d. vance",
+        "vance",
+        "vice president vance"
       ],
       "Witkoff": [
         "steve witkoff",
@@ -549,6 +597,38 @@
       "derail",
       "sabotage",
       "shredd"
+    ],
+    "letter_received": [
+      "received the letter",
+      "received a letter",
+      "reviewed the letter",
+      "reviewed vance letter",
+      "letter was relayed",
+      "letter was delivered"
+    ],
+    "formal_reply_sent": [
+      "formally replied",
+      "formal reply was sent",
+      "sent a formal reply",
+      "delivered its response",
+      "submitted its response"
+    ],
+    "formal_reply_pending": [
+      "has not responded",
+      "had not responded",
+      "has not replied",
+      "had not replied",
+      "no formal reply",
+      "reply remains pending",
+      "response remains pending",
+      "neither side accepted"
+    ],
+    "conditional_reopening_plan": [
+      "two-day plan",
+      "two day plan",
+      "day one.*day two",
+      "reopen.*hormuz",
+      "normal navigation.*day two"
     ]
   },
   "sources": [
@@ -655,6 +735,22 @@
       "publisher": "Google News",
       "enabled": true,
       "note": "斡旋总通道"
+    },
+    {
+      "id": "gn-vance-rezaei-letter",
+      "url": "https://news.google.com/rss/search?q=(Vance+letter)+Iran+(Rezaei+OR+Rezai+OR+response+OR+reply+OR+%22seven+conditions%22)&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "美伊信件与条件交换专项发现通道；是否正式回复由正文标记区分"
+    },
+    {
+      "id": "gn-hormuz-two-day-plan",
+      "url": "https://news.google.com/rss/search?q=Iran+Hormuz+(%22two-day+plan%22+OR+%22two+day+plan%22+OR+%22day+two%22)+Qatar&hl=en-US&gl=US&ceid=US:en",
+      "tier": "T3",
+      "publisher": "Google News",
+      "enabled": true,
+      "note": "霍尔木兹两日实施方案专项发现通道；不将方案自动等同正式回信或协议"
     },
     {
       "id": "gn-qatar",

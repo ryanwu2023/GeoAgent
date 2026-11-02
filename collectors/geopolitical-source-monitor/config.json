@@ -18,13 +18,14 @@
         "美伊", "伊朗", "德黑兰", "革命卫队", "哈梅内伊", "佩泽希齐扬", "阿拉格齐",
         "霍尔木兹", "波斯湾", "胡塞", "也门", "红海", "曼德海峡", "真主党", "伊拉克民兵",
         "Iran", "Iranian", "Tehran", "IRGC", "Revolutionary Guard", "Khamenei", "Pezeshkian",
-        "Araghchi", "US-Iran", "Israel-Iran", "Strait of Hormuz", "Hormuz", "Persian Gulf",
+        "Araghchi", "Rezaei", "Rezai", "Vance", "US-Iran", "Israel-Iran", "Strait of Hormuz", "Hormuz", "Persian Gulf",
         "Houthi", "Yemen", "Red Sea", "Bab el-Mandeb", "Hezbollah",
         "ایران", "تهران", "سپاه", "خلیج فارس", "تنگه هرمز", "آمریکا", "اسرائیل"
       ],
       "strong_anchors": [
         "美伊", "US-Iran", "Israel-Iran", "霍尔木兹", "Strait of Hormuz", "Hormuz",
-        "革命卫队", "IRGC", "胡塞", "Houthi", "曼德海峡", "Bab el-Mandeb"
+        "革命卫队", "IRGC", "胡塞", "Houthi", "曼德海峡", "Bab el-Mandeb",
+        "Vance letter", "Rezaei letter", "two-day Hormuz plan"
       ]
     },
     "ukraine": {
@@ -40,11 +41,11 @@
   "categories": {
     "military": [
       "战争", "冲突", "袭击", "打击", "空袭", "导弹", "无人机", "拦截", "交火", "部署", "增援", "军演", "封锁", "军舰", "战机",
-      "war", "conflict", "attack", "strike", "airstrike", "missile", "drone", "intercept", "clash", "deployment", "reinforcement", "military exercise", "blockade", "warship", "fighter jet"
+      "war", "conflict", "attack", "strike", "airstrike", "missile", "drone", "intercept", "clash", "deployment", "reinforcement", "military exercise", "blockade", "warship", "fighter jet", "strike options", "military options briefing", "transport aircraft", "airlift", "interceptor missile"
     ],
     "diplomacy": [
       "谈判", "会谈", "斡旋", "停火", "协议", "最后通牒", "代表团", "联合声明", "外交接触",
-      "talks", "negotiation", "mediation", "ceasefire", "agreement", "ultimatum", "delegation", "joint statement", "diplomatic contact"
+      "talks", "negotiation", "mediation", "ceasefire", "agreement", "ultimatum", "delegation", "joint statement", "diplomatic contact", "letter", "formal reply", "counterproposal", "seven conditions", "two-day plan", "conditional reopening"
     ],
     "sanctions": [
       "制裁", "次级制裁", "资产冻结", "出口管制", "技术限制", "关税", "实体清单", "禁运",

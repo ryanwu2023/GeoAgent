@@ -261,6 +261,16 @@
    "note": "实测 200 RSS 144KB (2026-09-19)"
   },
   {
+   "id": "gn-israel-airlift-resupply",
+   "type": "gnews",
+   "url": "https://news.google.com/rss/search?q=Israel+(%22transport+aircraft%22+OR+airlift)+(interceptors+OR+%22air+defense%22+OR+munitions)&hl=en-US&gl=US&ceid=US:en",
+   "tier": "T3",
+   "publisher": "Google News",
+   "tier_note": "以色列防空拦截弹与弹药空运补给发现通道",
+   "enabled": true,
+   "note": "需同时命中以色列、空运动作和防空/弹药三组词才准入"
+  },
+  {
    "id": "haaretz-rss",
    "type": "rss",
    "url": "https://www.haaretz.com/rss",
@@ -704,6 +714,37 @@
      "enriched uranium",
      "houthi",
      "yemen"
+    ]
+   ]
+  },
+  "airlift_resupply": {
+   "label": "以色列防空与弹药空运补给",
+   "require_all": [
+    [
+     "israel",
+     "israeli",
+     "idf",
+     "iran",
+     "iranian"
+    ],
+    [
+     "airlift",
+     "transport aircraft",
+     "cargo aircraft",
+     "military transport",
+     "resupply",
+     "delivered",
+     "arrived at"
+    ],
+    [
+     "air defense interceptor",
+     "air defence interceptor",
+     "interceptor missile",
+     "missile interceptor",
+     "air defense missile",
+     "air defence missile",
+     "munitions",
+     "ammunition"
     ]
    ]
   },

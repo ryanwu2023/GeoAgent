@@ -186,6 +186,18 @@
     "note": "anchor=当事方/地区词，domain=军事领域词。展示闸门要求 信号命中 且 (anchor≥1 或 domain≥1 或该源本身是国防主题源)。全部记录仍完整写入 JSONL。"
   },
   "signals": {
+    "strike_options_briefing": {
+      "label": "向总统汇报打击选项",
+      "weight": 3,
+      "phrases": [
+        "briefed the president on strike options",
+        "briefing the president on strike options",
+        "presented strike options to the president",
+        "military options briefing",
+        "briefed trump on military options",
+        "strike options against iran"
+      ]
+    },
     "readiness_claim": {
       "label": "战备状态声明",
       "weight": 3,
@@ -1024,6 +1036,24 @@
         "US Central Command"
       ],
       "merge_alternates": true
+    },
+    {
+      "id": "us-iran-strike-options-briefing",
+      "enabled": true,
+      "kind": "rss",
+      "party": "third",
+      "channel": "总统军事选项简报（议题检索）",
+      "publisher": "多源公开报道",
+      "tier": "T3",
+      "tier_note": "经公开聚合器发现；需回到报道正文核验，不等同已批准或已执行打击",
+      "aggregator": true,
+      "topic_anchored": true,
+      "url": "https://news.google.com/rss/search?q=(Iran+%22strike+options%22)+(president+OR+Trump+OR+briefed+OR+briefing)&hl=en-US&gl=US&ceid=US%3Aen",
+      "title_include": [
+        "Iran",
+        "strike options",
+        "military options"
+      ]
     },
     {
       "id": "usni-news",
