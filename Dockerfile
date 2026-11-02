@@ -7,6 +7,7 @@ COPY src ./src
 COPY config ./config
 COPY public ./public
 COPY tests/*.cjs ./tests/
+COPY backend/research.py ./backend/research.py
 ARG VITE_PICHAT_EMBED_ORIGIN=http://127.0.0.1:9172
 ARG VITE_PICHAT_AGENT_ID=geo-research-assistant
 ARG VITE_PICHAT_PRODUCT_USER_ID=geoagent-local

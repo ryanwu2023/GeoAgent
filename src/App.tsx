@@ -56,6 +56,7 @@ import remarkGfm from "remark-gfm";
 import BriefViewer from "./BriefViewer";
 import MeetingCalendar from "./MeetingCalendar";
 import { useHostViewContext } from "./useHostViewContext";
+import { useHostTheme } from "./useHostTheme";
 import { metricCategory } from "./metric_category";
 import { clearRunId, mergeAnalysisTrace, normalizeAnswer, normalizeAnswerMarkdown, qaRunStorageKey, saveRunId, storedRunId } from "./qa_ui";
 
@@ -209,18 +210,17 @@ export default function App() {
       connectionLoaded && pichatEmbedConfigured && !!embedWorkspaceScope);
   const viewBridge = useHostViewContext(pichatFrameRef,pichatOrigin,pichatAgentId,connectionVersion,
     connectionLoaded && pichatEmbedConfigured && !!embedWorkspaceScope, {version:'geoagent-view/v1',snapshot_id:workingSid,topic,dimension,start,end}, chatOpen);
+  useHostTheme(pichatFrameRef,pichatOrigin,pichatAgentId,connectionVersion,
+    connectionLoaded && pichatEmbedConfigured && !!embedWorkspaceScope);
   const pichatUrl = (() => {
     const url = new URL(
       `/work-embed/${encodeURIComponent(pichatAgentId)}`,
       pichatOrigin,
     );
     url.searchParams.set("org", "default");
-    url.searchParams.set("hideNav", "1");
-    // The host workbench is a dark surface.  PiChat's work-embed supports an
-    // explicit theme query for cross-origin embeds; without it the iframe
-    // falls back to the user's standalone light-theme preference and visually
-    // breaks the GeoAgent panel.
-    url.searchParams.set("theme", "dark");
+    // Session controls and the look come from the PiChat embed entry policy
+    // (API application → entry → 界面配置), not from URL hints. With
+    // "follow host window" on, useHostTheme sends GeoAgent's palette.
     url.searchParams.set("embedParentOrigin", window.location.origin);
     url.searchParams.set("parentOrigin", window.location.origin);
     url.searchParams.set(

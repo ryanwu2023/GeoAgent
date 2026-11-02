@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from html import unescape
 from html.parser import HTMLParser
 import json
+import os
+from pathlib import Path
+import sys
+import threading
 import re
 import time
 from typing import Any, Callable
@@ -14,6 +18,9 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 from urllib.robotparser import RobotFileParser
 
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.collector_cache import ResponseCache
 
 RETRYABLE = {429, 502, 503}
 TRACKING_KEYS = {"fbclid", "gclid", "mc_cid", "mc_eid"}
@@ -113,12 +120,17 @@ class PolicyHttpClient:
         transport: Callable[[Request, float], TransportResponse] | None = None,
         sleep: Callable[[float], None] = time.sleep,
         robots_fetcher: Callable[[str], str] | None = None,
+        cache_dir: Path | None = None,
     ):
         self.user_agent = user_agent
         self.transport = transport or _default_transport
         self.sleep = sleep
         self.robots_fetcher = robots_fetcher
         self.cache: dict[str, dict[str, Any]] = {}
+        directory = cache_dir or (Path(os.environ['COLLECTOR_STATE_ROOT']) / 'http-cache' if os.getenv('COLLECTOR_STATE_ROOT') else None)
+        self.disk_cache = ResponseCache(directory, os.getenv('COLLECTOR_RUN_ID', ''))
+        self._locks_guard = threading.Lock()
+        self._host_locks: dict[str, threading.Lock] = {}
         self.robot_cache: dict[str, RobotFileParser] = {}
         self.last_request_at: dict[str, float] = {}
 
@@ -141,10 +153,20 @@ class PolicyHttpClient:
             # robots 无法读取时只访问来源配置里的公开入口及同域公开链接；
             # 真实 401/403 仍由正文请求返回并停止重试。
             parser.parse([])
+        if not self.robots_fetcher:
+            self.last_request_at[(split.hostname or "").lower()] = time.monotonic()
         self.robot_cache[root] = parser
         return parser
 
     def fetch(self, url: str, source: dict[str, Any]) -> FetchResult:
+        # A shared client serializes each host, including robots requests and retry delays.
+        host = (urlsplit(url).hostname or '').lower()
+        with self._locks_guard:
+            lock = self._host_locks.setdefault(host, threading.Lock())
+        with lock:
+            return self._fetch_locked(url, source)
+
+    def _fetch_locked(self, url: str, source: dict[str, Any]) -> FetchResult:
         clean_url = canonicalize_url(url)
         split = urlsplit(clean_url)
         allowed = {str(host).lower() for host in source.get("allowed_hosts", [])}
@@ -156,10 +178,12 @@ class PolicyHttpClient:
 
         host = (split.hostname or "").lower()
         interval = float(source.get("rate_limit_seconds", 0))
-        elapsed = time.monotonic() - self.last_request_at.get(host, 0.0)
-        if interval > elapsed:
-            self.sleep(interval - elapsed)
-        cached = self.cache.get(clean_url, {})
+        cache_key = self.disk_cache.key(clean_url, variant=self.user_agent)
+        cached = self.cache.get(clean_url) or self.disk_cache.get(cache_key)
+        if not isinstance(cached.get('body'), str):
+            cached = {}
+        if self.disk_cache.same_run(cached):
+            return FetchResult(200, cached['body'], cached.get('final_url', clean_url), {}, from_cache=True)
         headers = {
             "User-Agent": self.user_agent,
             "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.5",
@@ -171,6 +195,9 @@ class PolicyHttpClient:
             headers["If-Modified-Since"] = cached["last_modified"]
         retries = int(source.get("max_retries", 2))
         for attempt in range(retries + 1):
+            elapsed = time.monotonic() - self.last_request_at.get(host, 0.0)
+            if interval > elapsed:
+                self.sleep(interval - elapsed)
             request = Request(clean_url, headers=headers)
             try:
                 response = self.transport(request, timeout)
@@ -180,6 +207,8 @@ class PolicyHttpClient:
                     self.sleep(max(retry_after, min(2 ** attempt, 8)))
                     continue
                 if response.status == 304 and cached:
+                    self.disk_cache.put(cache_key, cached)
+                    self.cache[clean_url] = self.disk_cache.get(cache_key) or cached
                     return FetchResult(304, cached["body"], response.final_url, response.headers, from_cache=True)
                 text = _decode(response.body, response.headers)
                 if response.status == 200:
@@ -188,11 +217,19 @@ class PolicyHttpClient:
                         "body": text,
                         "etag": lower_headers.get("etag", ""),
                         "last_modified": lower_headers.get("last-modified", ""),
+                        "final_url": response.final_url,
                     }
+                    if not any(x in lower_headers.get('cache-control', '') for x in ('no-store', 'private')):
+                        self.disk_cache.put(cache_key, self.cache[clean_url])
+                        self.cache[clean_url] = self.disk_cache.get(cache_key) or self.cache[clean_url]
                 error = "" if 200 <= response.status < 400 else f"http_{response.status}"
                 return FetchResult(response.status, text, response.final_url, response.headers, error)
             except HTTPError as exc:
                 self.last_request_at[host] = time.monotonic()
+                if exc.code == 304 and cached:
+                    self.disk_cache.put(cache_key, cached)
+                    self.cache[clean_url] = self.disk_cache.get(cache_key) or cached
+                    return FetchResult(304, cached['body'], cached.get('final_url', clean_url), {}, from_cache=True)
                 if exc.code in RETRYABLE and attempt < retries:
                     self.sleep(min(2 ** attempt, 8))
                     continue

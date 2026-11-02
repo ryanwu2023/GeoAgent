@@ -18,6 +18,13 @@ import xml.etree.ElementTree as ET
 from collections import Counter, OrderedDict
 from datetime import datetime, timezone, timedelta, date
 from urllib.parse import urlparse
+from pathlib import Path
+import threading
+
+_REPO = str(Path(__file__).resolve().parents[2])
+if _REPO not in sys.path:
+    sys.path.insert(0, _REPO)
+from scripts.collector_http_runtime import HttpRuntime, prepare_output, source_results
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CFG_PATH = os.path.join(BASE, "config.json")
@@ -62,7 +69,9 @@ def title_key(title):
 
 # ---------------------------------------------------------------- http
 _last_hit = {}
-_opener_cache = {}
+_opener_local = threading.local()
+_proxy_lock = threading.RLock()
+_http_runtime = HttpRuntime()
 _pool_cache = {"at": 0.0, "ok": []}
 
 def proxy_candidates():
@@ -81,6 +90,9 @@ def proxy_candidates():
     return cands + [None]
 
 def _opener_for(proxy):
+    if not hasattr(_opener_local, "cache"):
+        _opener_local.cache = {}
+    _opener_cache = _opener_local.cache
     if proxy not in _opener_cache:
         if proxy is None:
             _opener_cache[proxy] = urllib.request.build_opener(
@@ -131,6 +143,10 @@ def _proxy_deep_score(proxy, timeout=6):
     return good
 
 def live_proxies():
+    with _proxy_lock:
+        return _live_proxies_unlocked()
+
+def _live_proxies_unlocked():
     """探测存活出口（缓存 10 分钟）。出口漂移自动摘除，恢复后自动回归。
 
     排序：深探全通的排前面。这样即使环境代理本身是「半死」的，
@@ -169,10 +185,16 @@ def egress_rotatable(err):
 
 def demote_proxy(proxy):
     """某出口隧道失败时立即摘除（缓存到期后重新探测自然恢复）。"""
-    if proxy in _pool_cache.get("ok", []):
-        _pool_cache["ok"].remove(proxy)
+    with _proxy_lock:
+        if proxy in _pool_cache.get("ok", []):
+            _pool_cache["ok"].remove(proxy)
 
 def http_get(url, timeout=30, min_iv=1.2, ua=None, retries=1):
+    return _http_runtime.fetch(_http_get_uncached, url, timeout=timeout,
+                               min_iv=min_iv, ua=ua, retries=retries,
+                               valid_body=lambda body: bool(parse_rss(body, cap=1)))
+
+def _http_get_uncached(url, timeout=30, min_iv=1.2, ua=None, retries=1):
     host = urlparse(url).netloc
     wait = _last_hit.get(host)
     if wait is not None:
@@ -1109,7 +1131,7 @@ def main():
         cfg["window_days"] = args.window_days
     eng = Engine(cfg)
     as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
-    outdir = args.out_dir or os.path.join(BASE, "output")
+    outdir = args.out_dir or os.getenv("COLLECTOR_OUTPUT_ROOT") or os.path.join(BASE, "output")
 
     if args.selftest:
         sys.exit(run_selftest(cfg, eng))
@@ -1136,7 +1158,7 @@ def main():
     print(f"[cfg] cfg_ver={eng.cfg_ver[:12]}… window={cfg['window_days']}d "
           f"as_of={as_of} out={outdir}")
 
-    os.makedirs(outdir, exist_ok=True)
+    outdir = prepare_output(args.out_dir, os.path.join(BASE, "output"))
     arch_path = os.path.join(outdir, "ALL-records.jsonl")
     archive = load_archive(arch_path)
     n_prune = prune_archive(archive, as_of, cfg.get("max_age_days"),
@@ -1167,8 +1189,8 @@ def main():
             fetched = json.load(f)
         print(f"[from-file] {sum(len(v) for v in fetched.values())} 条离线语料")
     else:
-        for i, s in enumerate(enabled, 1):
-            items, r = fetch_source(s, cfg)
+        results = source_results(fetch_source, enabled, cfg)
+        for i, (s, (items, r)) in enumerate(zip(enabled, results), 1):
             if items is None:
                 src_stats[s["id"]] = {"ok": False, "status": r["status"], "err": r.get("err", "")}
                 print(f"  ❌ [{i}/{len(enabled)}] {s['id']}: {r['status']} {r.get('err','')}")

@@ -47,8 +47,8 @@ if args[0]=="run":
     ]
 
 
-@pytest.mark.parametrize("action,rollout_ok", [("deploy", True), ("deploy", False), ("rollback", True)])
-def test_release_record_patch_and_health_check(tmp_path, action, rollout_ok):
+@pytest.mark.parametrize("action,rollout_ok,busy", [("deploy", True, False), ("deploy", False, False), ("rollback", True, False), ("deploy", False, True), ("rollback", False, True)])
+def test_release_record_patch_and_health_check(tmp_path, action, rollout_ok, busy):
     release = tmp_path / "release"
     release.mkdir()
     data = b"fixture image archive"
@@ -78,11 +78,24 @@ elif args[0]=="run":
   elif ".image" in field: print(repo+"@sha256:"+("b" if {action!r}=="rollback" else "a")*64)
   elif "annotations" in field: print('{{"existing":"preserve"}}')
   else: print("deployment.apps/geoagent")
+ elif "get" in k and "pods" in k: print("geoagent-fixture-pod")
  elif "get" in k and "configmap" in k:
   if "previous" in k[-1]: print(repo+"@sha256:"+"a"*64)
   elif "image" in k[-1]: print(repo+"@sha256:"+"b"*64)
  elif "rollout" in k: sys.exit({0 if rollout_ok else 1})
- elif "exec" in k: print("/app/data/release-backups/123")
+ elif "exec" in k:
+  if {busy!r}: sys.exit(19)
+  if "--hold" in k:
+   import time
+   from pathlib import Path
+   print("Collector deployment guard acquired",flush=True)
+   for _ in range(300):
+    if Path({str(log) + '.released'!r}).exists(): break
+    time.sleep(0.1)
+  elif "--release" in k:
+   from pathlib import Path
+   Path({str(log) + '.released'!r}).touch()
+  else: print("/app/data/release-backups/123")
 ''')
     docker.chmod(0o755)
     for command, output in [("git", ""), ("curl", "401")]:
@@ -92,6 +105,7 @@ elif args[0]=="run":
     # Backup payload is read from cwd by the release script.
     (tmp_path / "scripts/ci").mkdir(parents=True)
     (tmp_path / "scripts/ci/backup.py").write_text("# fixture")
+    (tmp_path / "scripts/ci/assert_collectors_idle.py").write_text("# fixture idle preflight")
     result = subprocess.run(["bash", str(SCRIPT), action], cwd=tmp_path, capture_output=True,
         env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}",
              "CI_COMMIT_SHA": "f" * 40, "CI_PIPELINE_ID": "123",
@@ -102,6 +116,15 @@ elif args[0]=="run":
     commands = [json.loads(line) for line in log.read_text().splitlines()]
     assert not any(c[0] == "build" for c in commands)
     patches = [c for c in commands if "patch" in c]
+    if busy:
+        assert result.returncode != 0
+        assert not patches
+        assert not any("create" in c and "configmap" in c for c in commands)
+        return
+    guard_index = next(i for i, c in enumerate(commands) if "--hold" in c)
+    patch_index = next(i for i, c in enumerate(commands) if "patch" in c)
+    assert guard_index < patch_index
+    assert any("--release" in c for c in commands)
     assert len(patches) == 1  # Failed health checks do not silently alter data or rollback.
     patch = json.loads(patches[0][-1])
     assert patch[0] == {"op": "test", "path": "/metadata/resourceVersion", "value": "42"}

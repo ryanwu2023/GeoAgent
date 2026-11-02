@@ -961,3 +961,9 @@ live 中发现并修复：Vite 字符串代理默认 `changeOrigin=true`，使�
 - 已创建受保护生产标签 `geoagent-prod-v1.0.28`，标签流水线 #6296 的 verify 作业 #31444 通过。
 - deploy 作业 #31445 未执行应用变更即失败：Runner 使用生产 kubeconfig 访问 `https://gzg.sealos.run:6443` 时出现 `x509: certificate signed by unknown authority (crypto/rsa: verification error, candidate authority kubernetes-ca)`；未关闭 TLS 校验、未修改生产凭据、未创建 release ConfigMap、未滚动 Pod。
 - 当前结论：代码已合并且生产发布候选验证通过，但 v1.0.28 尚未发布生效；需由平台侧修复/重新签发 Runner 使用的生产 CA 链或 kubeconfig 后，重新执行同一受保护发布流程。
+
+### 2026-10-31：MR !22 构建与采集器说明回归修复
+
+- 作业 #32754 在 Docker 前端测试阶段失败；检查发现 qa_cost_ui 测试读取 backend/research.py，但构建阶段未复制此文件，已补入所需测试输入。
+- 隔离 PostgreSQL 全量回归得到 813 passed、2 failed、2 skipped；两项失败来自新增 geopolitical-source-monitor 未注册业务采集说明，已补全说明并更新采集器数量断言，定向 3 项通过。
+- 本地前端 134 项通过。镜像构建及新流水线仍待确认；未合并失败流水线、未发布生产。
