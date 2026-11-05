@@ -1,0 +1,51 @@
+# Multi-tunnel egress for GeoAgent on Sealos (namespace ns-d40dap45).
+#
+# Problem (2026-11-05): every overseas request shares ONE ssh -L connection to
+# 107.170.110.147. Under batch collection (~12 concurrent requests) half of them
+# time out at 30 s, while 1–4 concurrent requests finish in ~5 s.
+#
+# Layout after this patch (all inside the geoagent Pod):
+#   geoagent  --HTTP(S)_PROXY=127.0.0.1:18080-->  proxy-lb (nginx stream, least_conn)
+#       proxy-lb --> proxy-tunnel   127.0.0.1:18081 --ssh--> droplet 127.0.0.1:3128
+#                --> proxy-tunnel-2 127.0.0.1:18082 --ssh--> droplet 127.0.0.1:3128
+#                --> proxy-tunnel-3 127.0.0.1:18083 --ssh--> droplet 127.0.0.1:3128
+#                --> proxy-tunnel-4 127.0.0.1:18084 --ssh--> droplet 127.0.0.1:3128
+#
+# No droplet change and no NetworkPolicy change: same key, same host:22.
+# The application env (HTTP_PROXY/HTTPS_PROXY=127.0.0.1:18080) stays as is.
+#
+# Apply:
+#   kubectl apply -f deploy/sealos-proxy-multitunnel.yaml            # ConfigMap only
+#   kubectl patch deploy geoagent --type strategic \
+#     --patch-file deploy/sealos-proxy-multitunnel-patch.yaml
+# Rollback:
+#   kubectl rollout undo deploy/geoagent
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: geoagent-proxy-lb
+  labels:
+    cloud.sealos.io/app-deploy-manager: geoagent
+data:
+  nginx.conf: |
+    worker_processes 1;
+    pid /tmp/nginx.pid;
+    error_log /dev/stderr warn;
+    events { worker_connections 1024; }
+    stream {
+      upstream ssh_tunnels {
+        least_conn;
+        server 127.0.0.1:18081 max_fails=2 fail_timeout=20s;
+        server 127.0.0.1:18082 max_fails=2 fail_timeout=20s;
+        server 127.0.0.1:18083 max_fails=2 fail_timeout=20s;
+        server 127.0.0.1:18084 max_fails=2 fail_timeout=20s;
+      }
+      server {
+        listen 127.0.0.1:18080;
+        proxy_pass ssh_tunnels;
+        proxy_connect_timeout 3s;
+        proxy_next_upstream on;
+        proxy_next_upstream_tries 4;
+        proxy_timeout 10m;
+      }
+    }

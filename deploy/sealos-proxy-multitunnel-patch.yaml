@@ -1,0 +1,95 @@
+# Strategic-merge patch for deploy/geoagent; see sealos-proxy-multitunnel.yaml.
+# The existing proxy-tunnel moves from 18080 to 18081; proxy-lb takes 18080.
+spec:
+  template:
+    spec:
+      containers:
+        - &tunnel
+          name: proxy-tunnel
+          image: crpi-pkfixdfs4f7qepax.cn-shanghai.personal.cr.aliyuncs.com/stocklink-base/geoagent@sha256:2f226a875af038cda6826ebfcc33ee5e3cbb6d37905f28746eb58d32f4846601
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              umask 077
+              cp /etc/proxy-ssh/id_ed25519 /tmp/id_ed25519
+              chmod 600 /tmp/id_ed25519
+              exec ssh -N -T -i /tmp/id_ed25519 \
+                -o UserKnownHostsFile=/etc/proxy-ssh/known_hosts \
+                -o StrictHostKeyChecking=yes -o BatchMode=yes -o IdentitiesOnly=yes \
+                -o ExitOnForwardFailure=yes -o ConnectTimeout=15 \
+                -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+                -L "127.0.0.1:${TUNNEL_PORT}:127.0.0.1:3128" \
+                geoagent-proxy@107.170.110.147
+          readinessProbe:
+            exec:
+              command: [sh, -c, 'nc -z -w 2 127.0.0.1 "$TUNNEL_PORT"']
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile: {type: RuntimeDefault}
+          env: [{name: TUNNEL_PORT, value: "18081"}]
+          volumeMounts:
+            - {name: proxy-ssh, mountPath: /etc/proxy-ssh, readOnly: true}
+            - {name: proxy-tmp, mountPath: /tmp}
+        - <<: *tunnel
+          name: proxy-tunnel-2
+          env: [{name: TUNNEL_PORT, value: "18082"}]
+          volumeMounts:
+            - {name: proxy-ssh, mountPath: /etc/proxy-ssh, readOnly: true}
+            - {name: proxy-tmp-2, mountPath: /tmp}
+        - <<: *tunnel
+          name: proxy-tunnel-3
+          env: [{name: TUNNEL_PORT, value: "18083"}]
+          volumeMounts:
+            - {name: proxy-ssh, mountPath: /etc/proxy-ssh, readOnly: true}
+            - {name: proxy-tmp-3, mountPath: /tmp}
+        - <<: *tunnel
+          name: proxy-tunnel-4
+          env: [{name: TUNNEL_PORT, value: "18084"}]
+          volumeMounts:
+            - {name: proxy-ssh, mountPath: /etc/proxy-ssh, readOnly: true}
+            - {name: proxy-tmp-4, mountPath: /tmp}
+        - name: proxy-lb
+          image: nginx:1.28.0-alpine
+          command: [nginx, -c, /etc/proxy-lb/nginx.conf, -g, "daemon off;"]
+          readinessProbe:
+            exec:
+              command: [sh, -c, "nc -z -w 2 127.0.0.1 18080"]
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            seccompProfile: {type: RuntimeDefault}
+          volumeMounts:
+            - {name: proxy-lb-config, mountPath: /etc/proxy-lb, readOnly: true}
+            - {name: proxy-lb-tmp, mountPath: /tmp}
+            - {name: proxy-lb-cache, mountPath: /var/cache/nginx}
+      volumes:
+        - {name: proxy-tmp-2, emptyDir: {medium: Memory, sizeLimit: 1Mi}}
+        - {name: proxy-tmp-3, emptyDir: {medium: Memory, sizeLimit: 1Mi}}
+        - {name: proxy-tmp-4, emptyDir: {medium: Memory, sizeLimit: 1Mi}}
+        - {name: proxy-lb-tmp, emptyDir: {medium: Memory, sizeLimit: 1Mi}}
+        - {name: proxy-lb-cache, emptyDir: {medium: Memory, sizeLimit: 4Mi}}
+        - name: proxy-lb-config
+          configMap: {name: geoagent-proxy-lb}

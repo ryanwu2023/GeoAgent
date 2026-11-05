@@ -4,6 +4,22 @@ PostgreSQL setup and migration are required before using this deployment: [instr
 
 # Sealos deployment
 
+Multi-tunnel egress applied on 2026-11-05: overseas requests previously shared
+one `ssh -L` connection to the egress droplet; during batch collection about 12
+concurrent requests timed out half of the time. The Pod now runs four tunnels
+(`proxy-tunnel`, `proxy-tunnel-2..4` on 127.0.0.1:18081–18084) behind an nginx
+stream balancer (`proxy-lb`) on 127.0.0.1:18080, so the application's
+`HTTP(S)_PROXY` is unchanged. Manifests: `sealos-proxy-multitunnel.yaml`
+(ConfigMap) and `sealos-proxy-multitunnel-patch.yaml` (strategic-merge patch).
+No droplet or NetworkPolicy change was needed. Validation in the live Pod:
+Google News RSS with 12 concurrent requests went from 8/16 timeouts (avg 18.4 s)
+to 0/16 (avg 3.3 s), 24 concurrent had 0/28 timeouts; an isolated
+diplomacy-monitor run fetched 35/36 sources (only MEE, HTTP 404). Rollback:
+`kubectl rollout undo deploy/geoagent`. Any future full Deployment apply must
+keep these containers. Known remaining issue: collectors still demote the
+proxy on one timeout and fall back to 127.0.0.1:8080 (the gateway) or direct
+egress (blocked), which reports as `Network is unreachable`.
+
 Current release (2026-10-28): form login plus collector fixes, image `crpi-pkfixdfs4f7qepax.cn-shanghai.personal.cr.aliyuncs.com/stocklink-base/geoagent@sha256:ed4b0d35c58b4a490bb9ace32663e3c41f07acbc62fb6cec65881eb2ca7e57fa`. See [release validation and rollback](LOGIN-AND-COLLECTOR-FIX-20261028.md). The dated entries below describe earlier deployments.
 
 Prepared on 2026-10-08 from main commit `65bd31995bae0f6aaf2612954e61f885ba2f7ce7`.
