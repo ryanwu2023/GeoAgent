@@ -119,16 +119,31 @@ def _select(principal, tool, snapshot_id):
     return snapshot_id
 
 
-def _artifact(snapshot_id):
+def _projection_parts(snapshot_id):
+    payload = projection(store.get_snapshot(snapshot_id))
+    encoder = json.JSONEncoder(ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    parts = (part.encode("utf-8") for part in encoder.iterencode(payload))
+    return parts, {
+        "source_created_at": payload["source_created_at"], "encoding": "base64", "media_type": "application/json",
+        "counts": {key: len(payload[key]) for key in ("records", "observations", "sources", "projects")},
+    }
+
+
+def build_artifact(snapshot_id, fmt=FORMAT, render=_projection_parts):
+    """Write an immutable export once and reuse it for every chunk request.
+
+    ``render`` returns (byte parts, extra manifest fields). Each format has its
+    own cache key, so adding a format never changes another format's bytes.
+    """
     # Hash the identifier rather than using client input as a filesystem path.
-    key = hashlib.sha256((FORMAT + ":" + snapshot_id).encode()).hexdigest()
+    key = hashlib.sha256((fmt + ":" + snapshot_id).encode()).hexdigest()
     root = store.data_dir() / "mcp-exports"
     target, meta = root / (key + ".json"), root / (key + ".manifest.json")
 
     def cached():
         try:
             info = json.loads(meta.read_text(encoding="utf-8"))
-            if (info["schema_version"] == FORMAT and info["snapshot_id"] == snapshot_id
+            if (info["schema_version"] == fmt and info["snapshot_id"] == snapshot_id
                     and target.stat().st_size == info["total_bytes"]):
                 return target, info
         except (OSError, ValueError, KeyError, TypeError):
@@ -142,7 +157,7 @@ def _artifact(snapshot_id):
         existing = cached()
         if existing:
             return existing
-        payload = projection(store.get_snapshot(snapshot_id))
+        parts, extra = render(snapshot_id)
         root.mkdir(parents=True, exist_ok=True)
         temporary_paths = []
         try:
@@ -150,20 +165,15 @@ def _artifact(snapshot_id):
             total = 0
             with tempfile.NamedTemporaryFile(dir=root, delete=False) as output:
                 temporary_paths.append(Path(output.name))
-                encoder = json.JSONEncoder(ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
-                for part in encoder.iterencode(payload):
-                    chunk = part.encode("utf-8")
+                for chunk in parts:
                     sha.update(chunk)
                     total += len(chunk)
                     output.write(chunk)
                 output.flush()
                 os.fsync(output.fileno())
             info = {
-                "schema_version": FORMAT, "snapshot_id": snapshot_id,
-                "source_created_at": payload["source_created_at"],
-                "sha256": sha.hexdigest(), "total_bytes": total,
-                "chunk_bytes": CHUNK_BYTES, "encoding": "base64", "media_type": "application/json",
-                "counts": {key: len(payload[key]) for key in ("records", "observations", "sources", "projects")},
+                "schema_version": fmt, "snapshot_id": snapshot_id,
+                "sha256": sha.hexdigest(), "total_bytes": total, "chunk_bytes": CHUNK_BYTES, **extra,
             }
             with tempfile.NamedTemporaryFile(dir=root, mode="w", encoding="utf-8", delete=False) as output:
                 temporary_paths.append(Path(output.name))
@@ -180,19 +190,7 @@ def _artifact(snapshot_id):
                 path.unlink(missing_ok=True)
 
 
-def manifest(principal, snapshot_id="", known_sha256=""):
-    sid = _select(principal, "geo_sync_manifest", snapshot_id)
-    if sid is None:
-        return {"available": False, "schema_version": FORMAT}
-    _, info = _artifact(sid)
-    return {**info, "available": True, "unchanged": known_sha256 == info["sha256"]}
-
-
-def read_chunk(principal, snapshot_id, offset=0):
-    if not snapshot_id:
-        raise MCPError("GEO_SNAPSHOT_REQUIRED", "分块下载必须固定 manifest 返回的 snapshot_id")
-    sid = _select(principal, "geo_sync_chunk", snapshot_id)
-    path, info = _artifact(sid)
+def chunk_response(path, info, offset):
     if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset < info["total_bytes"]:
         raise MCPError("GEO_INVALID_OFFSET", "offset 必须在数据文件字节范围内")
     with path.open("rb") as stream:
@@ -200,13 +198,29 @@ def read_chunk(principal, snapshot_id, offset=0):
         chunk = stream.read(CHUNK_BYTES)
     next_offset = offset + len(chunk)
     return {
-        "schema_version": FORMAT, "snapshot_id": sid, "sha256": info["sha256"],
+        "schema_version": info["schema_version"], "snapshot_id": info["snapshot_id"], "sha256": info["sha256"],
         "total_bytes": info["total_bytes"], "offset": offset, "returned_bytes": len(chunk),
         "chunk_sha256": hashlib.sha256(chunk).hexdigest(),
         "encoding": "base64", "content": base64.b64encode(chunk).decode("ascii"),
         "next_offset": next_offset if next_offset < info["total_bytes"] else None,
         "has_more": next_offset < info["total_bytes"],
     }
+
+
+def manifest(principal, snapshot_id="", known_sha256=""):
+    sid = _select(principal, "geo_sync_manifest", snapshot_id)
+    if sid is None:
+        return {"available": False, "schema_version": FORMAT}
+    _, info = build_artifact(sid)
+    return {**info, "available": True, "unchanged": known_sha256 == info["sha256"]}
+
+
+def read_chunk(principal, snapshot_id, offset=0):
+    if not snapshot_id:
+        raise MCPError("GEO_SNAPSHOT_REQUIRED", "分块下载必须固定 manifest 返回的 snapshot_id")
+    sid = _select(principal, "geo_sync_chunk", snapshot_id)
+    path, info = build_artifact(sid)
+    return chunk_response(path, info, offset)
 
 
 def register_sync_tools(server, run_tool):

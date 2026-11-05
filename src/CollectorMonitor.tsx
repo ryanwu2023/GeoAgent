@@ -103,9 +103,18 @@ const statusOrder: Array<CollectorStatus | "all"> = [
   "success",
 ];
 
+type RemoteSyncState = {
+  collection_mode: "local" | "remote";
+  last_checked_at?: string;
+  last_success_at?: string;
+  snapshot_id?: string;
+  error?: { code: string; message: string; at: string } | null;
+};
+
 type CollectorRuntimePayload = {
   available: boolean;
   source: string;
+  collection_mode?: "local" | "remote";
   run_id?: string | null;
   run_status?: string | null;
   updated_at?: string | null;
@@ -442,6 +451,9 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const [pipelineView, setPipelineView] = useState<PipelineView>("run");
   const [apiState, setApiState] = useState<"unknown" | "empty" | "unavailable">("unknown");
   const [summaryRefreshKey, setSummaryRefreshKey] = useState(0);
+  const [collectionMode, setCollectionMode] = useState<"local" | "remote">("local");
+  const [remoteSync, setRemoteSync] = useState<RemoteSyncState | null>(null);
+  const [remoteSyncing, setRemoteSyncing] = useState(false);
   const [runtimeRunId, setRuntimeRunId] = useState("");
   const [selectedRunId, setSelectedRunId] = useState("");
   const [runtimeRequestId, setRuntimeRequestId] = useState("");
@@ -494,6 +506,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
     const loadSummary = () => api<CollectorRuntimePayload>("/collector/summary")
       .then((payload) => {
         if (cancelled) return;
+        setCollectionMode(payload.collection_mode === "remote" ? "remote" : "local");
         const activeWithoutResults = payload.available && payload.run_status === "running" && !payload.collectors.length;
         if (!payload.available || (!payload.collectors.length && !activeWithoutResults)) {
           setApiState("empty");
@@ -628,7 +641,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
 
   useEffect(() => {
     let cancelled = false;
-    if (!runtimeRunId || !selectedId) {
+    if (!runtimeRunId || !selectedId || collectionMode === "remote") {
       setCollectorLog(null);
       return () => { cancelled = true; };
     }
@@ -645,7 +658,21 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       cancelled = true;
       if (timer) window.clearInterval(timer);
     };
-  }, [runtimeRunId, runtimeRunStatus, selectedId, logStream]);
+  }, [runtimeRunId, runtimeRunStatus, selectedId, logStream, collectionMode]);
+
+  useEffect(() => {
+    if (collectionMode !== "remote") return;
+    let cancelled = false;
+    const loadRemoteSync = () => api<RemoteSyncState>("/collector/remote-sync")
+      .then((payload) => { if (!cancelled) setRemoteSync(payload); })
+      .catch(() => {});
+    loadRemoteSync();
+    const timer = window.setInterval(loadRemoteSync, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [collectionMode, summaryRefreshKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -956,7 +983,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
 
   async function retryImport(allowPartialImport = false) {
     if (!runtimeRunId) return;
-    setNotice("正在仅重试导入，不重新执行采集器…");
+    setNotice(collectionMode === "remote" ? "正在从采集端重新拉取本批次快照…" : "正在仅重试导入，不重新执行采集器…");
     try {
       const payload = await api<CollectorImportRetryResponse>(`/collector/runs/${encodeURIComponent(runtimeRunId)}/import-retry`, { allow_partial_import: allowPartialImport });
       setRuntimeImportStatus(payload.import_status || "succeeded");
@@ -965,11 +992,32 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       setNotice(`导入已完成${payload.snapshot_id ? `，快照 ${shortId(payload.snapshot_id)}` : ""}。`);
       window.setTimeout(() => setNotice(""), 5000);
     } catch (error) {
-      setNotice(`仅重试导入失败：${error instanceof Error ? error.message : "未知错误"}`);
+      setNotice(`${collectionMode === "remote" ? "重新拉取快照" : "仅重试导入"}失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  }
+
+  async function syncRemoteNow() {
+    setRemoteSyncing(true);
+    setNotice("正在从采集端拉取最新快照…");
+    try {
+      const payload = await api<{ status: string; snapshot_id?: string | null; state: RemoteSyncState }>("/collector/remote-sync", {});
+      setRemoteSync(payload.state);
+      setSummaryRefreshKey((value) => value + 1);
+      setNotice(payload.status === "unavailable" ? "采集端暂无已导入快照。" : `${payload.status === "imported" ? "已拉取并切换到" : "已是最新快照"} ${shortId(payload.snapshot_id || "")}。`);
+      window.setTimeout(() => setNotice(""), 5000);
+    } catch (error) {
+      setNotice(`同步失败：${error instanceof Error ? error.message : "未知错误"}`);
+    } finally {
+      setRemoteSyncing(false);
     }
   }
 
   function generateSnapshotFromPool() {
+    if (collectionMode === "remote") {
+      // The import ran on the collecting site; only the snapshot pull can be retried.
+      void retryImport();
+      return;
+    }
     if (!runtimeRunId) {
       setNotice("当前没有可生成快照的采集批次。");
       return;
@@ -1083,7 +1131,9 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
   const runFailed = collectors.filter((item) => item.status === "failed" || item.status === "offline").length;
   const gatePassed = runtimeImportStatus === "succeeded";
   const gateBlocked = !gatePassed && (runtimeImportStatus === "skipped_output_gate" || runtimeImportStatus === "skipped_collection_status" || runFailed > 0);
-  const snapshotActionEnabled = Boolean(runtimeRunId && runtimeImportStatus !== "succeeded" && (runtimeRunStatus === "success" || (runtimeRunStatus === "partial" && reviewStatus("gate") === "accepted")));
+  const snapshotActionEnabled = collectionMode === "remote"
+    ? Boolean(runtimeRunId && runtimeRunStatus !== "running" && runtimeImportStatus !== "succeeded")
+    : Boolean(runtimeRunId && runtimeImportStatus !== "succeeded" && (runtimeRunStatus === "success" || (runtimeRunStatus === "partial" && reviewStatus("gate") === "accepted")));
   const snapshotNeedsReview = Boolean(pendingSnapshotId && pendingSnapshotId !== workingSnapshotId);
 
   function confirmWorkingSnapshot() {
@@ -1238,7 +1288,12 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
           <span className={`collector-health ${dataSource === "runtime" ? "" : "is-muted"}`}><i /> {serviceHealthLabel}</span>
           <span className="collector-updated">{runtimeUpdated ? `报告更新于 ${formatDateTime(runtimeUpdated)}` : "报告更新时间未提供"}</span>
           <button onClick={refreshRuntimeView}><RefreshCw size={14} /> 刷新</button>
-          <button onClick={openConfig}><Settings2 size={14} /> 定时任务配置</button>
+          {collectionMode === "remote"
+            ? <>
+                <span className="collector-demo-badge" title={remoteSync?.error ? `上次同步失败：${remoteSync.error.message}` : remoteSync?.last_success_at ? `上次同步 ${formatDateTime(remoteSync.last_success_at)}` : "尚未同步"}>远端采集 · Sealos{remoteSync?.error ? " · 同步失败" : remoteSync?.snapshot_id ? ` · ${shortId(remoteSync.snapshot_id)}` : ""}</span>
+                <button disabled={remoteSyncing} onClick={() => void syncRemoteNow()}><RefreshCw size={14} /> {remoteSyncing ? "同步中…" : "立即同步"}</button>
+              </>
+            : <button onClick={openConfig}><Settings2 size={14} /> 定时任务配置</button>}
           <button className="primary" disabled={runtimeRunStatus === "running" || Boolean(runtimeRequestId)} title={runtimeRunStatus === "running" || runtimeRequestId ? "当前已有采集批次运行中，请等待完成后再执行" : "立即启动一批全量采集"} onClick={() => queueRun([], "立即执行全量采集")}><Play size={14} /> {runtimeRunStatus === "running" || runtimeRequestId ? "采集中…" : "立即执行"}</button>
         </div>
       </div>
@@ -1260,7 +1315,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       {pipelineView === "run" && <section className="pipeline-run-view" aria-label="当前运行流程">
         <div className="pipeline-view-heading">
           <div><span className="collector-kicker"><Activity size={14} /> 批次工作台 · {runtimeRunId || "尚未选择批次"}</span><h2>采集批次与日志</h2><p>左侧选择批次，中间选择本批次采集源，右侧查看选中来源的状态、事件与日志。</p></div>
-          <div className="pipeline-heading-actions"><span className={`pipeline-state-pill ${gateBlocked ? "warning" : gatePassed ? "success" : "pending"}`}>{gateBlocked ? "存在门禁阻断" : gatePassed ? "流程已落盘" : "等待运行"}</span><button className="batch-command" title="打开已抓取数据池，不会重新启动采集" onClick={() => openPipelineView("pool")}>浏览已抓取数据 <ChevronRight size={14} /></button>{gateBlocked && <><button className="batch-command approve" title="记录门禁批准，允许本批次继续进入后续导入/快照流程" onClick={() => void decideGate("approved")}>批准继续</button><button className="batch-command reject" title="记录门禁阻断，停止本批次进入后续导入/快照流程" onClick={() => void decideGate("rejected")}>阻断本批次</button></>}</div>
+          <div className="pipeline-heading-actions"><span className={`pipeline-state-pill ${gateBlocked ? "warning" : gatePassed ? "success" : "pending"}`}>{gateBlocked ? "存在门禁阻断" : gatePassed ? "流程已落盘" : "等待运行"}</span><button className="batch-command" title="打开已抓取数据池，不会重新启动采集" onClick={() => openPipelineView("pool")}>浏览已抓取数据 <ChevronRight size={14} /></button>{gateBlocked && collectionMode !== "remote" && <><button className="batch-command approve" title="记录门禁批准，允许本批次继续进入后续导入/快照流程" onClick={() => void decideGate("approved")}>批准继续</button><button className="batch-command reject" title="记录门禁阻断，停止本批次进入后续导入/快照流程" onClick={() => void decideGate("rejected")}>阻断本批次</button></>}</div>
         </div>
 
         <section className="batch-log-workspace" aria-label="运行批次与日志">
@@ -1324,7 +1379,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
       </section>}
 
       {pipelineView === "pool" && <section className="pipeline-pool-view" aria-label="全局已抓取数据池">
-      <div className="collector-pool-strip"><div><span>全局已抓取数据池</span><strong>{allFetchedSourceRows.length ? `${allFetchedSourceRows.length} 条来源记录` : "暂无可浏览来源记录"}</strong><small>这里浏览所有已落盘来源，不随当前运行批次切换；筛选只影响列表。</small></div><div><span>来源状态</span><strong>{poolSourceSummary.total ? `${poolSourceSummary.healthy} / ${poolSourceSummary.total}` : "未记录"}</strong><small>正常来源 · 全局数据池</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={poolSourceSummary.failed || poolSourceSummary.missing ? "warning" : ""}>{poolSourceSummary.total ? `${poolSourceSummary.failed} / ${poolSourceSummary.empty} / ${poolSourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors} title="返回当前运行流程并筛选失败采集器">查看失败来源</button><button disabled={!runtimeRunId || runtimeRunStatus === "running"} onClick={() => void retryCurrentRun()} title={runtimeRunId ? "重新提交当前批次中的失败采集器" : "当前没有可重试的批次"}>重试当前批次</button><button className="primary" disabled={!snapshotActionEnabled} title={runtimeImportStatus === "succeeded" ? "当前批次已经生成快照" : snapshotActionEnabled ? "使用当前批次已发布产物生成快照；不会把全局列表筛选条件写入快照" : "当前批次未通过采集/发布门禁，暂不能生成快照"} onClick={generateSnapshotFromPool}>{runtimeImportStatus === "succeeded" ? "快照已生成" : "从当前批次生成快照"}</button></div></div>
+      <div className="collector-pool-strip"><div><span>全局已抓取数据池</span><strong>{allFetchedSourceRows.length ? `${allFetchedSourceRows.length} 条来源记录` : "暂无可浏览来源记录"}</strong><small>这里浏览所有已落盘来源，不随当前运行批次切换；筛选只影响列表。</small></div><div><span>来源状态</span><strong>{poolSourceSummary.total ? `${poolSourceSummary.healthy} / ${poolSourceSummary.total}` : "未记录"}</strong><small>正常来源 · 全局数据池</small></div><div><span>失败 / 空响应 / 缺失</span><strong className={poolSourceSummary.failed || poolSourceSummary.missing ? "warning" : ""}>{poolSourceSummary.total ? `${poolSourceSummary.failed} / ${poolSourceSummary.empty} / ${poolSourceSummary.missing}` : "未记录"}</strong><small>失败、空响应、未提供产物</small></div><div className="collector-pool-actions"><button onClick={showFailedCollectors} title="返回当前运行流程并筛选失败采集器">查看失败来源</button><button disabled={!runtimeRunId || runtimeRunStatus === "running"} onClick={() => void retryCurrentRun()} title={runtimeRunId ? "重新提交当前批次中的失败采集器" : "当前没有可重试的批次"}>重试当前批次</button><button className="primary" disabled={!snapshotActionEnabled} title={runtimeImportStatus === "succeeded" ? "当前批次已经生成快照" : snapshotActionEnabled ? "使用当前批次已发布产物生成快照；不会把全局列表筛选条件写入快照" : "当前批次未通过采集/发布门禁，暂不能生成快照"} onClick={generateSnapshotFromPool}>{runtimeImportStatus === "succeeded" ? "快照已生成" : collectionMode === "remote" ? "重新拉取快照" : "从当前批次生成快照"}</button></div></div>
 
       <div className="fetched-data-layout">
       <section className="fetched-data-browser" aria-label="已抓取数据浏览">
@@ -1407,7 +1462,7 @@ export default function CollectorMonitor({ selectedSnapshotId = "", onWorkingSna
             <div className="collector-detail-block"><span>失败诊断</span><article className={selected.errorReason || selected.errorMessage ? "has-error" : ""}>{selected.errorType ? <b>{selected.errorType} · {selected.stage}</b> : <b>本轮无错误</b>}<p>{selected.errorReason || selected.errorMessage || "本次执行没有记录错误。"}</p>{selected.errorDetail && <small>脱敏日志摘要：{selected.errorDetail}</small>}</article></div>
             {(selected.errorType || selected.suggestedAction) && <div className="collector-detail-block"><span>建议处理</span><article><b>下一步</b><p>{selected.suggestedAction || "查看脱敏日志和来源状态，修复首个明确错误后再补采。"}</p><small>建议先单独补采，避免重复运行全部采集器。</small></article></div>}
             <div className="collector-detail-block"><span>运行事件</span>{ledgerEventsAvailable && ledgerEvents.length ? <div className="collector-event-list">{ledgerEvents.slice(-4).map((event) => <article key={event.id}><b>{event.event_type}</b><p>{event.message || event.status || "已记录"}</p><small>{event.created_at.replace("T", " ").slice(0, 19)}</small></article>)}</div> : <article><b>账本事件未提供</b><p>{dataSource === "runtime" ? "该历史报告尚未关联运行账本。" : "演示数据尚未连接真实运行事件。"}</p></article>}</div>
-            <div className="collector-detail-block"><span>日志尾部</span><div className="collector-log-toolbar"><button className={logStream === "stderr" ? "selected" : ""} onClick={() => setLogStream("stderr")}>stderr</button><button className={logStream === "stdout" ? "selected" : ""} onClick={() => setLogStream("stdout")}>stdout</button></div><pre className="collector-log-tail">{collectorLog?.available ? collectorLog.content || "（日志为空）" : "当前运行尚无可读日志尾部"}</pre></div>
+            <div className="collector-detail-block"><span>日志尾部</span><div className="collector-log-toolbar"><button className={logStream === "stderr" ? "selected" : ""} onClick={() => setLogStream("stderr")}>stderr</button><button className={logStream === "stdout" ? "selected" : ""} onClick={() => setLogStream("stdout")}>stdout</button></div><pre className="collector-log-tail">{collectionMode === "remote" ? "远端采集模式：日志保存在采集端（Sealos），此处只显示进度和失败原因。" : collectorLog?.available ? collectorLog.content || "（日志为空）" : "当前运行尚无可读日志尾部"}</pre></div>
             <div className="collector-detail-block"><span>来源状态</span>{collectorSources ? <><div className="collector-source-summary"><b>{collectorSources.summary.healthy} / {collectorSources.summary.total} 正常</b><small>{collectorSources.summary.failed} 失败 · {collectorSources.summary.stale} 过期 · {collectorSources.summary.disabled} 停用 · {collectorSources.updated_at ? collectorSources.updated_at.replace("T", " ").slice(0, 16) : "时间未提供"}</small></div><div className="collector-source-list">{collectorSources.sources.slice().sort((a, b) => { const rank = (state?: string) => state === "ok" ? 0 : state === "disabled" ? 1 : 2; return rank(b.state) - rank(a.state); }).slice(0, 12).map((source) => <article key={source.id}><span><b>{source.id}</b><small>{source.publisher || "未提供发布方"}</small></span><em className={source.state === "ok" ? "ok" : source.state === "disabled" ? "disabled" : "bad"}>{source.state || "未知"}</em><small>{source.error || `${source.entries ?? 0} 条 · HTTP ${source.http_status ?? "—"}`}</small></article>)}</div>{collectorSources.sources.length > 12 && <small className="collector-source-more">仅显示 12 个来源；接口返回完整来源列表。</small>}</> : <article><b>暂无来源产物</b><p>当前采集器没有可读取的 `_source_status.json`、`_fetch_stats.json` 或 `_source_health.json`。</p></article>}</div>
             <div className="collector-detail-actions"><button className="primary" disabled={runtimeRunStatus === "running" || Boolean(runtimeRequestId)} onClick={() => queueRun([selected.id], `单独采集 ${selected.name}`, true)}><RotateCcw size={15} /> 单独采集</button><button onClick={retryCurrentRun}><RefreshCw size={15} /> 重试失败项</button></div>
             <p className="collector-inspector-footnote">日志来自运行报告或账本事件的受限尾部，后端会脱敏 token、cookie、authorization 等字段。</p>

@@ -100,3 +100,54 @@
 为缓存预留磁盘空间，可在无下载任务时清理旧缓存（数据库快照保留即可重新生成）；保留原始数据库备份。首次大版本生成会占用内存和磁盘，发布前需按真实数据量验证。API 主事件循环沿用现有线程池隔离。
 
 验收命令：`python -m pytest tests/test_mcp_sync.py -q`。覆盖完整正文/指标下载、中文跨块、校验、版本固定、断点偏移、空库、未授权及受限 scope、MCP HTTP 工具发现和调用。
+
+# GeoAgent 部署间远端采集与镜像
+
+用于没有境外出口的 GeoAgent（如 HFT 内网）让 Sealos 正式环境采集并拉回快照。设计见 `docs/superpowers/specs/2026-11-05-远端采集与快照镜像设计.md`。接收端是 GeoAgent 自身的 `remote` 模式，不需要另写客户端；下文供排错和其他 GeoAgent 部署接入参考。
+
+## 采集端（Sealos）配置
+
+1. 在 MCP 工作台为接收端创建专用 Key，记下 Key 的 ID（列表中的 `id`），通过安全渠道交付 Key 原文。
+2. 设置 `GEO_REMOTE_COLLECT_PRINCIPALS=<Key ID>`（多个用逗号分隔）。未设置时不注册 `geo_collect_request`，其他工具仍全部只读。
+3. 可选 `GEO_REMOTE_COLLECT_MIN_INTERVAL_SEC`（默认 1800）：两次远端触发新批次的最短间隔。
+
+撤销该 Key 即同时停止接收端的触发和拉取。
+
+## 接收端（HFT）配置
+
+在 `/etc/geoagent/geoagent.env` 增加（Key 用占位符示意，不要写入仓库）：
+
+```text
+GEO_COLLECTION_MODE=remote
+GEO_REMOTE_MCP_URL=https://geoagent.lhotsetech.com/mcp
+GEO_REMOTE_MCP_KEY=geo_<采集端交付的Key>
+GEO_REMOTE_SYNC_INTERVAL_SEC=1800
+```
+
+接收端只出站访问采集端 HTTPS 443，校验证书。页面“立即执行”改为请求远端采集，进度、事件实时显示；完成后自动拉取同一快照并设为工作快照。“立即同步”可随时拉取采集端最新快照。门禁、日志、调度配置在采集端处理。
+
+## geo_collect_request
+
+参数 `{"ids": [], "topic": ""}`；`ids` 为空表示全部启用采集器。返回 `data`：
+
+```json
+{"run_id": "manual-20261105T080000Z-abcd1234", "request_id": "…", "reused": false,
+ "submitted_at": "2026-11-05T08:00:00+00:00", "min_interval_sec": 1800}
+```
+
+- 已有批次运行时返回该批次，`reused=true`，不新起批次。
+- 新批次以“部分源失败也入库”提交；失败源在 `geo_collector_status` 中可见。
+- 错误：`GEO_TOOL_NOT_ALLOWED`（不在白名单）、`GEO_RATE_LIMITED`（`details.retry_after_sec`、上一批 `run_id`）、`GEO_INVALID_ARGUMENT`（未知、停用或排除的采集器）、`GEO_COLLECTOR_BUSY`。
+
+进度用已有 `geo_collector_status(run_id)` 轮询，`run_status` 离开 `running` 后看 `import_status` 与 `snapshot_id`。
+
+## geo_mirror_manifest / geo_mirror_chunk（geo-mirror/v1）
+
+调用方式与 `geo_sync_*` 相同（manifest → 按 `next_offset` 分块 → 校验每块与全量 sha256）。区别：
+
+- 文件是 gzip 压缩的 JSON（`media_type: application/gzip`），需整体校验后再解压；
+- 内容为 `{"schema_version":"geo-mirror/v1","snapshot_id","source_created_at","payload","translations"}`，`payload` 是快照原始载荷，接收方对其做规范化 JSON（键排序、紧凑分隔、UTF-8）SHA256 取前 24 位，必须等于 `snapshot_id`；
+- `translations` 只含该快照标题、正文、来源名等文本的已有中文译文 `{hash, chinese, method}`，`hash` 为原文同样算法的摘要；
+- 与 `geo-sync/v1` 不同，镜像保留原始字段（含 `raw_refs`），只用于受信任的 GeoAgent 部署之间，不作为客户数据契约。
+
+验收命令：`python -m pytest tests/test_mcp_mirror.py tests/test_remote_collect_mcp.py tests/test_remote_collection.py -q`。

@@ -29,6 +29,7 @@ from .collector_jobs import CollectorBusyError, collector_jobs, recover_interrup
 from .collector_config import apply_config, load_config, save_config
 from .collector_import import import_collector_output
 from .collector_ledger import CollectorLedger
+from .remote_collection import RemoteError, collection_mode, default_client, pull_snapshot, remote_jobs, start_background as start_remote_collection, sync_state
 from scripts.integrate_collectors import load_registry
 from .mcp_news import McpClient, load_config as load_mcp_config, public_config as public_mcp_config, save_config as save_mcp_config, store_news
 from .external_mcp import public_registry as public_external_mcp_registry, test_and_save as test_and_save_external_mcp, delete_server as delete_external_mcp_server, news_import_capability, _safe_error as safe_mcp_error
@@ -72,6 +73,7 @@ async def lifespan(app):
         web_auth_users()
     recover_interrupted_runs()
     start_translation()
+    start_remote_collection()
     mcp_app = create_mcp_app(auth_config=mcp_config, managed_keys=True, project_transport=True)
     app.state.geo_mcp = mcp_app
     async with mcp_app.router.lifespan_context(mcp_app):
@@ -306,10 +308,45 @@ def update_workspace_selection(request: WorkspaceSelectionRequest):
         raise HTTPException(404, str(exc)) from exc
     return {"snapshot_id": snapshot_id, "available": True, "source": "research-postgresql-workspace-state"}
 
+REMOTE_ERROR_STATUS = {"REMOTE_NOT_CONFIGURED": 503, "GEO_RATE_LIMITED": 429, "GEO_TOOL_NOT_ALLOWED": 403,
+                       "GEO_INVALID_ARGUMENT": 422, "GEO_COLLECTOR_BUSY": 409}
+
+
+def _remote_http_error(exc: RemoteError) -> HTTPException:
+    message = exc.message
+    if exc.code == "GEO_RATE_LIMITED":
+        minutes = max(1, round(int(exc.details.get("retry_after_sec", 60)) / 60))
+        message = f"远端采集触发过于频繁，约 {minutes} 分钟后可再次触发；上一批：{exc.details.get('run_id') or '未知'}"
+    return HTTPException(REMOTE_ERROR_STATUS.get(exc.code, 502), message)
+
+
+def _local_collection_only() -> None:
+    """Reject operations that act on collector artefacts held by the remote site."""
+    if collection_mode() == "remote":
+        raise HTTPException(409, "远端采集模式下此操作需在采集端（Sealos）处理")
+
+
 @app.get("/api/collector/summary")
 def collector_summary():
     """Expose the newest persisted collection report without claiming live health."""
-    return load_latest_run(data_dir() / "collection-runs", ROOT / "collectors" / "collectors.json")
+    return {**load_latest_run(data_dir() / "collection-runs", ROOT / "collectors" / "collectors.json"),
+            "collection_mode": collection_mode()}
+
+
+@app.get("/api/collector/remote-sync")
+def remote_sync_status():
+    return {"collection_mode": collection_mode(), **sync_state()}
+
+
+@app.post("/api/collector/remote-sync")
+def remote_sync_now():
+    if collection_mode() != "remote":
+        raise HTTPException(409, "当前不是远端采集模式")
+    try:
+        result = pull_snapshot(default_client(), switch="always")
+    except RemoteError as exc:
+        raise _remote_http_error(exc) from exc
+    return {"collection_mode": "remote", **result, "state": sync_state()}
 
 
 @app.get("/api/collector/config")
@@ -335,6 +372,7 @@ def collector_config():
 
 @app.put("/api/collector/config")
 def update_collector_config(request: CollectorConfigRequest):
+    _local_collection_only()
     registry = load_registry(ROOT / "collectors" / "collectors.json")
     # Keep disabled registry entries valid in a previously saved exclusion
     # list; the service itself still only runs enabled collectors.
@@ -460,6 +498,13 @@ def _find_collector_run(run_id: str) -> dict | None:
     )
 
 
+def _remote_snapshot_id(projected: dict) -> str | None:
+    try:
+        return json.loads(Path(projected["report_path"]).read_text(encoding="utf-8")).get("remote_snapshot_id")
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 def _collector_ledger() -> CollectorLedger:
     return CollectorLedger()
 
@@ -508,6 +553,7 @@ def update_collector_review(run_id: str, item_id: str, request: CollectorReviewR
 
 @app.post("/api/collector/runs/{run_id}/gate")
 def decide_collector_gate(run_id: str, request: CollectorGateRequest):
+    _local_collection_only()
     projected = _find_collector_run(run_id)
     if projected is None:
         raise HTTPException(404, "采集运行记录不存在")
@@ -571,6 +617,16 @@ def retry_collector_import(run_id: str, request: CollectorImportRetryRequest):
     projected = _find_collector_run(run_id)
     if projected is None:
         raise HTTPException(404, "采集运行记录不存在")
+    if collection_mode() == "remote":
+        # Only the snapshot pull can be retried here; the import ran remotely.
+        remote_snapshot_id = projected.get("snapshot_id") or _remote_snapshot_id(projected)
+        if not remote_snapshot_id:
+            raise HTTPException(409, "远端本批次没有可拉取的快照")
+        try:
+            result = pull_snapshot(default_client(), remote_snapshot_id, switch="always")
+        except RemoteError as exc:
+            raise _remote_http_error(exc) from exc
+        return {"available": True, "source": "remote-snapshot-sync", "run_id": run_id, "import_status": "succeeded", **result}
     if projected.get("import_status") == "succeeded":
         return {"available": True, "source": "collector-import", "run_id": run_id, "import_status": "succeeded", "snapshot_id": projected.get("snapshot_id"), "reused": True}
     run_status = projected.get("run_status")
@@ -624,6 +680,12 @@ def start_collector_run(request: CollectorRunRequest):
     if explicitly_excluded:
         raise HTTPException(409, f"采集器已在调度配置中排除，不能手动执行：{', '.join(explicitly_excluded)}")
     configured_allow_partial = bool(config.get("allow_partial_import", False))
+    if collection_mode() == "remote":
+        try:
+            job = remote_jobs.submit(ids=request.ids, topic=request.topic)
+        except RemoteError as exc:
+            raise _remote_http_error(exc) from exc
+        return {**job.public(), "source": "remote-collector-job", "collection_mode": "remote"}
     try:
         job = collector_jobs.submit(
             ids=request.ids,
@@ -648,6 +710,12 @@ def retry_collector_run(run_id: str):
     failed_ids = [item["id"] for item in run.get("collectors", []) if item.get("status") == "failed"]
     if not failed_ids:
         raise HTTPException(422, "该运行没有可重试的失败采集器")
+    if collection_mode() == "remote":
+        try:
+            job = remote_jobs.submit(ids=failed_ids)
+        except RemoteError as exc:
+            raise _remote_http_error(exc) from exc
+        return {**job.public(), "source": "remote-collector-job", "retry_of": run_id, "collection_mode": "remote"}
     try:
         config = load_config()
         allowed_failed_ids = [item for item in failed_ids if item not in set(config.get("exclude_ids", []))]
@@ -665,7 +733,7 @@ def retry_collector_run(run_id: str):
 
 @app.get("/api/collector/jobs/{request_id}")
 def collector_job(request_id: str):
-    job = collector_jobs.get(request_id)
+    job = collector_jobs.get(request_id) or remote_jobs.get(request_id)
     if job is None:
         raise HTTPException(404, "采集请求不存在")
     return {**job.public(), "source": "collector-job"}
@@ -691,6 +759,7 @@ def collector_run_log(
     stream: Literal["stdout", "stderr"] = "stderr",
     tail: int = Query(2000, ge=1, le=10000),
 ):
+    _local_collection_only()
     """Return a bounded, redacted output tail for a collector item."""
     from .collector_logs import read_log_tail
 

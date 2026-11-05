@@ -412,7 +412,11 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
     )
     server._geo_auth_config = auth_config  # type: ignore[attr-defined]
     from .sync import register_sync_tools
+    from .mirror import register_mirror_tools
+    from .collect import register_collect_tools
     register_sync_tools(server, _run_tool)
+    register_mirror_tools(server, _run_tool)
+    register_collect_tools(server, _run_tool)
 
     @server.custom_route("/healthz", methods=["GET"], include_in_schema=False)
     async def healthz(_: Request) -> JSONResponse:

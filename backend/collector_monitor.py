@@ -204,11 +204,17 @@ def _load_report(report: Path, labels: dict[str, str]) -> dict[str, Any] | None:
         payload = json.loads(report.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    raw_results = payload.get("results", []) if isinstance(payload, dict) else payload
+    # A remote batch mirrored from another deployment arrives already
+    # projected and redacted; raw-report diagnosis must not run again.
+    projected = isinstance(payload, dict) and payload.get("projected") is True
+    if projected:
+        raw_results = payload.get("collectors", [])
+    else:
+        raw_results = payload.get("results", []) if isinstance(payload, dict) else payload
     if not isinstance(raw_results, list):
         return None
-    results = [_project_item(item, labels) for item in raw_results if isinstance(item, dict)]
-    started_at, finished_at = _iso_bounds(raw_results)
+    results = [item if projected else _project_item(item, labels) for item in raw_results if isinstance(item, dict)]
+    started_at, finished_at = (None, None) if projected else _iso_bounds(raw_results)
     if isinstance(payload, dict):
         started_at = started_at or payload.get("started_at")
         finished_at = finished_at or payload.get("finished_at")
