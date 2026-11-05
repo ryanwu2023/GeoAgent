@@ -613,7 +613,7 @@ def test_streaming_ask_emits_progress_before_final_answer(monkeypatch):
     snapshot = stored()
     set_working_snapshot_id(snapshot["id"])
 
-    async def streamed_answer(snapshot, question, topic, dimension, start, end, use_model, previous_answer_id, progress=None):
+    async def streamed_answer(snapshot, question, topic, dimension, start, end, use_model, previous_answer_id, progress=None, research_scope=None):
         trace = {"round": 1, "title": "初步整理", "status": "completed", "summary": "已完成首轮内部检索。", "details": [], "search_queries": [], "evidence_ids": []}
         await progress(trace)
         return {"id": "stream-answer", "snapshot_id": snapshot["id"], "as_of": snapshot["created_at"], "query": question, "topic": topic, "filters": {"dimension": dimension, "start": start, "end": end}, "created_at": snapshot["created_at"], "mode": "现场模型分析", "message": "完成", "summary": None, "facts": [], "citations": [], "inferences": [], "gaps": [], "steps": [], "analysis_trace": [trace]}
@@ -632,7 +632,7 @@ def test_streaming_ask_can_opt_into_compact_answer_projection(monkeypatch):
     set_working_snapshot_id(snapshot["id"])
     citation = {**snapshot["records"][0], "text": "很长的引用正文" * 2000}
 
-    async def streamed_answer(snapshot, question, topic, dimension, start, end, use_model, previous_answer_id, progress=None):
+    async def streamed_answer(snapshot, question, topic, dimension, start, end, use_model, previous_answer_id, progress=None, research_scope=None):
         return {"id": "compact-answer", "snapshot_id": snapshot["id"], "as_of": snapshot["created_at"], "query": question, "topic": topic, "filters": {"dimension": dimension, "start": start, "end": end}, "created_at": snapshot["created_at"], "mode": "现场模型分析", "message": "完成", "summary": None, "facts": [], "citations": [citation], "internal_sources": [], "inferences": [], "gaps": [], "steps": [], "analysis_trace": []}
 
     monkeypatch.setattr("backend.app.answer", streamed_answer)

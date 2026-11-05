@@ -24,6 +24,7 @@ def test_store_round_trip_and_scope_isolation(tmp_path, monkeypatch):
     recovered = HarnessStore().find_resumable_run("run-1", scope)
     assert recovered.research_memory == {
         "facts": ["事实"], "ledger": {"version": 1, "entries": []},
+        "claim_ledger": {"version": 1, "claims": [], "relations": [], "dependencies": []},
     }
     assert recovered.cost_snapshot["estimated_cost_cny"] == 0.12
     assert recovered.deadline_at.endswith("+00:00")
