@@ -29,6 +29,7 @@ if _REPO not in sys.path:
     sys.path.insert(0, _REPO)
 from scripts.collector_http_runtime import HttpRuntime, prepare_output, source_results
 from scripts.article_body import fetch_bodies, make_client
+from scripts.news_sitemap import coverage_gap, is_news_sitemap, parse_news_sitemap, sitemap_children
 from scripts.google_news import annotate_outlets, is_google_news, prefer_direct, resolve_records, split_outlet
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -204,7 +205,8 @@ def demote_proxy(proxy):
 def http_get(url, timeout=30, min_iv=1.2, ua=None, retries=1):
     return _http_runtime.fetch(_http_get_uncached, url, timeout=timeout,
                                min_iv=min_iv, ua=ua, retries=retries,
-                               valid_body=lambda body: bool(parse_rss(body, cap=1)))
+                               valid_body=lambda body: bool(parse_rss(body, cap=1)) or is_news_sitemap(body)
+                               or bool(sitemap_children(body)))
 
 def _http_get_uncached(url, timeout=30, min_iv=1.2, ua=None, retries=1):
     host = urlparse(url).netloc
@@ -260,8 +262,12 @@ def _http_get_uncached(url, timeout=30, min_iv=1.2, ua=None, retries=1):
                 time.sleep(1.5)
     return {"status": 0, "body": "", "ms": 0, "err": err, "proxy": None}
 
-def update_source_health(outdir, src_stats):
-    """跨运行跟踪信源连续失败；写 output/_source_health.json，返回 (ok, fail, alerts)。"""
+def update_source_health(outdir, src_stats, fetched=None):
+    """跨运行跟踪信源健康；写 output/_source_health.json，返回 (ok, fail, alerts)。
+
+    告警：连续失败≥3 次；需要 UA 回退才能取到（应在源上固定 ua）；
+    覆盖缺口——本轮最旧一条已晚于上次成功抓取，中间的文章可能已滚出源而漏抓（应提高频率）。
+    """
     hp = os.path.join(outdir, "_source_health.json")
     health = {}
     if os.path.exists(hp):
@@ -272,11 +278,20 @@ def update_source_health(outdir, src_stats):
             health = {}
     alerts, ok_n, fail_n = [], 0, 0
     today = time.strftime("%Y-%m-%d")
+    now = now_utc().isoformat(timespec="seconds")
     for sid, st in src_stats.items():
         h = health.setdefault(sid, {"consec_fail": 0, "last_ok": None})
         if st.get("ok"):
+            gap = coverage_gap((fetched or {}).get(sid) or [], h.get("last_ok_at") or "")
+            if gap:
+                h["gaps"] = int(h.get("gaps", 0)) + 1
+                alerts.append("- `%s` 覆盖缺口：本轮最旧一条 %s 晚于上次成功抓取 %s，中间文章可能已漏抓"
+                              "——建议提高抓取频率或改用站点地图" % (sid, gap, h["last_ok_at"]))
+            if st.get("ua_fallback"):
+                alerts.append("- `%s` 全局 UA 被拒，靠 fallback_ua 才取到——建议在源上固定 `ua`" % sid)
             h["consec_fail"] = 0
             h["last_ok"] = today
+            h["last_ok_at"] = now
             ok_n += 1
         else:
             h["consec_fail"] = int(h.get("consec_fail", 0)) + 1
@@ -416,17 +431,17 @@ def append_verification_section(latest_path, records, cfg):
         pass
 
 
-def append_health_alert(latest_path, src_stats, outdir):
+def append_health_alert(latest_path, src_stats, outdir, fetched=None):
     """把信源健康告警追加到 LATEST.md（仅在真实抓取运行后调用）。"""
     if not src_stats:
         return
-    ok_n, fail_n, alerts = update_source_health(outdir, src_stats)
-    if fail_n == 0:
+    ok_n, fail_n, alerts = update_source_health(outdir, src_stats, fetched)
+    if fail_n == 0 and not alerts:
         return
     lines = ["", "## 信源健康", "",
              "本轮 %d 个信源正常、**%d 个失败**（已自动尝试全部存活出口）。" % (ok_n, fail_n)]
     if alerts:
-        lines += ["", "**连续失败≥3 次（需处理）**：", ""]
+        lines += ["", "**需处理**（连续失败≥3 次 / 覆盖缺口 / UA 回退）：", ""]
         lines += alerts
     lines += ["", "明细见 `output/_fetch_stats.json` 与 `output/_source_health.json`。"]
     try:
@@ -732,20 +747,42 @@ def parse_rss(body, cap=200):
     return items[: cap]
 
 # ---------------------------------------------------------------- pipeline
-def fetch_source(src, cfg):
+def _fetch_items(src, cfg, ua):
     # 备用源：主 URL 失败时依次尝试 alt_urls（须同源同解析器，防聚合器陷阱）
     r = None
     for _u in [src["url"]] + list(src.get("alt_urls") or []):
-        # 个别站点按 UA 版本拦截（返回 404），允许按源覆盖 UA
         r = http_get(_u, timeout=cfg.get("request_timeout", 30),
-                     min_iv=cfg.get("min_interval_per_host", 1.2), ua=src.get("ua") or cfg.get("ua"))
+                     min_iv=cfg.get("min_interval_per_host", 1.2), ua=ua)
         if r["status"] == 200 and r["body"]:
             break
     if r["status"] != 200 or not r["body"]:
         return None, r
-    items = parse_rss(r["body"], cap=int(src.get("per_source_max") or cfg.get("per_source_max") or 200))
+    cap = int(src.get("per_source_max") or cfg.get("per_source_max") or 200)
+    body = r["body"]
+    if src.get("kind") == "news_sitemap":
+        # 站点地图索引：取前几个子地图（新闻地图通常按时间切片，最新的在前）
+        children = sitemap_children(body, int(src.get("sitemap_children") or 3))
+        bodies = [body] if not children else [
+            c["body"] for c in (http_get(u, timeout=cfg.get("request_timeout", 30),
+                                         min_iv=cfg.get("min_interval_per_host", 1.2), ua=ua)
+                                for u in children) if c["status"] == 200 and c["body"]]
+        items = [it for b in bodies for it in parse_news_sitemap(b, src.get("language", ""), cap)][:cap]
+    else:
+        items = parse_rss(body, cap=cap)
     if not items:
         return None, dict(r, err="ok-empty(200 但 0 条)")
+    return items, r
+
+def fetch_source(src, cfg):
+    # 个别站点按 UA 版本拦截（MEE 404、PBS 202 空响应），允许按源覆盖 UA；
+    # 未覆盖的源失败时自动换 fallback_ua 再试一次，结果记入健康档提示固定下来
+    ua = src.get("ua") or cfg.get("ua")
+    items, r = _fetch_items(src, cfg, ua)
+    fb = cfg.get("fallback_ua")
+    if items is None and fb and fb != ua:
+        items2, r2 = _fetch_items(src, cfg, fb)
+        if items2 is not None:
+            return items2, dict(r2, ua_fallback=True)
     return items, r
 
 def make_records(cfg, eng, fetched, run_dt):
@@ -762,7 +799,8 @@ def make_records(cfg, eng, fetched, run_dt):
                 too_old += 1
                 continue
             summary = clean_text(it.get("desc", ""), cfg.get("summary_max_chars", 1200))
-            cls = eng.classify(it["title"], summary)
+            # 站点地图没有摘要，用 news:keywords 辅助主题判断（不写进摘要）
+            cls = eng.classify(it["title"], (summary + " " + it.get("keywords", "")).strip())
             link = norm_link(it["link"])
             base = {"id": sha(link or it["title"]), "url": link,
                     "title": it["title"], "summary": summary,
@@ -797,8 +835,9 @@ def make_records(cfg, eng, fetched, run_dt):
                                     "anchor_no_bucket": blocked_anchor,
                                     "no_anchor": empty, "too_old": too_old}
     seen_tk, deduped = {}, []
-    # 同标题以直连源为准：谷歌新闻副本排在最后参与去重（sorted 稳定，其余顺序不变）
-    for r in sorted(records, key=lambda x: is_google_news(x.get("url") or "")):
+    # 同标题按渠道优先级保留：RSS（带摘要）> 新闻站点地图 > 谷歌新闻（sorted 稳定，其余顺序不变）
+    for r in sorted(records, key=lambda x: (is_google_news(x.get("url") or ""),
+                                            smap[x["source_id"]].get("kind") == "news_sitemap")):
         tk = title_key(r["title"])
         if tk and tk in seen_tk:
             audit["per_source"][r["source_id"]]["kept"] -= 1
@@ -1218,7 +1257,10 @@ def main():
             else:
                 fetched[s["id"]] = items
                 src_stats[s["id"]] = {"ok": True, "status": r["status"], "n": len(items)}
-                print(f"  ✅ [{i}/{len(enabled)}] {s['id']}: {len(items)} 条")
+                if r.get("ua_fallback"):
+                    src_stats[s["id"]]["ua_fallback"] = True
+                print(f"  ✅ [{i}/{len(enabled)}] {s['id']}: {len(items)} 条"
+                      f"{'（UA 回退）' if r.get('ua_fallback') else ''}")
         with open(os.path.join(outdir, "_fetch_stats.json"), "w", encoding="utf-8") as f:
             json.dump({"run": as_of.isoformat(), "src": src_stats}, f, ensure_ascii=False, indent=1)
 
@@ -1262,7 +1304,7 @@ def main():
     paths = write_outputs(cfg, recs, undated, audit, stats, as_of, outdir,
                           verify_last_note(outdir))
     print(f"[backfill] 回填 {n_bf} 条；新增 {n_new}；快照 {len(recs)}（无日期 {len(undated)}）")
-    append_health_alert(paths["latest"], src_stats, outdir)
+    append_health_alert(paths["latest"], src_stats, outdir, fetched)
     append_verification_section(paths["latest"], recs, cfg)
     print(f"[done] {paths['latest']}")
 
@@ -1496,6 +1538,44 @@ def run_selftest(cfg, eng):
     darch = {"g": dict(grecs[0])}
     kept, ndup = prefer_direct(drecs, darch, pcfg["sources"])
     ck("累积档里的谷歌新闻副本被直连源替换", not darch and ndup == 1 and len(kept) == 1)
+    # --- 新闻站点地图：与 RSS 同文时 RSS（带摘要）优先，谷歌新闻最后 ---
+    smx = ('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+           'xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"><url>'
+           '<loc>https://www.pbs.org/newshour/world/pakistan-mediate</loc><news:news>'
+           '<news:publication><news:name>PBS</news:name><news:language>en</news:language></news:publication>'
+           '<news:publication_date>2026-11-05T11:00:00Z</news:publication_date>'
+           '<news:title>Pakistan offers to mediate US Iran talks in Islamabad</news:title>'
+           '<news:keywords>Iran, Pakistan</news:keywords></news:news></url></urlset>')
+    smi = parse_news_sitemap(smx, "en")
+    ck("站点地图解析出标题/时间/关键词", smi and smi[0]["keywords"] == "Iran, Pakistan")
+    scfg = dict(pcfg, sources=pcfg["sources"] + [{"id": "pbs-sm", "kind": "news_sitemap",
+                                                 "publisher": "PBS", "tier": "T3"}])
+    srecs, _ = make_records(scfg, eng, {"gn-trump": gi, "pbs-sm": smi, "pbs-x": parse_rss(drss)}, "2026-11-05")
+    ck("渠道优先级 RSS > 站点地图 > 谷歌新闻", [r["source_id"] for r in srecs] == ["pbs-x"])
+    srecs2, _ = make_records(scfg, eng, {"gn-trump": gi, "pbs-sm": smi}, "2026-11-05")
+    ck("站点地图优先于谷歌新闻", [r["source_id"] for r in srecs2] == ["pbs-sm"])
+    # --- UA 回退与覆盖缺口告警 ---
+    global _fetch_items
+    _orig_fetch = _fetch_items
+    def _fake_fetch(src, cfg_, ua):
+        return ([{"title": "t", "link": "https://x.example/a", "pub": "", "desc": ""}], {"status": 200}) \
+            if ua == "SAFARI" else (None, {"status": 202, "err": "ok-empty(200 但 0 条)"})
+    _fetch_items = _fake_fetch
+    try:
+        fi, fr = fetch_source({"id": "x", "url": "https://x.example/rss"}, {"ua": "CHROME", "fallback_ua": "SAFARI"})
+        ck("全局 UA 被拒时自动用 fallback_ua 重试", fi is not None and fr.get("ua_fallback") is True)
+        fi2, _ = fetch_source({"id": "x", "url": "https://x.example/rss", "ua": "SAFARI"},
+                              {"ua": "CHROME", "fallback_ua": "SAFARI"})
+        ck("已固定 UA 的源不重复回退", fi2 is not None)
+    finally:
+        _fetch_items = _orig_fetch
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        with open(os.path.join(td, "_source_health.json"), "w", encoding="utf-8") as f:
+            json.dump({"aj": {"consec_fail": 0, "last_ok_at": "2026-11-05T00:00:00+00:00"}}, f)
+        _, _, al = update_source_health(td, {"aj": {"ok": True, "ua_fallback": True}},
+                                        {"aj": [{"pub": "Thu, 05 Nov 2026 09:00:00 GMT"}]})
+        ck("覆盖缺口与 UA 回退写入告警", any("覆盖缺口" in a for a in al) and any("fallback_ua" in a for a in al))
     ck("原文链接优先", _row_link({"url": "https://news.google.com/x", "original_url": "https://reuters.com/a"})
        == "[原文](https://reuters.com/a)")
     ck("等级展示标注当事方", tier_label(smap_["app-pk"]) == "T1·当事方官方"

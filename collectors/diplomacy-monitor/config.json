@@ -7,11 +7,12 @@
   "request_timeout": 30,
   "min_interval_per_host": 1.2,
   "per_source_max": 200,
-  "google_news_resolve_max": 8,
+  "google_news_resolve_max": 0,
   "body_fetch_max": 20,
   "body_max_chars": 6000,
   "body_ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
   "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "fallback_ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
   "buckets": {
     "qatar_mediation": {
       "label": "卡塔尔斡旋",
@@ -839,6 +840,106 @@
       "enabled": true,
       "body": true,
       "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。Politico 政治新闻（量大，靠桶与锚定过滤）。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "nyt-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.nytimes.com/sitemaps/new/news.xml.gz",
+      "tier": "T3",
+      "publisher": "The New York Times",
+      "per_source_max": 1000,
+      "enabled": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·857 条（带 keywords）；付费墙，不抓正文。2026-11-05 本机实测"
+    },
+    {
+      "id": "wsj-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.wsj.com/wsjsitemaps/wsj_google_news.xml",
+      "tier": "T3",
+      "publisher": "The Wall Street Journal",
+      "per_source_max": 1000,
+      "enabled": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·595 条（带 keywords）；付费墙，不抓正文。2026-11-05 本机实测"
+    },
+    {
+      "id": "bloomberg-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.bloomberg.com/sitemaps/news/latest.xml",
+      "tier": "T3",
+      "publisher": "Bloomberg",
+      "per_source_max": 1000,
+      "outlets": [
+        "Bloomberg.com"
+      ],
+      "enabled": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·587 条；付费墙，不抓正文。2026-11-05 本机实测"
+    },
+    {
+      "id": "cnn-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.cnn.com/sitemap/news.xml",
+      "tier": "T3",
+      "publisher": "CNN",
+      "per_source_max": 1000,
+      "enabled": true,
+      "body": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·227 条（CNN 官方 RSS 自 2023 年停更）。2026-11-05 本机实测"
+    },
+    {
+      "id": "aljazeera-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.aljazeera.com/news-sitemap.xml",
+      "tier": "T3",
+      "publisher": "Al Jazeera",
+      "per_source_max": 1000,
+      "enabled": true,
+      "body": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·228 条，覆盖约 48 小时（all.xml RSS 只有约 9 小时）。2026-11-05 本机实测"
+    },
+    {
+      "id": "bbc-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.bbc.com/sitemaps/https-index-com-news.xml",
+      "tier": "T3",
+      "publisher": "BBC",
+      "per_source_max": 1000,
+      "language": "en",
+      "sitemap_children": 3,
+      "enabled": true,
+      "body": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。站点地图索引，含各语种，按 news:language=en 过滤；200。2026-11-05 本机实测"
+    },
+    {
+      "id": "cbs-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.cbsnews.com/xml-sitemap/news.xml",
+      "tier": "T3",
+      "publisher": "CBS News",
+      "per_source_max": 1000,
+      "enabled": true,
+      "body": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·588 条（含地方台）。2026-11-05 本机实测"
+    },
+    {
+      "id": "nbc-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.nbcnews.com/sitemap/nbcnews/sitemap-news",
+      "tier": "T3",
+      "publisher": "NBC News",
+      "per_source_max": 1000,
+      "enabled": true,
+      "body": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·152 条。2026-11-05 本机实测"
+    },
+    {
+      "id": "toi-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.timesofisrael.com/news-sitemap.xml",
+      "tier": "T3",
+      "publisher": "The Times of Israel",
+      "per_source_max": 1000,
+      "enabled": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·216 条；文章页 403，不抓正文。2026-11-05 本机实测"
     },
     {
       "id": "mee",

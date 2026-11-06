@@ -46,12 +46,19 @@ run.bat                                  # 一条龙：自检→抓取→对账
   Jerusalem Post、Times of Israel、France 24、Gulf News、The Hill、Politico）：自带摘要和原文链接，
   同一篇文章（标题+发布方相同）优先保留直连记录，谷歌新闻副本在本轮和累积档里都会去掉。
   谷歌新闻对某家的叫法与 `publisher` 不同时，在源上写 `outlets` 别名（如 NYT → The New York Times）。
-- Google News 只负责补漏长尾媒体：记录写 `outlet`（取 `<source>` 或标题「 - Outlet」后缀），报告与后端展示
-  真实发布方，跨源印证按 outlet 计数；`google_news_resolve_max` 控制每轮最多把多少条
-  news.google.com 跳转链接解析为原文 `original_url`（每条约 2 次请求，结果随累积档保存）。
+- 新闻站点地图（`"kind": "news_sitemap"`：NYT、WSJ、Bloomberg、CNN、Al Jazeera、BBC、CBS、NBC、Times of Israel）：
+  媒体提交给谷歌新闻的最近约 48 小时文章清单，带原文链接、发布时间和 keywords（无摘要，keywords 只参与主题判断）。
+  支持站点地图索引（取前 `sitemap_children` 个子地图）和 `language` 过滤。Reuters/AP 站点地图拒绝抓取（401/403）。
+- 同一篇文章的渠道优先级：直连 RSS（带摘要）> 新闻站点地图 > 谷歌新闻。
+- Google News 只负责补漏 Reuters、AP 和长尾媒体：记录写 `outlet`（取 `<source>` 或标题「 - Outlet」后缀），
+  报告与后端展示真实发布方，跨源印证按 outlet 计数。原文链接解析会被谷歌限流，`google_news_resolve_max`
+  默认 0（关闭）；需要时可设小额度，每条约 2 次请求，结果随累积档保存。
+- 可靠性：全局 `ua` 取不到时自动用 `fallback_ua` 重试一次；`_source_health.json` 记录每源最近成功时间，
+  LATEST「信源健康」告警三类问题——连续失败≥3 次、需要 UA 回退（应在源上固定 `ua`）、覆盖缺口
+  （本轮最旧一条晚于上次成功抓取，说明抓取频率跟不上该源的保留窗口，中间文章可能已漏）。
 - 正文：源上 `"body": true` 的公开站，每轮最多 `body_fetch_max` 条（新的优先）抓正文写入 `body`
   （截断到 `body_max_chars`），复用 geopolitical-source-monitor 的 robots/按主机限速/付费墙识别；
-  结果写 `content_access`，同一条只抓一次（网络错误下轮重试）。付费墙站点（Reuters、NYT、
+  结果写 `content_access`，同一条只抓一次（网络错误下轮重试）。付费墙站点（Reuters、NYT、WSJ、Bloomberg、
   Al-Monitor、Jerusalem Post）和文章页 403 的 Times of Israel 不开，只保留标题和摘要。backend 有 `body` 时以正文作为记录文本。
 - 全部停用源在 `config.json` 带 `note`（实测日期+状态码+原因+替代覆盖）；探测证据
   `tools/_probe_round*.json`。
