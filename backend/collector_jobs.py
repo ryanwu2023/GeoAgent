@@ -106,9 +106,10 @@ class CollectorJobManager:
         auto_import: bool = True,
         allow_partial_import: bool = False,
         exclude_ids: list[str] | None = None,
+        run_prefix: str = "manual",
     ) -> CollectorJob:
         self._preflight_lock()
-        run_name = f"manual-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
+        run_name = f"{run_prefix}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
         job = CollectorJob(
             request_id=uuid.uuid4().hex,
             run_id=run_name,

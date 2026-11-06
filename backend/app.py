@@ -29,6 +29,7 @@ from .collector_jobs import CollectorBusyError, collector_jobs, recover_interrup
 from .collector_config import apply_config, load_config, save_config
 from .collector_import import import_collector_output
 from .collector_ledger import CollectorLedger
+from .collector_scheduler import start_background as start_collector_schedule
 from .remote_collection import RemoteError, collection_mode, default_client, pull_snapshot, remote_jobs, start_background as start_remote_collection, sync_state
 from scripts.integrate_collectors import load_registry
 from .mcp_news import McpClient, load_config as load_mcp_config, public_config as public_mcp_config, save_config as save_mcp_config, store_news
@@ -74,6 +75,7 @@ async def lifespan(app):
     recover_interrupted_runs()
     start_translation()
     start_remote_collection()
+    start_collector_schedule()
     mcp_app = create_mcp_app(auth_config=mcp_config, managed_keys=True, project_transport=True)
     app.state.geo_mcp = mcp_app
     async with mcp_app.router.lifespan_context(mcp_app):

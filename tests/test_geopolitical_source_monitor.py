@@ -328,6 +328,7 @@ def test_collector_is_registered_and_documented():
         "entrypoint": "geopolitical_source_monitor.py",
         "selftest_args": ["--selftest"],
         "output_kind": "geo-v6",
+        "cadence": "hourly",
         "enabled": True,
     }
     assert (COLLECTOR / item["entrypoint"]).is_file()

@@ -13,6 +13,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -39,6 +40,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -52,6 +54,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -105,6 +108,7 @@
         "--selftest"
       ],
       "output_kind": "geo-v6",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -118,6 +122,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -131,6 +136,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -144,6 +150,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -185,6 +192,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -211,6 +219,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -224,6 +233,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -237,6 +247,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -250,6 +261,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -307,6 +319,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "cadence": "hourly",
       "enabled": true
     },
     {
@@ -320,6 +333,7 @@
         "--selftest"
       ],
       "output_kind": "records-and-metrics",
+      "cadence": "hourly",
       "enabled": true
     },
     {
