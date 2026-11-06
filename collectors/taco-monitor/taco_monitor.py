@@ -215,7 +215,13 @@ def restore_recent_history(statuses, out_root):
         st["n"] = len(data)
         st["first_date"] = dates[0]
         st["last_date"] = dates[-1]
-        st["last_value"] = data[dates[-1]]
+        last = data[dates[-1]]
+        # Multi-field history rows (PortWatch: n_total/n_tanker/capacity) report the
+        # main count, as the live parser does; the status sheet only takes scalars.
+        if isinstance(last, dict):
+            st["last_record"] = last
+            last = last.get("n_total") if last.get("n_total") is not None else next(iter(last.values()), None)
+        st["last_value"] = last
         st["_data"] = data
         restored.append(st)
     return restored
