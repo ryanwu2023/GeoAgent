@@ -34,11 +34,17 @@ run.bat                                  # 一条龙：自检→抓取→对账
 
 ## 信源
 
-- **T1**：APP 巴基斯坦联合通讯社、UN Press（新闻稿）、UN Iran（国别页）。QNA/ONA/Radio Pakistan/
-  卡塔尔·巴基斯坦·伊朗·中国 MOFA/state.gov(407)/KUNA/WAM/SPA 等停用留档（404/JS 壳/连不上）。
+- **T1 中立**：UN Press（新闻稿）、UN Iran（国别页）。
+- **T1·当事方官方**（`source_role: party_official`）：APP 巴基斯坦联合通讯社（非美联社 AP）、白宫
+  `/news/feed/`、国务院 `/rss-feed/press-releases/feed/`、五角大楼 RSS.ashx（2026-11-05 本机实测恢复）。
+  只代表该方口径：单源不算「已印证」，问答检索权重 0.8（中立 T1 为 1.0）。QNA/ONA/Radio Pakistan/
+  卡塔尔·巴基斯坦·伊朗·中国 MOFA/KUNA/WAM/SPA 等停用留档（404/JS 壳/连不上）。
 - **T2**：ICG、Atlantic Council IranSource、Responsible Statecraft（Quincy）。
-- **T3**：Al Jazeera、BBC、Guardian、NYT、MEE、Dawn、Doha News、Tehran Times（伊朗官媒窗口）、
-  TASS（俄方官方立场窗口）、Anadolu、LobeLog + 15 条 Google News 关键词通道。
+- **T3**：Al Jazeera、BBC、Guardian、NYT、MEE、The National、Dawn、Doha News、Tehran Times（伊朗官媒窗口）、
+  TASS（俄方官方立场窗口）、Anadolu、LobeLog + Google News 关键词通道。
+- Google News 只是发现层：记录写 `outlet`（取 `<source>` 或标题「 - Outlet」后缀），报告与后端展示
+  真实发布方，跨源印证按 outlet 计数；`google_news_resolve_max` 控制每轮最多把多少条
+  news.google.com 跳转链接解析为原文 `original_url`（每条约 2 次请求，结果随累积档保存）。
 - 全部停用源在 `config.json` 带 `note`（实测日期+状态码+原因+替代覆盖）；探测证据
   `tools/_probe_round*.json`。
 

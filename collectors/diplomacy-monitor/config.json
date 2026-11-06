@@ -7,6 +7,7 @@
   "request_timeout": 30,
   "min_interval_per_host": 1.2,
   "per_source_max": 200,
+  "google_news_resolve_max": 8,
   "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   "buckets": {
     "qatar_mediation": {

@@ -9,6 +9,7 @@ from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from .catalog import TOPICS, topic_dimensions
 from .store import digest, data_dir
 from .events import CATEGORIES,SIGNALS
+from scripts.google_news import is_google_news, split_outlet
 
 MONITOR_DIMENSIONS = {"opinion-monitor":"us_opinion", "israel-monitor":"israel", "mideast-monitor":"regional", "iran-domestic-monitor":"iran_domestic", "diplomacy-monitor":"diplomacy", "iran-escalation-monitor":"iran_readiness"}
 UKRAINE_DIMENSIONS = {'ua-front-monitor':'frontline','ukraine-aid-monitor':'aid','russia-domestic-monitor':'russia_domestic','eu-domestic-monitor':'eu_domestic','ru-diplomacy-monitor':'diplomacy'}
@@ -189,10 +190,24 @@ def source_role(raw, monitor):
     return "party_official" if (monitor, str(raw.get("source_id", ""))) in party_official_sources() else ""
 
 
+def google_news_outlet(raw):
+    """Real outlet behind a Google News aggregator item ("" for every other record)."""
+    if str(raw.get("publisher") or "") != "Google News":
+        return ""
+    if raw.get("outlet"):
+        return str(raw["outlet"])
+    if not is_google_news(str(raw.get("link") or raw.get("url") or "")):
+        return ""
+    return split_outlet(str(raw.get("title", "")))[1]
+
+
 def normalize(raw, monitor):
     link = safe_url(raw.get("link", raw.get("url", "")))
     title = str(raw.get("title", "无标题"))
     rid = digest(link or [monitor, raw.get("id"), title, raw.get("published")])
+    # Google News is only the discovery layer: cite the outlet and, once resolved, its own URL.
+    outlet = google_news_outlet(raw)
+    original = safe_url(raw.get("original_url"))
     topics, dimensions = classify(raw)
     dimension_candidates = {t:[d] for t,d in dimensions.items()}
     if raw.get('kind')=='excluded':
@@ -212,16 +227,16 @@ def normalize(raw, monitor):
                 points.append({"lat": p["lat"], "lon": p["lon"], "label": p.get("name", "文中地点"), "precision": "mention", "role": "文章提及，非部署确认"})
     record = {
         "id": rid, "source_id": str(raw.get("source_id", monitor)),
-        "source_name": str(raw.get("source_name", raw.get("publisher", monitor))),
-        "tier": raw.get("tier", "未分级"), "publisher": raw.get("publisher", ""),
-        "title": title, "text": str(raw.get("summary", "")), "url": link,
+        "source_name": str(raw.get("source_name") or outlet or raw.get("publisher", monitor)),
+        "tier": raw.get("tier", "未分级"), "publisher": outlet or raw.get("publisher", ""),
+        "title": title, "text": str(raw.get("summary", "")), "url": (original if outlet and original else link),
         "published_at": raw.get("published_utc") or raw.get("published") or None,
         "fetched_at": raw.get("fetched_at") or None,
         "first_seen": raw.get("first_seen") or None, "event_at": None,
         "party": raw.get("party", "未标注"), "nature": ("原始表态/通报" if raw.get("tier") == "T1" else "报道/转述") if monitor == "readiness-monitor" else "公开记录",
         "verification": "待核验", "classification": "关键词候选，需研究员核验", "topics": topics,
         "dimensions": dimensions, "dimension_candidates":dimension_candidates, "crawler_buckets":raw.get("buckets",[]), "scope": "主题候选" if topics else "背景资料",
-        "points": points, "origin_id": digest(safe_url(raw.get("original_url"))) if safe_url(raw.get("original_url")) else rid,
+        "points": points, "origin_id": digest(original) if original else rid,
         "adapters": [monitor], "raw_refs": [],
         "upstream_kind":raw.get('kind'),
         "upstream_extractions": [{"monitor":monitor,"values":{k:raw[k] for k in ('polls','metrics','amounts','quantities','entities','flags','stance','ships','signals','claim_kinds','relevance','buckets','date_unknown') if k in raw}}],
@@ -230,6 +245,8 @@ def normalize(raw, monitor):
     role = source_role(raw, monitor)
     if role:
         record["source_role"] = role
+    if outlet:
+        record["via"] = "Google News"
     return record
 
 def load_bundle(root: Path):
