@@ -68,6 +68,7 @@
         "--selftest"
       ],
       "output_kind": "geo-v6",
+      "legacy_output": true,
       "enabled": true
     },
     {
@@ -81,6 +82,7 @@
         "--selftest"
       ],
       "output_kind": "geo-v6",
+      "legacy_output": true,
       "enabled": true
     },
     {
@@ -94,6 +96,7 @@
         "--selftest"
       ],
       "output_kind": "finance-series",
+      "legacy_output": true,
       "enabled": true
     },
     {
@@ -137,6 +140,7 @@
       ],
       "output_kind": "records-jsonl",
       "cadence": "hourly",
+      "legacy_output": true,
       "enabled": true
     },
     {
@@ -206,6 +210,7 @@
         "--selftest"
       ],
       "output_kind": "records-jsonl",
+      "legacy_output": true,
       "enabled": true
     },
     {
@@ -234,6 +239,7 @@
       ],
       "output_kind": "records-jsonl",
       "cadence": "hourly",
+      "legacy_output": true,
       "enabled": true
     },
     {
@@ -275,6 +281,7 @@
         "--selftest"
       ],
       "output_kind": "geo-v6",
+      "legacy_output": true,
       "enabled": true
     },
     {
@@ -306,6 +313,7 @@
         "--selftest"
       ],
       "output_kind": "taco",
+      "legacy_output": true,
       "enabled": true
     },
     {
@@ -347,6 +355,7 @@
         "--selftest"
       ],
       "output_kind": "geo-v6",
+      "legacy_output": true,
       "enabled": true
     },
     {
@@ -360,6 +369,7 @@
         "--selftest"
       ],
       "output_kind": "geo-v6",
+      "legacy_output": true,
       "enabled": true
     },
     {
@@ -373,6 +383,7 @@
         "--selftest"
       ],
       "output_kind": "geo-v6",
+      "legacy_output": true,
       "enabled": true
     },
     {
@@ -387,6 +398,7 @@
         "--selftest"
       ],
       "output_kind": "geo-v6",
+      "legacy_output": true,
       "enabled": true,
       "direct_hosts": [
         "www.news.cn"
