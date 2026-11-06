@@ -846,6 +846,7 @@ def enrich(rec: Dict[str, Any], src: Dict[str, Any]) -> Dict[str, Any]:
         "publisher": src.get("publisher", ""),
         "tier": src.get("tier", ""),
         "tier_note": src.get("tier_note", ""),
+        "source_role": src.get("source_role", ""),
     })
     rec.update(derived_fields(rec))
     resolve_outlet(rec, src)

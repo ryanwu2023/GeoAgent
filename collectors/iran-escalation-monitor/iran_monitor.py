@@ -1033,6 +1033,7 @@ def enrich(rec: Dict[str, Any], src: Dict[str, Any]) -> Dict[str, Any]:
         "publisher": src.get("publisher", ""),
         "tier": src.get("tier", ""),
         "tier_note": src.get("tier_note", ""),
+        "source_role": src.get("source_role", ""),
     })
     rec.update(derived_fields(rec))
     resolve_outlet(rec, src)
@@ -2661,7 +2662,8 @@ def iran_annotate_corroboration(records):
         groups.setdefault(tk, []).append(r)
     for g in groups.values():
         pubs = sorted({(r.get("publisher") or r.get("source_id") or "?") for r in g})
-        tiers = {(r.get("tier") or "") for r in g}
+        # 当事方官方（source_role=party_official）单源只代表其自身口径，不自动算印证
+        tiers = {(r.get("tier") or "") for r in g if r.get("source_role") != "party_official"}
         confirmed = bool(len(pubs) >= 2 or "T1" in tiers)
         for r in g:
             r["corroboration"] = {"n_records": len(g), "n_publishers": len(pubs),

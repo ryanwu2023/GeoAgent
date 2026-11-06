@@ -636,6 +636,7 @@
       "id": "app-pk",
       "url": "https://www.app.com.pk/feed/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Associated Press of Pakistan",
       "enabled": true,
       "note": "巴基斯坦国家通讯社 WordPress feed，9-19 实测 rss-ok"
@@ -868,6 +869,7 @@
       "id": "qna-rss",
       "url": "https://www.qna.org.qa/en/rss",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "QNA",
       "enabled": false,
       "note": "2026-09-19 实测 404 无 RSS（mideast 项目同期同结论）；卡塔尔官方口径经 aljazeera/dohanews/gn-qatar 覆盖"
@@ -876,6 +878,7 @@
       "id": "ona-oman",
       "url": "https://ona.gov.om/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Oman News Agency",
       "enabled": false,
       "note": "2026-09-19 实测连接失败(status 0)；阿官方口径经 gn-oman 覆盖"
@@ -884,6 +887,7 @@
       "id": "radiopk",
       "url": "https://www.radio.gov.pk/rss",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Radio Pakistan",
       "enabled": false,
       "note": "2026-09-19 实测 404；巴方口径经 app-pk(T1)/dawn 覆盖"
@@ -1020,6 +1024,7 @@
       "id": "qatar-mofa",
       "url": "https://www.mofa.gov.qa/en/rss.xml",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Qatar MOFA",
       "enabled": false,
       "note": "2026-09-19 实测 404（rss 与 newsroom 页均 404）；卡方口径经 aljazeera/dohanews/gn-qatar 覆盖"
@@ -1028,6 +1033,7 @@
       "id": "pakistan-mofa",
       "url": "https://mofa.gov.pk/feed/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Pakistan MOFA",
       "enabled": false,
       "note": "2026-09-19 实测连接失败(status 0)；巴方口径经 app-pk(T1)/dawn 覆盖"
@@ -1036,6 +1042,7 @@
       "id": "state-gov",
       "url": "https://www.state.gov/press-releases/feed/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "US State Dept",
       "enabled": false,
       "note": "2026-09-19 实测 407（代理认证拒绝）；美方口径经 gn-trump/gn-talks 覆盖"
@@ -1044,6 +1051,7 @@
       "id": "whitehouse-feed",
       "url": "https://www.whitehouse.gov/feed/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "White House",
       "enabled": false,
       "note": "2026-09-19 实测 404"
@@ -1052,6 +1060,7 @@
       "id": "defense-gov",
       "url": "https://www.defense.gov/News/Releases/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "US DoD",
       "enabled": false,
       "note": "2026-09-19 实测 403"
@@ -1060,6 +1069,7 @@
       "id": "kuna",
       "url": "https://www.kuna.net.kw/EnglishRSSNews.aspx",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "KUNA Kuwait",
       "enabled": false,
       "note": "2026-09-19 实测连接失败(status 0，两条路径)"
@@ -1068,6 +1078,7 @@
       "id": "wam-uae",
       "url": "https://www.wam.ae/en/rss",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "WAM UAE",
       "enabled": false,
       "note": "2026-09-19 实测 200 但返回 JS 壳 HTML（非 RSS）"
@@ -1076,6 +1087,7 @@
       "id": "spa-saudi",
       "url": "https://www.spa.gov.sa/en/rss.xml",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "SPA Saudi",
       "enabled": false,
       "note": "2026-09-19 实测 200 但返回 JS 壳 HTML（非 RSS）"
@@ -1084,6 +1096,7 @@
       "id": "china-mofa",
       "url": "https://www.fmprc.gov.cn/mfa_eng/xw/fyyl/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "China MFA",
       "enabled": false,
       "note": "2026-09-19 实测 200 HTML 列表页，无 RSS；中方口径经 gn-china 覆盖"
@@ -1092,6 +1105,7 @@
       "id": "iran-mofa",
       "url": "https://en.mfa.gov.ir/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Iran MOFA",
       "enabled": false,
       "note": "2026-09-19 实测 307 重定向链失败；伊方口径经 tehrantimes/gn 覆盖"

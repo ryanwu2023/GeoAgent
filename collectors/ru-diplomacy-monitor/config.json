@@ -14,6 +14,7 @@
    "id": "whitehouse-actions",
    "url": "https://www.whitehouse.gov/presidential-actions/feed/",
    "tier": "T1",
+   "source_role": "party_official",
    "publisher": "White House (EN)",
    "enabled": true,
    "note": "总统行动（行政令/特使任命/对俄乌决定一手），2026-09-19 实测 200/rss 30 条 fresh 09-18"
@@ -22,6 +23,7 @@
    "id": "whitehouse-news",
    "url": "https://www.whitehouse.gov/news/feed/",
    "tier": "T1",
+   "source_role": "party_official",
    "publisher": "White House (EN)",
    "enabled": true,
    "note": "白宫新闻（特使动态/会谈通报一手），2026-09-19 实测 200/rss 30 条；/feed/ 404 已留档"
@@ -38,6 +40,7 @@
    "id": "kremlin-en",
    "url": "http://en.kremlin.ru/feeds/news",
    "tier": "T1",
+   "source_role": "party_official",
    "publisher": "Kremlin (EN)",
    "enabled": true,
    "note": "克里姆林宫英文（俄方官方立场/谈判授权一手），2026-09-19 实测 200/rss 20 条 fresh 09-19"
@@ -177,6 +180,7 @@
    "id": "state-rss-page",
    "url": "https://www.state.gov/rss-page",
    "tier": "T1",
+   "source_role": "party_official",
    "publisher": "US State Dept",
    "enabled": false,
    "note": "2026-09-19 实测 404；国务院一手缺失留档（press-releases/feed 返回 HTML 壳非 feed），经 whitehouse/UN/gnews 覆盖"
@@ -185,6 +189,7 @@
    "id": "state-pressrel",
    "url": "https://www.state.gov/press-releases/feed/",
    "tier": "T1",
+   "source_role": "party_official",
    "publisher": "US State Dept",
    "enabled": false,
    "note": "2026-09-19 实测 200 但返回 221KB HTML（非 feed 壳页，嗅探无 rss 项）"
@@ -193,6 +198,7 @@
    "id": "state-brief",
    "url": "https://www.state.gov/press-briefings/feed/",
    "tier": "T1",
+   "source_role": "party_official",
    "publisher": "US State Dept",
    "enabled": false,
    "note": "2026-09-19 实测 404"
@@ -201,6 +207,7 @@
    "id": "whitehouse-root",
    "url": "https://www.whitehouse.gov/feed/",
    "tier": "T1",
+   "source_role": "party_official",
    "publisher": "White House",
    "enabled": false,
    "note": "2026-09-19 实测 404（presidential-actions/feed 与 news/feed 可用）"
@@ -209,6 +216,7 @@
    "id": "ua-president",
    "url": "https://www.president.gov.ua/en/rss",
    "tier": "T1",
+   "source_role": "party_official",
    "publisher": "President of Ukraine",
    "enabled": false,
    "note": "2026-09-19 实测 403（/rss 同 403；疑 WAF）；乌克兰总统府一手缺失留档，经 kyivpost/euromaidan/gnews 覆盖"
@@ -217,6 +225,7 @@
    "id": "ua-president2",
    "url": "https://www.president.gov.ua/rss",
    "tier": "T1",
+   "source_role": "party_official",
    "publisher": "President of Ukraine",
    "enabled": false,
    "note": "2026-09-19 实测 403（同上）"
@@ -225,6 +234,7 @@
    "id": "ua-mfa",
    "url": "https://mfa.gov.ua/en/rss",
    "tier": "T1",
+   "source_role": "party_official",
    "publisher": "Ukraine MFA",
    "enabled": false,
    "note": "2026-09-19 实测 403（/rss 同 403）"
@@ -233,6 +243,7 @@
    "id": "ua-mfa2",
    "url": "https://mfa.gov.ua/rss",
    "tier": "T1",
+   "source_role": "party_official",
    "publisher": "Ukraine MFA",
    "enabled": false,
    "note": "2026-09-19 实测 403（同上）"
@@ -289,6 +300,7 @@
    "id": "turkey-mfa",
    "url": "https://www.mfa.gov.tr/en.mfa-rss.en.mfa",
    "tier": "T1",
+   "source_role": "party_official",
    "publisher": "Türkiye MFA",
    "enabled": false,
    "note": "2026-09-19 实测 200 但返回 64KB HTML（非 feed）；土耳其官方一手缺失留档，经 anadolu 覆盖"

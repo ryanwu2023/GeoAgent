@@ -199,6 +199,7 @@ def _record_from_candidate(
         "source_name": source["name_zh"],
         "publisher": source["publisher"],
         "tier": source["tier"],
+        "source_role": source.get("source_role", ""),
         "language": source.get("language", ""),
         "published": published or candidate.published or None,
         "event_at": None,

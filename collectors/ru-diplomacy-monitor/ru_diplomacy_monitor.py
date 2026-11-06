@@ -309,7 +309,8 @@ def annotate_corroboration(records):
         groups.setdefault(tk, []).append(r)
     for g in groups.values():
         pubs = sorted({(r.get("publisher") or r.get("source_id") or "?") for r in g})
-        tiers = {(r.get("tier") or "") for r in g}
+        # 当事方官方（source_role=party_official）单源只代表其自身口径，不自动算印证
+        tiers = {(r.get("tier") or "") for r in g if r.get("source_role") != "party_official"}
         confirmed = bool(len(pubs) >= 2 or "T1" in tiers)
         for r in g:
             r["corroboration"] = {"n_records": len(g), "n_publishers": len(pubs),
@@ -765,6 +766,8 @@ def make_records(cfg, eng, fetched, run_dt):
                     "source_id": sid, "publisher": src["publisher"],
                     "tier": src["tier"], "run_date": run_dt,
                     "cfg_ver": eng.cfg_ver}
+            if src.get("source_role"):
+                base["source_role"] = src["source_role"]
             if cls is None:
                 empty += 1
                 continue

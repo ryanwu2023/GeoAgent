@@ -293,11 +293,17 @@ FLAG_NOTE_ZH = {
     "strings_attached": "附带条件（用途限制/监督条款）",
 }
 
+def tier_label(x):
+    """等级展示：当事方官方（source_role=party_official）在 T 级后标注，避免被当中立一手。"""
+    t = x.get("tier") or "?"
+    return f"{t}·当事方官方" if x.get("source_role") == "party_official" else t
+
 def annotate_corroboration(records):
     """跨源印证标注：只计数、不判真伪。
 
-    同一事件（归一化标题键）出现在 ≥2 个**不同发布方**，或出自 T1 原始出处 → 已印证。
-    单源且非 T1 一律「待证」——表态与承诺尤其不能拿单源当事实用。
+    同一事件（归一化标题键）出现在 ≥2 个**不同发布方**，或出自非当事方的 T1 原始出处 → 已印证。
+    单源且非 T1 一律「待证」；当事方官方（伊朗/巴基斯坦/卡塔尔等官媒、外交部）单源同样「待证」——
+    它只证明该方这么说了。表态与承诺尤其不能拿单源当事实用。
     """
     groups = {}
     for r in records:
@@ -307,7 +313,8 @@ def annotate_corroboration(records):
         groups.setdefault(tk, []).append(r)
     for g in groups.values():
         pubs = sorted({(r.get("publisher") or r.get("source_id") or "?") for r in g})
-        tiers = {(r.get("tier") or "") for r in g}
+        # 当事方官方（source_role=party_official）单源只代表其自身口径，不自动算印证
+        tiers = {(r.get("tier") or "") for r in g if r.get("source_role") != "party_official"}
         confirmed = bool(len(pubs) >= 2 or "T1" in tiers)
         for r in g:
             r["corroboration"] = {"n_records": len(g), "n_publishers": len(pubs),
@@ -349,21 +356,21 @@ def append_verification_section(latest_path, records, cfg):
     corr = [r for r in records if isinstance(r.get("corroboration"), dict)]
     multi = [r for r in corr if r["corroboration"]["confirmed"]]
     single = [r for r in corr if not r["corroboration"]["confirmed"]]
-    L.append(f"- 跨源印证：本窗口 **{len(multi)}** 条已被 ≥2 个发布方报道或出自 T1 原始出处"
+    L.append(f"- 跨源印证：本窗口 **{len(multi)}** 条已被 ≥2 个发布方报道或出自非当事方 T1 原始出处"
              f"（**已印证**）；**{len(single)}** 条为单源（**待证**）。")
     if multi:
         L += ["", "**已印证（可当事实引用，按印证方数量排序）**：", ""]
         for r in sorted(multi, key=lambda x: -x["corroboration"]["n_publishers"])[:12]:
             c = r["corroboration"]
             L.append(f"- {str(r.get('published') or '—')[:10]} · {(r.get('title') or '')[:88]}"
-                     f" · {r.get('publisher', '?')} / {r.get('tier', '?')}"
+                     f" · {r.get('publisher', '?')} / {tier_label(r)}"
                      f" · 印证方 {c['n_publishers']} 个："
                      f"{'、'.join(c['publishers'])[:110]}")
     if single:
         L += ["", "**单源待证（表态/承诺类尤甚：不可当已发生的事实引用）**：", ""]
         for r in sorted(single, key=lambda x: x.get("published") or "", reverse=True)[:8]:
             L.append(f"- {str(r.get('published') or '—')[:10]} · {(r.get('title') or '')[:88]}"
-                     f" · {r.get('publisher', '?')} / {r.get('tier', '?')}"
+                     f" · {r.get('publisher', '?')} / {tier_label(r)}"
                      f" · kind={r.get('kind', '')}")
     kinds = {}
     for r in records:
@@ -381,7 +388,7 @@ def append_verification_section(latest_path, records, cfg):
         L += ["", "**旗标统计（不同旗标不可相加）**：", ""]
         for f_, v in sorted(fl.items(), key=lambda x: -x[1]):
             L.append(f"- `{f_}` {v} 条{'　—— ' + FLAG_NOTE_ZH.get(f_, '')}")
-    L += ["", "> 口径提醒：上述「已印证」只说明**多个信源都这么报道**或**出自 T1 原始出处**，",
+    L += ["", "> 口径提醒：上述「已印证」只说明**多个信源都这么报道**或**出自非当事方 T1 原始出处**，",
           "> 不等于事件在物理上确已发生；`opinion_statement`（表态）永远只代表说了什么。",
           "> 援助类的承诺额与交付额分别标注，**两者不可相加**。"]
     gh = glossary_hits(records, cfg)
@@ -748,6 +755,8 @@ def make_records(cfg, eng, fetched, run_dt):
                     "source_id": sid, "publisher": src["publisher"],
                     "tier": src["tier"], "run_date": run_dt,
                     "cfg_ver": eng.cfg_ver}
+            if src.get("source_role"):
+                base["source_role"] = src["source_role"]
             if cls is None:
                 empty += 1
                 continue
@@ -1031,11 +1040,12 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
     W.append("|---|---|---|---|---|")
     for s_ in cfg["sources"]:
         st = "启用" if s_.get("enabled") else "停用"
-        W.append(f"| {s_['id']} | {s_['tier']} | {s_['publisher']} | {st} | {(s_.get('note') or '')[:120]} |")
+        W.append(f"| {s_['id']} | {tier_label(s_)} | {s_['publisher']} | {st} | {(s_.get('note') or '')[:120]} |")
     W.append("")
     W.append("## 附录B 等级定义与分类学")
     W.append("")
-    W.append("- **T1** 官方一手（本监测期仅 APP 巴基斯坦联合通讯社；QNA/ONA/Radio Pakistan 停用留档）；")
+    W.append("- **T1** 官方一手；其中「T1·当事方官方」= 当事/斡旋方政府与官媒（APP 巴基斯坦联合通讯社——")
+    W.append("  非美联社 AP——白宫、各国外交部等），只代表该方口径，单源不算已印证；中立机构（联合国）为纯 T1；")
     W.append("  **T2** 机构分析（ICG / Atlantic Council）；**T3** 媒体转述（含 Tehran Times 官媒窗口、")
     W.append("  Google News 聚合层）；**T4** 自媒体——不采用。")
     W.append("- 事实（完成态事件）≠ 表态（『他说了X』是事实，X 是观点）≠ 启发式判断（立场词表）。")
@@ -1400,6 +1410,21 @@ def run_selftest(cfg, eng):
        for s in cfg["sources"] if s.get("enabled")))
     ck("无启用 T4 源", all(s.get("tier") != "T4" for s in cfg["sources"] if s.get("enabled")))
     ck("停用源有留档", all(s.get("note") for s in cfg["sources"] if not s.get("enabled")))
+    # --- 当事方官方 ≠ 中立一手 ---
+    smap_ = {s["id"]: s for s in cfg["sources"]}
+    ck("APP/白宫标当事方官方，联合国不标",
+       smap_["app-pk"].get("source_role") == "party_official"
+       and smap_["whitehouse-feed"].get("source_role") == "party_official"
+       and not smap_["un-press"].get("source_role"))
+    cr = annotate_corroboration([
+        {"title": "Pakistan says Iran US talks to resume in Islamabad", "publisher": "APP",
+         "tier": "T1", "source_role": "party_official"},
+        {"title": "Secretary-General welcomes Iran US talks resumption", "publisher": "United Nations",
+         "tier": "T1"}])
+    ck("当事方官方单源不自动印证、中立 T1 仍印证",
+       cr[0]["corroboration"]["confirmed"] is False and cr[1]["corroboration"]["confirmed"] is True)
+    ck("等级展示标注当事方", tier_label(smap_["app-pk"]) == "T1·当事方官方"
+       and tier_label(smap_["un-press"]) == "T1")
     for bl in ("mediator_baseline", "trump_baseline", "memo_baseline",
                "military_baseline", "talks_baseline"):
         ck(f"{bl} 字段完整",

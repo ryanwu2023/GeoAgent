@@ -1330,9 +1330,9 @@ def _brief_relevance(record, topic):
         score += 2
     if metadata["situation_signal"] != "unknown":
         score += 2
-    if record.get("tier") == "T1":
+    if record.get("tier") == "T1" and record.get("source_role") != "party_official":
         score += 2
-    elif record.get("tier") == "T2":
+    elif record.get("tier") in {"T1", "T2"}:
         score += 1
     if BRIEF_LOW_INFORMATION.search(title) and not BRIEF_CONCRETE_ACTION.search(title):
         return None

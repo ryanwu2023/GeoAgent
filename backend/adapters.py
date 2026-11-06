@@ -2,6 +2,7 @@
 import json
 import re
 import math
+from functools import lru_cache
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
@@ -160,6 +161,34 @@ def classify(raw):
         dims[topic] = next((d for d, pattern in DIM_RULES[topic] if re.search(pattern, text)), default)
     return topics, dims
 
+COLLECTORS_DIR = Path(__file__).resolve().parents[1] / "collectors"
+
+
+@lru_cache(maxsize=1)
+def party_official_sources():
+    """Return (monitor, source_id) pairs marked source_role=party_official in collector configs.
+
+    Records archived before the field existed carry no source_role; consulting the
+    configs keeps a party's state media or ministry from regaining neutral T1 weight.
+    """
+    pairs = set()
+    for path in COLLECTORS_DIR.glob("*/config.json"):
+        try:
+            sources = json.loads(path.read_text(encoding="utf-8")).get("sources")
+        except (OSError, ValueError, AttributeError):
+            continue
+        for source in sources if isinstance(sources, list) else []:
+            if isinstance(source, dict) and source.get("source_role") == "party_official":
+                pairs.add((path.parent.name, str(source.get("id", ""))))
+    return frozenset(pairs)
+
+
+def source_role(raw, monitor):
+    if raw.get("source_role"):
+        return str(raw["source_role"])
+    return "party_official" if (monitor, str(raw.get("source_id", ""))) in party_official_sources() else ""
+
+
 def normalize(raw, monitor):
     link = safe_url(raw.get("link", raw.get("url", "")))
     title = str(raw.get("title", "无标题"))
@@ -181,7 +210,7 @@ def normalize(raw, monitor):
         if isinstance(p, dict) and isinstance(p.get("lat"), (int, float)) and isinstance(p.get("lon"), (int, float)):
             if -90 <= p["lat"] <= 90 and -180 <= p["lon"] <= 180:
                 points.append({"lat": p["lat"], "lon": p["lon"], "label": p.get("name", "文中地点"), "precision": "mention", "role": "文章提及，非部署确认"})
-    return {
+    record = {
         "id": rid, "source_id": str(raw.get("source_id", monitor)),
         "source_name": str(raw.get("source_name", raw.get("publisher", monitor))),
         "tier": raw.get("tier", "未分级"), "publisher": raw.get("publisher", ""),
@@ -197,6 +226,11 @@ def normalize(raw, monitor):
         "upstream_kind":raw.get('kind'),
         "upstream_extractions": [{"monitor":monitor,"values":{k:raw[k] for k in ('polls','metrics','amounts','quantities','entities','flags','stance','ships','signals','claim_kinds','relevance','buckets','date_unknown') if k in raw}}],
     }
+    # Only tagged records carry the key, so untouched records keep their stored version digest.
+    role = source_role(raw, monitor)
+    if role:
+        record["source_role"] = role
+    return record
 
 def load_bundle(root: Path):
     records = {}

@@ -83,32 +83,32 @@
   ],
   "sources": [
     {
-      "id": "white-house", "name_zh": "美国白宫", "publisher": "The White House", "tier": "T1", "language": "en",
+      "id": "white-house", "name_zh": "美国白宫", "publisher": "The White House", "tier": "T1", "source_role": "party_official", "language": "en",
       "entry_urls": ["https://www.whitehouse.gov/news/"], "allowed_hosts": ["www.whitehouse.gov", "whitehouse.gov"],
       "discovery_mode": "listing", "content_policy": "public_fulltext"
     },
     {
-      "id": "us-state", "name_zh": "美国国务院", "publisher": "U.S. Department of State", "tier": "T1", "language": "en",
+      "id": "us-state", "name_zh": "美国国务院", "publisher": "U.S. Department of State", "tier": "T1", "source_role": "party_official", "language": "en",
       "entry_urls": ["https://www.state.gov/press-releases/"], "allowed_hosts": ["www.state.gov", "state.gov"],
       "discovery_mode": "listing", "content_policy": "public_fulltext"
     },
     {
-      "id": "us-defense", "name_zh": "美国国防部", "publisher": "U.S. Department of Defense", "tier": "T1", "language": "en",
+      "id": "us-defense", "name_zh": "美国国防部", "publisher": "U.S. Department of Defense", "tier": "T1", "source_role": "party_official", "language": "en",
       "entry_urls": ["https://www.defense.gov/News/"], "allowed_hosts": ["www.defense.gov", "defense.gov"],
       "discovery_mode": "listing", "content_policy": "public_fulltext"
     },
     {
-      "id": "centcom", "name_zh": "美国中央司令部", "publisher": "U.S. Central Command", "tier": "T1", "language": "en",
+      "id": "centcom", "name_zh": "美国中央司令部", "publisher": "U.S. Central Command", "tier": "T1", "source_role": "party_official", "language": "en",
       "entry_urls": ["https://www.centcom.mil/MEDIA/PRESS-RELEASES/"], "allowed_hosts": ["www.centcom.mil", "centcom.mil"],
       "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["usiran"]
     },
     {
-      "id": "iran-mfa", "name_zh": "伊朗外交部", "publisher": "Ministry of Foreign Affairs of Iran", "tier": "T1", "language": "en",
+      "id": "iran-mfa", "name_zh": "伊朗外交部", "publisher": "Ministry of Foreign Affairs of Iran", "tier": "T1", "source_role": "party_official", "language": "en",
       "entry_urls": ["https://en.mfa.ir/"], "allowed_hosts": ["en.mfa.ir", "mfa.gov.ir", "en.mfa.gov.ir"],
       "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["usiran"]
     },
     {
-      "id": "khamenei", "name_zh": "伊朗最高领袖官网", "publisher": "Khamenei.ir", "tier": "T1", "language": "en",
+      "id": "khamenei", "name_zh": "伊朗最高领袖官网", "publisher": "Khamenei.ir", "tier": "T1", "source_role": "party_official", "language": "en",
       "entry_urls": ["https://english.khamenei.ir/"], "allowed_hosts": ["english.khamenei.ir", "khamenei.ir"],
       "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["usiran"]
     },
@@ -118,12 +118,12 @@
       "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["usiran"]
     },
     {
-      "id": "sepah-news", "name_zh": "伊朗革命卫队新闻", "publisher": "Sepah News", "tier": "T1", "language": "fa",
+      "id": "sepah-news", "name_zh": "伊朗革命卫队新闻", "publisher": "Sepah News", "tier": "T1", "source_role": "party_official", "language": "fa",
       "entry_urls": ["https://www.sepahnews.ir/"], "allowed_hosts": ["www.sepahnews.ir", "sepahnews.ir"],
       "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["usiran"]
     },
     {
-      "id": "china-mfa", "name_zh": "中国外交部", "publisher": "中华人民共和国外交部", "tier": "T1", "language": "zh",
+      "id": "china-mfa", "name_zh": "中国外交部", "publisher": "中华人民共和国外交部", "tier": "T1", "source_role": "party_official", "language": "zh",
       "entry_urls": ["https://www.fmprc.gov.cn/"], "allowed_hosts": ["www.fmprc.gov.cn", "fmprc.gov.cn", "www.mfa.gov.cn", "mfa.gov.cn"],
       "discovery_mode": "listing", "content_policy": "public_fulltext"
     },
@@ -153,12 +153,12 @@
       "discovery_mode": "public_metadata", "content_policy": "metadata_only", "licensed_api_env": "DOW_JONES_API_KEY"
     },
     {
-      "id": "russia-mfa", "name_zh": "俄罗斯外交部", "publisher": "Ministry of Foreign Affairs of Russia", "tier": "T1", "language": "en",
+      "id": "russia-mfa", "name_zh": "俄罗斯外交部", "publisher": "Ministry of Foreign Affairs of Russia", "tier": "T1", "source_role": "party_official", "language": "en",
       "entry_urls": ["https://mid.ru/en/"], "allowed_hosts": ["mid.ru", "www.mid.ru"],
       "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["ukraine"]
     },
     {
-      "id": "kremlin", "name_zh": "克里姆林宫", "publisher": "President of Russia", "tier": "T1", "language": "en",
+      "id": "kremlin", "name_zh": "克里姆林宫", "publisher": "President of Russia", "tier": "T1", "source_role": "party_official", "language": "en",
       "entry_urls": ["http://en.kremlin.ru/events/president/news"], "allowed_hosts": ["en.kremlin.ru", "kremlin.ru"],
       "discovery_mode": "listing", "content_policy": "public_fulltext", "topic_hints": ["ukraine"]
     },
