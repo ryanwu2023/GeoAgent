@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timezone
 
 import pytest
@@ -244,3 +245,26 @@ def test_failed_run_archive_never_borrows_previous_success(tmp_path):
     assert json.loads((target/'_source_artifact.json').read_text())['status']=='missing'
     _archive_source_artifacts(report,[{'id':'demo','published':False,'source_diagnostics':{'_source_status.json':{'collection_status':'failed','run_at':'new'}}}],tmp_path/'data')
     assert json.loads((target/'_source_status.json').read_text())['run_at']=='new'
+
+
+def test_service_lock_left_by_previous_container_is_reclaimed(tmp_path, monkeypatch):
+    # A restarted container's web server is PID 1 again, so the stale lock's PID looks alive.
+    lock_path = tmp_path / "service.lock"
+    lock_path.write_text(json.dumps({"pid": os.getpid(), "created_at": "2026-11-05T08:20:18+00:00"}))
+    with service_lock(lock_path):
+        assert json.loads(lock_path.read_text())["pid"] == os.getpid()
+    assert not lock_path.exists()
+
+
+def test_service_lock_reclaims_pid_now_owned_by_another_process(tmp_path, monkeypatch):
+    from backend import collector_ledger
+    lock_path = tmp_path / "service.lock"
+    lock_path.write_text(json.dumps({"pid": 4242, "process": "boot-a:100"}))
+    monkeypatch.setattr(collector_ledger, "_pid_alive", lambda pid: True)
+    monkeypatch.setattr(collector_ledger, "_process_identity", lambda pid: "boot-a:999" if pid == 4242 else None)
+    with service_lock(lock_path):
+        pass
+    lock_path.write_text(json.dumps({"pid": 4242, "process": "boot-a:999"}))  # same process: still held
+    with pytest.raises(RuntimeError, match="lock is held"):
+        with service_lock(lock_path):
+            pass

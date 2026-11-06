@@ -86,3 +86,17 @@ def test_unknown_or_excluded_collectors_are_rejected(principal, monkeypatch):  #
     for ids in (["missing"], ["off"], ["eu-gas-storage"]):
         with pytest.raises(MCPError, match="GEO_INVALID_ARGUMENT"):
             collect.request_collection(principal, ids, jobs=Jobs(), now=NOW)
+
+
+def test_collect_only_hourly_batch_is_not_reused(principal, monkeypatch):  # RC-07
+    run = collect._runs_root() / "scheduled-hourly-1"
+    run.mkdir(parents=True, exist_ok=True)
+    (run / "state.json").write_text(json.dumps({"auto_import": False,
+                                                "started_at": (NOW - timedelta(minutes=5)).isoformat()}))
+    monkeypatch.setattr(collect, "_running_run_id", lambda: "scheduled-hourly-1")
+    jobs = Jobs()
+    with pytest.raises(MCPError) as error:
+        collect.request_collection(principal, jobs=jobs, now=NOW)
+    assert error.value.code == "GEO_COLLECTOR_BUSY"
+    assert error.value.details == {"run_id": "scheduled-hourly-1", "retry_after_sec": 600}
+    assert jobs.calls == [] and not collect._state_path().exists()  # no rate-limit slot spent
