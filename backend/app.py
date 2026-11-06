@@ -57,12 +57,13 @@ def load_env():
                     os.environ.setdefault(key.strip(), value.strip().strip('"'))
 
 load_env()
-from .integrations import router as integrations_router, settings as integration_settings, pichat_tls_context
+from .integrations import router as integrations_router, settings as integration_settings, pichat_tls_context, embed_identity_payload
 from .geo_mcp.server import create_app as create_mcp_app
 from .geo_mcp.auth import AuthConfig, BearerAuthMiddleware
 from starlette.routing import Route
+from starlette.concurrency import run_in_threadpool
 
-from .web_auth import router as web_auth_router, WebAuthMiddleware, enabled as web_auth_enabled, users as web_auth_users
+from .web_auth import router as web_auth_router, WebAuthMiddleware, enabled as web_auth_enabled, users as web_auth_users, pichat_subject
 
 mcp_config = AuthConfig.from_env()
 
@@ -132,11 +133,13 @@ Topic = Literal["all", "usiran", "ukraine"]
 
 
 @app.get("/api/pichat/embed-identity")
-async def pichat_embed_identity(agent_id: str = "geo-research-assistant"):
+async def pichat_embed_identity(request: Request, agent_id: str = "geo-research-assistant"):
     """Mint the short-lived PiChat panel identity for the local GeoAgent UI.
 
-    The pk- application key and product phone stay server-side. The browser only
-    receives the short-lived panel JWT needed by the iframe handshake.
+    Users created in GeoAgent get their own PiChat shadow user; administrators and
+    unauthenticated local use share the configured product identity. The pk-
+    application key and phones stay server-side. The browser only receives the
+    short-lived panel JWT needed by the iframe handshake.
     """
     cfg = integration_settings()
     base_url = cfg["origin"].rstrip("/")
@@ -148,15 +151,8 @@ async def pichat_embed_identity(agent_id: str = "geo-research-assistant"):
             status_code=503,
             detail="未配置 PICHAT_EMBED_APP_KEY / PICHAT_EMBED_PHONE；密钥只能由 GeoAgent 后端读取。",
         )
-    entry = cfg["entry"]
-    payload = {
-        "phone": phone,
-        "productUserId": cfg["product_user_id"],
-        "displayName": "GeoAgent 本地研究用户",
-        "clientId": "geoagent-ui",
-        "expiresInSec": 3600,
-    }
-    payload["entry" if entry else "agentId"] = entry or agent_id
+    subject = await run_in_threadpool(pichat_subject, getattr(request.state, "web_user", ""))
+    payload = embed_identity_payload(cfg, *(subject or (cfg["product_user_id"], phone, "GeoAgent 本地研究用户")))
     try:
         async with httpx.AsyncClient(timeout=10, verify=pichat_tls_context()) as client:
             response = await client.post(
