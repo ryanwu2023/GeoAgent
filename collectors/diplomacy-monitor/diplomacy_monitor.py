@@ -1285,9 +1285,12 @@ def main():
         # 只抓 "body": true 的直连源（公开站）；付费墙站点保留标题+摘要
         bs = fetch_bodies([r for r in archive.values() if r.get("kind") != "excluded"], cfg["sources"],
                           make_client(cfg.get("body_ua") or cfg.get("ua") or "Mozilla/5.0"),
-                          max_new=body_max, max_chars=int(cfg.get("body_max_chars") or 6000))
+                          max_new=body_max, max_chars=int(cfg.get("body_max_chars") or 6000),
+                          timeout=float(cfg.get("body_timeout") or 20),
+                          budget_seconds=float(cfg.get("body_fetch_seconds") or 0))
         print(f"[body] 正文抓取 全文 {bs['fulltext']}，其他 {bs['other']}"
-              f"（待抓 {bs['pending']}，本轮上限 {body_max}）")
+              f"（待抓 {bs['pending']}，本轮上限 {body_max}"
+              f"{'，时间预算用完' if bs['stopped'] else ''}）")
     with open(arch_path, "w", encoding="utf-8") as f:
         for r in archive.values():
             f.write(json.dumps(r, ensure_ascii=False) + "\n")

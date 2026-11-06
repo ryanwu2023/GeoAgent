@@ -25,10 +25,12 @@ def test_first_tick_runs_full_import_then_hourly_collect_only(tmp_path):
     calls = []
     s = _scheduler(tmp_path, calls)
     assert s.tick(T0) == "full"
-    assert calls[0] == {"run_prefix": "scheduled-full", "auto_import": True, "allow_partial_import": True}
+    assert calls[0] == {"run_prefix": "scheduled-full", "timeout": 1500, "auto_import": True,
+                        "allow_partial_import": True}
     assert s.tick(T0 + timedelta(minutes=30)) is None  # full also counts as this hour's news run
     assert s.tick(T0 + timedelta(hours=1)) == "hourly"
-    assert calls[1] == {"run_prefix": "scheduled-hourly", "ids": ["diplomacy-monitor"], "auto_import": False}
+    assert calls[1] == {"run_prefix": "scheduled-hourly", "timeout": 1500, "ids": ["diplomacy-monitor"],
+                        "auto_import": False}
     assert s.tick(T0 + timedelta(hours=6)) == "full"
 
 

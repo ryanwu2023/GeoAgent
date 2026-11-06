@@ -56,7 +56,7 @@ run.bat                                  # 一条龙：自检→抓取→对账
 - 可靠性：全局 `ua` 取不到时自动用 `fallback_ua` 重试一次；`_source_health.json` 记录每源最近成功时间，
   LATEST「信源健康」告警三类问题——连续失败≥3 次、需要 UA 回退（应在源上固定 `ua`）、覆盖缺口
   （本轮最旧一条晚于上次成功抓取，说明抓取频率跟不上该源的保留窗口，中间文章可能已漏）。
-- 正文：源上 `"body": true` 的公开站，每轮最多 `body_fetch_max` 条（新的优先）抓正文写入 `body`
+- 正文：源上 `"body": true` 的公开站，每轮最多 `body_fetch_max` 条、最多 `body_fetch_seconds` 秒（线上经隧道每篇 13–40 秒）抓正文写入 `body`
   （截断到 `body_max_chars`），复用 geopolitical-source-monitor 的 robots/按主机限速/付费墙识别；
   结果写 `content_access`，同一条只抓一次（网络错误下轮重试）。付费墙站点（Reuters、NYT、WSJ、Bloomberg、
   Al-Monitor、Jerusalem Post）和文章页 403 的 Times of Israel 不开，只保留标题和摘要。backend 有 `body` 时以正文作为记录文本。

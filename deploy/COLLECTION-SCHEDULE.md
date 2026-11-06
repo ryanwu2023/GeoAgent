@@ -30,6 +30,7 @@ Linux 容器里只运行 Web 服务，**没有任何定时采集**。2026-11-05 
 | `GEO_COLLECT_FULL_INTERVAL_SEC` | `21600` | 全量采集+导入间隔（最小 3600） |
 | `GEO_COLLECT_SCHEDULE_PARTIAL_IMPORT` | `true` | 全量批次部分成功时是否导入 |
 | `GEO_COLLECT_SCHEDULE_START_DELAY_SEC` | `300` | 进程启动后首次检查前的等待 |
+| `GEO_COLLECT_SCHEDULE_TIMEOUT_SEC` | `1500` | 定时批次单个采集器超时（手动采集仍为 900）；diplomacy 经隧道抓 66 个源约 11 分钟 |
 
 ## 上线步骤
 

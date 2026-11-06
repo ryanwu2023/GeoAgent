@@ -34,7 +34,7 @@ def test_fetch_bodies_only_opted_in_sources_newest_first_and_marks_paywall():
         {"source_id": "open", "url": "https://a.example/done", "published": "2026-11-05", "content_access": "public_fulltext"},
     ]
     stats = fetch_bodies(records, sources, client, max_new=10, max_chars=50, rate_limit_seconds=0)
-    assert stats == {"pending": 3, "fulltext": 1, "other": 2}
+    assert stats == {"pending": 3, "fulltext": 1, "other": 2, "stopped": False}
     assert records[1]["content_access"] == "public_fulltext" and len(records[1]["body"]) == 50
     assert records[0]["content_access"] == "restricted_metadata_only" and "body" not in records[0]
     assert records[2]["content_access"] == "http_403"
@@ -60,3 +60,14 @@ def test_captcha_word_inside_scripts_does_not_hide_public_article():
     assert web.parse_public_article(page, "https://a.example/x", {}).content_access == "public_fulltext"
     challenge = "<html><body><h1>Verify you are human</h1><p>" + "x" * 200 + "</p></body></html>"
     assert web.parse_public_article(challenge, "https://a.example/x", {}).content_access == "restricted_metadata_only"
+
+
+def test_time_budget_stops_starting_new_fetches():
+    pages = {f"https://a.example/{i}": (200, ARTICLE) for i in range(5)}
+    client, seen = _client(pages)
+    ticks = iter([0, 10, 70, 130, 190, 250])
+    records = [{"source_id": "open", "url": f"https://a.example/{i}", "published": f"2026-11-0{5 - i}"} for i in range(5)]
+    stats = fetch_bodies(records, [{"id": "open", "body": True}], client, max_new=5,
+                         rate_limit_seconds=0, budget_seconds=120, clock=lambda: next(ticks))
+    assert stats["fulltext"] == 2 and stats["stopped"] is True
+    assert "content_access" not in records[2]  # left for the next run

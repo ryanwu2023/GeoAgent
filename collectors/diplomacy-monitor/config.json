@@ -9,6 +9,8 @@
   "per_source_max": 200,
   "google_news_resolve_max": 0,
   "body_fetch_max": 20,
+  "body_fetch_seconds": 120,
+  "body_timeout": 20,
   "body_max_chars": 6000,
   "body_ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
   "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",

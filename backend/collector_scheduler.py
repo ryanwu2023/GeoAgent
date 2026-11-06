@@ -40,6 +40,9 @@ class ScheduleConfig:
     full_interval_sec: int = 21600
     allow_partial_import: bool = True
     start_delay_sec: int = 300
+    # Per-collector timeout; diplomacy alone needs ~11 min for 66 sources through the
+    # production egress tunnel, over the 900 s default of manual runs.
+    collector_timeout_sec: int = 1500
     tick_sec: int = 60
 
     @classmethod
@@ -51,6 +54,7 @@ class ScheduleConfig:
             full_interval_sec=max(3600, int(env("GEO_COLLECT_FULL_INTERVAL_SEC", "21600"))),
             allow_partial_import=env("GEO_COLLECT_SCHEDULE_PARTIAL_IMPORT", "true").strip().lower() in TRUE,
             start_delay_sec=max(0, int(env("GEO_COLLECT_SCHEDULE_START_DELAY_SEC", "300"))),
+            collector_timeout_sec=max(300, int(env("GEO_COLLECT_SCHEDULE_TIMEOUT_SEC", "1500"))),
         )
 
 
@@ -103,7 +107,7 @@ class CollectorScheduler:
         else:
             return None
         try:
-            job = self._submit(run_prefix=f"scheduled-{kind}", **kwargs)
+            job = self._submit(run_prefix=f"scheduled-{kind}", timeout=self.config.collector_timeout_sec, **kwargs)
         except CollectorBusyError:
             # A manual or remote run owns the pipeline; try again on the next tick.
             return None

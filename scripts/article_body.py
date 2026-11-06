@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import time
 from pathlib import Path
 from typing import Callable, Iterable
 from urllib.parse import urlsplit
@@ -37,12 +38,17 @@ def make_client(ua: str, transport: Callable | None = None):
 
 
 def fetch_bodies(records: Iterable[dict], sources: Iterable[dict], client, *, max_new: int,
-                 max_chars: int = 6000, rate_limit_seconds: float = 2.0, timeout: float = 25) -> dict:
+                 max_chars: int = 6000, rate_limit_seconds: float = 2.0, timeout: float = 25,
+                 budget_seconds: float = 0, clock: Callable[[], float] = time.monotonic) -> dict:
     """Fill ``body`` / ``content_access`` on up to ``max_new`` records, newest first.
 
     Parsed pages and refusals (4xx, robots) set ``content_access`` (public_fulltext,
     public_summary, restricted_metadata_only, unavailable, http_403…), so each article
     is tried once; network errors leave it unset for the next run.
+
+    ``budget_seconds`` (0 = unlimited) stops starting new fetches once spent: through
+    the production egress tunnel one article takes 13-40 s, and the collector as a
+    whole is killed at its per-collector timeout.
     """
     web = _web_module()
     opted = {s["id"] for s in sources if s.get("body")}
@@ -50,8 +56,12 @@ def fetch_bodies(records: Iterable[dict], sources: Iterable[dict], client, *, ma
             if r.get("source_id") in opted and not r.get("content_access")
             and urlsplit(r.get("url") or "").scheme in {"http", "https"}]
     todo.sort(key=lambda r: r.get("published") or "", reverse=True)
-    stats = {"pending": len(todo), "fulltext": 0, "other": 0}
+    stats = {"pending": len(todo), "fulltext": 0, "other": 0, "stopped": False}
+    deadline = clock() + budget_seconds if budget_seconds else None
     for r in todo[: max(0, int(max_new or 0))]:
+        if deadline is not None and clock() >= deadline:
+            stats["stopped"] = True
+            break
         url = r["url"]
         # The link comes from the source's own feed, so its host is the allowed one.
         policy = {"allowed_hosts": [(urlsplit(url).hostname or "").lower()],
