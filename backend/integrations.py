@@ -22,6 +22,19 @@ def pichat_tls_context():
     context.verify_flags &= ~ssl.VERIFY_X509_STRICT
     return context
 
+def embed_identity_payload(cfg, product_user_id, phone, display_name):
+    """Body for PiChat POST /api/v1/embed/identity; PiChat materializes a
+    shadow user per (app, productUserId/phone) on first call."""
+    payload = {
+        "phone": phone,
+        "productUserId": product_user_id,
+        "displayName": display_name,
+        "clientId": "geoagent-ui",
+        "expiresInSec": 3600,
+    }
+    payload["entry" if cfg["entry"] else "agentId"] = cfg["entry"] or cfg["agent_id"]
+    return payload
+
 def no_cache(response: Response):
     response.headers["Cache-Control"] = "no-store"
 

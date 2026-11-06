@@ -1,8 +1,9 @@
 import {createContext, useContext, useEffect, useState, type FormEvent, type ReactNode} from 'react';
-import {ArrowRight, Eye, EyeOff, Globe2, LoaderCircle, LogOut, ShieldCheck} from 'lucide-react';
+import {ArrowRight, Eye, EyeOff, Globe2, LoaderCircle, LogOut, ShieldCheck, Users} from 'lucide-react';
+import UserAdmin from './UserAdmin';
 import './login.css';
 
-type Session = {enabled:boolean; authenticated:boolean; username:string};
+type Session = {enabled:boolean; authenticated:boolean; username:string; is_admin?:boolean};
 const SessionContext = createContext<{session:Session|null; logout:()=>Promise<void>; busy:boolean}>({session:null,logout:async()=>{},busy:false});
 async function auth(path:string, body?:unknown):Promise<Session> {
   const response=await fetch('/api/auth/'+path, body===undefined ? {cache:'no-store'} : {method:'POST',headers:{'Content-Type':'application/json','X-GeoAgent-Login':'1'},body:JSON.stringify(body),cache:'no-store'});
@@ -12,8 +13,13 @@ async function auth(path:string, body?:unknown):Promise<Session> {
 }
 export function SessionAccount(){
   const {session,logout,busy}=useContext(SessionContext);
+  const [admin,setAdmin]=useState(false);
   if(!session?.enabled)return null;
-  return <button className="session-account" disabled={busy} onClick={()=>void logout()} title={`当前账号：${session.username} · 退出登录`}><LogOut size={15}/><span>退出登录</span></button>;
+  return <>
+    {session.is_admin&&<button className="session-account" onClick={()=>setAdmin(true)}><Users size={15}/><span>用户管理</span></button>}
+    {admin&&<UserAdmin onClose={()=>setAdmin(false)}/>}
+    <button className="session-account" disabled={busy} onClick={()=>void logout()} title={`当前账号：${session.username} · 退出登录`}><LogOut size={15}/><span>退出登录</span></button>
+  </>;
 }
 export default function SessionGate({children}:{children:ReactNode}){
   const [session,setSession]=useState<Session|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
