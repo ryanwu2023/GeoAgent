@@ -13,6 +13,17 @@ export const validView = (view: GeoView) =>
 export const trustedViewSource = (origin: string, source: unknown, expectedOrigin: string, expectedSource: unknown) =>
   Boolean(expectedSource) && origin === expectedOrigin && source === expectedSource;
 
+type IdSource = {randomUUID?: () => string; getRandomValues: <T extends Uint8Array>(array: T) => T};
+/** randomUUID exists only in secure contexts; the HFT intranet serves plain http, where calling it
+ * threw inside a React effect and unmounted the whole page (black screen on snapshot switch). */
+export function requestId(source: IdSource = globalThis.crypto): string {
+  if (typeof source.randomUUID === 'function') return source.randomUUID();
+  const b = source.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+
 /** Transport-independent state machine. No identity, prompt, or input is stored. */
 export class HostViewBridge {
   binding: Binding | null = null;
