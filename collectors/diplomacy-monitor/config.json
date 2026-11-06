@@ -702,8 +702,9 @@
       "url": "https://www.middleeasteye.net/rss",
       "tier": "T3",
       "publisher": "Middle East Eye",
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
       "enabled": true,
-      "note": "9-19 实测 rss-ok"
+      "note": "2026-11-05 本机复测：配置全局 UA（Chrome/124）被站点按 UA 拦截返回 404，Chrome/130 与 Safari UA 均 200 RSS 20 条——线上 Sealos 404 应是同因而非出口问题；改为按源覆盖 UA，URL 不变；线上待复测"
     },
     {
       "id": "dawn",
@@ -950,11 +951,11 @@
     },
     {
       "id": "thenational",
-      "url": "https://www.thenationalnews.com/rss?latest",
+      "url": "https://www.thenationalnews.com/arc/outboundfeeds/rss/?outputType=xml",
       "tier": "T3",
       "publisher": "The National",
-      "enabled": false,
-      "note": "2026-09-19 实测 404"
+      "enabled": true,
+      "note": "阿联酋英文报（阿联酋背景，按加工方定级 T3）。2026-11-05 本机实测 Arc outboundfeeds 200 RSS 100 条（旧 /rss?latest 404）；全站流量大，靠桶与锚定过滤；线上未复测"
     },
     {
       "id": "presstv",
@@ -1040,30 +1041,30 @@
     },
     {
       "id": "state-gov",
-      "url": "https://www.state.gov/press-releases/feed/",
+      "url": "https://www.state.gov/rss-feed/press-releases/feed/",
       "tier": "T1",
       "source_role": "party_official",
       "publisher": "US State Dept",
-      "enabled": false,
-      "note": "2026-09-19 实测 407（代理认证拒绝）；美方口径经 gn-trump/gn-talks 覆盖"
+      "enabled": true,
+      "note": "2026-11-05 本机实测 /rss-feed/press-releases/feed/ 200 RSS 10 条（旧 /press-releases/feed/ 200 但空频道；9-19 线上 407 为代理认证问题）；同址 meeting-calendar-monitor 在用；线上未复测"
     },
     {
       "id": "whitehouse-feed",
-      "url": "https://www.whitehouse.gov/feed/",
+      "url": "https://www.whitehouse.gov/news/feed/",
       "tier": "T1",
       "source_role": "party_official",
       "publisher": "White House",
-      "enabled": false,
-      "note": "2026-09-19 实测 404"
+      "enabled": true,
+      "note": "2026-11-05 本机实测 /news/feed/ 200 RSS 30 条（旧 /feed/ 已 404）；线上经 Sealos 隧道出境，未在线上复测"
     },
     {
       "id": "defense-gov",
-      "url": "https://www.defense.gov/News/Releases/",
+      "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=9&Site=945&max=60",
       "tier": "T1",
       "source_role": "party_official",
       "publisher": "US DoD",
-      "enabled": false,
-      "note": "2026-09-19 实测 403"
+      "enabled": true,
+      "note": "五角大楼新闻稿（ContentType=9=Releases，链接落 war.gov）。2026-11-05 本机实测 200 RSS 60 条（旧 /News/Releases/ 为 HTML 页 403）；readiness-monitor 同接口在用；线上未复测"
     },
     {
       "id": "kuna",

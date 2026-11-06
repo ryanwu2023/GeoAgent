@@ -4362,17 +4362,17 @@
       "zone": "energy",
       "tier": "T3",
       "publisher": "The National（阿联酋）",
-      "url": "https://www.thenationalnews.com/rss",
-      "enabled": false,
+      "url": "https://www.thenationalnews.com/arc/outboundfeeds/rss/?outputType=xml",
+      "enabled": true,
       "topic_anchored": false,
       "aggregator": false,
-      "note": "【实测 2026-09-18】`thenationalnews.com/rss` 返回 **HTTP 404**。替代：`arabnews`（沙特）。",
+      "note": "【实测 2026-11-05 本机】Arc outboundfeeds 200 RSS 100 条（旧 `thenationalnews.com/rss` 2026-09-18 实测 404）；线上 Sealos 未复测。",
       "probe": {
-        "date": "2026-09-18",
-        "http": 404,
-        "items": 0,
-        "server": "openresty",
-        "latest": null
+        "date": "2026-11-05",
+        "http": 200,
+        "items": 100,
+        "server": "arc",
+        "latest": "2026-11-06"
       },
       "stale_days": 45,
       "zone_name": "energy"

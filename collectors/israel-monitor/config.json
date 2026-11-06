@@ -57,8 +57,9 @@
    "tier": "T3",
    "publisher": "Middle East Eye",
    "tier_note": "区域批评视角媒体",
+   "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
    "enabled": true,
-   "note": "实测 200 RSS 71KB (2026-09-19)"
+   "note": "实测 200 RSS 71KB (2026-09-19)；2026-11-05 本机复测：全局 UA Chrome/124 被站点拦截返回 404，换 Safari UA 200，改为按源覆盖 UA"
   },
   {
    "id": "aawsat-feed",

@@ -721,8 +721,9 @@ def fetch_source(src, cfg):
     # 备用源：主 URL 失败时依次尝试 alt_urls（须同源同解析器，防聚合器陷阱）
     r = None
     for _u in [src["url"]] + list(src.get("alt_urls") or []):
+        # 个别站点按 UA 版本拦截（返回 404），允许按源覆盖 UA
         r = http_get(_u, timeout=cfg.get("request_timeout", 30),
-                     min_iv=cfg.get("min_interval_per_host", 1.2), ua=cfg.get("ua"))
+                     min_iv=cfg.get("min_interval_per_host", 1.2), ua=src.get("ua") or cfg.get("ua"))
         if r["status"] == 200 and r["body"]:
             break
     if r["status"] != 200 or not r["body"]:

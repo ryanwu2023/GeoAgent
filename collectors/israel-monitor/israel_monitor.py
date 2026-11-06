@@ -744,7 +744,7 @@ def fetch_source(src, cfg):
     r = None
     for _u in [src["url"]] + list(src.get("alt_urls") or []):
         r = http_get(_u, timeout=cfg.get("request_timeout", 30),
-                     min_iv=cfg.get("min_interval_per_host", 1.2), ua=cfg.get("ua"))
+                     min_iv=cfg.get("min_interval_per_host", 1.2), ua=src.get("ua") or cfg.get("ua"))
         if r["status"] == 200 and r["body"]:
             break
     if r["status"] != 200 or not r["body"]:
