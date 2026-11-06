@@ -1,0 +1,82 @@
+# PiChat on a single offline host with Docker CE, host networking.
+# Data lives in host directories under /srv/pichat; sandboxes run on the pichat_agents bridge.
+# Managed by deploy-pichat-docker.sh, which also writes /srv/pichat/.env (TAG, DOCKER_GID).
+# Manual use: docker compose -p pichat --env-file /srv/pichat/.env -f /srv/pichat/compose.yaml <cmd>
+# The runner image is the app image plus the docker CLI; api needs that CLI to manage sandboxes
+# (same choice as PiChat's own local environment, scripts/deploy/environment.mjs).
+x-app: &app
+  image: pichat-runner:${TAG}
+  restart: unless-stopped
+  network_mode: host
+  extra_hosts: ["postgres:127.0.0.1"]
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp:uid=1000,gid=1000,mode=1777,size=1g", "/home/node:uid=1000,gid=1000,size=128m"]
+  environment:
+    PICHAT_ENVIRONMENT: local
+    PI_CHAT_RUNTIME_DIR: /var/lib/pi-chat/runtime
+    PI_CHAT_RUNTIME_PROFILE: /var/lib/pi-chat/runtime/runtime-profile.json
+    PI_CHAT_REPORT_SERVICE_URL: http://127.0.0.1:9182
+  volumes:
+    - /srv/pichat/runtime:/var/lib/pi-chat/runtime
+    - /srv/pichat/data:/var/lib/pi-chat/data
+    - /srv/pichat/logs:/var/lib/pi-chat/logs
+    - /srv/pichat/keys:/var/lib/pi-chat/keys
+  depends_on:
+    postgres: {condition: service_healthy}
+
+# api and runner create and manage sandbox containers through the host Docker daemon.
+x-docker-client: &docker-client
+  group_add: ["${DOCKER_GID}"]
+  volumes:
+    - /srv/pichat/runtime:/var/lib/pi-chat/runtime
+    - /srv/pichat/data:/var/lib/pi-chat/data
+    - /srv/pichat/logs:/var/lib/pi-chat/logs
+    - /srv/pichat/keys:/var/lib/pi-chat/keys
+    - /var/run/docker.sock:/var/run/docker.sock
+
+services:
+  postgres:
+    image: pichat-postgres:18
+    restart: unless-stopped
+    network_mode: host
+    shm_size: 256m
+    command: [postgres, -c, listen_addresses=127.0.0.1, -c, port=5432]
+    environment:
+      POSTGRES_DB: pichat
+      POSTGRES_PASSWORD_FILE: /run/pg-secret/password
+    volumes:
+      - /srv/pichat/postgres:/var/lib/postgresql
+      - /srv/pichat/pg-secret:/run/pg-secret:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U postgres -d pichat"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+  api:
+    <<: [*docker-client, *app]
+    command: [api]
+  gateway:
+    <<: *app
+    command: [gateway]
+  runner:
+    <<: [*docker-client, *app]
+    command: [runner]
+  report:
+    <<: *app
+    command: [report]
+    environment:
+      NODE_ENV: production
+      PICHAT_ENVIRONMENT: local
+      PI_CHAT_RUNTIME_DIR: /var/lib/pi-chat/report-runtime
+      PI_CHAT_DATABASE_URL_FILE: /run/report-secret/database-url
+      PI_CHAT_REPORT_DATABASE_URL_FILE: /run/report-secret/database-url
+      DBOS_SYSTEM_DATABASE_URL_FILE: /run/report-secret/database-url
+      PI_CHAT_REPORT_DATABASE_ROLE: pichat_report
+      PI_CHAT_REPORT_SERVICE_HOST: 127.0.0.1
+      PI_CHAT_REPORT_DB_POOL_MAX: "8"
+    volumes:
+      - /srv/pichat/report-runtime:/var/lib/pi-chat/report-runtime:ro
+      - /srv/pichat/report-data:/var/lib/pi-chat/report-data
+      - /srv/pichat/report-secret:/run/report-secret:ro
