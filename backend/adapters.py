@@ -229,7 +229,8 @@ def normalize(raw, monitor):
         "id": rid, "source_id": str(raw.get("source_id", monitor)),
         "source_name": str(raw.get("source_name") or outlet or raw.get("publisher", monitor)),
         "tier": raw.get("tier", "未分级"), "publisher": outlet or raw.get("publisher", ""),
-        "title": title, "text": str(raw.get("summary", "")), "url": (original if outlet and original else link),
+        # Collectors fill "body" only for public full text (paywalled outlets keep the summary).
+        "title": title, "text": str(raw.get("body") or raw.get("summary", "")), "url": (original if outlet and original else link),
         "published_at": raw.get("published_utc") or raw.get("published") or None,
         "fetched_at": raw.get("fetched_at") or None,
         "first_seen": raw.get("first_seen") or None, "event_at": None,

@@ -42,9 +42,17 @@ run.bat                                  # 一条龙：自检→抓取→对账
 - **T2**：ICG、Atlantic Council IranSource、Responsible Statecraft（Quincy）。
 - **T3**：Al Jazeera、BBC、Guardian、NYT、MEE、The National、Dawn、Doha News、Tehran Times（伊朗官媒窗口）、
   TASS（俄方官方立场窗口）、Anadolu、LobeLog + Google News 关键词通道。
-- Google News 只是发现层：记录写 `outlet`（取 `<source>` 或标题「 - Outlet」后缀），报告与后端展示
+- 头部媒体直连 RSS（PBS、CNBC、BBC World、CBS、NBC、NPR、Axios、Iran International、Al-Monitor、
+  Jerusalem Post、Times of Israel、France 24、Gulf News、The Hill、Politico）：自带摘要和原文链接，
+  同一篇文章（标题+发布方相同）优先保留直连记录，谷歌新闻副本在本轮和累积档里都会去掉。
+  谷歌新闻对某家的叫法与 `publisher` 不同时，在源上写 `outlets` 别名（如 NYT → The New York Times）。
+- Google News 只负责补漏长尾媒体：记录写 `outlet`（取 `<source>` 或标题「 - Outlet」后缀），报告与后端展示
   真实发布方，跨源印证按 outlet 计数；`google_news_resolve_max` 控制每轮最多把多少条
   news.google.com 跳转链接解析为原文 `original_url`（每条约 2 次请求，结果随累积档保存）。
+- 正文：源上 `"body": true` 的公开站，每轮最多 `body_fetch_max` 条（新的优先）抓正文写入 `body`
+  （截断到 `body_max_chars`），复用 geopolitical-source-monitor 的 robots/按主机限速/付费墙识别；
+  结果写 `content_access`，同一条只抓一次（网络错误下轮重试）。付费墙站点（Reuters、NYT、
+  Al-Monitor、Jerusalem Post）和文章页 403 的 Times of Israel 不开，只保留标题和摘要。backend 有 `body` 时以正文作为记录文本。
 - 全部停用源在 `config.json` 带 `note`（实测日期+状态码+原因+替代覆盖）；探测证据
   `tools/_probe_round*.json`。
 

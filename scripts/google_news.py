@@ -55,6 +55,54 @@ def annotate_outlets(records: Iterable[dict]) -> int:
     return n
 
 
+def outlet_key(name: str) -> str:
+    """Normalize an outlet name so "The Guardian" / "Guardian" / "Bloomberg.com" compare equal."""
+    s = re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+    s = re.sub(r"^the(?=.{3})", "", s)
+    return re.sub(r"(?<=.{3})com$", "", s)
+
+
+def headline_key(title: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", split_outlet(title)[0].lower())[:80]
+
+
+def _direct_keys(records: Iterable[dict], aliases: dict[str, list[str]]) -> set[tuple[str, str]]:
+    keys = set()
+    for r in records:
+        if is_google_news(r.get("url") or ""):
+            continue
+        hk = headline_key(r.get("title", ""))
+        if not hk:
+            continue
+        for name in [r.get("publisher", "")] + list(aliases.get(r.get("source_id", ""), [])):
+            if outlet_key(name):
+                keys.add((hk, outlet_key(name)))
+    return keys
+
+
+def prefer_direct(records: list[dict], archive: dict, sources: Iterable[dict]) -> tuple[list[dict], int]:
+    """Drop Google News copies of articles a direct feed already carries (same headline + outlet).
+
+    Direct feeds give a summary and the publisher's own URL, so they win. Checks the
+    incoming batch and the archive: direct feeds roll items off within a day while
+    Google News keeps surfacing them for weeks. Matching archived Google News copies
+    are removed from ``archive`` in place. Sources may list ``outlets`` aliases for
+    names Google uses differently (e.g. NYT → "The New York Times").
+    """
+    aliases = {s["id"]: list(s.get("outlets") or []) for s in sources if s.get("id")}
+    keys = _direct_keys(list(archive.values()) + list(records), aliases)
+
+    def dup(r: dict) -> bool:
+        return (is_google_news(r.get("url") or "") and bool(r.get("outlet"))
+                and (headline_key(r.get("title", "")), outlet_key(r["outlet"])) in keys)
+
+    kept = [r for r in records if not dup(r)]
+    stale = [rid for rid, r in archive.items() if dup(r)]
+    for rid in stale:
+        del archive[rid]
+    return kept, len(records) - len(kept) + len(stale)
+
+
 def _article_id(url: str) -> str:
     parts = urllib.parse.urlsplit(url).path.rstrip("/").split("/")
     return parts[-1] if len(parts) >= 2 and parts[-2] == "articles" else ""

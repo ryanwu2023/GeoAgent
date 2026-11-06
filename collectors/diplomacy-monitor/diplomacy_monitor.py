@@ -28,7 +28,8 @@ _REPO = str(Path(__file__).resolve().parents[2])
 if _REPO not in sys.path:
     sys.path.insert(0, _REPO)
 from scripts.collector_http_runtime import HttpRuntime, prepare_output, source_results
-from scripts.google_news import annotate_outlets, is_google_news, resolve_records, split_outlet
+from scripts.article_body import fetch_bodies, make_client
+from scripts.google_news import annotate_outlets, is_google_news, prefer_direct, resolve_records, split_outlet
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CFG_PATH = os.path.join(BASE, "config.json")
@@ -796,7 +797,8 @@ def make_records(cfg, eng, fetched, run_dt):
                                     "anchor_no_bucket": blocked_anchor,
                                     "no_anchor": empty, "too_old": too_old}
     seen_tk, deduped = {}, []
-    for r in records:
+    # 同标题以直连源为准：谷歌新闻副本排在最后参与去重（sorted 稳定，其余顺序不变）
+    for r in sorted(records, key=lambda x: is_google_news(x.get("url") or "")):
         tk = title_key(r["title"])
         if tk and tk in seen_tk:
             audit["per_source"][r["source_id"]]["kept"] -= 1
@@ -1221,9 +1223,13 @@ def main():
             json.dump({"run": as_of.isoformat(), "src": src_stats}, f, ensure_ascii=False, indent=1)
 
     records, audit = make_records(cfg, eng, fetched, as_of.isoformat())
+    # 直连源已有的文章（同标题+同发布方）不再保留谷歌新闻副本，含累积档里的旧副本
+    annotate_outlets(archive.values())
+    records, n_gn_dup = prefer_direct(records, archive, cfg["sources"])
+    if n_gn_dup:
+        print(f"[gnews] 直连源已收录，去掉谷歌新闻副本 {n_gn_dup} 条")
     n_new = merge_archive(archive, records)
     n_bf = backfill_archive(cfg, eng, archive)
-    annotate_outlets(archive.values())
     gn_max = int(cfg.get("google_news_resolve_max") or 0)
     if gn_max and not args.from_file:
         gs = resolve_records([r for r in archive.values() if r.get("kind") != "excluded"],
@@ -1232,6 +1238,14 @@ def main():
         print(f"[gnews] 原文链接解析 {gs['resolved']}/{min(gn_max, gs['pending'])}"
               f"（待解析 {gs['pending']}，失败 {gs['failed']}"
               f"{'，连续失败已熔断' if gs['stopped'] else ''}，留待下次）")
+    body_max = int(cfg.get("body_fetch_max") or 0)
+    if body_max and not args.from_file:
+        # 只抓 "body": true 的直连源（公开站）；付费墙站点保留标题+摘要
+        bs = fetch_bodies([r for r in archive.values() if r.get("kind") != "excluded"], cfg["sources"],
+                          make_client(cfg.get("body_ua") or cfg.get("ua") or "Mozilla/5.0"),
+                          max_new=body_max, max_chars=int(cfg.get("body_max_chars") or 6000))
+        print(f"[body] 正文抓取 全文 {bs['fulltext']}，其他 {bs['other']}"
+              f"（待抓 {bs['pending']}，本轮上限 {body_max}）")
     with open(arch_path, "w", encoding="utf-8") as f:
         for r in archive.values():
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -1473,6 +1487,15 @@ def run_selftest(cfg, eng):
         {"title": "Iran rejects US proposal - Reuters", "publisher": "Google News", "outlet": "Reuters", "tier": "T3"},
         {"title": "Iran rejects US proposal - AP News", "publisher": "Google News", "outlet": "AP News", "tier": "T3"}])
     ck("两家媒体经谷歌新闻报道算 2 个发布方", gc[0]["corroboration"]["n_publishers"] == 2)
+    drss = ('<rss><channel><item><title>Pakistan offers to mediate US Iran talks in Islamabad</title>'
+            '<link>https://www.pbs.org/newshour/world/pakistan-mediate</link>'
+            '<pubDate>Thu, 05 Nov 2026 11:00:00 GMT</pubDate><description>x</description></item></channel></rss>')
+    pcfg = dict(gcfg, sources=gcfg["sources"] + [{"id": "pbs-x", "publisher": "Reuters", "tier": "T3"}])
+    drecs, _ = make_records(pcfg, eng, {"gn-trump": gi, "pbs-x": parse_rss(drss)}, "2026-11-05")
+    ck("同标题直连源优先于谷歌新闻副本", [r["source_id"] for r in drecs] == ["pbs-x"])
+    darch = {"g": dict(grecs[0])}
+    kept, ndup = prefer_direct(drecs, darch, pcfg["sources"])
+    ck("累积档里的谷歌新闻副本被直连源替换", not darch and ndup == 1 and len(kept) == 1)
     ck("原文链接优先", _row_link({"url": "https://news.google.com/x", "original_url": "https://reuters.com/a"})
        == "[原文](https://reuters.com/a)")
     ck("等级展示标注当事方", tier_label(smap_["app-pk"]) == "T1·当事方官方"

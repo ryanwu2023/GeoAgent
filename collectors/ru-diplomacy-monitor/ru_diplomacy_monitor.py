@@ -30,7 +30,7 @@ _REPO = str(Path(__file__).resolve().parents[2])
 if _REPO not in sys.path:
     sys.path.insert(0, _REPO)
 from scripts.collector_http_runtime import HttpRuntime, prepare_output, source_results
-from scripts.google_news import annotate_outlets, is_google_news, resolve_records, split_outlet
+from scripts.google_news import annotate_outlets, is_google_news, prefer_direct, resolve_records, split_outlet
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CFG_PATH = os.path.join(BASE, "config.json")
@@ -806,7 +806,8 @@ def make_records(cfg, eng, fetched, run_dt):
                                     "anchor_no_bucket": blocked_anchor,
                                     "no_anchor": empty, "too_old": too_old}
     seen_tk, deduped = {}, []
-    for r in records:
+    # 同标题以直连源为准：谷歌新闻副本排在最后参与去重（sorted 稳定，其余顺序不变）
+    for r in sorted(records, key=lambda x: is_google_news(x.get("url") or "")):
         tk = title_key(r["title"])
         if tk and tk in seen_tk:
             audit["per_source"][r["source_id"]]["kept"] -= 1
@@ -1192,9 +1193,13 @@ def main():
             json.dump({"run": as_of.isoformat(), "src": src_stats}, f, ensure_ascii=False, indent=1)
 
     records, audit = make_records(cfg, eng, fetched, as_of.isoformat())
+    # 直连源已有的文章（同标题+同发布方）不再保留谷歌新闻副本，含累积档里的旧副本
+    annotate_outlets(archive.values())
+    records, n_gn_dup = prefer_direct(records, archive, cfg["sources"])
+    if n_gn_dup:
+        print(f"[gnews] 直连源已收录，去掉谷歌新闻副本 {n_gn_dup} 条")
     n_new = merge_archive(archive, records)
     n_bf = backfill_archive(cfg, eng, archive)
-    annotate_outlets(archive.values())
     gn_max = int(cfg.get("google_news_resolve_max") or 0)
     if gn_max and not args.from_file:
         gs = resolve_records([r for r in archive.values() if r.get("kind") != "excluded"],

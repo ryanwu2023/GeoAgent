@@ -2,7 +2,7 @@ import json
 import urllib.request
 
 from backend.adapters import normalize
-from scripts.google_news import annotate_outlets, resolve_article_url, resolve_records, split_outlet
+from scripts.google_news import annotate_outlets, outlet_key, prefer_direct, resolve_article_url, resolve_records, split_outlet
 
 GN = "https://news.google.com/rss/articles/CBMiAU_yqLtest?oc=5"
 
@@ -73,3 +73,27 @@ def test_normalize_cites_outlet_and_original_url_for_google_news_items():
     assert legacy["publisher"] == "PBS" and legacy["url"].startswith("https://news.google.com/")
     direct = normalize({"source_id": "bbc", "publisher": "BBC", "url": "https://bbc.com/a", "title": "A - B"}, "diplomacy-monitor")
     assert direct["publisher"] == "BBC" and "via" not in direct
+
+
+def test_outlet_key_matches_common_name_variants():
+    assert outlet_key("The Guardian") == outlet_key("Guardian")
+    assert outlet_key("Bloomberg.com") == outlet_key("Bloomberg")
+    assert outlet_key("The Hill") == outlet_key("the hill") != outlet_key("The National")
+
+
+def test_prefer_direct_drops_google_copies_in_batch_and_archive():
+    sources = [{"id": "nyt", "publisher": "NYT", "outlets": ["The New York Times"]}, {"id": "gn"}]
+    archive = {
+        "d1": {"id": "d1", "source_id": "pbs", "publisher": "PBS", "url": "https://www.pbs.org/a", "title": "Iran talks stall"},
+        "g1": {"id": "g1", "source_id": "gn", "url": GN, "title": "Iran talks stall - PBS", "outlet": "PBS"},
+        "g2": {"id": "g2", "source_id": "gn", "url": GN, "title": "Iran talks stall - Reuters", "outlet": "Reuters"},
+    }
+    batch = [
+        {"id": "n1", "source_id": "nyt", "publisher": "NYT", "url": "https://www.nytimes.com/b", "title": "Oman hosts envoys"},
+        {"id": "g3", "source_id": "gn", "url": GN, "title": "Oman hosts envoys - The New York Times", "outlet": "The New York Times"},
+        {"id": "g4", "source_id": "gn", "url": GN, "title": "Qatar steps in - CNBC", "outlet": "CNBC"},
+    ]
+    kept, dropped = prefer_direct(batch, archive, sources)
+    assert [r["id"] for r in kept] == ["n1", "g4"]
+    assert set(archive) == {"d1", "g2"}  # same headline from another outlet is kept
+    assert dropped == 2
