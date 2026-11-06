@@ -15,6 +15,8 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
 import asyncio
 import logging
+import threading
+import time
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from .store import ROOT, snapshots, snapshot_summaries, get_snapshot, save_snapshot, db, data_dir, digest, get_working_snapshot_id, set_working_snapshot_id
@@ -250,6 +252,72 @@ async def protect_local_mutations(request: Request, call_next):
         response.headers["Cache-Control"] = "no-store"
     return response
 
+VIEW_CACHE_TTL = 60
+_view_cache: dict = {}
+_view_locks: dict = {}
+_view_guard = threading.Lock()
+
+
+def _review_marker(snapshot_id):
+    with db() as c:
+        row = c.execute("SELECT COUNT(*) AS n, COALESCE(MAX(created_at),'') AS latest FROM reviews WHERE snapshot_id=%s", (snapshot_id,)).fetchone()
+    return (int(row["n"]), str(row["latest"]))
+
+
+def cached_view(name, snapshot_id, params, compute):
+    """Short-lived cache for views that walk every record of a snapshot.
+
+    Snapshots are immutable, but /workspace, /map-records and /evidence re-project all
+    ~12k records (translation, events, risk counts) on each call: 5-8 s apiece, and a
+    snapshot switch fires several at once into a 2-core Pod. Reviews are part of the
+    key so a researcher's verdict shows at once; new translations appear within the TTL.
+    A per-key lock makes concurrent identical requests wait for one computation.
+    """
+    from . import chinese
+    key = (name, snapshot_id, params, _review_marker(snapshot_id), chinese.local_translation_epoch)
+    with _view_guard:
+        lock = _view_locks.setdefault(key[:3], threading.Lock())
+    with lock:
+        hit = _view_cache.get(key)
+        if hit and time.monotonic() - hit[0] < VIEW_CACHE_TTL:
+            return hit[1]
+        value = compute()
+        with _view_guard:
+            stale = [k for k, (at, _) in _view_cache.items() if time.monotonic() - at >= VIEW_CACHE_TTL]
+            for k in stale:
+                _view_cache.pop(k, None)
+            _view_cache[key] = (time.monotonic(), value)
+            if len(_view_locks) > 256:  # free-text evidence queries would grow this forever
+                live = {k[:3] for k in _view_cache}
+                for k in [k for k, l in _view_locks.items() if k not in live and not l.locked()]:
+                    _view_locks.pop(k, None)
+        return value
+
+
+_warmed: set = set()
+
+
+def warm_views(snapshot_id):
+    """Precompute the views a snapshot switch opens first (map tab, both topics).
+
+    Runs once per snapshot per process: on an explicit switch, and when /status first
+    sees a new working snapshot (scheduled imports and remote pulls switch it too).
+    """
+    with _view_guard:
+        if not snapshot_id or snapshot_id in _warmed:
+            return
+        _warmed.add(snapshot_id)
+
+    def run():
+        for topic in ("usiran", "ukraine"):
+            try:
+                workspace(snapshot_id, topic, "", False, "", "")
+                map_records(snapshot_id, topic, "", "", "")
+            except Exception:
+                logging.getLogger(__name__).exception("view warm-up failed for %s", snapshot_id)
+    threading.Thread(target=run, name=f"warm-{snapshot_id[:8]}", daemon=True).start()
+
+
 def snapshot_or_404(sid):
     try:
         return get_snapshot(sid)
@@ -290,7 +358,9 @@ def legacy_crawler_status():
 def status(snapshot_id: str | None = None):
     if snapshot_id:
         snapshot_or_404(snapshot_id)
-    return {"model": model_status(), "translation":translation_status(snapshot_id), "crawler_root": str(collector_read_root()), "crawler": legacy_crawler_status(), "mcp": public_mcp_config(), "rule_version": RULE_VERSION, "snapshots": snapshots(), "working_snapshot_id": get_working_snapshot_id()}
+    working = get_working_snapshot_id()
+    warm_views(working)
+    return {"model": model_status(), "translation":translation_status(snapshot_id), "crawler_root": str(collector_read_root()), "crawler": legacy_crawler_status(), "mcp": public_mcp_config(), "rule_version": RULE_VERSION, "snapshots": snapshots(), "working_snapshot_id": working}
 
 @app.get("/api/collector/snapshots")
 def collector_snapshots():
@@ -308,6 +378,7 @@ def update_workspace_selection(request: WorkspaceSelectionRequest):
         snapshot_id = set_working_snapshot_id(request.snapshot_id)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
+    warm_views(snapshot_id)
     return {"snapshot_id": snapshot_id, "available": True, "source": "research-postgresql-workspace-state"}
 
 REMOTE_ERROR_STATUS = {"REMOTE_NOT_CONFIGURED": 503, "GEO_RATE_LIMITED": 429, "GEO_TOOL_NOT_ALLOWED": 403,
@@ -939,6 +1010,11 @@ def import_data():
 def workspace(snapshot_id: str, topic: Topic = "all", dimension: str = "", include_records: bool = True, start: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$"), end: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")):
     s = snapshot_or_404(snapshot_id)
     validate_range(start, end)
+    return cached_view("workspace", snapshot_id, (topic, dimension, include_records, start, end),
+                       lambda: _workspace(s, snapshot_id, topic, dimension, include_records, start, end))
+
+
+def _workspace(s, snapshot_id, topic, dimension, include_records, start, end):
     records = filtered_records(s, topic, dimension, start, end)
     records.sort(key=lambda r: r["published_at"] or "", reverse=True)
     a = analysis(s, topic, dimension, start, end)
@@ -954,6 +1030,11 @@ def map_records(snapshot_id: str, topic: Topic = "all", dimension: str = "", sta
     """Return map-only evidence on demand instead of attaching it to every page."""
     s = snapshot_or_404(snapshot_id)
     validate_range(start, end)
+    return cached_view("map-records", snapshot_id, (topic, dimension, start, end),
+                       lambda: _map_records(s, snapshot_id, topic, dimension, start, end))
+
+
+def _map_records(s, snapshot_id, topic, dimension, start, end):
     records = filtered_records(s, topic, dimension, start, end)
     records.sort(key=lambda r: r["published_at"] or "", reverse=True)
     cache = translation_cache()
@@ -976,6 +1057,11 @@ async def generate_page_summary(body: PageSummaryRequest):
 def evidence_page(snapshot_id: str, topic: Topic = "all", dimension: str = "", q: str = Query("", max_length=300), offset: int = Query(0, ge=0), limit: int = Query(30, ge=1, le=100), start: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$"), end: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")):
     s = snapshot_or_404(snapshot_id)
     validate_range(start, end)
+    return cached_view("evidence", snapshot_id, (topic, dimension, q, offset, limit, start, end),
+                       lambda: _evidence_page(s, snapshot_id, topic, dimension, q, offset, limit, start, end))
+
+
+def _evidence_page(s, snapshot_id, topic, dimension, q, offset, limit, start, end):
     records = filtered_records(s, topic, dimension, start, end)
     cache = translation_cache()
     from .semantic import search_evidence
