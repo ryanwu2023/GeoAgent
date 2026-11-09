@@ -117,15 +117,15 @@ def fetch_fred_monthly(series_id: str) -> tuple[bytes, list[dict]]:
     errors = []
     raw = None
     for proxy in _proxy_candidates():
+        # 保持curl默认UA：FRED会以HTTP/2 INTERNAL_ERROR断开伪装浏览器的UA（2026-11实测）。
         command = [
             "curl.exe" if os.name == "nt" else "curl",
-            "-L", "--fail", "--silent", "--show-error", "--max-time", "5",
-            "-H", "User-Agent: Mozilla/5.0 GeoAgent/6", url,
+            "-L", "--fail", "--silent", "--show-error", "--max-time", "15", url,
         ]
         if proxy:
             command[1:1] = ["--proxy", proxy]
         try:
-            completed = subprocess.run(command, capture_output=True, timeout=8, check=False)
+            completed = subprocess.run(command, capture_output=True, timeout=20, check=False)
             if completed.returncode:
                 raise RuntimeError(completed.stderr.decode("utf-8", "replace").strip())
             raw = completed.stdout
