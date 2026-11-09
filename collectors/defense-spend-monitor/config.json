@@ -248,7 +248,7 @@
       "priority": "high",
       "api_url": "https://api.congress.gov/v3/crsreport",
       "api_key": "DEMO_KEY",
-      "api_key_note": "DEMO_KEY 为公开演示 key，限流约 30 次/小时。正式长期运行建议到 api.data.gov 免费申请个人 key 后替换（过程约 1 分钟），可显著提高限额。",
+      "api_key_note": "DEMO_KEY 为公开演示 key，限流约 30 次/小时。设置环境变量 DATA_GOV_API_KEY（api.data.gov 免费申请）后，请求时自动换成个人 key。",
       "limit": 250,
       "max_pages": 2,
       "window_days": 240,

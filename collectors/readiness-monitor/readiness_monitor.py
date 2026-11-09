@@ -549,6 +549,21 @@ def _opener(tls_verify: bool = True):
     return urllib.request.build_opener(*handlers)
 
 
+
+def with_data_gov_key(url: str) -> str:
+    """发请求前把 api.data.gov 系接口的 DEMO_KEY 换成环境变量里的个人 key。
+
+    配置与状态记录里仍保留 DEMO_KEY，个人 key 不进日志、状态和快照。
+    """
+    key = os.getenv("DATA_GOV_API_KEY", "").strip()
+    parts = urllib.parse.urlsplit(url)
+    if not key or not parts.hostname or not parts.hostname.endswith(("api.congress.gov", "api.data.gov")):
+        return url
+    query = [(k, key if k == "api_key" and v == "DEMO_KEY" else v)
+             for k, v in urllib.parse.parse_qsl(parts.query, keep_blank_values=True)]
+    return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query)))
+
+
 def http_get(url: str, *, json_mode: bool = False, tls_verify: bool = True,
              timeout: int = 30, retries: int = 3,
              backoff: float = 2.0) -> Dict[str, Any]:
@@ -563,7 +578,7 @@ def http_get(url: str, *, json_mode: bool = False, tls_verify: bool = True,
         for i in range(max(1, retries)):
             try:
                 req = urllib.request.Request(
-                    url, headers=(JSON_HEADERS if json_mode else RSS_HEADERS))
+                    with_data_gov_key(url), headers=(JSON_HEADERS if json_mode else RSS_HEADERS))
                 r = _egress_opener(egress, tls_verify).open(req, timeout=timeout)
                 return {"status": r.status, "server": r.headers.get("Server", ""),
                         "body": decompress(r.read(), r.headers.get("Content-Encoding", "")),

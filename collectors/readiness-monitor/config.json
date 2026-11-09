@@ -1019,7 +1019,7 @@
       "topic_anchored": false,
       "url": "https://api.congress.gov/v3/crsreport?limit=40&format=json&api_key=DEMO_KEY",
       "json_path": "CRSReports",
-      "note": "DEMO_KEY 约 30 次/小时限流，实测会返回 HTTP 429。建议申请个人 API key 后替换 url 中的 api_key。"
+      "note": "DEMO_KEY 约 30 次/小时限流，实测会返回 HTTP 429。设置环境变量 DATA_GOV_API_KEY 后，请求时自动换成个人 key。"
     },
     {
       "id": "centcom-gnews",

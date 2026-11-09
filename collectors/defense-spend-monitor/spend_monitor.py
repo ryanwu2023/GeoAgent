@@ -344,6 +344,21 @@ def build_psc_codes(cfg: Dict[str, Any]) -> List[str]:
 # --------------------------------------------------------------------------- #
 # 二、HTTP 抓取（GET + POST JSON）
 # --------------------------------------------------------------------------- #
+
+def with_data_gov_key(url: str) -> str:
+    """发请求前把 api.data.gov 系接口的 DEMO_KEY 换成环境变量里的个人 key。
+
+    配置与状态记录里仍保留 DEMO_KEY，个人 key 不进日志、状态和快照。
+    """
+    key = os.getenv("DATA_GOV_API_KEY", "").strip()
+    parts = urllib.parse.urlsplit(url)
+    if not key or not parts.hostname or not parts.hostname.endswith(("api.congress.gov", "api.data.gov")):
+        return url
+    query = [(k, key if k == "api_key" and v == "DEMO_KEY" else v)
+             for k, v in urllib.parse.parse_qsl(parts.query, keep_blank_values=True)]
+    return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query)))
+
+
 class Fetcher:
     def __init__(self, cfg: Dict[str, Any], direct: bool = False,
                  proxy: Optional[str] = None):
@@ -435,7 +450,7 @@ class Fetcher:
                 headers = self._headers(json_post=is_post)
                 if is_post:
                     headers["Content-Type"] = "application/json"
-                req = urllib.request.Request(url, data=body, headers=headers,
+                req = urllib.request.Request(with_data_gov_key(url), data=body, headers=headers,
                                              method="POST" if is_post else "GET")
                 with self._opener().open(req, timeout=self.timeout) as resp:
                     raw = resp.read()
@@ -962,7 +977,7 @@ def collect_crs_reports(source: Dict[str, Any], fetcher: Fetcher,
         extra_note.append(f"标题闸门过滤 {gated} 条")
     if note:
         extra_note.append(note)
-    if key == "DEMO_KEY":
+    if key == "DEMO_KEY" and not os.getenv("DATA_GOV_API_KEY", "").strip():
         extra_note.append("使用 DEMO_KEY（限流约 30 次/小时），建议申请个人 key")
     if extra_note:
         status["note"] = "；".join(extra_note)
