@@ -51,7 +51,8 @@ def metric_view(obs, start="", end=""):
         delta = current["value"] - previous["value"]
         pct = delta / abs(previous["value"]) * 100 if previous["value"] else None
     if delta is not None and abs(delta)<1e-10:delta=0.0
-    if obs['unit'] in ('基点','个百分点','σ'):pct=None
+    # z 分数等标准化/差值单位可跨零，百分比变化无意义，只给变化额。
+    if obs['unit'] in ('基点','个百分点','σ','z'):pct=None
     delta_unit=obs['unit']
     if obs['unit']=='%':
         delta_unit='基点' if obs.get('bucket')=='rates' else '个百分点'
