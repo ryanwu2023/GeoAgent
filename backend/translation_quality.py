@@ -34,11 +34,12 @@ MONTH_WORDS = {
 
 SCALES = {
     'thousand': 10**3, 'million': 10**6, 'mn': 10**6, 'billion': 10**9, 'bn': 10**9, 'trillion': 10**12,
+    'k': 10**3, 'm': 10**6, 'b': 10**9,
     '万亿': 10**12, '千亿': 10**11, '百亿': 10**10, '亿': 10**8, '千万': 10**7, '百万': 10**6, '万': 10**4,
 }
 NUMBER = re.compile(
     r'(?<![A-Za-z0-9_])(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:[.,]\d+)*)(%|％)?'
-    r'(?:\s*(thousand|million|billion|trillion|bn|mn)\b|(万亿|千亿|百亿|亿|千万|百万|万))?',
+    r'(?:\s*(thousand|million|billion|trillion|bn|mn)\b|([kKmMbB])\b|(万亿|千亿|百亿|亿|千万|百万|万))?',
     re.I,
 )
 
@@ -54,7 +55,7 @@ def _value(digits, percent, scale):
 def numeric_tokens(text):
     # Chinese dates and quantities commonly attach digits directly to 年/月/日.
     # Exclude only Latin identifier prefixes instead of all Unicode word chars.
-    tokens={_value(m.group(1),m.group(2),m.group(3) or m.group(4)) for m in NUMBER.finditer(text)}
+    tokens={_value(m.group(1),m.group(2),m.group(3) or m.group(4) or m.group(5)) for m in NUMBER.finditer(text)}
     lowered=text.lower()
     for number,words in MONTH_WORDS.items():
         if any(word in lowered for word in words):tokens.add(str(number))

@@ -11,3 +11,10 @@ def test_scaled_numbers_match_chinese_units():
 def test_wrong_magnitude_is_still_flagged():
     issues = quality("War losses reach $60 billion", "战争损失达60亿美元")["issues"]
     assert "数字表达发生变化，需核对原文" in issues
+
+
+def test_abbreviated_scales_match_chinese_units():
+    original = "Iran denies talks on reopening Strait of Hormuz in exchange for $8B in frozen assets"
+    assert quality(original, "伊朗否认就以80亿美元冻结资产换取重新开放霍尔木兹海峡进行谈判")["issues"] == []
+    assert quality("Kyiv gets $1.5M in aid", "基辅获得150万美元援助")["issues"] == []
+    assert quality("Iran gets $8B", "伊朗获得8亿美元")["issues"]
