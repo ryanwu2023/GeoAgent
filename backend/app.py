@@ -1179,7 +1179,10 @@ async def translate_evidence(rid:str,snapshot_id:str):
         for item in result["items"]:
             save_translation(record[item["id"]], item["text"], '模型翻译，待语义核验')
         return {"ok":True,"message":"已生成机器译文，请对照原文核验语义","model":result["model"]}
-    except Exception as exc:return {"ok":False,"message":llm.error_message(exc)+"；未替换现有译文"}
+    except Exception as exc:
+        if str(exc) == "translation_quality_failed":
+            return {"ok":False,"message":"模型已返回译文，但未通过数字或外文残留校验；未替换现有译文"}
+        return {"ok":False,"message":llm.error_message(exc)+"；未替换现有译文"}
 
 
 @app.post("/api/translations/titles")
