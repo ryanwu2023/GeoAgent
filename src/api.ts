@@ -65,5 +65,7 @@ export async function apiStream<TProgress,TFinal>(path:string,body:unknown,onPro
   if(!answer)throw new Error('问答服务未返回最终结果');
   return answer;
 }
-export const dateText=(date:string|null|undefined)=>{if(!date)return '时间未披露';const zone=date.match(/(Z|[+-]\d{2}:\d{2})$/)?.[1];return date.replace('T',' ').slice(0,16)+(zone?(zone==='Z'||zone==='+00:00'?' 世界时':' 世界时'+zone):'');};
+const beijing=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+// 带时区的时间一律换算成北京时间；没有时区的日期或时间无法换算，按原文显示。
+export const dateText=(date:string|null|undefined)=>{if(!date)return '时间未披露';const raw=date.replace('T',' ').slice(0,16);if(!/(Z|[+-]\d{2}:?\d{2})$/.test(date))return raw;const time=Date.parse(date);if(Number.isNaN(time))return raw;const p=Object.fromEntries(beijing.formatToParts(time).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute} 北京时间`;};
 export const num=(value:number|null|undefined,unit='')=>value==null?'—':unit==='USD'?(value/1e8).toFixed(2)+' 亿美元':value.toLocaleString('zh-CN',{maximumFractionDigits:Math.abs(value)<10?4:2});
