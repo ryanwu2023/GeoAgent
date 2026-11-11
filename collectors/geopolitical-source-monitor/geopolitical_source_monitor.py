@@ -105,11 +105,16 @@ def merge_records(
     config: dict[str, Any],
 ) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
+    # Same title+day (origin_id) or same source+link (record id) is the same article;
+    # the importer rejects duplicate record ids, so both must land on one entry.
+    index: dict[str, str] = {}
     for raw in [*previous, *incoming]:
         record = _revalidate(raw, config)
         if record is None:
             continue
-        key = record["origin_id"]
+        names = [record["origin_id"], *(["id:" + record["id"]] if record.get("id") else [])]
+        key = next((index[name] for name in names if name in index), record["origin_id"])
+        index.update({name: key for name in names})
         current = merged.get(key)
         if current is None:
             record["aliases"] = sorted({url for url in record.get("aliases", []) if url} | ({record["link"]} if record.get("link") else set()))
@@ -135,7 +140,16 @@ def merge_records(
         combined["first_seen"] = min(filter(None, [str(current.get("first_seen") or ""), str(record.get("first_seen") or "")]), default="")
         combined["last_seen"] = max(str(current.get("last_seen") or ""), str(record.get("last_seen") or ""))
         merged[key] = combined
-    return sorted(merged.values(), key=lambda item: (str(item.get("published") or ""), item.get("id", "")), reverse=True)
+        if combined.get("id"):
+            index["id:" + combined["id"]] = key
+    # Guard: chained merges can still leave one id on two entries; keep the better one.
+    unique: dict[str, dict[str, Any]] = {}
+    for item in merged.values():
+        rid = str(item.get("id") or item["origin_id"])
+        other = unique.get(rid)
+        if other is None or (ACCESS_RANK.get(item.get("content_access", ""), 0), str(item.get("fetched_at") or "")) > (ACCESS_RANK.get(other.get("content_access", ""), 0), str(other.get("fetched_at") or "")):
+            unique[rid] = item
+    return sorted(unique.values(), key=lambda item: (str(item.get("published") or ""), item.get("id", "")), reverse=True)
 
 
 def _event_category(categories: list[str]) -> str:
