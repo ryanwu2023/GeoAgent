@@ -175,7 +175,7 @@ test("内置采集器的真实配置形态不会让草稿与来源计数崩溃",
 });
 test("类型与后端形态一致", () => {
   const src = fs.readFileSync(path.join(__dirname, "..", "src", "pipelines.ts"), "utf8");
-  assert.ok(/export type PreviewResult = \{sources: Array<\{source_id: string; state: string; error: string \| null; candidates: Array<\{title: string; url: string; accepted: boolean; reason: string; matched: string\[\]\}>\}>\}/.test(src));
+  assert.ok(/export type PreviewResult = \{sources: Array<\{source_id: string; state: string; error: string \| null; error_message\?: string; candidates: Array<\{title: string; url: string; accepted: boolean; reason: string; matched: string\[\]\}>\}>\}/.test(src));
   assert.ok(/export type PipelineRun = \{[^}]*version: number/.test(src));
 });
 test("列表行带 last_trigger，不再按运行 ID 推断", () => {
