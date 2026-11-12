@@ -15,6 +15,7 @@ def postgres_database(monkeypatch, tmp_path):
     schema = "test_" + uuid.uuid4().hex
     monkeypatch.setenv("GEO_DATABASE_URL", dsn)
     monkeypatch.setenv("GEO_DATABASE_SCHEMA", schema)
+    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "false")
     monkeypatch.setenv("GEO_DATA_DIR", str(tmp_path / "data"))
     from backend.store import get_snapshot
     get_snapshot.cache_clear()

@@ -156,6 +156,7 @@ def test_sync_builtin_skips_name_conflict_with_user_pipeline(caplog):
 
 def test_scheduled_builtin_excluded_from_batch(tmp_path, monkeypatch):
     import scripts.collect as collect
+    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
     sync_builtin_pipelines(registry("sched", "other"))
     with db() as conn:
         conn.execute("UPDATE collection_pipelines SET enabled=true WHERE id='sched'")
@@ -190,13 +191,52 @@ def test_feature_flag(monkeypatch):
     assert pipelines_enabled() is False
 
 
-def test_start_scheduler_returns_daemon_thread(monkeypatch):
-    stop = threading.Event()
+def names():
+    return [t for t in threading.enumerate() if t.name == "pipeline-scheduler"]
+
+
+def test_start_scheduler_is_idempotent_and_stoppable(monkeypatch):
     ticks = []
     monkeypatch.setattr(pipeline_scheduler, "tick", lambda now: ticks.append(now) or [])
-    thread = start_scheduler(0.01, stop=stop)
-    assert thread.daemon and thread.name == "pipeline-scheduler"
-    threading.Event().wait(0.1)
-    stop.set()
-    thread.join(2)
-    assert ticks
+    first = start_scheduler(0.01)
+    second = start_scheduler(0.01)
+    try:
+        assert first is second and first.daemon and first.name == "pipeline-scheduler"
+        assert len(names()) == 1
+        threading.Event().wait(0.1)
+        assert ticks
+    finally:
+        pipeline_scheduler.stop_scheduler()
+    assert names() == []
+    pipeline_scheduler.stop_scheduler()  # 重复停止无害
+
+
+def test_feature_flag_off_skips_scheduler(monkeypatch):
+    from backend import app as app_module
+    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "false")
+    app_module._start_pipelines()
+    assert names() == []
+
+
+def test_feature_flag_on_starts_scheduler_once(monkeypatch):
+    from backend import app as app_module
+    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
+    monkeypatch.setattr(pipeline_scheduler, "tick", lambda now: [])
+    monkeypatch.setattr(app_module, "load_registry", lambda path: [])
+    try:
+        app_module._start_pipelines()
+        app_module._start_pipelines()
+        assert len(names()) == 1
+    finally:
+        pipeline_scheduler.stop_scheduler()
+    assert names() == []
+
+
+def test_restore_does_not_overwrite_user_change():
+    p = make()
+    claimed = pipeline_scheduler._claim(p["id"], NOW)
+    later = NOW + timedelta(days=1)
+    with db() as conn:
+        conn.execute("UPDATE collection_pipelines SET next_run_at=%s WHERE id=%s", (later, p["id"]))
+    pipeline_scheduler._restore(p["id"], claimed)
+    assert get_pipeline(p["id"])["next_run_at"] == later

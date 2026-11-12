@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import shutil
 import time
 from datetime import datetime, timezone
@@ -92,6 +93,7 @@ def _with_scheduled_builtin(exclude_ids: list[str] | None) -> list[str] | None:
             return exclude_ids
         extra = scheduled_builtin_ids()
     except Exception:
+        logging.getLogger(__name__).warning("读取已调度的内置管线失败，整批采集不做排除", exc_info=True)
         return exclude_ids
     return list(dict.fromkeys([*(exclude_ids or []), *extra])) if extra else exclude_ids
 

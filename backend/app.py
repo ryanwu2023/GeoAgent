@@ -95,8 +95,12 @@ async def lifespan(app):
     _start_pipelines()
     mcp_app = create_mcp_app(auth_config=mcp_config, managed_keys=True, project_transport=True)
     app.state.geo_mcp = mcp_app
-    async with mcp_app.router.lifespan_context(mcp_app):
-        yield
+    try:
+        async with mcp_app.router.lifespan_context(mcp_app):
+            yield
+    finally:
+        from .pipeline_scheduler import stop_scheduler
+        stop_scheduler()
 
 app = FastAPI(title="地缘政治研究接口", version="0.6.1",lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1000)

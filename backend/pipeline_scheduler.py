@@ -63,13 +63,16 @@ def _claim(pipeline_id: str, now: datetime) -> dict | None:
                                "AND NOT is_deleted LIMIT 1", (pipeline_id,)).fetchone()
         if running:
             return None
-        conn.execute("UPDATE collection_pipelines SET next_run_at=%s WHERE id=%s", (next_run_at(row, now), pipeline_id))
-        return dict(row)
+        advanced = next_run_at(row, now)
+        conn.execute("UPDATE collection_pipelines SET next_run_at=%s WHERE id=%s", (advanced, pipeline_id))
+        return {**row, "advanced_next_run_at": advanced}
 
 
-def _restore(pipeline_id: str, claimed: dict, now: datetime) -> None:
+def _restore(pipeline_id: str, claimed: dict) -> None:
+    """仅当 next_run_at 仍是本次推进的值时才还原，避免覆盖期间用户对计划的修改。"""
     with db() as conn:
-        conn.execute("UPDATE collection_pipelines SET next_run_at=%s WHERE id=%s", (claimed["next_run_at"], pipeline_id))
+        conn.execute("UPDATE collection_pipelines SET next_run_at=%s WHERE id=%s AND next_run_at IS NOT DISTINCT FROM %s",
+                     (claimed["next_run_at"], pipeline_id, claimed["advanced_next_run_at"]))
 
 
 def tick(now: datetime, *, run: Callable[..., dict] = run_pipeline) -> list[str]:
@@ -93,24 +96,47 @@ def tick(now: datetime, *, run: Callable[..., dict] = run_pipeline) -> list[str]
             triggered.append(pipeline_id)
         except CollectorBusyError:
             log.info("采集服务忙，管线 %s 留待下个周期", pipeline_id)
-            _restore(pipeline_id, claimed, now)
+            _restore(pipeline_id, claimed)
         except Exception:
             log.exception("管线 %s 调度运行失败", pipeline_id)
             triggered.append(pipeline_id)
     return triggered
 
 
+_lock = threading.Lock()
+_thread: threading.Thread | None = None
+_stop: threading.Event | None = None
+
+
 def start_scheduler(interval_sec: float = 30, *, stop: threading.Event | None = None) -> threading.Thread:
-    stop = stop or threading.Event()
+    """启动调度线程；已有存活线程时直接返回它（幂等）。"""
+    global _thread, _stop
+    with _lock:
+        if _thread is not None and _thread.is_alive():
+            return _thread
+        event = stop or threading.Event()
 
-    def loop() -> None:
-        while not stop.is_set():
-            try:
-                tick(datetime.now(timezone.utc))
-            except Exception:
-                log.exception("管线调度扫描失败")
-            stop.wait(interval_sec)
+        def loop() -> None:
+            while not event.is_set():
+                try:
+                    tick(datetime.now(timezone.utc))
+                except Exception:
+                    log.exception("管线调度扫描失败")
+                event.wait(interval_sec)
 
-    thread = threading.Thread(target=loop, name="pipeline-scheduler", daemon=True)
-    thread.start()
-    return thread
+        _stop = event
+        _thread = threading.Thread(target=loop, name="pipeline-scheduler", daemon=True)
+        _thread.start()
+        return _thread
+
+
+def stop_scheduler(timeout: float = 5) -> None:
+    """停止调度线程并等待其退出（最多 timeout 秒）。"""
+    global _thread, _stop
+    with _lock:
+        thread, event = _thread, _stop
+        _thread = _stop = None
+    if event is not None:
+        event.set()
+    if thread is not None and thread is not threading.current_thread():
+        thread.join(timeout)
