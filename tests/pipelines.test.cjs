@@ -71,7 +71,7 @@ test("emptyDraft 是合法骨架", () => {
   assert.deepEqual(d.config, {
     schema_version: "pipeline/1", sources: [],
     filters: {include_any: [], include_strong: [], exclude: [], require_category: true, lookback_days: 14, max_candidates_per_source: 80},
-    request: {timeout_seconds: 25, rate_limit_seconds: 1.5, max_pages_per_source: 3},
+    request: {timeout_seconds: 25, rate_limit_seconds: 1.5},
   });
   const t = ["ukraine"]; const d2 = m.emptyDraft(t); t.push("x");
   assert.deepEqual(d2.row.topics, ["ukraine"]);
@@ -146,7 +146,7 @@ test("tabForField 定位到所在详情页签", () => {
   assert.equal(m.tabForField("row.topics"), "basic");
   assert.equal(m.tabForField("sources[2].feed_url"), "sources");
   assert.equal(m.tabForField("sources"), "sources");
-  assert.equal(m.tabForField("request.max_pages_per_source"), "sources");
+  assert.equal(m.tabForField("request.timeout_seconds"), "sources");
   assert.equal(m.tabForField("filters.exclude"), "keywords");
   assert.equal(m.tabForField("filters"), "keywords");
   assert.equal(m.tabForField(undefined), null);
@@ -207,4 +207,12 @@ test("recentlyUpdated 统计最近 24 小时有新增的管线", () => {
     {last_new_items: 2, last_finished_at: null},
   ];
   assert.equal(m.recentlyUpdated(rows, now), 1);
+});
+
+test("draftOf 去掉已移除的翻页项", () => {
+  const config = {schema_version: "pipeline/1", sources: [], filters: {include_any: [], include_strong: [], exclude: [], require_category: true, lookback_days: 7, max_candidates_per_source: 80},
+    request: {timeout_seconds: 25, rate_limit_seconds: 1.5, max_pages_per_source: 3}};
+  const d = m.draftOf({id: "p-1", name: "n", description: null, topics: ["usiran"], config});
+  assert.deepEqual(d.config.request, {timeout_seconds: 25, rate_limit_seconds: 1.5});
+  assert.equal(config.request.max_pages_per_source, 3, "不修改入参");
 });

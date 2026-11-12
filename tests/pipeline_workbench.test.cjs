@@ -85,3 +85,10 @@ test("修正一轮：测试运行反馈、重载竞态、链接与弹窗", () =>
   assert.ok(read("src/pipeline/Dialogs.tsx").includes("isWebUrl(c.url)"));
   assert.ok(read("src/pipeline/RunPanels.tsx").includes("dimensionLabel"));
 });
+
+test("内置采集器详情不显示本次新增与运行记录", () => {
+  const s = read("src/PipelineWorkbench.tsx");
+  assert.ok(s.includes('const BUILTIN_TABS = new Set<DetailTab>(["basic", "sources"]);'));
+  assert.ok(s.includes("运行情况见‘采集管线监控’页"));
+  assert.ok(!pageSources().includes("max_pages_per_source") && !pageSources().includes("最多翻页"));
+});

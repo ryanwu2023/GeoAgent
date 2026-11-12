@@ -20,7 +20,7 @@ const RUN_POLL_MS = 4000;
 const TRIAL_START_TIMEOUT_MS = 60_000;
 const MAX_TERMS = 200;
 const TABS: [DetailTab, string][] = [["basic", "基本信息"], ["sources", "来源"], ["keywords", "关键词"], ["items", "本次新增"], ["versions", "版本历史"], ["runs", "运行记录"]];
-const BUILTIN_TABS = new Set<DetailTab>(["basic", "sources", "items", "runs"]);
+const BUILTIN_TABS = new Set<DetailTab>(["basic", "sources"]);
 const BUILTIN_NOTE = "内置采集器随整批采集运行，来源由代码维护";
 
 type Filters = {topic: string; status: string; kind: string; q: string};
@@ -397,7 +397,7 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
               <div><h2>{isNew ? "新建管线" : detail?.name}</h2>
                 <small>{isNew ? "保存后默认未启用" : `${detail?.kind === "builtin" ? "内置" : "配置"} · 第 ${detail?.current_version} 版 · ${detail?.enabled ? "已启用" : "未启用"}`}{dirty ? " · 有未保存修改" : ""}</small></div>
             </header>
-            {isBuiltin && <Warning>{BUILTIN_NOTE}。在这里切换启用状态等同于修改采集监控页的“排除采集器”。</Warning>}
+            {isBuiltin && <Warning>{BUILTIN_NOTE}。在这里切换启用状态等同于修改采集监控页的“排除采集器”。运行情况见‘采集管线监控’页。</Warning>}
             {staleVersion != null && <div className="pipeline-banner" role="status">已有新版本（第 {staleVersion} 版），可能由 PiChat 或其他管理员修改。当前表单有未保存修改，未自动刷新。<button type="button" onClick={reload}>重新加载</button></div>}
             <nav className="pipeline-tabs" role="tablist">
               {tabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "selected" : ""} onClick={() => setTab(id)}>{label}</button>)}
@@ -420,7 +420,6 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
               {tab === "sources" && (isBuiltin
                 ? <p className="pipeline-empty">内置采集器，来源由代码维护。</p>
                 : <SourceEditor sources={draft.config.sources} onChange={(sources) => patchConfig((c) => ({...c, sources}))}
-                    maxPages={draft.config.request.max_pages_per_source} onMaxPages={(n) => patchConfig((c) => ({...c, request: {...c.request, max_pages_per_source: n}}))}
                     errField={saveError?.field} errMessage={saveError?.message} />)}
               {tab === "keywords" && <div className="pipeline-form-grid">
                 <p className="wide pipeline-hint">每行一个词，也可用逗号或顿号分隔。锚词需命中标题或至少两个；强锚词命中一个即可；排除词命中即剔除。合计 {terms} / {MAX_TERMS}。</p>

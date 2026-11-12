@@ -17,9 +17,8 @@ export function newSource(sources: PipelineSource[], type: "web" | "rss"): Pipel
 }
 
 /** 来源卡片：web 填入口页，rss 填订阅地址；allowed_hosts 为空时按链接自动补齐。 */
-export default function SourceEditor({sources, onChange, maxPages, onMaxPages, errField, errMessage}: {
-  sources: PipelineSource[]; onChange: (next: PipelineSource[]) => void;
-  maxPages: number; onMaxPages: (n: number) => void; errField?: string; errMessage?: string;
+export default function SourceEditor({sources, onChange, errField, errMessage}: {
+  sources: PipelineSource[]; onChange: (next: PipelineSource[]) => void; errField?: string; errMessage?: string;
 }) {
   const patch = (index: number, change: Partial<PipelineSource>) => onChange(sources.map((s, i) => i === index ? {...s, ...change} : s));
   const fillHosts = (index: number, urls: string[]) => { if (!sources[index].allowed_hosts.length) patch(index, {allowed_hosts: hostsFromUrls(urls)}); };
@@ -29,11 +28,8 @@ export default function SourceEditor({sources, onChange, maxPages, onMaxPages, e
       <span>来源 {sources.length} / {MAX_SOURCES}</span>
       <button type="button" disabled={sources.length >= MAX_SOURCES} onClick={() => onChange([...sources, newSource(sources, "web")])}><Globe size={13} /> 添加网页来源</button>
       <button type="button" disabled={sources.length >= MAX_SOURCES} onClick={() => onChange([...sources, newSource(sources, "rss")])}><Rss size={13} /> 添加 RSS 来源</button>
-      <label className={`pipeline-inline-field ${hit("request.max_pages_per_source") ? "invalid" : ""}`}>每个来源最多翻页
-        <input type="number" min={1} max={5} value={maxPages} onChange={(e) => onMaxPages(Number(e.target.value))} />
-      </label>
     </div>
-    <FieldError show={(hit("sources") && !/^sources\[/.test(errField || "")) || hit("request.max_pages_per_source")} message={errMessage} />
+    <FieldError show={(hit("sources") && !/^sources\[/.test(errField || "")) || hit("request")} message={errMessage} />
     {!sources.length && <p className="pipeline-empty">还没有来源。添加网页或 RSS 来源后可以试跑。</p>}
     {sources.map((s, i) => {
       const p = `sources[${i}]`;

@@ -64,6 +64,8 @@ Deployed on 2026-10-08 to Guangzhou (`https://gzg.sealos.run:6443`), namespace `
 
 The image contains repository demo inputs, not the user's local database or live collector data. A fresh PVC starts with no snapshots. The existing app falls back to demo inputs until real collector output exists. Import and explicitly select a working snapshot before using snapshot-dependent features. Run real collection before treating the data as current.
 
+`GEO_PIPELINES_ENABLED` (default `true`) controls configurable collection pipelines: when `false`, the 采集管线配置 tab is hidden, `/api/pipelines*` returns 404, and full batch collection no longer appends configurable pipelines (built-in collectors are unaffected).
+
 PiChat/LLM credentials and local translation models are not bundled. Configure optional services through Sealos secrets/environment variables. This manifest starts the web/API process; it does not install a recurring collector scheduler or expose the separate MCP server.
 
 ## PiChat embed configuration (deployed 2026-10-09)

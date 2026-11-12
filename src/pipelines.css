@@ -38,12 +38,10 @@
 .pipeline-workbench .pipeline-tab-body{padding:14px 0}
 .pipeline-workbench .pipeline-form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
 .pipeline-workbench .pipeline-form-grid .wide{grid-column:1/-1}
-.pipeline-workbench .pipeline-form-grid label,
-.pipeline-workbench .pipeline-inline-field{display:flex;flex-direction:column;gap:5px;color:#9fb4ce;font-size:11px;min-width:0}
+.pipeline-workbench .pipeline-form-grid label{display:flex;flex-direction:column;gap:5px;color:#9fb4ce;font-size:11px;min-width:0}
 .pipeline-workbench .pipeline-form-grid input,
 .pipeline-workbench .pipeline-form-grid select,
 .pipeline-workbench .pipeline-form-grid textarea,
-.pipeline-workbench .pipeline-inline-field input,
 .pipeline-workbench .pipeline-footer input{font-size:12px;padding:6px 8px;min-width:0;color:#dce6ef;background:#0d1926;border:1px solid #344759;border-radius:5px}
 .pipeline-workbench .pipeline-form-grid textarea{resize:vertical;line-height:1.6}
 .pipeline-workbench .invalid,
@@ -71,8 +69,6 @@
 .pipeline-workbench .pipeline-sources{display:flex;flex-direction:column;gap:12px}
 .pipeline-workbench .pipeline-sources-toolbar{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;color:#9fb4ce;font-size:11px}
 .pipeline-workbench .pipeline-sources-toolbar button{font-size:11px;padding:6px 10px}
-.pipeline-workbench .pipeline-sources-toolbar .pipeline-inline-field{margin-left:auto}
-.pipeline-workbench .pipeline-sources-toolbar .pipeline-inline-field input{width:70px}
 .pipeline-workbench .pipeline-source-card{padding:12px;border:1px solid #2a4664;border-radius:7px;background:#0f2034}
 .pipeline-workbench .pipeline-source-card header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .pipeline-workbench .pipeline-source-card header strong{flex:1;font-size:12px}

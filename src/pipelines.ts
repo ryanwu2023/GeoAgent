@@ -10,7 +10,7 @@ export type PipelineConfig = {
   schema_version: string;
   sources: PipelineSource[];
   filters: {include_any: string[]; include_strong: string[]; exclude: string[]; require_category: boolean; lookback_days: number; max_candidates_per_source: number};
-  request: {timeout_seconds: number; rate_limit_seconds: number; max_pages_per_source: number};
+  request: {timeout_seconds: number; rate_limit_seconds: number};
 };
 export type PipelineRow = {name: string; description: string; topics: string[]};
 export type Pipeline = PipelineRow & {
@@ -97,7 +97,7 @@ export function emptyDraft(topics: string[]): PipelineDraft {
     config: {
       schema_version: "pipeline/1", sources: [],
       filters: {include_any: [], include_strong: [], exclude: [], require_category: true, lookback_days: 14, max_candidates_per_source: 80},
-      request: {timeout_seconds: 25, rate_limit_seconds: 1.5, max_pages_per_source: 3},
+      request: {timeout_seconds: 25, rate_limit_seconds: 1.5},
     },
   };
 }
@@ -148,8 +148,14 @@ export function hostsFromUrls(urls: string[]): string[] {
 export function draftOf(p: PipelineRow & {config?: PipelineConfig}): PipelineDraft {
   return {
     row: {name: p.name, description: p.description ?? "", topics: [...p.topics]},
-    config: p.config ? JSON.parse(JSON.stringify(p.config)) : emptyDraft([]).config,
+    config: p.config ? withoutRemovedKeys(JSON.parse(JSON.stringify(p.config))) : emptyDraft([]).config,
   };
+}
+/** 早期版本可能带已移除的翻页项（max_pages_per_source），后端现按未知字段拒绝，载入时去掉。 */
+function withoutRemovedKeys(config: PipelineConfig): PipelineConfig {
+  const request = {...(config.request || {})} as Record<string, unknown>;
+  delete request.max_pages_per_source;
+  return {...config, request: request as PipelineConfig["request"]};
 }
 export const recentlyUpdated = (rows: {last_new_items: number; last_finished_at: string | null}[], now = Date.now()): number =>
   rows.filter((p) => p.last_new_items > 0 && p.last_finished_at && now - Date.parse(p.last_finished_at) <= 86_400_000).length;
