@@ -4,8 +4,16 @@ from datetime import datetime, timezone
 
 import pytest
 
+from backend import collector_config
 from backend.collector_ledger import CollectorLedger, service_lock
 from scripts.collector_service import execute_once, service_loop
+
+
+@pytest.fixture(autouse=True)
+def isolated_collector_settings(tmp_path, monkeypatch):
+    """整批运行会读取排除列表；测试不读仓库里的真实配置。"""
+    monkeypatch.setattr(collector_config, "CONFIG_PATH", tmp_path / "settings" / "collector-settings.json")
+    monkeypatch.setattr(collector_config, "project_root", lambda: tmp_path / "settings")
 
 
 def test_execute_once_writes_running_then_finished_report(tmp_path):
@@ -293,3 +301,43 @@ def test_service_lock_reclaims_pid_now_owned_by_another_process(tmp_path, monkey
     with pytest.raises(RuntimeError, match="lock is held"):
         with service_lock(lock_path):
             pass
+
+
+def _write_settings(exclude_ids):
+    collector_config.CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    collector_config.CONFIG_PATH.write_text(json.dumps({"exclude_ids": exclude_ids}), encoding="utf-8")
+
+
+def _registry_ab():
+    return [{"id": "a", "enabled": True, "topics": ["usiran"]}, {"id": "b", "enabled": True, "topics": ["usiran"]}]
+
+
+def test_full_batch_unions_configured_exclusions(tmp_path, monkeypatch):
+    """R-T15-1：整批运行时把 collector_config 的排除列表并入 exclude_ids（Sealos 6 小时整批、参数过期的 launchd）。"""
+    _write_settings(["b"])
+    ran = []
+    monkeypatch.setattr("scripts.collect.run_one", lambda item, **kw: ran.append(item["id"]) or {"id": item["id"], "returncode": 0})
+    report = execute_once(report_root=tmp_path / "runs", registry=_registry_ab(), exclude_ids=["x"])
+    assert ran == ["a"] and [r["id"] for r in report["results"]] == ["a"]
+    assert report["excluded_collector_ids"] == ["x", "b"]
+
+
+def test_explicit_ids_batch_ignores_configured_exclusions(tmp_path, monkeypatch):
+    _write_settings(["b"])
+    ran = []
+    monkeypatch.setattr("scripts.collect.run_one", lambda item, **kw: ran.append(item["id"]) or {"id": item["id"], "returncode": 0})
+    report = execute_once(report_root=tmp_path / "runs", registry=_registry_ab(), ids=["b"])
+    assert ran == ["b"] and report["excluded_collector_ids"] == []
+
+
+def test_full_batch_proceeds_when_exclusions_unreadable(tmp_path, monkeypatch, caplog):
+    def broken():
+        raise ValueError("interval_sec 越界")
+
+    monkeypatch.setattr(collector_config, "load_config", broken)
+    ran = []
+    monkeypatch.setattr("scripts.collect.run_one", lambda item, **kw: ran.append(item["id"]) or {"id": item["id"], "returncode": 0})
+    with caplog.at_level("WARNING"):
+        report = execute_once(report_root=tmp_path / "runs", registry=_registry_ab(), exclude_ids=["a"])
+    assert ran == ["b"] and report["excluded_collector_ids"] == ["a"] and report["status"] == "success"
+    assert any("排除列表" in r.getMessage() for r in caplog.records)

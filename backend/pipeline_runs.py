@@ -1,12 +1,17 @@
-"""采集管线执行：经现有采集服务运行可配置管线、试跑、记录“本次新增”。
+"""采集管线执行：随整批运行的管线、隔离的测试运行、试跑、记录“本次新增”。
 
-管线不单独定时：这里的 run_pipeline / run_builtin 只是过渡入口（Task 15 改为随整批运行与隔离的
-测试运行）。execute_once 的服务锁与整批采集互斥；锁被占用时抛 CollectorBusyError，
-并删除本次写入的 running 运行行，管线的 last_* 恢复原值。
+管线不单独定时（2026-11-11 用户决定）：
+- 整批运行：execute_once 整批（未指定 ids）时把已启用的配置化管线（batch_pipeline_items）追加到当次
+  注册表，产物发布到正式目录随整批导入；整批结束后 record_batch_pipeline_runs 写运行记录
+  （trigger=batch、snapshot_id=本次快照）与本次新增，并写去重台账。
+- 测试运行：run_trial 在 collector_data_root()/.pipeline-trials/ 下用 run_one 运行，只占该管线自己的
+  单采集器锁，不经过整批服务锁与整批台账；产物不被导入扫描到，永不进快照；本次新增对照去重台账
+  计算但不写台账。
 """
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -18,20 +23,28 @@ from pathlib import Path
 from typing import Any, Callable
 
 from backend.adapters import normalize
-from backend.collector_jobs import CollectorBusyError
 from backend.paths import collector_data_root, collector_source_root
 from backend.pipeline_config import PipelineConfigError, default_resolve, to_monitor_config, validate_pipeline
+from backend.pipeline_scheduler import pipelines_enabled
 from backend.pipeline_service import PipelineError, get_pipeline
 from backend.store import db
-from scripts.collect import _collector_environment
-from scripts.collector_service import execute_once
+from scripts.collect import _collector_environment, run_one
+
+log = logging.getLogger(__name__)
 
 RUNNER_DIR = "pipeline-runner"
+PIPELINE_PREFIX = "pipeline-"
 RUNNER_ENTRYPOINT = "pipeline_runner.py"
 STATUS_MAP = {"ok": "success", "partial": "partial", "failed": "failed"}
 REPORT_COUNTS = ("records", "candidates", "accepted", "excluded", "errors", "restricted", "duplicates_merged")
 ERROR_LIMIT = 1000
 SUMMARY_LIMIT = 1000
+TRIAL_DIR = ".pipeline-trials"
+TRIAL_TIMEOUT_SEC = 900
+BATCH_ACTOR = "system"
+BUILTIN_NO_TRIAL = "内置采集器随整批运行，不支持测试运行"
+TRIAL_CONFLICT = "该管线正在测试运行"
+UNPUBLISHED = "采集产物未通过发布门禁"
 
 
 def _now() -> datetime:
@@ -49,7 +62,7 @@ def base_monitor_config() -> dict:
 
 
 def collector_id(pipeline_id: str) -> str:
-    return f"pipeline-{pipeline_id}"
+    return f"{PIPELINE_PREFIX}{pipeline_id}"
 
 
 def registry_item(pipeline: dict, config_path: Path) -> dict:
@@ -81,8 +94,11 @@ def _parse_time(value: Any) -> datetime | None:
 
 
 def record_new_items(conn, *, pipeline_id: str, run_id: str, records: list[dict],
-                     source_types: dict[str, str]) -> int:
-    """登记本次首次出现的记录；返回新增数。重复调用不会重复登记。"""
+                     source_types: dict[str, str], write_ledger: bool = True) -> int:
+    """登记本次首次出现的记录；返回新增数。重复调用不会重复登记。
+
+    write_ledger=False（测试运行）：只对照去重台账判断新增并写本次新增条目，不写台账。
+    """
     run = conn.execute("SELECT started_at, created_by FROM collection_pipeline_runs WHERE run_id=%s",
                        (run_id,)).fetchone()
     if run is None:
@@ -97,11 +113,15 @@ def record_new_items(conn, *, pipeline_id: str, run_id: str, records: list[dict]
         if not record_id or record_id in seen_now:
             continue
         seen_now.add(record_id)
-        inserted = conn.execute(
-            "INSERT INTO pipeline_seen_items(pipeline_id,record_id,first_run_id,created_by,data_timestamp) "
-            "VALUES (%s,%s,%s,%s,%s) ON CONFLICT (pipeline_id,record_id) DO NOTHING RETURNING record_id",
-            (pipeline_id, record_id, run_id, actor, started)).fetchone()
-        if inserted:
+        if write_ledger:
+            is_new = conn.execute(
+                "INSERT INTO pipeline_seen_items(pipeline_id,record_id,first_run_id,created_by,data_timestamp) "
+                "VALUES (%s,%s,%s,%s,%s) ON CONFLICT (pipeline_id,record_id) DO NOTHING RETURNING record_id",
+                (pipeline_id, record_id, run_id, actor, started)).fetchone() is not None
+        else:
+            is_new = conn.execute("SELECT 1 FROM pipeline_seen_items WHERE pipeline_id=%s AND record_id=%s",
+                                  (pipeline_id, record_id)).fetchone() is None
+        if is_new:
             fresh.append(record)
     if not fresh:
         return 0
@@ -140,8 +160,8 @@ def _read_json(path: Path) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
-def _collector_error(result: dict | None, report: dict) -> str:
-    if report.get("error_message"):
+def _collector_error(result: dict | None, report: dict | None = None) -> str:
+    if report and report.get("error_message"):
         return f"采集服务异常：{report['error_message']}"
     if not result:
         return "采集器没有返回结果"
@@ -150,18 +170,154 @@ def _collector_error(result: dict | None, report: dict) -> str:
     return f"{text}：{detail[-500:]}" if detail else text
 
 
-def _is_busy(exc: BaseException) -> bool:
-    return isinstance(exc, CollectorBusyError) or (isinstance(exc, RuntimeError) and "lock is held" in str(exc))
+def _write_monitor_config(pipeline: dict, root: Path) -> Path:
+    """把管线配置翻译成多源采集器配置，原子写到 <root>/pipeline-<id>/state/pipeline-config.json。"""
+    monitor = to_monitor_config(pipeline, pipeline["config"], base_monitor_config())
+    config_path = root / collector_id(pipeline["id"]) / "state" / "pipeline-config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = config_path.with_suffix(f".json.{uuid.uuid4().hex[:8]}.tmp")
+    tmp.write_text(json.dumps(monitor, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(config_path)
+    return config_path
 
 
-def _start(pipeline: dict, run_id: str, trigger: str, actor: str | None, started: datetime) -> dict:
+def _outcome(result: dict | None, output: Path, stats: dict) -> tuple[str, dict, str | None, list[dict] | None]:
+    """按单采集器结果与已发布产物给出 (状态, 统计, 错误, 记录)。未发布时不读产物（目录里是上一次的结果）。"""
+    stats = dict(stats)
+    if not result or result.get("published") is not True:
+        if result and result.get("returncode") == 0:
+            return "failed", stats, UNPUBLISHED, None
+        return "failed", stats, _collector_error(result), None
+    collection = _read_json(output / "_collection_report.json") or {}
+    payload = _read_json(output / "geo-v6.json") or {}
+    stats.update({k: collection[k] for k in REPORT_COUNTS if k in collection})
+    stats["sources"] = collection.get("sources") or {}
+    status = STATUS_MAP.get(collection.get("collection_status") or payload.get("collection_status"), "failed")
+    error = "采集报告缺失或标记为失败" if status == "failed" else None
+    records = [r for r in payload.get("records") or [] if isinstance(r, dict)]
+    return status, stats, error, records
+
+
+def _complete(conn, pipeline_id: str, run_id: str, *, status: str, stats: dict, snapshot_id: str | None,
+              error: str | None, actor: str | None, records: list[dict] | None, source_types: dict[str, str],
+              write_ledger: bool, finished: datetime) -> dict:
+    new_items = 0
+    if records:
+        new_items = record_new_items(conn, pipeline_id=pipeline_id, run_id=run_id, records=records,
+                                     source_types=source_types, write_ledger=write_ledger)
+    stats = {**stats, "new_items": new_items}
+    conn.execute(
+        "UPDATE collection_pipeline_runs SET status=%s,finished_at=%s,stats=%s,snapshot_id=%s,error=%s,"
+        "updated_by=%s,updated_at=%s WHERE run_id=%s",
+        (status, finished, json.dumps(stats, ensure_ascii=False), snapshot_id,
+         error[:ERROR_LIMIT] if error else None, actor, finished, run_id))
+    # last_* 是运行态字段，不改动 updated_by/updated_at（那两项只反映配置修改）。
+    conn.execute(
+        "UPDATE collection_pipelines SET last_run_id=%s,last_status=%s,last_finished_at=%s,last_new_items=%s "
+        "WHERE id=%s",
+        (run_id, status, finished, new_items, pipeline_id))
+    return dict(conn.execute("SELECT * FROM collection_pipeline_runs WHERE run_id=%s", (run_id,)).fetchone())
+
+
+# —— 随整批运行 ——
+
+def batch_pipeline_items() -> list[dict]:
+    """整批注册表要追加的已启用配置化管线；开关关闭或出错时返回 [] 并告警。"""
+    if not pipelines_enabled():
+        return []
+    try:
+        with db() as conn:
+            rows = conn.execute(
+                "SELECT p.*, v.config FROM collection_pipelines p JOIN collection_pipeline_versions v "
+                "ON v.pipeline_id=p.id AND v.version=p.current_version AND NOT v.is_deleted "
+                "WHERE p.kind='configurable' AND p.enabled AND NOT p.is_deleted ORDER BY p.id").fetchall()
+    except Exception as exc:  # noqa: BLE001 - 数据库不可用时整批照常运行内置采集器
+        log.warning("读取已启用管线失败，本次整批不含配置化管线：%s", exc)
+        return []
+    root = collector_data_root()
+    items = []
+    for row in rows:
+        pipeline = dict(row)
+        try:
+            items.append(registry_item(pipeline, _write_monitor_config(pipeline, root)))
+        except Exception as exc:  # noqa: BLE001 - 单条管线配置坏了不影响其它管线
+            log.warning("管线 %s 配置无法翻译，本次整批跳过：%s", pipeline["id"], exc)
+    return items
+
+
+def _report_time(value: Any, fallback: datetime) -> datetime:
+    return _parse_time(value) or fallback
+
+
+def record_batch_pipeline_runs(report: dict, snapshot_id: str | None) -> list[str]:
+    """整批结束后为每条参与的管线写运行记录、本次新增与去重台账；返回写入的 run_id。
+
+    run_id = <整批 run_id>:<管线 id>，同一整批重复调用不会重复写。单条失败只告警。
+    """
+    batch_run_id = str(report.get("run_id") or "")
+    now = _now()
+    batch_started = _report_time(report.get("started_at"), now)
+    batch_finished = _report_time(report.get("finished_at"), now)
+    root = collector_data_root()
+    written: list[str] = []
+    for result in report.get("results") or []:
+        cid = str(result.get("id") or "")
+        if not cid.startswith(PIPELINE_PREFIX) or not batch_run_id:
+            continue
+        pipeline_id = cid[len(PIPELINE_PREFIX):]
+        run_id = f"{batch_run_id}:{pipeline_id}"
+        try:
+            with db() as conn:
+                pipeline = conn.execute(
+                    "SELECT p.id,p.kind,p.current_version,v.config FROM collection_pipelines p "
+                    "LEFT JOIN collection_pipeline_versions v ON v.pipeline_id=p.id AND v.version=p.current_version "
+                    "WHERE p.id=%s FOR UPDATE OF p", (pipeline_id,)).fetchone()
+                if not pipeline or pipeline["kind"] != "configurable":
+                    continue
+                if conn.execute("SELECT 1 FROM collection_pipeline_runs WHERE run_id=%s", (run_id,)).fetchone():
+                    continue
+                started = _report_time(result.get("started_at"), batch_started)
+                finished = _report_time(result.get("finished_at"), batch_finished)
+                stats = {"import_status": report.get("import_status"), "collector_status": report.get("status")}
+                status, stats, error, records = _outcome(result, root / cid / "output", stats)
+                conn.execute(
+                    "INSERT INTO collection_pipeline_runs(run_id,pipeline_id,version,trigger,status,started_at,"
+                    "created_by,data_timestamp) VALUES (%s,%s,%s,'batch',%s,%s,%s,%s)",
+                    (run_id, pipeline_id, pipeline["current_version"], status, started, BATCH_ACTOR, started))
+                _complete(conn, pipeline_id, run_id, status=status, stats=stats, snapshot_id=snapshot_id,
+                          error=error, actor=BATCH_ACTOR, records=records,
+                          source_types=_source_types(pipeline["config"] or {}), write_ledger=True,
+                          finished=max(finished, started))
+            written.append(run_id)
+        except Exception as exc:  # noqa: BLE001 - 不影响整批结果与其它管线
+            log.warning("写入管线 %s 的整批运行记录失败：%s", pipeline_id, exc)
+    return written
+
+
+# —— 测试运行 ——
+
+def trial_root() -> Path:
+    return collector_data_root() / TRIAL_DIR
+
+
+def trial_running(pipeline_id: str) -> bool:
+    with db() as conn:
+        return conn.execute(
+            "SELECT 1 FROM collection_pipeline_runs WHERE pipeline_id=%s AND trigger='trial' AND status='running' "
+            "AND NOT is_deleted LIMIT 1", (pipeline_id,)).fetchone() is not None
+
+
+def _start_trial(pipeline: dict, run_id: str, actor: str | None, started: datetime) -> dict:
     with db() as conn:
         previous = conn.execute(
             "SELECT last_run_id,last_status FROM collection_pipelines WHERE id=%s FOR UPDATE", (pipeline["id"],)).fetchone()
+        if conn.execute("SELECT 1 FROM collection_pipeline_runs WHERE pipeline_id=%s AND trigger='trial' "
+                        "AND status='running' AND NOT is_deleted LIMIT 1", (pipeline["id"],)).fetchone():
+            raise PipelineError("CONFLICT", TRIAL_CONFLICT, {"id": pipeline["id"]})
         conn.execute(
             "INSERT INTO collection_pipeline_runs(run_id,pipeline_id,version,trigger,status,started_at,created_by,data_timestamp) "
-            "VALUES (%s,%s,%s,%s,'running',%s,%s,%s)",
-            (run_id, pipeline["id"], pipeline["current_version"], trigger, started, actor, started))
+            "VALUES (%s,%s,%s,'trial','running',%s,%s,%s)",
+            (run_id, pipeline["id"], pipeline["current_version"], started, actor, started))
         conn.execute("UPDATE collection_pipelines SET last_run_id=%s,last_status='running' WHERE id=%s",
                      (run_id, pipeline["id"]))
     return dict(previous)
@@ -174,109 +330,42 @@ def _discard(pipeline_id: str, run_id: str, previous: dict) -> None:
                      (previous["last_run_id"], previous["last_status"], pipeline_id, run_id))
 
 
-def _finish(pipeline_id: str, run_id: str, *, status: str, stats: dict, snapshot_id: str | None,
-            error: str | None, actor: str | None, records: list[dict] | None, source_types: dict[str, str]) -> dict:
-    finished = _now()
+def _finish_trial(pipeline_id: str, run_id: str, *, status: str, stats: dict, error: str | None,
+                  actor: str | None, records: list[dict] | None, source_types: dict[str, str]) -> dict:
     with db() as conn:
-        new_items = 0
-        if records:
-            new_items = record_new_items(conn, pipeline_id=pipeline_id, run_id=run_id, records=records,
-                                         source_types=source_types)
-        stats = {**stats, "new_items": new_items}
-        conn.execute(
-            "UPDATE collection_pipeline_runs SET status=%s,finished_at=%s,stats=%s,snapshot_id=%s,error=%s,"
-            "updated_by=%s,updated_at=%s WHERE run_id=%s",
-            (status, finished, json.dumps(stats, ensure_ascii=False), snapshot_id,
-             error[:ERROR_LIMIT] if error else None, actor, finished, run_id))
-        # last_* 是运行态字段，不改动 updated_by/updated_at（那两项只反映配置修改）。
-        conn.execute(
-            "UPDATE collection_pipelines SET last_run_id=%s,last_status=%s,last_finished_at=%s,last_new_items=%s "
-            "WHERE id=%s",
-            (run_id, status, finished, new_items, pipeline_id))
-        return dict(conn.execute("SELECT * FROM collection_pipeline_runs WHERE run_id=%s", (run_id,)).fetchone())
+        return _complete(conn, pipeline_id, run_id, status=status, stats=stats, snapshot_id=None, error=error,
+                         actor=actor, records=records, source_types=source_types, write_ledger=False,
+                         finished=_now())
 
 
-def run_pipeline(pipeline_id: str, *, trigger: str, actor: str | None,
-                 executor: Callable[..., dict] = execute_once) -> dict:
-    """同步运行一次可配置管线并返回运行行。锁被占用时抛 CollectorBusyError。"""
+def run_trial(pipeline_id: str, *, actor: str | None, runner: Callable[..., dict] = run_one,
+              timeout: int = TRIAL_TIMEOUT_SEC) -> dict:
+    """同步测试运行一次配置化管线并返回运行行；不进快照、不写去重台账、不占整批锁。
+
+    同一管线已有测试运行进行中时抛 PipelineError("CONFLICT")。
+    """
     pipeline = get_pipeline(pipeline_id)
     if pipeline["kind"] != "configurable" or not pipeline.get("config"):
-        raise PipelineError("INVALID", "只有可配置管线可以由管线执行器运行", {"id": pipeline_id})
+        raise PipelineError("INVALID", BUILTIN_NO_TRIAL, {"id": pipeline_id})
     started = _now()
     run_id = _new_run_id(pipeline_id, started)
-    previous = _start(pipeline, run_id, trigger, actor, started)
+    previous = _start_trial(pipeline, run_id, actor, started)
     source_types = _source_types(pipeline["config"])
-    item_root = collector_data_root() / collector_id(pipeline_id)
+    root = trial_root()
+    stats: dict[str, Any] = {"import_status": "not_imported"}
     try:
-        monitor = to_monitor_config(pipeline, pipeline["config"], base_monitor_config())
-        config_path = item_root / "state" / "pipeline-config.json"
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = config_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(monitor, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(config_path)
-        item = registry_item(pipeline, config_path)
-        report = executor(registry=[item], ids=[item["id"]], run_id_override=run_id,
-                          auto_import=False)
+        item = registry_item(pipeline, _write_monitor_config(pipeline, root))
+        result = runner(item, timeout=timeout, data_root=root)
     except Exception as exc:
-        if _is_busy(exc):
+        if isinstance(exc, RuntimeError) and "lock is held" in str(exc):
+            # 另一进程正在测试运行同一管线（单采集器锁被占用）。
             _discard(pipeline_id, run_id, previous)
-            if isinstance(exc, CollectorBusyError):
-                raise
-            raise CollectorBusyError(str(exc)) from exc
-        return _finish(pipeline_id, run_id, status="failed", stats={}, snapshot_id=None,
-                       error=f"{type(exc).__name__}: {exc}", actor=actor, records=None, source_types=source_types)
-
-    result = next((r for r in report.get("results") or [] if r.get("id") == item["id"]), None)
-    stats: dict[str, Any] = {"import_status": "deferred", "collector_status": report.get("status")}
-    if not result or result.get("published") is not True:
-        # 未发布时输出目录仍是上一次的结果，不能当作本次数据读取。
-        return _finish(pipeline_id, run_id, status="failed", stats=stats, snapshot_id=None,
-                       error=_collector_error(result, report), actor=actor, records=None, source_types=source_types)
-
-    output = item_root / "output"
-    collection = _read_json(output / "_collection_report.json") or {}
-    payload = _read_json(output / "geo-v6.json") or {}
-    stats.update({k: collection[k] for k in REPORT_COUNTS if k in collection})
-    stats["sources"] = collection.get("sources") or {}
-    status = STATUS_MAP.get(collection.get("collection_status") or payload.get("collection_status"), "failed")
-    error = None
-    if status == "failed":
-        error = "采集报告缺失或标记为失败"
-    records = [r for r in payload.get("records") or [] if isinstance(r, dict)]
-    return _finish(pipeline_id, run_id, status=status, stats=stats, snapshot_id=None,
-                   error=error, actor=actor, records=records, source_types=source_types)
-
-
-def run_builtin(pipeline_id: str, *, trigger: str, actor: str | None,
-                executor: Callable[..., dict] = execute_once) -> dict:
-    """同步运行一次内置采集器并写运行记录（无逐条“本次新增”）。锁被占用时抛 CollectorBusyError。"""
-    pipeline = get_pipeline(pipeline_id)
-    if pipeline["kind"] != "builtin":
-        raise PipelineError("INVALID", "只有内置管线可以由内置运行入口运行", {"id": pipeline_id})
-    started = _now()
-    run_id = _new_run_id(pipeline_id, started)
-    previous = _start(pipeline, run_id, trigger, actor, started)
-    try:
-        report = executor(ids=[pipeline_id], auto_import=False, run_id_override=run_id)
-    except Exception as exc:
-        if _is_busy(exc):
-            _discard(pipeline_id, run_id, previous)
-            if isinstance(exc, CollectorBusyError):
-                raise
-            raise CollectorBusyError(str(exc)) from exc
-        return _finish(pipeline_id, run_id, status="failed", stats={}, snapshot_id=None,
-                       error=f"{type(exc).__name__}: {exc}", actor=actor, records=None, source_types={})
-    status = report.get("status") if report.get("status") in ("success", "partial", "failed") else "failed"
-    stats = {"import_status": "deferred", "collector_status": report.get("status")}
-    error = None
-    mine = next((r for r in report.get("results") or [] if r.get("id") == pipeline_id), None)
-    if status == "failed":
-        error = _collector_error(mine, report)
-    elif mine is not None and mine.get("published") is not True:
-        # 退出码正常但产物未通过发布门禁：本次没有新产物，不能算成功。
-        status, error = "failed", "采集产物未通过发布门禁"
-    return _finish(pipeline_id, run_id, status=status, stats=stats, snapshot_id=None,
-                   error=error, actor=actor, records=None, source_types={})
+            raise PipelineError("CONFLICT", TRIAL_CONFLICT, {"id": pipeline_id}) from exc
+        return _finish_trial(pipeline_id, run_id, status="failed", stats=stats,
+                             error=f"{type(exc).__name__}: {exc}", actor=actor, records=None, source_types=source_types)
+    status, stats, error, records = _outcome(result, root / item["id"] / "output", stats)
+    return _finish_trial(pipeline_id, run_id, status=status, stats=stats, error=error, actor=actor,
+                         records=records, source_types=source_types)
 
 
 def _run_process(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int) -> subprocess.CompletedProcess:

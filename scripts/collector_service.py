@@ -9,18 +9,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import shutil
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from backend import collector_config
 from backend.paths import project_root
 from backend.paths import collector_data_root
 from backend.collector_ledger import CollectorLedger, service_lock
 from backend.collector_import import import_collector_output
 from scripts.collect import run_collectors
 from scripts.integrate_collectors import load_registry
+
+log = logging.getLogger(__name__)
+PIPELINE_PREFIX = "pipeline-"
 
 
 def utc_now() -> datetime:
@@ -84,6 +89,37 @@ def _result_message(item: dict) -> str | None:
     return None
 
 
+def _effective_exclusions(exclude_ids: list[str] | None) -> list[str]:
+    """整批运行时并入采集配置的排除列表（builtin 启用状态的唯一来源）；读取失败只告警。"""
+    given = list(exclude_ids or [])
+    try:
+        configured = collector_config.load_config().get("exclude_ids", [])
+    except Exception as exc:  # noqa: BLE001 - 配置坏了不能让整批停摆
+        log.warning("读取采集排除列表失败，本次整批按启动参数运行：%s", exc)
+        return given
+    return list(dict.fromkeys([*given, *configured]))
+
+
+def _batch_pipeline_items() -> list[dict]:
+    """已启用的配置化管线（延迟导入，避免与 backend.pipeline_runs 循环引用）。"""
+    try:
+        from backend.pipeline_runs import batch_pipeline_items
+        return batch_pipeline_items()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("加载配置化管线失败，本次整批不含管线：%s", exc)
+        return []
+
+
+def _record_pipeline_runs(report: dict, snapshot_id: str | None) -> None:
+    if not any(str(item.get("id", "")).startswith(PIPELINE_PREFIX) for item in report.get("results") or []):
+        return
+    try:
+        from backend import pipeline_runs
+        pipeline_runs.record_batch_pipeline_runs(report, snapshot_id)
+    except Exception as exc:  # noqa: BLE001 - 管线运行记录失败不影响整批结果
+        log.warning("写入整批管线运行记录失败：%s", exc)
+
+
 def execute_once(
     *,
     ids: list[str] | None = None,
@@ -109,6 +145,11 @@ def execute_once(
     report_root = report_root or project_root() / "data" / "collection-runs"
     report_root.mkdir(parents=True, exist_ok=True)
     lock_path = lock_path or report_root / ".collector-service.lock"
+    # 整批（未指定 ids）：排除列表在运行时并入采集配置，已启用的配置化管线随整批运行。
+    # 指定 ids 的批次（每小时任务、单个采集器）不含管线，也不改排除参数。
+    full_batch = not ids
+    if full_batch:
+        exclude_ids = _effective_exclusions(exclude_ids)
     with service_lock(lock_path):
         report_name = run_id_override or run_id(started)
         report_dir = report_root / report_name
@@ -193,6 +234,8 @@ def execute_once(
             selected_registry = registry
             if selected_registry is None:
                 selected_registry = load_registry(project_root() / "collectors" / "collectors.json")
+            if full_batch:
+                selected_registry = [*selected_registry, *_batch_pipeline_items()]
             if runner is run_collectors:
                 results = runner(
                     ids or [],
@@ -298,6 +341,8 @@ def execute_once(
                 import_error_message=import_error_message,
             )
             ledger.event(run_id=report_dir.name, event_type="run_finished", status=status, payload=report)
+            if full_batch:
+                _record_pipeline_runs(report, snapshot_id)
             return report
         except Exception as exc:
             finished = utc_now()

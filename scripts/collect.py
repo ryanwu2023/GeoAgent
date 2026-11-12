@@ -203,9 +203,16 @@ def run_one(
     sleep: Callable[[float], None] = time.sleep,
     staging_root: Path | None = None,
     output_callback: Callable[[str, str], None] | None = None,
+    data_root: Path | None = None,
 ) -> dict:
-    """Run one collector while preventing concurrent runs for the same id."""
-    lock_path = collector_data_root() / ".collector-locks" / f"{item['id']}.lock"
+    """Run one collector while preventing concurrent runs for the same id.
+
+    ``data_root`` overrides the publish root (lock, staging, output, state and
+    previous output all live under it); pipeline test runs use it to stay out
+    of the live tree. The default is the live collector data root.
+    """
+    root = Path(data_root) if data_root is not None else collector_data_root()
+    lock_path = root / ".collector-locks" / f"{item['id']}.lock"
     with service_lock(lock_path):
         return _run_one_unlocked(
             item,
@@ -216,6 +223,7 @@ def run_one(
             sleep=sleep,
             staging_root=staging_root,
             output_callback=output_callback,
+            data_root=root,
         )
 
 
@@ -229,11 +237,12 @@ def _run_one_unlocked(
     sleep: Callable[[float], None] = time.sleep,
     staging_root: Path | None = None,
     output_callback: Callable[[str, str], None] | None = None,
+    data_root: Path | None = None,
 ) -> dict:
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
     source_root = collector_source_root()
-    data_root = collector_data_root()
+    data_root = Path(data_root) if data_root is not None else collector_data_root()
     # Several registry items may share one runner directory (source_dir); output,
     # state and staging stay keyed by the item id.
     collector_dir = source_root / item.get("source_dir", item["id"])

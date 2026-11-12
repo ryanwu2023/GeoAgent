@@ -296,3 +296,35 @@ history = (out / 'history' / 'SERIES.jsonl').read_text(encoding='utf-8')
     assert result["returncode"] == 0 and result["published"] is True
     assert (live_output / "LATEST.md").read_text() == "rows=1"
     assert (live_output / "history" / "SERIES.jsonl").exists()
+
+
+def test_run_one_data_root_override(tmp_path, monkeypatch):
+    """data_root 覆盖产物发布根目录：锁、暂存、发布、状态与上次产物都落在覆盖目录，默认根不受影响。"""
+    source_root, data_root, trial_root = tmp_path / 'sources', tmp_path / 'data', tmp_path / 'data' / '.trials'
+    _write_collector_script(source_root, 'demo', '''
+import json, os
+from pathlib import Path
+p = Path(os.environ['COLLECTOR_OUTPUT_ROOT'])
+p.mkdir(parents=True, exist_ok=True)
+(p / 'env.json').write_text(json.dumps({k: os.environ[k] for k in
+    ('COLLECTOR_STATE_ROOT', 'COLLECTOR_PREVIOUS_OUTPUT_ROOT', 'COLLECTOR_OUTPUT_ROOT')}), encoding='utf-8')
+''')
+    monkeypatch.setattr('scripts.collect.collector_source_root', lambda: source_root)
+    monkeypatch.setattr('scripts.collect.collector_data_root', lambda: data_root)
+    live = data_root / 'demo' / 'output'
+    live.mkdir(parents=True)
+    (live / 'keep.json').write_text('{}', encoding='utf-8')
+    item = {'id': 'demo', 'entrypoint': 'collector.py'}
+    with service_lock(data_root / '.collector-locks' / 'demo.lock'):  # 正式根上的同名锁不影响覆盖目录
+        result = run_one(item, timeout=10, data_root=trial_root)
+    assert result['returncode'] == 0 and result['published'] is True
+    assert result['runtime_files'] == ['env.json']
+    env = json.loads((trial_root / 'demo' / 'output' / 'env.json').read_text(encoding='utf-8'))
+    assert env['COLLECTOR_STATE_ROOT'] == str(trial_root / 'demo' / 'state')
+    assert env['COLLECTOR_PREVIOUS_OUTPUT_ROOT'] == str(trial_root / 'demo' / 'output')
+    assert env['COLLECTOR_OUTPUT_ROOT'].startswith(str(trial_root / '.staging'))
+    assert sorted(p.name for p in live.iterdir()) == ['keep.json']
+    assert not (data_root / '.staging').exists() or not any((data_root / '.staging').iterdir())
+    with service_lock(trial_root / '.collector-locks' / 'demo.lock'):
+        with pytest.raises(RuntimeError, match='lock is held'):
+            run_one(item, timeout=10, data_root=trial_root)

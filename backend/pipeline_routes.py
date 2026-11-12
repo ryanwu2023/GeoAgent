@@ -13,11 +13,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from pydantic import BaseModel, Field
 
 from . import web_auth
-from .collector_jobs import CollectorBusyError, collector_jobs
 from .pipeline_config import default_resolve
-from .pipeline_runs import list_run_items, list_runs, preview_pipeline, run_builtin, run_pipeline
+from .pipeline_runs import (BUILTIN_NO_TRIAL, TRIAL_CONFLICT, list_run_items, list_runs, preview_pipeline, run_trial,
+                            trial_running)
 from .pipeline_scheduler import pipelines_enabled
-from .pipeline_service import (Actor, PipelineError, can_edit, create_pipeline, delete_pipeline, get_pipeline,
+from .pipeline_service import (Actor, PipelineError, create_pipeline, delete_pipeline, get_pipeline,
                                list_pipelines, list_versions, rollback, set_enabled, update_pipeline)
 from .remote_collection import collection_mode
 from .store import db
@@ -50,10 +50,6 @@ def require_admin(request: Request, _flag: None = Depends(_feature_enabled)) -> 
 
 
 router = APIRouter(prefix="/api/pipelines", tags=["pipelines"], dependencies=[Depends(require_admin)])
-
-
-def _preflight() -> None:
-    collector_jobs._preflight_lock()
 
 
 def _write(request: Request) -> Actor:
@@ -186,35 +182,28 @@ def roll_back(pipeline_id: str, body: RollbackBody, actor: Actor = Depends(_writ
         raise _http(exc) from exc
 
 
-def _background(pipeline: dict, username: str) -> None:
-    # 过渡：配置化管线记为测试运行；builtin 运行入口在 Task 15 移除前沿用 batch。
-    builtin = pipeline["kind"] == "builtin"
-    runner = run_builtin if builtin else run_pipeline
+def _background_trial(pipeline_id: str, username: str) -> None:
     try:
-        runner(pipeline["id"], trigger="batch" if builtin else "trial", actor=username)
+        run_trial(pipeline_id, actor=username)
+    except PipelineError as exc:
+        log.warning("管线 %s 测试运行未执行：%s", pipeline_id, exc.message)
     except Exception:  # noqa: BLE001 - 后台线程不能让异常外泄
-        log.exception("管线 %s 手动运行失败", pipeline["id"])
+        log.exception("管线 %s 测试运行失败", pipeline_id)
 
 
-@router.post("/{pipeline_id}/run", status_code=202)
-def run(pipeline_id: str, actor: Actor = Depends(_write)):
+@router.post("/{pipeline_id}/trial", status_code=202)
+def trial(pipeline_id: str, actor: Actor = Depends(_write)):
+    """测试运行：产物写到测试目录、不进快照、不写去重台账；不检查整批服务锁，整批进行中也可发起。"""
     try:
         pipeline = get_pipeline(pipeline_id)
-        if not can_edit(actor, pipeline):
-            raise PipelineError("FORBIDDEN", "没有权限运行此管线", {"owner": pipeline["owner"]})
     except PipelineError as exc:
         raise _http(exc) from exc
-    with db() as conn:
-        running = conn.execute("SELECT 1 FROM collection_pipeline_runs WHERE pipeline_id=%s AND status='running' "
-                               "AND NOT is_deleted LIMIT 1", (pipeline_id,)).fetchone()
-    if running:
-        raise HTTPException(409, "该管线正在运行")
-    try:
-        _preflight()
-    except CollectorBusyError:
-        raise HTTPException(409, "已有采集任务在运行，请稍后再试") from None
-    threading.Thread(target=_background, args=(pipeline, actor.username), daemon=True,
-                     name=f"pipeline-run-{pipeline_id}").start()
+    if pipeline["kind"] != "configurable":
+        raise HTTPException(422, {"code": "INVALID", "message": BUILTIN_NO_TRIAL})
+    if trial_running(pipeline_id):
+        raise HTTPException(409, TRIAL_CONFLICT)
+    threading.Thread(target=_background_trial, args=(pipeline_id, actor.username), daemon=True,
+                     name=f"pipeline-trial-{pipeline_id}").start()
     return {"pipeline_id": pipeline_id, "accepted": True}
 
 

@@ -6,7 +6,6 @@ from passlib.hash import sha512_crypt
 
 from backend import collector_config, pipeline_routes, pipeline_service
 from backend.app import app
-from backend.collector_jobs import CollectorBusyError
 from backend.pipeline_service import Actor, PipelineError, create_pipeline
 from backend.store import db
 
@@ -26,7 +25,6 @@ def enabled(monkeypatch, tmp_path):
     monkeypatch.setattr(collector_config, "CONFIG_PATH", tmp_path / "collector-settings.json")
     monkeypatch.setattr(collector_config, "project_root", lambda: tmp_path)
     monkeypatch.setattr(pipeline_routes, "default_resolve", lambda host: ["93.184.216.34"])
-    monkeypatch.setattr(pipeline_routes, "_preflight", lambda: None)
 
 
 @pytest.fixture
@@ -122,7 +120,7 @@ def test_remote_mode_rejects_writes_but_allows_reads(client, monkeypatch):
               client.patch(f"/api/pipelines/{p['id']}", headers={"If-Match": "1"}, json={"row": {}}),
               client.delete(f"/api/pipelines/{p['id']}"),
               client.post(f"/api/pipelines/{p['id']}/enable"),
-              client.post(f"/api/pipelines/{p['id']}/run"),
+              client.post(f"/api/pipelines/{p['id']}/trial"),
               client.post("/api/pipelines/preview", json=body()),
               client.post(f"/api/pipelines/{p['id']}/rollback", json={"to_version": 1, "expected_version": 1})):
         assert r.status_code == 409 and r.json()["detail"] == msg
@@ -165,28 +163,18 @@ def test_cross_origin_write_rejected(client):
     assert client.get("/api/pipelines", headers={"Origin": "https://evil.example"}).status_code == 200
 
 
-def test_run_returns_202_and_runs_in_background(client, monkeypatch):
+def test_trial_returns_202_and_runs_in_background(client, monkeypatch):
     p = create(client)
     called, done = {}, threading.Event()
 
-    def fake(pid, *, trigger, actor, **kw):
-        called.update(pid=pid, trigger=trigger, actor=actor)
+    def fake(pid, *, actor, **kw):
+        called.update(pid=pid, actor=actor, **kw)
         done.set()
-    monkeypatch.setattr(pipeline_routes, "run_pipeline", fake)
-    r = client.post(f"/api/pipelines/{p['id']}/run")
+    monkeypatch.setattr(pipeline_routes, "run_trial", fake)
+    r = client.post(f"/api/pipelines/{p['id']}/trial")
     assert r.status_code == 202 and r.json() == {"pipeline_id": p["id"], "accepted": True}
-    assert done.wait(5) and called == {"pid": p["id"], "trigger": "trial", "actor": "local"}
-
-
-def test_run_builtin_uses_run_builtin(client, monkeypatch):
-    from backend.pipeline_scheduler import sync_builtin_pipelines
-    sync_builtin_pipelines([{"id": "bi1", "name_zh": "内置", "topics": ["usiran"]}])
-    pid = client.get("/api/pipelines?kind=builtin").json()["items"][0]["id"]
-    done = threading.Event()
-    seen = {}
-    monkeypatch.setattr(pipeline_routes, "run_builtin", lambda pid, **k: seen.update(k) or done.set())
-    assert client.post(f"/api/pipelines/{pid}/run").status_code == 202
-    assert done.wait(5) and seen["trigger"] == "batch"
+    assert done.wait(5) and called == {"pid": p["id"], "actor": "local"}
+    assert client.post(f"/api/pipelines/{p['id']}/run").status_code in (404, 405)
 
 
 def test_builtin_enable_disable_routes_write_exclude_list(client, monkeypatch):
@@ -205,29 +193,44 @@ def test_builtin_enable_disable_routes_write_exclude_list(client, monkeypatch):
     assert r.status_code == 422 and r.json()["detail"]["message"] == "注册表已停用该采集器，不能在此启用"
 
 
-def test_run_conflicts(client, monkeypatch):
+def test_trial_route_rejects_builtin_and_concurrent(client, monkeypatch):
+    from backend.pipeline_scheduler import sync_builtin_pipelines
+    sync_builtin_pipelines([{"id": "bi1", "name_zh": "内置", "topics": ["usiran"]}])
+    started = []
+    monkeypatch.setattr(pipeline_routes, "run_trial", lambda pid, **k: started.append(pid))
+    r = client.post("/api/pipelines/bi1/trial")
+    assert r.status_code == 422 and r.json()["detail"]["message"] == "内置采集器随整批运行，不支持测试运行"
+    assert client.post("/api/pipelines/nope/trial").status_code == 404
     p = create(client)
     seed_run(p["id"], "r1", status="running")
-    r = client.post(f"/api/pipelines/{p['id']}/run")
-    assert r.status_code == 409 and r.json()["detail"] == "该管线正在运行"
-    q = create(client, name="二")
+    r = client.post(f"/api/pipelines/{p['id']}/trial")
+    assert r.status_code == 409 and r.json()["detail"] == "该管线正在测试运行"
+    assert started == []
+
+
+def test_trial_ignores_batch_service_lock(client, monkeypatch, tmp_path):
+    """测试运行不检查整批服务锁：整批进行中也能发起。"""
+    from backend.collector_jobs import CollectorBusyError, collector_jobs
+    p = create(client)
+    done = threading.Event()
 
     def busy():
         raise CollectorBusyError("busy")
-    monkeypatch.setattr(pipeline_routes, "_preflight", busy)
-    r = client.post(f"/api/pipelines/{q['id']}/run")
-    assert r.status_code == 409 and r.json()["detail"] == "已有采集任务在运行，请稍后再试"
+    monkeypatch.setattr(collector_jobs, "_preflight_lock", busy)
+    monkeypatch.setattr(pipeline_routes, "run_trial", lambda pid, **k: done.set())
+    assert client.post(f"/api/pipelines/{p['id']}/trial").status_code == 202
+    assert done.wait(5)
 
 
-def test_run_thread_swallows_exceptions(client, monkeypatch):
+def test_trial_thread_swallows_exceptions(client, monkeypatch):
     p = create(client)
     done = threading.Event()
 
     def boom(*a, **k):
         done.set()
         raise RuntimeError("x")
-    monkeypatch.setattr(pipeline_routes, "run_pipeline", boom)
-    assert client.post(f"/api/pipelines/{p['id']}/run").status_code == 202
+    monkeypatch.setattr(pipeline_routes, "run_trial", boom)
+    assert client.post(f"/api/pipelines/{p['id']}/trial").status_code == 202
     assert done.wait(5)
 
 
@@ -282,8 +285,8 @@ def test_web_auth_admin_creates_and_owner_recorded(authed, monkeypatch):
         mine = c.post("/api/pipelines", json=body(), headers=h)
         assert mine.status_code == 201 and mine.json()["owner"] == "admin"
         assert c.post(f"/api/pipelines/{mine.json()['id']}/enable", headers=h).status_code == 200
-        monkeypatch.setattr(pipeline_routes, "run_pipeline", lambda *a, **k: None)
-        assert c.post(f"/api/pipelines/{mine.json()['id']}/run", headers=h).status_code == 202
+        monkeypatch.setattr(pipeline_routes, "run_trial", lambda *a, **k: None)
+        assert c.post(f"/api/pipelines/{mine.json()['id']}/trial", headers=h).status_code == 202
 
 
 def test_non_admin_gets_403_on_every_pipeline_route(authed, monkeypatch):
@@ -303,7 +306,7 @@ def test_non_admin_gets_403_on_every_pipeline_route(authed, monkeypatch):
                  ("patch", f"/api/pipelines/{pid}", {"json": {"row": {}}, "headers": {"If-Match": "1"}}),
                  ("delete", f"/api/pipelines/{pid}", {}),
                  ("post", f"/api/pipelines/{pid}/enable", {}), ("post", f"/api/pipelines/{pid}/disable", {}),
-                 ("post", f"/api/pipelines/{pid}/run", {}),
+                 ("post", f"/api/pipelines/{pid}/trial", {}),
                  ("post", f"/api/pipelines/{pid}/rollback", {"json": {"to_version": 1, "expected_version": 1}})]
         for method, url, kw in calls:
             kw = {**kw, "headers": {**h, **kw.get("headers", {})}}
