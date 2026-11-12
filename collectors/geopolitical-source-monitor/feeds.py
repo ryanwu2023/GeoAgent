@@ -71,7 +71,7 @@ def discover_feed_candidates(xml_text: str, base_url: str, source: dict[str, Any
         raise FeedParseError("订阅源含实体声明，已拒绝")
     try:
         root = ET.fromstring(xml_text.strip().encode("utf-8"))
-    except ET.ParseError as exc:
+    except (ET.ParseError, RecursionError) as exc:
         raise FeedParseError(f"订阅源不是有效 XML：{exc}") from exc
     allowed = {host.lower() for host in source.get("allowed_hosts", [])}
     found: dict[str, Candidate] = {}

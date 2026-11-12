@@ -50,6 +50,12 @@ def load_config(path: Path) -> dict[str, Any]:
             raise ValueError(f"来源访问策略无效：{source_id}")
         if source.get("discovery_mode", "listing") not in VALID_DISCOVERY_MODES:
             raise ValueError(f"来源发现方式无效：{source_id}")
+        pattern = source.get("link_include_pattern")
+        if pattern:
+            try:
+                re.compile(str(pattern))
+            except re.error as exc:
+                raise ValueError(f"来源 link_include_pattern 不是有效正则：{source_id}（{exc}）") from exc
         if not source.get("entry_urls") or not source.get("allowed_hosts"):
             raise ValueError(f"来源入口或允许域名为空：{source_id}")
     return config

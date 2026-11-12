@@ -262,6 +262,17 @@ def run_collection(
             "candidates": 0, "accepted": 0, "excluded": 0, "http_statuses": [], "error": None,
         }
         source_records: list[dict[str, Any]] = []
+        link_filter = None
+        if source.get("link_include_pattern"):
+            try:
+                link_filter = re.compile(str(source["link_include_pattern"]))
+            except re.error:
+                status["state"] = "failed"
+                status["error"] = "CONFIG_ERROR"
+                counts["errors"] += 1
+                status["elapsed_sec"] = round(time.monotonic() - started, 3)
+                print(f"[source:done] {source['id']} state=failed error=CONFIG_ERROR", flush=True)
+                return source_records, status, counts
         for entry_index, entry_url in enumerate(source["entry_urls"]):
             listing = http.fetch(entry_url, source)
             status["http_statuses"].append(listing.status)
@@ -287,9 +298,8 @@ def run_collection(
                     continue
             else:
                 candidates = discover_candidates(listing.body, base_url, source)
-            pattern = source.get("link_include_pattern")
-            if pattern:
-                candidates = [item for item in candidates if re.search(pattern, item.url)]
+            if link_filter:
+                candidates = [item for item in candidates if link_filter.search(item.url)]
             candidates = candidates[: int(source.get("max_candidates_per_source", 80))]
             status["candidates"] += len(candidates)
             counts["candidates"] += len(candidates)

@@ -456,3 +456,44 @@ def test_rss_source_collects_and_link_include_pattern_filters(tmp_path):
     assert report["sources"]["feed"]["state"] == "ok"
     payload = json.loads((tmp_path / "out" / "geo-v6.json").read_text(encoding="utf-8"))
     assert [r["link"] for r in payload["records"]] == ["https://feed.example/world/1"]
+
+
+def test_load_config_rejects_invalid_link_include_pattern(tmp_path):
+    import pytest
+    filtering = load_module("filtering")
+    config = json.loads((COLLECTOR / "config.json").read_text(encoding="utf-8"))
+    config["sources"][0]["link_include_pattern"] = "["
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    with pytest.raises(ValueError, match=config["sources"][0]["id"]):
+        filtering.load_config(path)
+
+
+def test_invalid_link_pattern_fails_only_that_source_at_runtime(tmp_path):
+    filtering = load_module("filtering")
+    web = load_module("web")
+    monitor = load_module("geopolitical_source_monitor")
+    base = {"tier": "T1", "language": "en", "content_policy": "metadata_only"}
+    path = _rss_config(tmp_path, filtering, [
+        {**base, "id": "bad", "name_zh": "坏", "publisher": "Bad", "entry_urls": ["https://bad.example/list"],
+         "allowed_hosts": ["bad.example"], "discovery_mode": "listing", "link_include_pattern": "["},
+        {**base, "id": "meta", "name_zh": "列表", "publisher": "Media", "entry_urls": ["https://meta.example/list"],
+         "allowed_hosts": ["meta.example"], "discovery_mode": "public_metadata"},
+    ])
+    # 绕过 load_config 的校验，只验证运行时保护
+    real = monitor.load_config
+    monitor.load_config = lambda p: json.loads(Path(p).read_text(encoding="utf-8"))
+    try:
+        responses = {
+            "https://bad.example/list": web.FetchResult(200, "<a href='/x'>Iran strike</a>", "https://bad.example/list", {}),
+            "https://meta.example/list": web.FetchResult(
+                200, '<a href="/item">Russia sanctions restrict oil exports during Ukraine war</a>',
+                "https://meta.example/list", {}),
+        }
+        report = monitor.run_collection(path, tmp_path / "out", FakeClient(responses))
+    finally:
+        monitor.load_config = real
+    assert report["collection_status"] == "partial"
+    assert report["sources"]["bad"]["state"] == "failed"
+    assert report["sources"]["bad"]["error"] == "CONFIG_ERROR"
+    assert report["sources"]["meta"]["state"] == "ok"
