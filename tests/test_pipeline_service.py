@@ -107,7 +107,7 @@ def test_non_owner_cannot_edit_admin_can():
 def test_rollback_creates_new_version_with_old_config():
     p = make()
     upd(p["id"], expected_version=1, config=cfg(term="b"))
-    r = rollback(ADMIN, p["id"], to_version=1, expected_version=2)
+    r = rollback(ADMIN, p["id"], to_version=1, expected_version=2, resolve=resolve)
     assert r["current_version"] == 3 and r["config"]["filters"]["include_any"] == ["iran"]
     assert [v["version"] for v in list_versions(p["id"])] == [3, 2, 1]
     with pytest.raises(PipelineError) as e:
@@ -230,3 +230,38 @@ def test_changed_since_filters_by_updated_or_finished():
     assert [p["name"] for p in list_pipelines(changed_since=since)] == ["A", "B"]
     assert [p["name"] for p in list_pipelines(changed_since=now)] == []
     assert c["id"]
+
+
+def test_list_versions_not_found_for_deleted_or_unknown():
+    p = make()
+    assert len(list_versions(p["id"])) == 1
+    delete_pipeline(ADMIN, p["id"])
+    for pid in (p["id"], "p-nope"):
+        with pytest.raises(PipelineError) as e:
+            list_versions(pid)
+        assert e.value.code == "NOT_FOUND"
+
+
+def test_set_enabled_again_keeps_next_run_at():
+    p = make()
+    first = set_enabled(ADMIN, p["id"], True)
+    past = datetime.now(timezone.utc) - timedelta(minutes=5)
+    with db() as conn:
+        conn.execute("UPDATE collection_pipelines SET next_run_at=%s WHERE id=%s", (past, p["id"]))
+    again = set_enabled(ADMIN, p["id"], True)
+    assert again["next_run_at"] == past and first["next_run_at"] != past
+
+
+def test_rollback_rejects_current_version_and_revalidates():
+    p = make()
+    with pytest.raises(PipelineError) as e:
+        rollback(ADMIN, p["id"], to_version=1, expected_version=1)
+    assert e.value.code == "INVALID"
+    upd(p["id"], expected_version=1, config=cfg(term="b"))
+    def bad(host):
+        return ["10.0.0.1"]
+    with pytest.raises(PipelineError) as e:
+        rollback(ADMIN, p["id"], to_version=1, expected_version=2, resolve=bad)
+    assert e.value.code == "INVALID"
+    assert get_pipeline(p["id"])["current_version"] == 2
+    assert rollback(ADMIN, p["id"], to_version=1, expected_version=2, resolve=resolve)["current_version"] == 3

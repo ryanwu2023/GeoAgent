@@ -13,8 +13,8 @@ from typing import Any, Callable
 
 import psycopg
 
-from backend.pipeline_config import (PipelineConfigError, _validate_row, default_resolve, next_run_at,
-                                     validate_pipeline, validate_schedule)
+from backend.pipeline_config import (PipelineConfigError, default_resolve, next_run_at,
+                                     validate_pipeline, validate_row, validate_schedule)
 from backend.store import db
 
 STATUSES = ("enabled", "disabled", "running", "success", "partial", "failed")
@@ -134,6 +134,8 @@ def get_pipeline(pipeline_id: str) -> dict:
 
 def list_versions(pipeline_id: str) -> list[dict]:
     with db() as conn:
+        if not conn.execute("SELECT 1 FROM collection_pipelines WHERE id=%s AND NOT is_deleted", (pipeline_id,)).fetchone():
+            raise PipelineError("NOT_FOUND", "管线不存在或已删除", {"id": pipeline_id})
         rows = conn.execute(
             "SELECT * FROM collection_pipeline_versions WHERE pipeline_id=%s AND NOT is_deleted ORDER BY version DESC",
             (pipeline_id,)).fetchall()
@@ -187,7 +189,7 @@ def update_pipeline(actor: Actor, pipeline_id: str, *, expected_version: int, ro
                 elif config is not None:
                     clean_row, clean_config = validate_pipeline(merged, config, resolve=resolve)
                 else:
-                    clean_row = _validate_row(merged)
+                    clean_row = validate_row(merged)
             except PipelineConfigError as exc:
                 raise _invalid(exc) from exc
             if clean_config is not None and clean_config != _config(conn, pipeline_id, new_version):
@@ -217,7 +219,12 @@ def set_enabled(actor: Actor, pipeline_id: str, enabled: bool) -> dict:
         cur = _lock(conn, pipeline_id)
         _check_edit(actor, cur)
         now = datetime.now(timezone.utc)
-        nxt = _schedule_next(cur, now) if enabled else None
+        if not enabled:
+            nxt = None
+        elif cur["enabled"] and cur["next_run_at"] is not None:
+            nxt = cur["next_run_at"]  # 已启用：保留原计划，避免推迟已到期的运行
+        else:
+            nxt = _schedule_next(cur, now)
         conn.execute("UPDATE collection_pipelines SET enabled=%s,next_run_at=%s,updated_by=%s,updated_at=%s WHERE id=%s",
                      (bool(enabled), nxt, actor.username, now, pipeline_id))
     return get_pipeline(pipeline_id)
@@ -234,7 +241,8 @@ def delete_pipeline(actor: Actor, pipeline_id: str) -> None:
                      (actor.username, datetime.now(timezone.utc), pipeline_id))
 
 
-def rollback(actor: Actor, pipeline_id: str, *, to_version: int, expected_version: int) -> dict:
+def rollback(actor: Actor, pipeline_id: str, *, to_version: int, expected_version: int,
+             resolve: Callable[[str], list[str]] = default_resolve) -> dict:
     with db() as conn:
         cur = _lock(conn, pipeline_id)
         _check_edit(actor, cur)
@@ -244,6 +252,14 @@ def rollback(actor: Actor, pipeline_id: str, *, to_version: int, expected_versio
         old = _config(conn, pipeline_id, to_version)
         if old is None:
             raise PipelineError("NOT_FOUND", f"版本 {to_version} 不存在", {"version": to_version})
+        if to_version == cur["current_version"]:
+            raise PipelineError("INVALID", "不能回滚到当前版本", {"field": "to_version"})
+        row = {k: cur[k] for k in ROW_FIELDS}
+        row["daily_times"] = row["daily_times"] or None
+        try:
+            _, old = validate_pipeline(row, old, resolve=resolve)
+        except PipelineConfigError as exc:
+            raise _invalid(exc) from exc
         new_version = cur["current_version"] + 1
         _add_version(conn, actor, pipeline_id, new_version, old, f"回滚到版本 {to_version}")
         conn.execute("UPDATE collection_pipelines SET current_version=%s,updated_by=%s,updated_at=%s WHERE id=%s",

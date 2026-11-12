@@ -85,6 +85,11 @@ def _validate_row(row: Any) -> dict[str, Any]:
     return {"name": name, "description": description, "topic": topic, **schedule}
 
 
+def validate_row(row: Any) -> dict[str, Any]:
+    """只校验行字段（name/description/topic/调度），不涉及配置。"""
+    return _validate_row(row)
+
+
 def validate_schedule(row: Any) -> dict[str, Any]:
     """只校验调度相关字段（interval_sec / daily_times / timezone），返回规范化后的三项。"""
     if not isinstance(row, dict):
