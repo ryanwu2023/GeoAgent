@@ -4,13 +4,13 @@ import pytest
 from fastapi.testclient import TestClient
 from passlib.hash import sha512_crypt
 
-from backend import pipeline_routes
+from backend import collector_config, pipeline_routes, pipeline_service
 from backend.app import app
 from backend.collector_jobs import CollectorBusyError
 from backend.pipeline_service import Actor, PipelineError, create_pipeline
 from backend.store import db
 
-ROW = {"name": "路透社", "description": "d", "topics": ["usiran"], "interval_sec": 3600}
+ROW = {"name": "路透社", "description": "d", "topics": ["usiran"]}
 
 
 def cfg(term="iran"):
@@ -21,8 +21,10 @@ def cfg(term="iran"):
 
 
 @pytest.fixture(autouse=True)
-def enabled(monkeypatch):
+def enabled(monkeypatch, tmp_path):
     monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
+    monkeypatch.setattr(collector_config, "CONFIG_PATH", tmp_path / "collector-settings.json")
+    monkeypatch.setattr(collector_config, "project_root", lambda: tmp_path)
     monkeypatch.setattr(pipeline_routes, "default_resolve", lambda host: ["93.184.216.34"])
     monkeypatch.setattr(pipeline_routes, "_preflight", lambda: None)
 
@@ -136,7 +138,7 @@ def test_feature_flag_off_returns_404(client, monkeypatch):
 def seed_run(pid, run_id="r1", status="success", items=0):
     with db() as conn:
         conn.execute("INSERT INTO collection_pipeline_runs (run_id,pipeline_id,version,trigger,status,started_at,data_timestamp) "
-                     "VALUES (%s,%s,1,'manual',%s,now(),now())", (run_id, pid, status))
+                     "VALUES (%s,%s,1,'trial',%s,now(),now())", (run_id, pid, status))
         for i in range(items):
             conn.execute("INSERT INTO collection_pipeline_run_items (run_id,pipeline_id,seq,record_id,source_id,source_type,title,data_timestamp) "
                          "VALUES (%s,%s,%s,%s,'s0','rss',%s,now())", (run_id, pid, i, f"rec{run_id}{i}", f"t{i}"))
@@ -173,7 +175,7 @@ def test_run_returns_202_and_runs_in_background(client, monkeypatch):
     monkeypatch.setattr(pipeline_routes, "run_pipeline", fake)
     r = client.post(f"/api/pipelines/{p['id']}/run")
     assert r.status_code == 202 and r.json() == {"pipeline_id": p["id"], "accepted": True}
-    assert done.wait(5) and called == {"pid": p["id"], "trigger": "manual", "actor": "local"}
+    assert done.wait(5) and called == {"pid": p["id"], "trigger": "trial", "actor": "local"}
 
 
 def test_run_builtin_uses_run_builtin(client, monkeypatch):
@@ -181,9 +183,26 @@ def test_run_builtin_uses_run_builtin(client, monkeypatch):
     sync_builtin_pipelines([{"id": "bi1", "name_zh": "内置", "topics": ["usiran"]}])
     pid = client.get("/api/pipelines?kind=builtin").json()["items"][0]["id"]
     done = threading.Event()
-    monkeypatch.setattr(pipeline_routes, "run_builtin", lambda *a, **k: done.set())
+    seen = {}
+    monkeypatch.setattr(pipeline_routes, "run_builtin", lambda pid, **k: seen.update(k) or done.set())
     assert client.post(f"/api/pipelines/{pid}/run").status_code == 202
-    assert done.wait(5)
+    assert done.wait(5) and seen["trigger"] == "batch"
+
+
+def test_builtin_enable_disable_routes_write_exclude_list(client, monkeypatch):
+    from backend.pipeline_scheduler import sync_builtin_pipelines
+    reg = [{"id": "bi1", "name_zh": "内置", "topics": ["usiran"], "enabled": True},
+           {"id": "bi2", "name_zh": "内置停用", "topics": ["usiran"], "enabled": False}]
+    monkeypatch.setattr(pipeline_service, "_registry", lambda: reg)
+    sync_builtin_pipelines(reg)
+    assert client.get("/api/pipelines/bi1").json()["enabled"] is True
+    r = client.post("/api/pipelines/bi1/disable")
+    assert r.status_code == 200 and r.json()["enabled"] is False
+    assert collector_config.load_config()["exclude_ids"] == ["bi1"]
+    assert client.post("/api/pipelines/bi1/enable").json()["enabled"] is True
+    assert collector_config.load_config()["exclude_ids"] == []
+    r = client.post("/api/pipelines/bi2/enable")
+    assert r.status_code == 422 and r.json()["detail"]["message"] == "注册表已停用该采集器，不能在此启用"
 
 
 def test_run_conflicts(client, monkeypatch):

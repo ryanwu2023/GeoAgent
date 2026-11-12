@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import shutil
 import time
 from datetime import datetime, timezone
@@ -20,7 +19,7 @@ from backend.paths import project_root
 from backend.paths import collector_data_root
 from backend.collector_ledger import CollectorLedger, service_lock
 from backend.collector_import import import_collector_output
-from scripts.collect import run_collectors, select_collectors
+from scripts.collect import run_collectors
 from scripts.integrate_collectors import load_registry
 
 
@@ -85,32 +84,6 @@ def _result_message(item: dict) -> str | None:
     return None
 
 
-def _with_scheduled_builtin(exclude_ids: list[str] | None) -> list[str] | None:
-    """整批采集时排除已有单独调度的内置管线；开关关闭或查询失败则保持原样。"""
-    try:
-        from backend.pipeline_scheduler import pipelines_enabled, scheduled_builtin_ids
-        if not pipelines_enabled():
-            return exclude_ids
-        extra = scheduled_builtin_ids()
-    except Exception:
-        logging.getLogger(__name__).warning("读取已调度的内置管线失败，整批采集不做排除", exc_info=True)
-        return exclude_ids
-    return list(dict.fromkeys([*(exclude_ids or []), *extra])) if extra else exclude_ids
-
-
-def _backfill_pipeline_runs(snapshot_id: str | None, imported_before: datetime) -> None:
-    """整批导入成功后回填管线运行的快照编号；任何失败只记 warning，不影响整批结果。"""
-    if not snapshot_id:
-        return
-    try:
-        from backend.pipeline_runs import backfill_merged_runs
-        from backend.pipeline_scheduler import pipelines_enabled
-        if pipelines_enabled():
-            backfill_merged_runs(snapshot_id, imported_before=imported_before)
-    except Exception:
-        logging.getLogger(__name__).warning("回填管线运行的快照编号失败", exc_info=True)
-
-
 def execute_once(
     *,
     ids: list[str] | None = None,
@@ -132,8 +105,6 @@ def execute_once(
     """Run one scheduled batch and persist an explicit running/completed state."""
     if retry_attempts < 1:
         raise ValueError("retry_attempts must be at least 1")
-    if not ids:
-        exclude_ids = _with_scheduled_builtin(exclude_ids)
     started = now or utc_now()
     report_root = report_root or project_root() / "data" / "collection-runs"
     report_root.mkdir(parents=True, exist_ok=True)
@@ -240,11 +211,6 @@ def execute_once(
             finished = utc_now()
             failed = [item for item in results if _result_status(item) == "failed"]
             status = "failed" if results and len(failed) == len(results) else "partial" if failed else "success"
-            # 整批运行中所有采集器都被单独调度排除时，仍要导入，让管线结果并入快照。
-            all_excluded = bool(
-                auto_import and not ids and exclude_ids and not results
-                and not select_collectors(selected_registry, [], None, exclude_ids=exclude_ids)
-            )
             if runner is not run_collectors:
                 for item in results:
                     ledger.event(
@@ -267,7 +233,7 @@ def execute_once(
                     _result_status(item) == "success" and item.get("published") is False
                     for item in results
                 )
-                if not results and not all_excluded:
+                if not results:
                     import_status = "skipped_no_results"
                 elif output_gate_failed:
                     # A zero exit code is not enough when the runner reports
@@ -282,12 +248,10 @@ def execute_once(
                         status="running",
                         payload={"collector_status": status},
                     )
-                    import_started = utc_now()
                     try:
                         import_result = importer(collector_data_root())
                         snapshot_id = import_result.get("snapshot_id")
                         import_status = "succeeded"
-                        _backfill_pipeline_runs(snapshot_id, import_started)
                         ledger.event(
                             run_id=report_dir.name,
                             event_type="import_finished",

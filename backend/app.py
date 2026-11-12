@@ -72,7 +72,7 @@ class ProjectMCP:
         await app.state.geo_mcp(scope, receive, send)
 
 def _start_pipelines():
-    """启用管线功能时恢复遗留运行、同步内置采集器并启动调度；任何失败只记日志，不阻塞启动。"""
+    """启用管线功能时恢复遗留运行并同步内置采集器（管线不单独定时，无调度线程）；任何失败只记日志，不阻塞启动。"""
     from . import pipeline_scheduler as scheduler
     from .pipeline_runs import recover_interrupted_pipeline_runs
     if not scheduler.pipelines_enabled():
@@ -80,7 +80,6 @@ def _start_pipelines():
     for label, step in (
         ("恢复中断的管线运行", lambda: recover_interrupted_pipeline_runs(datetime.now(timezone.utc))),
         ("同步内置采集器", lambda: scheduler.sync_builtin_pipelines(load_registry(ROOT / "collectors" / "collectors.json"))),
-        ("启动管线调度", scheduler.start_scheduler),
     ):
         try:
             step()
@@ -99,12 +98,8 @@ async def lifespan(app):
     start_collector_schedule()
     mcp_app = create_mcp_app(auth_config=mcp_config, managed_keys=True, project_transport=True)
     app.state.geo_mcp = mcp_app
-    try:
-        async with mcp_app.router.lifespan_context(mcp_app):
-            yield
-    finally:
-        from .pipeline_scheduler import stop_scheduler
-        stop_scheduler()
+    async with mcp_app.router.lifespan_context(mcp_app):
+        yield
 
 app = FastAPI(title="地缘政治研究接口", version="0.6.1",lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1000)

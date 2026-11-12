@@ -1,16 +1,33 @@
+import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from backend import collector_config, pipeline_service
 from backend.pipeline_service import (Actor, PipelineError, can_edit, create_pipeline, delete_pipeline,
-                                      get_pipeline, list_pipelines, list_versions, rollback, set_enabled,
-                                      update_pipeline)
+                                      effective_builtin_enabled, get_pipeline, list_pipelines, list_versions,
+                                      rollback, set_enabled, update_pipeline)
 from backend.store import db
 
 ADMIN = Actor("admin", True)
 ALICE = Actor("alice", False)
 BOB = Actor("bob", False)
-ROW = {"name": "路透社", "description": "d", "topics": ["usiran"], "interval_sec": 3600}
+ROW = {"name": "路透社", "description": "d", "topics": ["usiran"]}
+
+
+@pytest.fixture(autouse=True)
+def registry(tmp_path, monkeypatch):
+    """内置采集器注册表与 collector_config 都隔离到临时目录；测试可往返回的列表里追加注册项。"""
+    monkeypatch.setattr(collector_config, "CONFIG_PATH", tmp_path / "collector-settings.json")
+    monkeypatch.setattr(collector_config, "project_root", lambda: tmp_path)
+    items: list[dict] = []
+    monkeypatch.setattr(pipeline_service, "_registry", lambda: items)
+    return items
+
+
+def reg_item(cid, enabled=True):
+    return {"id": cid, "name_zh": f"采集器{cid}", "topics": ["usiran"], "entrypoint": "x.py",
+            "selftest_args": [], "output_kind": "geo-v6", "enabled": enabled}
 
 
 def resolve(host):
@@ -39,7 +56,7 @@ def test_create_starts_disabled_with_version_1():
     p = make(ALICE)
     assert p["id"].startswith("p-") and len(p["id"]) == 14
     assert p["enabled"] is False and p["current_version"] == 1 and p["owner"] == "alice"
-    assert p["kind"] == "configurable" and p["next_run_at"] is None
+    assert p["kind"] == "configurable" and "next_run_at" not in p and "interval_sec" not in p
     assert p["config"]["sources"][0]["id"] == "s0"
     assert p["created_by"] == "alice" and p["updated_by"] is None
     vs = list_versions(p["id"])
@@ -81,14 +98,14 @@ def test_config_change_adds_version():
     assert list_versions(p["id"])[0]["change_note"] == "改词"
 
 
-def test_update_rejects_unknown_patch_and_invalid_schedule():
+def test_update_rejects_unknown_and_schedule_patch():
     p = make()
-    for patch in ({"owner": "x"}, {"bogus": 1}):
+    for patch in ({"owner": "x"}, {"bogus": 1}, {"interval_sec": 3600}, {"daily_times": ["08:00"]}, {"timezone": "UTC"}):
         with pytest.raises(PipelineError) as e:
             upd(p["id"], expected_version=1, row_patch=patch)
         assert e.value.code == "INVALID"
     with pytest.raises(PipelineError) as e:
-        upd(p["id"], expected_version=1, row_patch={"interval_sec": 5})
+        create_pipeline(ADMIN, {**ROW, "interval_sec": 3600}, cfg(), resolve=resolve)
     assert e.value.code == "INVALID" and e.value.details["field"] == "row.interval_sec"
 
 
@@ -122,22 +139,14 @@ def test_rollback_creates_new_version_with_old_config():
     assert e.value.code == "NOT_FOUND"
 
 
-def test_set_enabled_computes_and_clears_next_run():
+def test_new_configurable_pipeline_defaults_disabled():
     p = make()
-    on = set_enabled(ADMIN, p["id"], True)
-    assert on["enabled"] and on["next_run_at"] > datetime.now(timezone.utc)
-    off = set_enabled(ADMIN, p["id"], False)
-    assert off["enabled"] is False and off["next_run_at"] is None
-    m = make(name="手动")
-    upd(m["id"], expected_version=1, row_patch={"interval_sec": None})
-    assert set_enabled(ADMIN, m["id"], True)["next_run_at"] is None
-
-
-def test_schedule_change_recomputes_next_run_when_enabled():
-    p = make()
-    set_enabled(ADMIN, p["id"], True)
-    u = upd(p["id"], expected_version=1, row_patch={"interval_sec": None, "daily_times": ["03:00"]})
-    assert u["daily_times"] == ["03:00"] and u["interval_sec"] is None and u["next_run_at"] is not None
+    assert p["enabled"] is False
+    assert [x["enabled"] for x in list_pipelines()] == [False]
+    assert set_enabled(ADMIN, p["id"], True)["enabled"] is True
+    assert set_enabled(ADMIN, p["id"], True)["enabled"] is True  # 重复启用无害
+    assert set_enabled(ADMIN, p["id"], False)["enabled"] is False
+    assert collector_config.load_config()["exclude_ids"] == []  # 配置化管线不碰排除列表
 
 
 def test_delete_hides_from_list_and_disables():
@@ -151,8 +160,8 @@ def test_delete_hides_from_list_and_disables():
             fn()
         assert e.value.code == "NOT_FOUND"
     with db() as conn:
-        r = conn.execute("SELECT enabled,is_deleted,next_run_at FROM collection_pipelines WHERE id=%s", (p["id"],)).fetchone()
-    assert r["enabled"] is False and r["is_deleted"] is True and r["next_run_at"] is None
+        r = conn.execute("SELECT enabled,is_deleted FROM collection_pipelines WHERE id=%s", (p["id"],)).fetchone()
+    assert r["enabled"] is False and r["is_deleted"] is True
     with pytest.raises(PipelineError) as e:
         get_pipeline("p-nope")
     assert e.value.code == "NOT_FOUND"
@@ -172,8 +181,8 @@ def test_recreate_after_delete_has_fresh_seen():
 
 def _builtin(pid="b-news"):
     with db() as conn:
-        conn.execute("INSERT INTO collection_pipelines(id,kind,name,topics,current_version,owner,interval_sec) "
-                     "VALUES (%s,'builtin','内置新闻',ARRAY['usiran'],1,'system',3600)", (pid,))
+        conn.execute("INSERT INTO collection_pipelines(id,kind,name,topics,current_version,owner) "
+                     "VALUES (%s,'builtin','内置新闻',ARRAY['usiran'],1,'system')", (pid,))
     return pid
 
 
@@ -183,27 +192,74 @@ def test_admin_can_edit_pipeline_created_by_other_admin():
     assert upd(p["id"], ADMIN, expected_version=1, row_patch={"description": "x"})["description"] == "x"
 
 
-def test_builtin_only_schedule_editable():
+def test_builtin_is_readonly_except_enable(registry):
+    registry.append(reg_item("b-news"))
     pid = _builtin()
     assert get_pipeline(pid)["config"] is None
     assert not can_edit(ALICE, get_pipeline(pid)) and can_edit(ADMIN, get_pipeline(pid))
     with pytest.raises(PipelineError) as e:
-        upd(pid, ALICE, expected_version=1, row_patch={"interval_sec": 1200})
+        upd(pid, ALICE, expected_version=1, row_patch={"description": "x"})
     assert e.value.code == "FORBIDDEN"
-    u = upd(pid, expected_version=1, row_patch={"interval_sec": 1200, "timezone": "UTC"})
-    assert u["interval_sec"] == 1200 and u["timezone"] == "UTC"
-    for kw in ({"row_patch": {"name": "x"}}, {"row_patch": {"topics": ["ukraine"]}}, {"config": cfg()}):
+    for kw in ({"row_patch": {"name": "x"}}, {"row_patch": {"topics": ["ukraine"]}},
+               {"row_patch": {"description": "x"}}, {"config": cfg()}):
         with pytest.raises(PipelineError) as e:
             upd(pid, expected_version=1, **kw)
         assert e.value.code == "BUILTIN_READONLY"
-    with pytest.raises(PipelineError) as e:
-        upd(pid, expected_version=1, row_patch={"interval_sec": 5})
-    assert e.value.code == "INVALID"
     assert set_enabled(ADMIN, pid, True)["enabled"] is True
     for fn in (lambda: delete_pipeline(ADMIN, pid), lambda: rollback(ADMIN, pid, to_version=1, expected_version=1)):
         with pytest.raises(PipelineError) as e:
             fn()
         assert e.value.code == "BUILTIN_READONLY"
+
+
+def test_effective_builtin_enabled():
+    assert effective_builtin_enabled(reg_item("a"), []) is True
+    assert effective_builtin_enabled(reg_item("a"), ["a"]) is False
+    assert effective_builtin_enabled(reg_item("a", enabled=False), []) is False
+    assert effective_builtin_enabled(None, []) is False
+
+
+def test_builtin_enable_writes_exclude_list(registry):
+    registry.extend([reg_item("b-news"), reg_item("other")])
+    pid = _builtin()
+    collector_config.CONFIG_PATH.write_text(json.dumps({"interval_sec": 7200, "exclude_ids": ["other"],
+                                                        "auto_import": True, "allow_partial_import": True,
+                                                        "operator_note": "保留"}), encoding="utf-8")
+    keep = ("interval_sec", "auto_import", "allow_partial_import", "operator_note")
+    off = set_enabled(ADMIN, pid, False)
+    after = collector_config.load_config()
+    assert off["enabled"] is False and after["exclude_ids"] == ["b-news", "other"]
+    assert {k: after[k] for k in keep} == {"interval_sec": 7200, "auto_import": True,
+                                           "allow_partial_import": True, "operator_note": "保留"}
+    on = set_enabled(ADMIN, pid, True)
+    assert on["enabled"] is True and collector_config.load_config()["exclude_ids"] == ["other"]
+    assert on["updated_by"] == "admin"
+
+
+def test_builtin_enabled_reflects_monitor_exclusion(registry):
+    registry.append(reg_item("b-news"))
+    pid = _builtin()
+    assert get_pipeline(pid)["enabled"] is True
+    assert [p["enabled"] for p in list_pipelines(kind="builtin")] == [True]
+    assert [p["id"] for p in list_pipelines(status="enabled")] == [pid]
+    # 采集监控页直接改同一份排除列表
+    collector_config.save_config({"interval_sec": 86400, "exclude_ids": ["b-news"]}, known_ids={"b-news"})
+    assert get_pipeline(pid)["enabled"] is False
+    assert [p["enabled"] for p in list_pipelines(kind="builtin")] == [False]
+    assert list_pipelines(status="enabled") == []
+    assert [p["id"] for p in list_pipelines(status="disabled")] == [pid]
+
+
+def test_builtin_disabled_in_registry_cannot_be_enabled(registry):
+    registry.append(reg_item("b-news", enabled=False))
+    pid = _builtin()
+    assert get_pipeline(pid)["enabled"] is False
+    with pytest.raises(PipelineError) as e:
+        set_enabled(ADMIN, pid, True)
+    assert e.value.code == "INVALID" and e.value.message == "注册表已停用该采集器，不能在此启用"
+    assert collector_config.load_config()["exclude_ids"] == []
+    assert set_enabled(ADMIN, pid, False)["enabled"] is False  # 停用仍允许写入排除列表
+    assert collector_config.load_config()["exclude_ids"] == ["b-news"]
 
 
 def test_list_filters_and_source_count():
@@ -250,16 +306,6 @@ def test_list_versions_not_found_for_deleted_or_unknown():
         with pytest.raises(PipelineError) as e:
             list_versions(pid)
         assert e.value.code == "NOT_FOUND"
-
-
-def test_set_enabled_again_keeps_next_run_at():
-    p = make()
-    first = set_enabled(ADMIN, p["id"], True)
-    past = datetime.now(timezone.utc) - timedelta(minutes=5)
-    with db() as conn:
-        conn.execute("UPDATE collection_pipelines SET next_run_at=%s WHERE id=%s", (past, p["id"]))
-    again = set_enabled(ADMIN, p["id"], True)
-    assert again["next_run_at"] == past and first["next_run_at"] != past
 
 
 def test_rollback_rejects_current_version_and_revalidates():

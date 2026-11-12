@@ -247,29 +247,22 @@ def test_failed_run_archive_never_borrows_previous_success(tmp_path):
     assert json.loads((target/'_source_status.json').read_text())['run_at']=='new'
 
 
-def test_full_batch_with_all_excluded_still_imports(tmp_path):
+def test_full_batch_with_all_excluded_skips_import(tmp_path):
+    """单独定时已取消：整批全部被排除时没有结果，不再为并入管线结果而导入。"""
     imported = []
     registry = [{"id": "a", "enabled": True, "topics": ["usiran"]}]
-
-    def importer(root):
-        imported.append(root)
-        return {"snapshot_id": "s-all", "created": True}
-
     report = execute_once(report_root=tmp_path, registry=registry, exclude_ids=["a"], auto_import=True,
-                          importer=importer)
-    assert imported and report["status"] == "success"
-    assert report["import_status"] == "succeeded" and report["snapshot_id"] == "s-all"
+                          importer=lambda root: imported.append(root))
+    assert not imported and report["import_status"] == "skipped_no_results"
+    assert report["excluded_collector_ids"] == ["a"]
 
 
-def test_all_excluded_without_outputs_records_import_failure(tmp_path):
-    registry = [{"id": "a", "enabled": True, "topics": ["usiran"]}]
-
-    def importer(root):
-        raise ValueError("no published outputs")
-
-    report = execute_once(report_root=tmp_path, registry=registry, exclude_ids=["a"], auto_import=True,
-                          importer=importer)
-    assert report["import_status"] == "failed" and report["import_error_type"] == "ValueError"
+def test_batch_exclusion_does_not_consult_pipelines(tmp_path, monkeypatch):
+    import scripts.collector_service as service
+    assert not hasattr(service, "_with_scheduled_builtin") and not hasattr(service, "_backfill_pipeline_runs")
+    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
+    report = execute_once(report_root=tmp_path, registry=[], exclude_ids=None, runner=lambda *a, **k: [], timeout=5)
+    assert report["excluded_collector_ids"] == []
 
 
 def test_explicit_ids_with_no_results_still_skip_import(tmp_path):

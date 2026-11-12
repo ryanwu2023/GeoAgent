@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
+from . import collector_config
 from .collector_jobs import CollectorBusyError, collector_jobs
 from .paths import project_root
 from .remote_collection import collection_mode
@@ -64,15 +65,12 @@ def hourly_collector_ids(registry_path: Path | None = None) -> list[str]:
     return [c["id"] for c in collectors if c.get("enabled") and c.get("cadence") == "hourly"]
 
 
-def _without_scheduled_builtin(ids: list[str]) -> list[str]:
-    """去掉已有单独调度的内置管线，避免与管线调度重复运行；开关关闭或查询失败则保持原样。"""
+def _without_excluded(ids: list[str]) -> list[str]:
+    """去掉 collector_config 排除列表中的采集器（停用的 builtin 每小时同样不跑）；读取失败则保持原样。"""
     try:
-        from .pipeline_scheduler import pipelines_enabled, scheduled_builtin_ids
-        if not pipelines_enabled():
-            return ids
-        skip = set(scheduled_builtin_ids())
+        skip = set(collector_config.load_config().get("exclude_ids", []))
     except Exception:
-        logger.warning("读取已调度的内置管线失败，每小时采集不做排除", exc_info=True)
+        logger.warning("读取采集器排除列表失败，每小时采集不做排除", exc_info=True)
         return ids
     return [i for i in ids if i not in skip]
 
@@ -114,7 +112,7 @@ class CollectorScheduler:
             kind, kwargs = "full", {"auto_import": True, "allow_partial_import": self.config.allow_partial_import}
         elif self._due(state.get("hourly_at"), self.config.hourly_interval_sec, now):
             ids = self._hourly_ids if self._hourly_ids is not None else hourly_collector_ids()
-            ids = _without_scheduled_builtin(ids)
+            ids = _without_excluded(ids)
             if not ids:
                 return None
             kind, kwargs = "hourly", {"ids": ids, "auto_import": False}

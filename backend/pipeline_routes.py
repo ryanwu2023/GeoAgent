@@ -187,9 +187,11 @@ def roll_back(pipeline_id: str, body: RollbackBody, actor: Actor = Depends(_writ
 
 
 def _background(pipeline: dict, username: str) -> None:
-    runner = run_builtin if pipeline["kind"] == "builtin" else run_pipeline
+    # 过渡：配置化管线记为测试运行；builtin 运行入口在 Task 15 移除前沿用 batch。
+    builtin = pipeline["kind"] == "builtin"
+    runner = run_builtin if builtin else run_pipeline
     try:
-        runner(pipeline["id"], trigger="manual", actor=username)
+        runner(pipeline["id"], trigger="batch" if builtin else "trial", actor=username)
     except Exception:  # noqa: BLE001 - 后台线程不能让异常外泄
         log.exception("管线 %s 手动运行失败", pipeline["id"])
 

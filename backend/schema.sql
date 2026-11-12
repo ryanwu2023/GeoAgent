@@ -280,10 +280,6 @@ CREATE TABLE IF NOT EXISTS collection_pipelines (
  topics TEXT[] NOT NULL CHECK (cardinality(topics) >= 1),
  enabled BOOLEAN NOT NULL DEFAULT false,
  current_version INTEGER NOT NULL,
- interval_sec INTEGER NULL,
- daily_times TEXT[] NOT NULL DEFAULT '{}',
- timezone TEXT NOT NULL DEFAULT 'Asia/Shanghai',
- next_run_at TIMESTAMPTZ NULL,
  last_run_id TEXT NULL,
  last_status TEXT NULL,
  last_finished_at TIMESTAMPTZ NULL,
@@ -296,7 +292,6 @@ CREATE TABLE IF NOT EXISTS collection_pipelines (
  data_timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
  is_deleted BOOLEAN NOT NULL DEFAULT false
 );
-CREATE INDEX IF NOT EXISTS collection_pipelines_due ON collection_pipelines(enabled, next_run_at) WHERE NOT is_deleted;
 CREATE UNIQUE INDEX IF NOT EXISTS collection_pipelines_active_name ON collection_pipelines(name) WHERE NOT is_deleted;
 CREATE TABLE IF NOT EXISTS collection_pipeline_versions (
  pipeline_id TEXT NOT NULL REFERENCES collection_pipelines(id) ON DELETE RESTRICT,
@@ -316,7 +311,7 @@ CREATE TABLE IF NOT EXISTS collection_pipeline_runs (
  run_id TEXT PRIMARY KEY,
  pipeline_id TEXT NOT NULL REFERENCES collection_pipelines(id) ON DELETE RESTRICT,
  version INTEGER NOT NULL,
- trigger TEXT NOT NULL CHECK (trigger IN ('schedule','manual','mcp')),
+ trigger TEXT NOT NULL CHECK (trigger IN ('batch','trial')),
  status TEXT NOT NULL CHECK (status IN ('queued','running','success','partial','failed','cancelled')),
  started_at TIMESTAMPTZ NOT NULL,
  finished_at TIMESTAMPTZ NULL,
@@ -367,18 +362,14 @@ CREATE TABLE IF NOT EXISTS collection_pipeline_run_items (
 );
 CREATE INDEX IF NOT EXISTS collection_pipeline_run_items_by_pipeline ON collection_pipeline_run_items(pipeline_id, run_id);
 
-COMMENT ON TABLE collection_pipelines IS '采集管线：可配置（网页/RSS）或内置的一条采集任务，含启停、调度与最近一次运行摘要；只做逻辑删除';
+COMMENT ON TABLE collection_pipelines IS '采集管线：可配置（网页/RSS）或内置的一条采集来源，含启停与最近一次运行摘要；不单独定时，启用后随整批采集运行；只做逻辑删除';
 COMMENT ON COLUMN collection_pipelines.id IS '管线唯一标识，由应用生成；删除后同名重建会得到新的 id';
 COMMENT ON COLUMN collection_pipelines.kind IS '管线类型：configurable 为用户配置的网页/RSS 管线，builtin 为内置采集器';
 COMMENT ON COLUMN collection_pipelines.name IS '管线名称；有效（未删除）记录内唯一，删除后可重用';
 COMMENT ON COLUMN collection_pipelines.description IS '管线说明，可为空字符串';
 COMMENT ON COLUMN collection_pipelines.topics IS '所属主题列表（至少一个，可多选），元素目前仅 usiran 或 ukraine，按该顺序存放；由应用校验';
-COMMENT ON COLUMN collection_pipelines.enabled IS '是否启用定时调度：false 不调度（默认），true 按调度配置运行';
+COMMENT ON COLUMN collection_pipelines.enabled IS '是否启用：true 随整批采集运行，false 不参与（新建默认）；builtin 行为同步缓存，以注册表启用且不在 collector_config 排除列表为准';
 COMMENT ON COLUMN collection_pipelines.current_version IS '当前生效的配置版本号，对应 collection_pipeline_versions.version';
-COMMENT ON COLUMN collection_pipelines.interval_sec IS '固定间隔调度，单位秒，取值 600~604800；与 daily_times 二选一，未使用时为空';
-COMMENT ON COLUMN collection_pipelines.daily_times IS '每日定点调度时刻数组，格式 HH:MM，最多 24 个，按 timezone 解释；与 interval_sec 二选一';
-COMMENT ON COLUMN collection_pipelines.timezone IS '定点调度使用的 IANA 时区，默认 Asia/Shanghai';
-COMMENT ON COLUMN collection_pipelines.next_run_at IS '下一次计划运行时间；未启用或无调度时为空';
 COMMENT ON COLUMN collection_pipelines.last_run_id IS '最近一次运行的 run_id，尚未运行为空';
 COMMENT ON COLUMN collection_pipelines.last_status IS '最近一次运行状态，取值同 collection_pipeline_runs.status；尚未运行为空';
 COMMENT ON COLUMN collection_pipelines.last_finished_at IS '最近一次运行结束时间；尚未运行或未结束为空';
@@ -404,18 +395,18 @@ COMMENT ON COLUMN collection_pipeline_versions.updated_at IS '最近一次实际
 COMMENT ON COLUMN collection_pipeline_versions.data_timestamp IS '版本由本系统生成，取创建时刻';
 COMMENT ON COLUMN collection_pipeline_versions.is_deleted IS '逻辑删除标记：false 有效，true 已删除';
 
-COMMENT ON TABLE collection_pipeline_runs IS '采集管线运行记录：每次调度、手动或 MCP 触发的一次运行及其状态、统计与产出快照';
+COMMENT ON TABLE collection_pipeline_runs IS '采集管线运行记录：随整批采集或管理员测试运行的一次运行及其状态、统计与产出快照';
 COMMENT ON COLUMN collection_pipeline_runs.run_id IS '运行唯一标识，由应用生成';
 COMMENT ON COLUMN collection_pipeline_runs.pipeline_id IS '所属管线，引用 collection_pipelines.id';
 COMMENT ON COLUMN collection_pipeline_runs.version IS '运行时使用的配置版本号';
-COMMENT ON COLUMN collection_pipeline_runs.trigger IS '触发方式：schedule 定时调度、manual 页面手动、mcp MCP 工具';
+COMMENT ON COLUMN collection_pipeline_runs.trigger IS '运行方式：batch 随整批采集运行（进入快照），trial 管理员测试运行（不进快照）';
 COMMENT ON COLUMN collection_pipeline_runs.status IS '运行状态：queued 排队、running 运行中、success 成功、partial 部分成功、failed 失败、cancelled 已取消';
 COMMENT ON COLUMN collection_pipeline_runs.started_at IS '运行开始时间';
 COMMENT ON COLUMN collection_pipeline_runs.finished_at IS '运行结束时间；未结束为空';
 COMMENT ON COLUMN collection_pipeline_runs.stats IS '运行统计 JSON（抓取、命中、新增、各来源错误数等），默认空对象';
 COMMENT ON COLUMN collection_pipeline_runs.snapshot_id IS '本次运行产出的数据快照标识；无产出为空';
 COMMENT ON COLUMN collection_pipeline_runs.error IS '失败或部分失败时的错误摘要；成功为空';
-COMMENT ON COLUMN collection_pipeline_runs.created_by IS '触发该运行的操作者账号；定时调度时为服务身份或空';
+COMMENT ON COLUMN collection_pipeline_runs.created_by IS '触发该运行的操作者账号；整批运行时为服务身份或空';
 COMMENT ON COLUMN collection_pipeline_runs.created_at IS '运行记录首次写入本系统的时间';
 COMMENT ON COLUMN collection_pipeline_runs.updated_by IS '最近一次更新该运行记录的操作者或服务身份；未更新为空';
 COMMENT ON COLUMN collection_pipeline_runs.updated_at IS '最近一次实际更新时间（如状态变化）；未更新为空';

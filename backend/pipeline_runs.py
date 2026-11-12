@@ -1,7 +1,8 @@
 """采集管线执行：经现有采集服务运行可配置管线、试跑、记录“本次新增”。
 
-一期运行串行：execute_once 的服务锁与整批采集互斥；锁被占用时抛 CollectorBusyError，
-并删除本次写入的 running 运行行，管线的 last_* 恢复原值，调度在下个周期重试。
+管线不单独定时：这里的 run_pipeline / run_builtin 只是过渡入口（Task 15 改为随整批运行与隔离的
+测试运行）。execute_once 的服务锁与整批采集互斥；锁被占用时抛 CollectorBusyError，
+并删除本次写入的 running 运行行，管线的 last_* 恢复原值。
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ from typing import Any, Callable
 from backend.adapters import normalize
 from backend.collector_jobs import CollectorBusyError
 from backend.paths import collector_data_root, collector_source_root
-from backend.pipeline_config import PipelineConfigError, default_resolve, next_run_at, to_monitor_config, validate_pipeline
+from backend.pipeline_config import PipelineConfigError, default_resolve, to_monitor_config, validate_pipeline
 from backend.pipeline_service import PipelineError, get_pipeline
 from backend.store import db
 from scripts.collect import _collector_environment
@@ -187,13 +188,11 @@ def _finish(pipeline_id: str, run_id: str, *, status: str, stats: dict, snapshot
             "updated_by=%s,updated_at=%s WHERE run_id=%s",
             (status, finished, json.dumps(stats, ensure_ascii=False), snapshot_id,
              error[:ERROR_LIMIT] if error else None, actor, finished, run_id))
-        row = conn.execute("SELECT * FROM collection_pipelines WHERE id=%s FOR UPDATE", (pipeline_id,)).fetchone()
-        nxt = next_run_at(row, finished) if row and row["enabled"] else (row["next_run_at"] if row else None)
         # last_* 是运行态字段，不改动 updated_by/updated_at（那两项只反映配置修改）。
         conn.execute(
-            "UPDATE collection_pipelines SET last_run_id=%s,last_status=%s,last_finished_at=%s,last_new_items=%s,"
-            "next_run_at=%s WHERE id=%s",
-            (run_id, status, finished, new_items, nxt, pipeline_id))
+            "UPDATE collection_pipelines SET last_run_id=%s,last_status=%s,last_finished_at=%s,last_new_items=%s "
+            "WHERE id=%s",
+            (run_id, status, finished, new_items, pipeline_id))
         return dict(conn.execute("SELECT * FROM collection_pipeline_runs WHERE run_id=%s", (run_id,)).fetchone())
 
 
@@ -274,21 +273,10 @@ def run_builtin(pipeline_id: str, *, trigger: str, actor: str | None,
     if status == "failed":
         error = _collector_error(mine, report)
     elif mine is not None and mine.get("published") is not True:
-        # 退出码正常但产物未通过发布门禁：本次没有新产物，不能算成功，也不得被回填快照。
+        # 退出码正常但产物未通过发布门禁：本次没有新产物，不能算成功。
         status, error = "failed", "采集产物未通过发布门禁"
     return _finish(pipeline_id, run_id, status=status, stats=stats, snapshot_id=None,
                    error=error, actor=actor, records=None, source_types={})
-
-
-def backfill_merged_runs(snapshot_id: str, *, imported_before: datetime) -> int:
-    """整批导入成功后，把导入开始前已完成、尚未归属快照的运行回填为该快照；返回更新行数。"""
-    now = _now()
-    with db() as conn:
-        cur = conn.execute(
-            "UPDATE collection_pipeline_runs SET snapshot_id=%s,updated_at=%s WHERE snapshot_id IS NULL "
-            "AND status IN ('success','partial') AND finished_at <= %s AND NOT is_deleted",
-            (snapshot_id, now, imported_before))
-        return cur.rowcount
 
 
 def _run_process(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int) -> subprocess.CompletedProcess:
@@ -348,21 +336,13 @@ def list_run_items(run_id: str, *, offset: int = 0, limit: int = 50) -> list[dic
 
 
 def recover_interrupted_pipeline_runs(now: datetime) -> list[str]:
-    """服务重启后把遗留的 running 运行标记为失败，并为启用的管线重算下次运行时间。"""
+    """服务重启后把遗留的 running 运行标记为失败（SERVICE_INTERRUPTED）。"""
     with db() as conn:
         rows = conn.execute("SELECT run_id,pipeline_id FROM collection_pipeline_runs WHERE status='running' "
                             "AND NOT is_deleted ORDER BY started_at FOR UPDATE").fetchall()
         for row in rows:
             conn.execute("UPDATE collection_pipeline_runs SET status='failed',error='SERVICE_INTERRUPTED',finished_at=%s,"
                          "updated_at=%s WHERE run_id=%s", (now, now, row["run_id"]))
-            pipeline = conn.execute("SELECT * FROM collection_pipelines WHERE id=%s FOR UPDATE",
-                                    (row["pipeline_id"],)).fetchone()
-            if pipeline is None:
-                continue
-            nxt = next_run_at(pipeline, now) if pipeline["enabled"] and not pipeline["is_deleted"] else pipeline["next_run_at"]
-            if pipeline["last_run_id"] == row["run_id"]:
-                conn.execute("UPDATE collection_pipelines SET last_status='failed',last_finished_at=%s,last_new_items=0,"
-                             "next_run_at=%s WHERE id=%s", (now, nxt, pipeline["id"]))
-            else:
-                conn.execute("UPDATE collection_pipelines SET next_run_at=%s WHERE id=%s", (nxt, pipeline["id"]))
+            conn.execute("UPDATE collection_pipelines SET last_status='failed',last_finished_at=%s,last_new_items=0 "
+                         "WHERE id=%s AND last_run_id=%s", (now, row["pipeline_id"], row["run_id"]))
         return [r["run_id"] for r in rows]

@@ -1,9 +1,18 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
+from backend import collector_config
 from backend import collector_scheduler as cs
 from backend.collector_jobs import CollectorBusyError
 
 T0 = datetime(2026, 11, 5, 0, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def collector_settings(tmp_path, monkeypatch):
+    monkeypatch.setattr(collector_config, "CONFIG_PATH", tmp_path / "collector-settings.json")
+    monkeypatch.setattr(collector_config, "project_root", lambda: tmp_path)
 
 
 class Job:
@@ -76,31 +85,27 @@ def _hourly_tick(tmp_path, calls):
     return s.tick(T0 + timedelta(hours=1))
 
 
-def test_hourly_ids_drop_separately_scheduled_builtin(tmp_path, monkeypatch):
-    from backend import pipeline_scheduler
-    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
-    monkeypatch.setattr(pipeline_scheduler, "scheduled_builtin_ids", lambda: ["news-x"])
+def test_hourly_job_skips_excluded_builtin(tmp_path):
+    collector_config.save_config({"interval_sec": 86400, "exclude_ids": ["news-x"]},
+                                 known_ids={"diplomacy-monitor", "news-x"})
     calls = []
     assert _hourly_tick(tmp_path, calls) == "hourly"
     assert calls[0]["ids"] == ["diplomacy-monitor"]
 
 
-def test_hourly_skipped_when_all_ids_scheduled_separately(tmp_path, monkeypatch):
-    from backend import pipeline_scheduler
-    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
-    monkeypatch.setattr(pipeline_scheduler, "scheduled_builtin_ids", lambda: ["diplomacy-monitor", "news-x"])
+def test_hourly_skipped_when_all_ids_excluded(tmp_path):
+    collector_config.save_config({"interval_sec": 86400, "exclude_ids": ["diplomacy-monitor", "news-x"]},
+                                 known_ids={"diplomacy-monitor", "news-x"})
     calls = []
     assert _hourly_tick(tmp_path, calls) is None and calls == []
 
 
-def test_hourly_ids_unchanged_on_flag_off_or_lookup_error(tmp_path, monkeypatch, caplog):
-    from backend import pipeline_scheduler
-    monkeypatch.setattr(pipeline_scheduler, "scheduled_builtin_ids", lambda: ["news-x"])
-    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "false")
+def test_hourly_ids_unchanged_when_exclusion_read_fails(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(collector_config, "load_config", lambda: (_ for _ in ()).throw(ValueError("bad")))
     calls = []
     assert _hourly_tick(tmp_path, calls) == "hourly" and calls[0]["ids"] == ["diplomacy-monitor", "news-x"]
-    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
-    monkeypatch.setattr(pipeline_scheduler, "scheduled_builtin_ids", lambda: (_ for _ in ()).throw(RuntimeError("db")))
-    calls = []
-    assert _hourly_tick(tmp_path / "b", calls) == "hourly" and calls[0]["ids"] == ["diplomacy-monitor", "news-x"]
     assert any(r.levelname == "WARNING" for r in caplog.records)
+
+
+def test_hourly_no_longer_consults_pipeline_scheduler():
+    assert not hasattr(cs, "_without_scheduled_builtin")

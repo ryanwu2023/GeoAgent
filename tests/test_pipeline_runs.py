@@ -2,7 +2,7 @@ import importlib.util
 import json
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -18,7 +18,7 @@ from scripts.collector_service import execute_once
 
 ROOT = Path(__file__).resolve().parents[1]
 ADMIN = Actor("admin", True)
-ROW = {"name": "测试管线", "description": "", "topics": ["usiran"], "interval_sec": 3600}
+ROW = {"name": "测试管线", "description": "", "topics": ["usiran"]}
 
 
 def resolve(host):
@@ -89,10 +89,10 @@ def count(table):
 def test_first_run_all_items_are_new(data_root):
     p = make()
     calls = []
-    run = run_pipeline(p["id"], trigger="manual", actor="admin",
+    run = run_pipeline(p["id"], trigger="trial", actor="admin",
                        executor=fake_executor(data_root, [rec(1), rec(2), rec(3, published=None)], calls=calls))
     assert run["status"] == "success" and run["snapshot_id"] is None and run["error"] is None
-    assert run["trigger"] == "manual" and run["version"] == 1 and run["created_by"] == "admin"
+    assert run["trigger"] == "trial" and run["version"] == 1 and run["created_by"] == "admin"
     assert run["stats"]["new_items"] == 3 and run["stats"]["candidates"] == 9
     assert run["stats"]["import_status"] == "deferred" and run["stats"]["sources"]["rss-a"]["state"] == "ok"
     assert run["data_timestamp"] == run["started_at"] and run["finished_at"] is not None
@@ -108,7 +108,7 @@ def test_first_run_all_items_are_new(data_root):
     after = get_pipeline(p["id"])
     assert after["last_new_items"] == 3 and after["last_status"] == "success" and after["last_run_id"] == run["run_id"]
     assert after["last_finished_at"] == run["finished_at"]
-    assert after["next_run_at"] == run["finished_at"] + timedelta(seconds=3600)
+    assert "next_run_at" not in after
     items = list_run_items(run["run_id"])
     assert [i["seq"] for i in items] == [1, 2, 3]
     assert [i["record_id"] for i in items] == ["r2", "r1", "r3"]  # 发布时间倒序，无时间排最后
@@ -124,9 +124,9 @@ def test_first_run_all_items_are_new(data_root):
 
 def test_second_run_only_new_items(data_root):
     p = make()
-    run_pipeline(p["id"], trigger="schedule", actor=None, executor=fake_executor(data_root, [rec(1), rec(2), rec(3)]))
+    run_pipeline(p["id"], trigger="trial", actor=None, executor=fake_executor(data_root, [rec(1), rec(2), rec(3)]))
     web = rec(4, source="web-b")
-    run = run_pipeline(p["id"], trigger="schedule", actor=None,
+    run = run_pipeline(p["id"], trigger="trial", actor=None,
                        executor=fake_executor(data_root, [rec(1), rec(2), rec(3), web]))
     assert run["created_by"] is None and run["stats"]["new_items"] == 1
     items = list_run_items(run["run_id"])
@@ -139,8 +139,8 @@ def test_second_run_only_new_items(data_root):
 def test_rerun_without_new_content_records_zero(data_root):
     p = make()
     records = [rec(1), rec(2), rec(3)]
-    run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, records))
-    run = run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, records))
+    run_pipeline(p["id"], trigger="trial", actor="admin", executor=fake_executor(data_root, records))
+    run = run_pipeline(p["id"], trigger="trial", actor="admin", executor=fake_executor(data_root, records))
     assert list_run_items(run["run_id"]) == []
     assert get_pipeline(p["id"])["last_new_items"] == 0 and run["stats"]["new_items"] == 0
 
@@ -155,16 +155,15 @@ def test_busy_collector_leaves_no_running_row(tmp_path, data_root):
 
     with service_lock(reports / ".collector-service.lock"):
         with pytest.raises(CollectorBusyError):
-            run_pipeline(p["id"], trigger="schedule", actor=None, executor=executor)
+            run_pipeline(p["id"], trigger="trial", actor=None, executor=executor)
     assert count("collection_pipeline_runs") == 0
     after = get_pipeline(p["id"])
-    assert (after["last_status"], after["last_run_id"], after["next_run_at"]) == \
-           (before["last_status"], before["last_run_id"], before["next_run_at"])
+    assert (after["last_status"], after["last_run_id"]) == (before["last_status"], before["last_run_id"])
 
 
 def test_partial_report_maps_to_partial(data_root):
     p = make()
-    run = run_pipeline(p["id"], trigger="manual", actor="admin",
+    run = run_pipeline(p["id"], trigger="trial", actor="admin",
                        executor=fake_executor(data_root, [rec(1)], collection_status="partial"))
     assert run["status"] == "partial" and run["stats"]["sources"]["web-b"]["state"] == "failed"
     assert get_pipeline(p["id"])["last_status"] == "partial"
@@ -173,7 +172,7 @@ def test_partial_report_maps_to_partial(data_root):
 def test_pipeline_run_does_not_import(data_root):
     p = make()
     calls = []
-    run = run_pipeline(p["id"], trigger="manual", actor="admin",
+    run = run_pipeline(p["id"], trigger="trial", actor="admin",
                        executor=fake_executor(data_root, [rec(1)], calls=calls))
     assert calls[0]["auto_import"] is False
     assert run["status"] == "success" and run["snapshot_id"] is None
@@ -182,7 +181,7 @@ def test_pipeline_run_does_not_import(data_root):
 
 def test_import_failure_no_longer_affects_pipeline_run(data_root):
     p = make()
-    run = run_pipeline(p["id"], trigger="manual", actor="admin",
+    run = run_pipeline(p["id"], trigger="trial", actor="admin",
                        executor=fake_executor(data_root, [rec(1)], import_status="failed", import_error="坏数据"))
     assert run["status"] == "success" and run["error"] is None and run["snapshot_id"] is None
 
@@ -190,87 +189,32 @@ def test_import_failure_no_longer_affects_pipeline_run(data_root):
 def test_run_items_store_truncated_summary(data_root):
     p = make()
     long = {**rec(1), "summary": "摘" * 1500}
-    run = run_pipeline(p["id"], trigger="manual", actor="admin",
+    run = run_pipeline(p["id"], trigger="trial", actor="admin",
                        executor=fake_executor(data_root, [long, rec(2)]))
     by_id = {i["record_id"]: i for i in list_run_items(run["run_id"])}
     assert by_id["r1"]["summary"] == "摘" * 1000 and by_id["r2"]["summary"] == ""
 
 
-def test_backfill_merged_runs(data_root):
-    p = make()
-    run = run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, [rec(1)]))
-    failed = run_pipeline(p["id"], trigger="manual", actor="admin",
-                          executor=fake_executor(data_root, [], published=False))
-    after_cut = datetime.now(timezone.utc) - timedelta(hours=1)
-    assert pipeline_runs.backfill_merged_runs("s1", imported_before=after_cut) == 0
-    n = pipeline_runs.backfill_merged_runs("s1", imported_before=datetime.now(timezone.utc))
-    assert n == 1
-    rows = {r["run_id"]: r for r in list_runs(p["id"])}
-    assert rows[run["run_id"]]["snapshot_id"] == "s1" and rows[run["run_id"]]["updated_at"] is not None
-    assert rows[run["run_id"]]["data_timestamp"] == run["data_timestamp"]
-    assert rows[failed["run_id"]]["snapshot_id"] is None
-    assert pipeline_runs.backfill_merged_runs("s2", imported_before=datetime.now(timezone.utc)) == 0
-
-
-def test_batch_import_backfills_pipeline_runs(data_root, tmp_path, monkeypatch):
-    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
-    p = make()
-    run = run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, [rec(1)]))
-
-    def importer(root):
-        return {"snapshot_id": "s1", "created": True}
-
-    report = execute_once(report_root=tmp_path / "r", runner=lambda *a, **k: [{"id": "x", "returncode": 0}],
-                          registry=[], auto_import=True, importer=importer)
-    assert report["import_status"] == "succeeded"
-    assert list_runs(p["id"])[0]["snapshot_id"] == "s1"
-    later = run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, [rec(2)]))
-    assert later["snapshot_id"] is None
-    assert {r["run_id"]: r["snapshot_id"] for r in list_runs(p["id"])}[run["run_id"]] == "s1"
-
-
-def test_run_finished_after_import_start_is_not_backfilled(data_root):
-    p = make()
-    cut = datetime.now(timezone.utc)
-    run = run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, [rec(1)]))
-    assert run["finished_at"] > cut
-    assert pipeline_runs.backfill_merged_runs("s1", imported_before=cut) == 0
-    assert list_runs(p["id"])[0]["snapshot_id"] is None
-
-
-def test_backfill_failure_does_not_fail_batch(tmp_path, monkeypatch, caplog):
-    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
-
-    def boom(*a, **k):
-        raise RuntimeError("db down")
-
-    monkeypatch.setattr(pipeline_runs, "backfill_merged_runs", boom)
-    report = execute_once(report_root=tmp_path, runner=lambda *a, **k: [{"id": "x", "returncode": 0}],
-                          registry=[], auto_import=True, importer=lambda root: {"snapshot_id": "s1"})
-    assert report["status"] == "success" and report["import_status"] == "succeeded"
-    assert any(r.levelname == "WARNING" and "回填" in r.getMessage() for r in caplog.records)
-
-
 def test_failed_collector_does_not_read_stale_output(data_root):
     p = make()
-    run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, [rec(1)]))
-    run = run_pipeline(p["id"], trigger="manual", actor="admin",
+    run_pipeline(p["id"], trigger="trial", actor="admin", executor=fake_executor(data_root, [rec(1)]))
+    run = run_pipeline(p["id"], trigger="trial", actor="admin",
                        executor=fake_executor(data_root, [rec(1), rec(2)], published=False))
     assert run["status"] == "failed" and run["error"] and run["stats"]["new_items"] == 0
     assert list_run_items(run["run_id"]) == []
     assert get_pipeline(p["id"])["last_status"] == "failed"
 
 
-def test_disabled_pipeline_keeps_next_run_empty(data_root):
+def test_trial_run_on_disabled_pipeline_keeps_it_disabled(data_root):
     p = make(enabled=False)
-    run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, [rec(1)]))
+    run_pipeline(p["id"], trigger="trial", actor="admin", executor=fake_executor(data_root, [rec(1)]))
     after = get_pipeline(p["id"])
-    assert after["next_run_at"] is None and after["last_status"] == "success"
+    assert after["enabled"] is False and after["last_status"] == "success"
 
 
 def test_record_new_items_is_idempotent(data_root):
     p = make()
-    run = run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, []))
+    run = run_pipeline(p["id"], trigger="trial", actor="admin", executor=fake_executor(data_root, []))
     with db() as conn:
         n = record_new_items(conn, pipeline_id=p["id"], run_id=run["run_id"], records=[rec(1)], source_types={"rss-a": "rss"})
         again = record_new_items(conn, pipeline_id=p["id"], run_id=run["run_id"], records=[rec(1)], source_types={"rss-a": "rss"})
@@ -329,14 +273,14 @@ def test_recover_marks_interrupted_runs(data_root):
     started = datetime(2026, 11, 11, 1, 0, tzinfo=timezone.utc)
     with db() as conn:
         conn.execute("INSERT INTO collection_pipeline_runs(run_id,pipeline_id,version,trigger,status,started_at,data_timestamp) "
-                     "VALUES ('run-x',%s,1,'schedule','running',%s,%s)", (p["id"], started, started))
+                     "VALUES ('run-x',%s,1,'trial','running',%s,%s)", (p["id"], started, started))
         conn.execute("UPDATE collection_pipelines SET last_status='running', last_run_id='run-x' WHERE id=%s", (p["id"],))
     now = datetime(2026, 11, 11, 2, 0, tzinfo=timezone.utc)
     assert recover_interrupted_pipeline_runs(now) == ["run-x"]
     run = list_runs(p["id"])[0]
     assert run["status"] == "failed" and run["error"] == "SERVICE_INTERRUPTED" and run["finished_at"] == now
     after = get_pipeline(p["id"])
-    assert after["last_status"] == "failed" and after["next_run_at"] == now + timedelta(seconds=3600)
+    assert after["last_status"] == "failed" and after["last_finished_at"] == now and after["enabled"] is True
     assert recover_interrupted_pipeline_runs(now) == []
 
 
@@ -408,8 +352,8 @@ def test_runner_requires_pipeline_config(tmp_path):
 
 def _builtin():
     with db() as conn:
-        conn.execute("INSERT INTO collection_pipelines(id,kind,name,topics,enabled,current_version,interval_sec,owner,created_by) "
-                     "VALUES ('bi1','builtin','内置采集器',ARRAY['usiran'],true,1,3600,'system','system')")
+        conn.execute("INSERT INTO collection_pipelines(id,kind,name,topics,enabled,current_version,owner,created_by) "
+                     "VALUES ('bi1','builtin','内置采集器',ARRAY['usiran'],true,1,'system','system')")
         conn.execute("INSERT INTO collection_pipeline_versions(pipeline_id,version,config,source_channel) "
                      "VALUES ('bi1',1,'{\"schema_version\":\"pipeline/1\",\"builtin\":true}','migration')")
 
@@ -426,9 +370,9 @@ def builtin_executor(status="success", import_status="succeeded", calls=None, er
 def test_run_builtin_success_writes_run_without_items():
     _builtin()
     calls = []
-    run = pipeline_runs.run_builtin("bi1", trigger="schedule", actor="scheduler",
+    run = pipeline_runs.run_builtin("bi1", trigger="batch", actor="scheduler",
                                     executor=builtin_executor(calls=calls))
-    assert run["status"] == "success" and run["snapshot_id"] is None and run["trigger"] == "schedule"
+    assert run["status"] == "success" and run["snapshot_id"] is None and run["trigger"] == "batch"
     assert run["stats"]["import_status"] == "deferred"
     kw = calls[0]
     assert kw["ids"] == ["bi1"] and kw["auto_import"] is False
@@ -440,10 +384,10 @@ def test_run_builtin_success_writes_run_without_items():
 
 def test_run_builtin_failed_and_partial():
     _builtin()
-    failed = pipeline_runs.run_builtin("bi1", trigger="manual", actor="a",
+    failed = pipeline_runs.run_builtin("bi1", trigger="batch", actor="a",
                                        executor=builtin_executor("failed", "skipped_collection_status", error_message="炸了"))
     assert failed["status"] == "failed" and "炸了" in failed["error"]
-    partial = pipeline_runs.run_builtin("bi1", trigger="manual", actor="a", executor=builtin_executor("partial"))
+    partial = pipeline_runs.run_builtin("bi1", trigger="batch", actor="a", executor=builtin_executor("partial"))
     assert partial["status"] == "partial"
 
 
@@ -454,26 +398,25 @@ def test_run_builtin_busy_discards_row():
         raise CollectorBusyError("lock is held")
 
     with pytest.raises(CollectorBusyError):
-        pipeline_runs.run_builtin("bi1", trigger="schedule", actor="scheduler", executor=busy)
+        pipeline_runs.run_builtin("bi1", trigger="batch", actor="scheduler", executor=busy)
     assert count("collection_pipeline_runs") == 0 and get_pipeline("bi1")["last_run_id"] is None
 
 
 def test_run_builtin_rejects_configurable():
     p = make()
     with pytest.raises(PipelineError):
-        pipeline_runs.run_builtin(p["id"], trigger="manual", actor="a", executor=builtin_executor())
+        pipeline_runs.run_builtin(p["id"], trigger="batch", actor="a", executor=builtin_executor())
 
 
-def test_run_builtin_unpublished_output_is_failed_and_not_backfilled():
+def test_run_builtin_unpublished_output_is_failed():
     _builtin()
 
     def gated(**kw):
         return {"status": "success", "import_status": "not_requested",
                 "results": [{"id": "bi1", "returncode": 0, "published": False}]}
 
-    run = pipeline_runs.run_builtin("bi1", trigger="schedule", actor="scheduler", executor=gated)
+    run = pipeline_runs.run_builtin("bi1", trigger="batch", actor="scheduler", executor=gated)
     assert run["status"] == "failed" and "发布门禁" in run["error"]
-    assert pipeline_runs.backfill_merged_runs("s1", imported_before=datetime.now(timezone.utc)) == 0
     assert list_runs("bi1")[0]["snapshot_id"] is None
 
 
@@ -484,7 +427,7 @@ def test_run_items_store_dimensions_json(data_root):
     r = rec(1)
     r["topics"] = ["usiran", "ukraine", "taiwan"]
     r["dimensions"] = {"usiran": "diplomacy", "ukraine": "aid", "taiwan": "x"}
-    run = run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, [r, rec(2)]))
+    run = run_pipeline(p["id"], trigger="trial", actor="admin", executor=fake_executor(data_root, [r, rec(2)]))
     items = {i["record_id"]: i for i in list_run_items(run["run_id"])}
     assert items["r1"]["dimensions"] == {"usiran": "diplomacy", "ukraine": "aid"}
     assert items["r2"]["dimensions"] == {"usiran": "diplomacy"}

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
@@ -10,20 +9,18 @@ import pytest
 
 from backend.pipeline_config import (
     PipelineConfigError,
-    next_run_at,
     to_monitor_config,
     validate_pipeline,
+    validate_row,
 )
 
-UTC = timezone.utc
 ROOT = Path(__file__).resolve().parents[1]
 COLLECTOR = ROOT / "collectors" / "geopolitical-source-monitor"
 BASE = json.loads((COLLECTOR / "config.json").read_text(encoding="utf-8"))
 
 PUBLIC = lambda host: ["93.184.216.34"]  # noqa: E731
 
-ROW = {"name": "测试管线", "description": "", "topics": ["usiran"], "interval_sec": 3600,
-       "daily_times": None, "timezone": "Asia/Shanghai"}
+ROW = {"name": "测试管线", "description": "", "topics": ["usiran"]}
 CFG = {
     "schema_version": "pipeline/1",
     "sources": [
@@ -66,7 +63,7 @@ def fail(r, c, resolve=PUBLIC):
 
 def test_valid_config_fills_defaults():
     r, c = validate_pipeline(ROW, CFG, resolve=PUBLIC)
-    assert r["name"] == "测试管线" and r["interval_sec"] == 3600 and r["daily_times"] is None
+    assert r == {"name": "测试管线", "description": "", "topics": ["usiran"]}
     assert c["filters"]["require_category"] is True and c["filters"]["lookback_days"] == 14
     assert c["filters"]["max_candidates_per_source"] == 80
     assert c["request"] == {"timeout_seconds": 25, "rate_limit_seconds": 1.5, "max_pages_per_source": 3}
@@ -108,34 +105,14 @@ def test_rejects_unknown_topic():
     assert fail(row(topics=["taiwan"]), CFG).field == "row.topics"
 
 
-def test_rejects_interval_and_daily_times_together():
-    e = fail(row(interval_sec=3600, daily_times=["08:00"]), CFG)
-    assert e.field in ("row.interval_sec", "row.daily_times")
-
-
-@pytest.mark.parametrize("v", [599, 604801, 0, -5, "x", True])
-def test_rejects_bad_interval(v):
-    assert fail(row(interval_sec=v), CFG).field == "row.interval_sec"
-
-
-def test_interval_bounds_ok():
-    for v in (600, 604800):
-        validate_pipeline(row(interval_sec=v), CFG, resolve=PUBLIC)
-
-
-def test_daily_times_normalized_and_validated():
-    r, _ = validate_pipeline(row(interval_sec=None, daily_times=["18:30", "08:00", "08:00"]), CFG, resolve=PUBLIC)
-    assert r["daily_times"] == ["08:00", "18:30"]
-    for bad in (["24:00"], ["8:00"], ["12:60"], ["ab"], "08:00"):
-        assert fail(row(interval_sec=None, daily_times=bad), CFG).field == "row.daily_times"
-    many = [f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 30)]
-    assert fail(row(interval_sec=None, daily_times=many), CFG).field == "row.daily_times"
-
-
-def test_empty_daily_times_is_unset_and_row_is_whitelisted():
-    r, _ = validate_pipeline(row(interval_sec=3600, daily_times=[], extra="x"), CFG, resolve=PUBLIC)
-    assert r["daily_times"] is None and "extra" not in r
-    assert set(r) == {"name", "description", "topics", "interval_sec", "daily_times", "timezone"}
+def test_row_has_no_schedule_fields():
+    """单独定时已取消：行字段只接受 name/description/topics，传调度字段或其它未知字段 → 校验失败。"""
+    assert validate_row(ROW) == {"name": "测试管线", "description": "", "topics": ["usiran"]}
+    for key, value in (("interval_sec", 3600), ("daily_times", ["08:00"]), ("timezone", "UTC"), ("extra", "x")):
+        with pytest.raises(PipelineConfigError) as e:
+            validate_row(row(**{key: value}))
+        assert e.value.field == f"row.{key}"
+        assert fail(row(**{key: value}), CFG).field == f"row.{key}"
 
 
 def test_rejects_cgnat_literal_and_resolved():
@@ -157,13 +134,7 @@ def test_unicode_error_from_resolver_is_unresolvable():
     assert "无法解析域名" in fail(ROW, CFG, boom).message
 
 
-def test_manual_only_allowed():
-    r, _ = validate_pipeline(row(interval_sec=None, daily_times=None), CFG, resolve=PUBLIC)
-    assert next_run_at(r, datetime(2026, 11, 11, tzinfo=UTC)) is None
-
-
-def test_timezone_and_name_rules():
-    assert fail(row(timezone="Mars/Base"), CFG).field == "row.timezone"
+def test_name_rules():
     assert fail(row(name="  "), CFG).field == "row.name"
     assert fail(row(name="x" * 101), CFG).field == "row.name"
     assert fail(row(description="x" * 2001), CFG).field == "row.description"
@@ -252,22 +223,6 @@ def test_to_monitor_config_passes_filtering_load_config(tmp_path, monkeypatch):
     p = tmp_path / "c.json"
     p.write_text(json.dumps(to_monitor_config(r, c, BASE), ensure_ascii=False), encoding="utf-8")
     assert filtering.load_config(p)["topics"] == ["usiran"]
-
-
-def test_next_run_interval():
-    after = datetime(2026, 11, 11, 1, 0, tzinfo=UTC)
-    assert next_run_at({"interval_sec": 600}, after) == datetime(2026, 11, 11, 1, 10, tzinfo=UTC)
-
-
-def test_next_run_daily_times_crosses_midnight():
-    r = {"daily_times": ["08:00"], "timezone": "Asia/Shanghai", "interval_sec": None}
-    assert next_run_at(r, datetime(2026, 11, 11, 1, 0, tzinfo=UTC)) == datetime(2026, 11, 12, 0, 0, tzinfo=UTC)
-    assert next_run_at(r, datetime(2026, 11, 10, 23, 0, tzinfo=UTC)) == datetime(2026, 11, 11, 0, 0, tzinfo=UTC)
-
-
-def test_next_run_strictly_later():
-    r = {"daily_times": ["08:00", "20:00"], "timezone": "Asia/Shanghai", "interval_sec": None}
-    assert next_run_at(r, datetime(2026, 11, 11, 0, 0, tzinfo=UTC)) == datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 
 
 def test_topics_multi_select_validated():

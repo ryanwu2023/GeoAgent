@@ -46,3 +46,27 @@ def test_run_items_summary_column_has_comment():
             "FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='collection_pipeline_run_items' "
             "AND column_name='summary'").fetchone()
     assert col and col["is_nullable"] == "NO" and "''" in col["column_default"] and col["c"]
+
+
+def test_runs_trigger_check_batch_trial():
+    with db() as conn:
+        _insert(conn, "p1", "管线")
+        sql = ("INSERT INTO collection_pipeline_runs(run_id,pipeline_id,version,trigger,status,started_at,data_timestamp) "
+               "VALUES (%s,'p1',1,%s,'running',now(),now())")
+        for trigger in ("batch", "trial"):
+            conn.execute(sql, (f"r-{trigger}", trigger))
+        for trigger in ("schedule", "manual", "mcp"):
+            with pytest.raises(psycopg.errors.CheckViolation):
+                with conn.transaction():
+                    conn.execute(sql, (f"r-{trigger}", trigger))
+
+
+def test_pipelines_have_no_schedule_columns_or_due_index():
+    with db() as conn:
+        cols = {r["column_name"] for r in conn.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() "
+            "AND table_name='collection_pipelines'")}
+        idx = {r["indexname"] for r in conn.execute(
+            "SELECT indexname FROM pg_indexes WHERE schemaname=current_schema() AND tablename='collection_pipelines'")}
+    assert not cols & {"interval_sec", "daily_times", "timezone", "next_run_at"}
+    assert "collection_pipelines_due" not in idx

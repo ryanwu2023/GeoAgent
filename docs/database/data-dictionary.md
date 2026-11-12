@@ -47,7 +47,7 @@
 
 ## collection_pipelines
 
-采集管线：可配置（网页/RSS）或内置采集任务，含启停、调度与最近一次运行摘要。主键 `id`；被其余四张管线表以外键引用（`ON DELETE RESTRICT`）；删除策略为逻辑删除，删除后同名重建得到新 `id`，旧台账不会串入。
+采集管线：可配置（网页/RSS）或内置采集来源，含启停与最近一次运行摘要；不单独定时，启用后随整批采集运行。主键 `id`；被其余四张管线表以外键引用（`ON DELETE RESTRICT`）；删除策略为逻辑删除，删除后同名重建得到新 `id`，旧台账不会串入。
 
 | 字段 | 类型 | 可空 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -56,12 +56,8 @@
 | ``name`` | text | 否 | — | 管线名称，有效记录内唯一 |
 | ``description`` | text | 否 | `''` | 管线说明 |
 | ``topics`` | text[] | 否 | — | 所属主题列表，至少一个、可多选，元素目前仅 `usiran`、`ukraine`，按该顺序存放（数据库检查非空，元素由应用校验） |
-| ``enabled`` | boolean | 否 | `false` | 是否启用定时调度 |
+| ``enabled`` | boolean | 否 | `false` | 是否启用：`true` 随整批采集运行，`false` 不参与（新建默认）；`builtin` 行为同步缓存，以注册表启用且不在 `collector_config` 排除列表（`exclude_ids`）为准 |
 | ``current_version`` | integer | 否 | — | 当前生效配置版本号，对应 `collection_pipeline_versions.version` |
-| ``interval_sec`` | integer | 是 | — | 固定间隔调度（秒），600~604800，与 `daily_times` 二选一（由应用校验） |
-| ``daily_times`` | text[] | 否 | `'{}'` | 每日定点时刻 `HH:MM`，最多 24 个，按 `timezone` 解释 |
-| ``timezone`` | text | 否 | `'Asia/Shanghai'` | 定点调度时区（IANA） |
-| ``next_run_at`` | timestamptz | 是 | — | 下次计划运行时间，未启用或无调度为空 |
 | ``last_run_id`` | text | 是 | — | 最近一次运行 `run_id` |
 | ``last_status`` | text | 是 | — | 最近一次运行状态，取值同 `collection_pipeline_runs.status` |
 | ``last_finished_at`` | timestamptz | 是 | — | 最近一次运行结束时间 |
@@ -81,7 +77,6 @@
 | 名称 | 类型 | 列 | 条件 | 用途 |
 | --- | --- | --- | --- | --- |
 | ``collection_pipelines_pkey`` | 唯一 btree | `id` | — | 主键 |
-| ``collection_pipelines_due`` | btree | `enabled, next_run_at` | `WHERE NOT is_deleted` | 调度器扫描到期的已启用管线 |
 | ``collection_pipelines_active_name`` | 唯一 btree | `name` | `WHERE NOT is_deleted` | 有效管线不重名；删除后允许重用名称 |
 
 ## collection_pipeline_versions
@@ -112,21 +107,21 @@
 
 ## collection_pipeline_runs
 
-采集管线运行记录：一次调度、手动或 MCP 触发的运行及其状态、统计与产出快照。主键 `run_id`；`pipeline_id` 外键引用 `collection_pipelines.id`（`ON DELETE RESTRICT`）；删除策略为逻辑删除。
+采集管线运行记录：随整批采集或管理员测试运行的一次运行及其状态、统计与产出快照。主键 `run_id`；`pipeline_id` 外键引用 `collection_pipelines.id`（`ON DELETE RESTRICT`）；删除策略为逻辑删除。
 
 | 字段 | 类型 | 可空 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | ``run_id`` | text | 否 | — | 运行唯一标识，由应用生成 |
 | ``pipeline_id`` | text | 否 | — | 所属管线 |
 | ``version`` | integer | 否 | — | 运行所用配置版本号 |
-| ``trigger`` | text | 否 | — | CHECK：`schedule` 定时 / `manual` 页面手动 / `mcp` MCP 工具 |
+| ``trigger`` | text | 否 | — | CHECK：`batch` 随整批采集运行（进入快照） / `trial` 管理员测试运行（不进快照） |
 | ``status`` | text | 否 | — | CHECK：`queued` 排队 / `running` 运行中 / `success` 成功 / `partial` 部分成功 / `failed` 失败 / `cancelled` 已取消 |
 | ``started_at`` | timestamptz | 否 | — | 运行开始时间 |
 | ``finished_at`` | timestamptz | 是 | — | 运行结束时间，未结束为空 |
 | ``stats`` | jsonb | 否 | `'{}'` | 运行统计（抓取、命中、新增、各来源错误数等） |
 | ``snapshot_id`` | text | 是 | — | 本次运行产出的数据快照标识 |
 | ``error`` | text | 是 | — | 失败或部分失败的错误摘要 |
-| `created_by` | text | 是 | — | 触发该运行的操作者；定时调度为服务身份或空 |
+| `created_by` | text | 是 | — | 触发该运行的操作者；整批运行为服务身份或空 |
 | `created_at` | timestamptz | 否 | `CURRENT_TIMESTAMP` | 记录首次写入时间，更新不重置 |
 | `updated_by` | text | 是 | — | 最近更新该运行记录的操作者或服务身份 |
 | `updated_at` | timestamptz | 是 | — | 最近一次实际更新时间（如状态变化） |

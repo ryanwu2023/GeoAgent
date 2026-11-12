@@ -9,10 +9,8 @@ import copy
 import ipaddress
 import re
 import socket
-from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 from urllib.parse import urlsplit
-from zoneinfo import ZoneInfo
 
 SCHEMA_VERSION = "pipeline/1"
 VALID_TOPICS = ("usiran", "ukraine")
@@ -20,7 +18,6 @@ VALID_TIERS = ("T1", "T2", "T3")
 VALID_POLICIES = ("public_fulltext", "metadata_only")
 VALID_TYPES = ("web", "rss")
 SOURCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
-TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
 MAX_SOURCES = 30
 MAX_TERMS_TOTAL = 200
@@ -29,9 +26,8 @@ MAX_PATTERN_LEN = 200
 MAX_ENTRY_URLS = 10
 MAX_ALLOWED_HOSTS = 10
 MAX_URL_LEN = 2000
-MIN_INTERVAL, MAX_INTERVAL = 600, 604800
-MAX_DAILY_TIMES = 24
 
+ROW_KEYS = ("name", "description", "topics")
 TOP_KEYS = {"schema_version", "sources", "filters", "request"}
 SOURCE_KEYS = {"id", "type", "name", "feed_url", "entry_urls", "allowed_hosts", "language", "tier",
                "content_policy", "link_include_pattern"}
@@ -75,6 +71,9 @@ def _text(value: Any, field: str, *, max_len: int, min_len: int = 1, strip: bool
 def _validate_row(row: Any) -> dict[str, Any]:
     if not isinstance(row, dict):
         raise PipelineConfigError("row", "必须是对象")
+    for key in row:
+        if key not in ROW_KEYS:
+            raise PipelineConfigError(f"row.{key}", "未知字段（管线不单独定时，只接受名称、说明、主题）")
     name = _text(row.get("name"), "row.name", max_len=100)
     description = row.get("description") or ""
     description = _text(description, "row.description", max_len=2000, min_len=0)
@@ -83,42 +82,12 @@ def _validate_row(row: Any) -> dict[str, Any]:
             or any(not isinstance(t, str) or t not in VALID_TOPICS for t in raw)):
         raise PipelineConfigError("row.topics", f"主题至少选一个，且只能是 {'、'.join(VALID_TOPICS)}")
     topics = [t for t in VALID_TOPICS if t in raw]
-    schedule = validate_schedule(row)
-    return {"name": name, "description": description, "topics": topics, **schedule}
+    return {"name": name, "description": description, "topics": topics}
 
 
 def validate_row(row: Any) -> dict[str, Any]:
-    """只校验行字段（name/description/topics/调度），不涉及配置。"""
+    """只校验行字段（name/description/topics），不涉及配置；其它字段一律拒绝。"""
     return _validate_row(row)
-
-
-def validate_schedule(row: Any) -> dict[str, Any]:
-    """只校验调度相关字段（interval_sec / daily_times / timezone），返回规范化后的三项。"""
-    if not isinstance(row, dict):
-        raise PipelineConfigError("row", "必须是对象")
-    tz_name = row.get("timezone") or "Asia/Shanghai"
-    try:
-        ZoneInfo(tz_name)
-    except Exception as exc:  # ZoneInfoNotFoundError / ValueError / TypeError
-        raise PipelineConfigError("row.timezone", f"无效的时区：{tz_name}") from exc
-
-    interval = row.get("interval_sec")
-    daily = row.get("daily_times") or None  # 空数组等同未设置
-    if interval is not None and daily is not None:
-        raise PipelineConfigError("row.interval_sec", "间隔运行与每日定时只能二选一")
-    if interval is not None:
-        if isinstance(interval, bool) or not isinstance(interval, int) or not MIN_INTERVAL <= interval <= MAX_INTERVAL:
-            raise PipelineConfigError("row.interval_sec", f"间隔必须是 {MIN_INTERVAL} ~ {MAX_INTERVAL} 秒的整数")
-    if daily is not None:
-        if not isinstance(daily, list):
-            raise PipelineConfigError("row.daily_times", "每日定时必须是数组")
-        for item in daily:
-            if not isinstance(item, str) or not TIME_RE.match(item):
-                raise PipelineConfigError("row.daily_times", f"时间格式必须为 HH:MM（00:00-23:59）：{item!r}")
-        daily = sorted(set(daily))
-        if len(daily) > MAX_DAILY_TIMES:
-            raise PipelineConfigError("row.daily_times", f"每日定时最多 {MAX_DAILY_TIMES} 个")
-    return {"timezone": tz_name, "interval_sec": interval, "daily_times": daily}
 
 
 # ---------------------------------------------------------------- URL / SSRF
@@ -362,27 +331,3 @@ def to_monitor_config(row: dict, config: dict, base: dict) -> dict:
         sources.append(item)
     out["sources"] = sources
     return out
-
-
-def next_run_at(row: dict, after: datetime) -> datetime | None:
-    """返回严格晚于 after 的下一次运行时间（UTC）；仅手动运行返回 None。"""
-    if after.tzinfo is None:
-        after = after.replace(tzinfo=timezone.utc)
-    after = after.astimezone(timezone.utc)
-    interval = row.get("interval_sec")
-    if interval:
-        return after + timedelta(seconds=int(interval))
-    daily = row.get("daily_times")
-    if not daily:
-        return None
-    tz = ZoneInfo(row.get("timezone") or "Asia/Shanghai")
-    local_day = after.astimezone(tz).date()
-    best: datetime | None = None
-    for offset in (-1, 0, 1, 2):
-        day = local_day + timedelta(days=offset)
-        for item in daily:
-            hh, mm = (int(x) for x in item.split(":"))
-            candidate = datetime(day.year, day.month, day.day, hh, mm, tzinfo=tz).astimezone(timezone.utc)
-            if candidate > after and (best is None or candidate < best):
-                best = candidate
-    return best

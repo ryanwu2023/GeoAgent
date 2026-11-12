@@ -1,37 +1,31 @@
 import threading
-from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from backend import pipeline_scheduler
-from backend.collector_jobs import CollectorBusyError
-from backend.collector_ledger import service_lock
-from backend.pipeline_scheduler import (pipelines_enabled, scheduled_builtin_ids, start_scheduler,
-                                        sync_builtin_pipelines, tick)
-from backend.pipeline_service import Actor, create_pipeline, get_pipeline, set_enabled
+from backend import collector_config, pipeline_scheduler
+from backend.pipeline_scheduler import pipelines_enabled, sync_builtin_pipelines
+from backend.pipeline_service import Actor, create_pipeline, get_pipeline
 from backend.store import db
-from scripts.collector_service import execute_once
 
 ADMIN = Actor("admin", True)
-NOW = datetime(2026, 11, 11, 8, 0, tzinfo=timezone.utc)
-ROW = {"name": "测试管线", "description": "", "topics": ["usiran"], "interval_sec": 3600}
+ROW = {"name": "测试管线", "description": "", "topics": ["usiran"]}
 CFG = {"sources": [{"id": "rss-a", "type": "rss", "name": "RSS 源", "feed_url": "https://example.com/feed.xml",
                     "allowed_hosts": ["example.com"], "language": "en", "tier": "T2",
                     "content_policy": "metadata_only"}], "filters": {"include_any": ["iran"]}}
+
+
+@pytest.fixture(autouse=True)
+def collector_settings(tmp_path, monkeypatch):
+    monkeypatch.setattr(collector_config, "CONFIG_PATH", tmp_path / "collector-settings.json")
+    monkeypatch.setattr(collector_config, "project_root", lambda: tmp_path)
 
 
 def resolve(host):
     return ["93.184.216.34"]
 
 
-def make(name="测试管线", enabled=True, due=True):
-    p = create_pipeline(ADMIN, {**ROW, "name": name}, CFG, resolve=resolve)
-    if enabled:
-        p = set_enabled(ADMIN, p["id"], True)
-    if enabled and due:
-        with db() as conn:
-            conn.execute("UPDATE collection_pipelines SET next_run_at=%s WHERE id=%s", (NOW - timedelta(minutes=1), p["id"]))
-    return get_pipeline(p["id"])
+def make(name="测试管线"):
+    return create_pipeline(ADMIN, {**ROW, "name": name}, CFG, resolve=resolve)
 
 
 def registry(*ids, enabled=True):
@@ -39,147 +33,49 @@ def registry(*ids, enabled=True):
              "selftest_args": [], "output_kind": "geo-v6", "enabled": enabled} for i in ids]
 
 
-def test_tick_runs_due_pipeline_once():
-    p = make()
-    calls = []
-    assert tick(NOW, run=lambda pid, **kw: calls.append((pid, kw))) == [p["id"]]
-    assert calls == [(p["id"], {"trigger": "schedule", "actor": "scheduler"})]
-    after = get_pipeline(p["id"])
-    assert after["next_run_at"] == NOW + timedelta(seconds=3600)
-    assert tick(NOW, run=lambda pid, **kw: calls.append(pid)) == []
+def test_scheduler_machinery_removed():
+    for name in ("tick", "start_scheduler", "stop_scheduler", "scheduled_builtin_ids", "_claim", "_restore"):
+        assert not hasattr(pipeline_scheduler, name)
 
 
-def test_two_concurrent_ticks_run_once():
-    p = make()
-    calls, barrier = [], threading.Barrier(2)
-
-    def run(pid, **kw):
-        calls.append(pid)
-        threading.Event().wait(0.3)
-
-    def worker():
-        barrier.wait()
-        tick(NOW, run=run)
-
-    threads = [threading.Thread(target=worker) for _ in range(2)]
-    [t.start() for t in threads]
-    [t.join() for t in threads]
-    assert calls == [p["id"]]
-
-
-def test_busy_restores_next_run_at():
-    p = make()
-    original = p["next_run_at"]
-
-    def busy(pid, **kw):
-        raise CollectorBusyError("lock is held")
-
-    assert tick(NOW, run=busy) == []
-    assert get_pipeline(p["id"])["next_run_at"] == original
-
-
-def test_other_exception_does_not_stop_tick():
-    a, b = make("甲"), make("乙")
-    calls = []
-
-    def run(pid, **kw):
-        calls.append(pid)
-        if len(calls) == 1:
-            raise RuntimeError("boom")
-
-    assert len(tick(NOW, run=run)) == 2 and sorted(calls) == sorted([a["id"], b["id"]])
-
-
-def test_running_run_skips_pipeline():
-    p = make()
-    with db() as conn:
-        conn.execute("INSERT INTO collection_pipeline_runs(run_id,pipeline_id,version,trigger,status,started_at,data_timestamp) "
-                     "VALUES ('r1',%s,1,'manual','running',%s,%s)", (p["id"], NOW, NOW))
-    calls = []
-    assert tick(NOW, run=lambda pid, **kw: calls.append(pid)) == [] and calls == []
-
-
-def test_disabled_or_deleted_not_run():
-    off = make("停用", enabled=False)
-    gone = make("删除")
-    with db() as conn:
-        conn.execute("UPDATE collection_pipelines SET is_deleted=true WHERE id=%s", (gone["id"],))
-        conn.execute("UPDATE collection_pipelines SET next_run_at=%s WHERE id=%s", (NOW - timedelta(hours=1), off["id"]))
-    calls = []
-    assert tick(NOW, run=lambda pid, **kw: calls.append(pid)) == [] and calls == []
-
-
-def test_unscheduled_pipeline_gets_null_next_run():
-    p = make()
-    with db() as conn:
-        conn.execute("UPDATE collection_pipelines SET interval_sec=NULL WHERE id=%s", (p["id"],))
-    tick(NOW, run=lambda pid, **kw: None)
-    assert get_pipeline(p["id"])["next_run_at"] is None
-
-
-def test_builtin_uses_run_builtin(monkeypatch):
-    sync_builtin_pipelines(registry("demo"))
-    with db() as conn:
-        conn.execute("UPDATE collection_pipelines SET enabled=true,interval_sec=3600,next_run_at=%s WHERE id='demo'",
-                     (NOW - timedelta(minutes=1),))
-    seen = []
-    monkeypatch.setattr(pipeline_scheduler, "run_builtin", lambda pid, **kw: seen.append((pid, kw)))
-    assert tick(NOW) == ["demo"]
-    assert seen == [("demo", {"trigger": "schedule", "actor": "scheduler"})]
-
-
-def test_sync_builtin_creates_disabled_rows_and_is_idempotent():
+def test_sync_builtin_mirrors_effective_enabled_and_is_idempotent():
+    collector_config.save_config({"interval_sec": 86400, "exclude_ids": ["c2"]}, known_ids={"c1", "c2", "c3"})
     reg = registry("c1", "c2") + registry("c3", enabled=False)
     sync_builtin_pipelines(reg)
     sync_builtin_pipelines(reg)
     with db() as conn:
         rows = conn.execute("SELECT * FROM collection_pipelines WHERE kind='builtin' ORDER BY id").fetchall()
         versions = conn.execute("SELECT * FROM collection_pipeline_versions ORDER BY pipeline_id").fetchall()
-    assert [r["id"] for r in rows] == ["c1", "c2", "c3"]
+    assert [(r["id"], r["enabled"]) for r in rows] == [("c1", True), ("c2", False), ("c3", False)]
     r = rows[0]
-    assert (r["name"], r["topics"], r["enabled"], r["owner"], r["current_version"]) == ("采集器c1", ["ukraine", "usiran"], False, "system", 1)
+    assert (r["name"], r["topics"], r["owner"], r["current_version"]) == ("采集器c1", ["ukraine", "usiran"], "system", 1)
     assert len(versions) == 3 and versions[0]["source_channel"] == "migration"
     assert versions[0]["config"] == {"schema_version": "pipeline/1", "builtin": True}
-    assert scheduled_builtin_ids() == []
+    # 排除列表变化后再次同步，已存在行的 enabled 跟随有效状态
+    collector_config.save_config({"interval_sec": 86400, "exclude_ids": ["c1"]}, known_ids={"c1", "c2", "c3"})
+    sync_builtin_pipelines(reg)
     with db() as conn:
-        conn.execute("UPDATE collection_pipelines SET enabled=true WHERE id='c2'")
-    assert scheduled_builtin_ids() == ["c2"]
+        rows = conn.execute("SELECT id,enabled FROM collection_pipelines WHERE kind='builtin' ORDER BY id").fetchall()
+    assert [(r["id"], r["enabled"]) for r in rows] == [("c1", False), ("c2", True), ("c3", False)]
 
 
-def test_sync_builtin_skips_name_conflict_with_user_pipeline(caplog):
-    make("采集器c1", enabled=False)
+def test_sync_builtin_skips_name_conflict_with_user_pipeline():
+    p = make("采集器c1")
     sync_builtin_pipelines(registry("c1", "c2"))
     with db() as conn:
         ids = [r["id"] for r in conn.execute("SELECT id FROM collection_pipelines WHERE kind='builtin'").fetchall()]
     assert ids == ["c2"]
+    assert get_pipeline(p["id"])["enabled"] is False
 
 
-def test_scheduled_builtin_excluded_from_batch(tmp_path, monkeypatch):
-    import scripts.collect as collect
-    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
-    sync_builtin_pipelines(registry("sched", "other"))
+def test_builtin_sync_keeps_all_registry_topics_and_skips_empty(caplog):
+    reg = registry("c1") + [{**registry("c2")[0], "topics": []}]
+    with caplog.at_level("WARNING"):
+        sync_builtin_pipelines(reg)
     with db() as conn:
-        conn.execute("UPDATE collection_pipelines SET enabled=true WHERE id='sched'")
-    ran = []
-
-    def fake_run_one(item, **kw):
-        ran.append(item["id"])
-        return {"id": item["id"], "returncode": 0, "published": False}
-
-    monkeypatch.setattr(collect, "run_one", fake_run_one)
-    report = execute_once(registry=registry("sched", "other"), report_root=tmp_path / "r", runner=collect.run_collectors,
-                          timeout=5)
-    assert ran == ["other"] and "sched" in report["excluded_collector_ids"]
-    ran.clear()
-    execute_once(ids=["sched"], run_id_override="explicit", registry=registry("sched", "other"), report_root=tmp_path / "r2",
-                 runner=collect.run_collectors, timeout=5)
-    assert ran == ["sched"]
-
-
-def test_batch_ignores_scheduler_lookup_failure(tmp_path, monkeypatch):
-    monkeypatch.setattr(pipeline_scheduler, "scheduled_builtin_ids", lambda: (_ for _ in ()).throw(RuntimeError("db")))
-    report = execute_once(registry=[], report_root=tmp_path, runner=lambda *a, **k: [], timeout=5)
-    assert report["status"] == "success"
+        rows = conn.execute("SELECT id,topics FROM collection_pipelines WHERE kind='builtin' ORDER BY id").fetchall()
+    assert [(r["id"], r["topics"]) for r in rows] == [("c1", ["ukraine", "usiran"])]
+    assert "c2" in caplog.text
 
 
 def test_feature_flag(monkeypatch):
@@ -191,62 +87,33 @@ def test_feature_flag(monkeypatch):
     assert pipelines_enabled() is False
 
 
-def names():
-    return [t for t in threading.enumerate() if t.name == "pipeline-scheduler"]
+def _pipeline_threads():
+    return [t for t in threading.enumerate() if t.name.startswith("pipeline-scheduler")]
 
 
-def test_start_scheduler_is_idempotent_and_stoppable(monkeypatch):
-    ticks = []
-    monkeypatch.setattr(pipeline_scheduler, "tick", lambda now: ticks.append(now) or [])
-    first = start_scheduler(0.01)
-    second = start_scheduler(0.01)
-    try:
-        assert first is second and first.daemon and first.name == "pipeline-scheduler"
-        assert len(names()) == 1
-        threading.Event().wait(0.1)
-        assert ticks
-    finally:
-        pipeline_scheduler.stop_scheduler()
-    assert names() == []
-    pipeline_scheduler.stop_scheduler()  # 重复停止无害
-
-
-def test_feature_flag_off_skips_scheduler(monkeypatch):
+def test_start_pipelines_recovers_and_syncs_without_thread(monkeypatch):
     from backend import app as app_module
+    from backend import pipeline_runs
+    calls = []
+    monkeypatch.setattr(pipeline_runs, "recover_interrupted_pipeline_runs", lambda now: calls.append("recover"))
+    monkeypatch.setattr(pipeline_scheduler, "sync_builtin_pipelines", lambda reg: calls.append(("sync", reg)))
+    monkeypatch.setattr(app_module, "load_registry", lambda path: ["reg"])
     monkeypatch.setenv("GEO_PIPELINES_ENABLED", "false")
     app_module._start_pipelines()
-    assert names() == []
-
-
-def test_feature_flag_on_starts_scheduler_once(monkeypatch):
-    from backend import app as app_module
+    assert calls == []
     monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
-    monkeypatch.setattr(pipeline_scheduler, "tick", lambda now: [])
+    app_module._start_pipelines()
+    assert calls == ["recover", ("sync", ["reg"])] and _pipeline_threads() == []
+
+
+def test_start_pipelines_step_failure_is_logged_not_raised(monkeypatch, caplog):
+    from backend import app as app_module
+    from backend import pipeline_runs
+    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
+    monkeypatch.setattr(pipeline_runs, "recover_interrupted_pipeline_runs",
+                        lambda now: (_ for _ in ()).throw(RuntimeError("db")))
+    synced = []
+    monkeypatch.setattr(pipeline_scheduler, "sync_builtin_pipelines", lambda reg: synced.append(reg))
     monkeypatch.setattr(app_module, "load_registry", lambda path: [])
-    try:
-        app_module._start_pipelines()
-        app_module._start_pipelines()
-        assert len(names()) == 1
-    finally:
-        pipeline_scheduler.stop_scheduler()
-    assert names() == []
-
-
-def test_restore_does_not_overwrite_user_change():
-    p = make()
-    claimed = pipeline_scheduler._claim(p["id"], NOW)
-    later = NOW + timedelta(days=1)
-    with db() as conn:
-        conn.execute("UPDATE collection_pipelines SET next_run_at=%s WHERE id=%s", (later, p["id"]))
-    pipeline_scheduler._restore(p["id"], claimed)
-    assert get_pipeline(p["id"])["next_run_at"] == later
-
-
-def test_builtin_sync_keeps_all_registry_topics_and_skips_empty(caplog):
-    reg = registry("c1") + [{**registry("c2")[0], "topics": []}]
-    with caplog.at_level("WARNING"):
-        sync_builtin_pipelines(reg)
-    with db() as conn:
-        rows = conn.execute("SELECT id,topics FROM collection_pipelines WHERE kind='builtin' ORDER BY id").fetchall()
-    assert [(r["id"], r["topics"]) for r in rows] == [("c1", ["ukraine", "usiran"])]
-    assert "c2" in caplog.text
+    app_module._start_pipelines()
+    assert synced == [[]] and "恢复中断的管线运行失败" in caplog.text
