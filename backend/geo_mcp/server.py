@@ -417,6 +417,8 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
     register_sync_tools(server, _run_tool)
     register_mirror_tools(server, _run_tool)
     register_collect_tools(server, _run_tool)
+    from .pipeline_tools import register_pipeline_tools
+    register_pipeline_tools(server, _run_tool)
 
     @server.custom_route("/healthz", methods=["GET"], include_in_schema=False)
     async def healthz(_: Request) -> JSONResponse:
