@@ -11,6 +11,7 @@ from typing import Any
 
 VALID_TOPICS = {"usiran", "ukraine"}
 VALID_POLICIES = {"public_fulltext", "metadata_only"}
+VALID_DISCOVERY_MODES = {"listing", "public_metadata", "rss"}
 
 
 def _norm(value: object) -> str:
@@ -34,8 +35,8 @@ def _matches(text: str, terms: list[str]) -> list[str]:
 def load_config(path: Path) -> dict[str, Any]:
     config = json.loads(Path(path).read_text(encoding="utf-8"))
     topics = set(config.get("topics", []))
-    if topics != VALID_TOPICS:
-        raise ValueError("采集器只允许 usiran 与 ukraine 两个主题")
+    if not topics or not topics.issubset(VALID_TOPICS):
+        raise ValueError("topics 必须为非空，且只能包含 usiran 与 ukraine")
     sources = config.get("sources")
     if not isinstance(sources, list) or not sources:
         raise ValueError("sources 必须为非空数组")
@@ -47,6 +48,8 @@ def load_config(path: Path) -> dict[str, Any]:
         ids.add(source_id)
         if source.get("content_policy") not in VALID_POLICIES:
             raise ValueError(f"来源访问策略无效：{source_id}")
+        if source.get("discovery_mode", "listing") not in VALID_DISCOVERY_MODES:
+            raise ValueError(f"来源发现方式无效：{source_id}")
         if not source.get("entry_urls") or not source.get("allowed_hosts"):
             raise ValueError(f"来源入口或允许域名为空：{source_id}")
     return config
@@ -103,6 +106,7 @@ def classify_candidate(
             categories.append(category)
             admission_terms.extend(hits)
 
+    require_category = config.get("require_category", True)
     topics: list[str] = []
     dimensions: dict[str, str] = {}
     discovery_terms: list[str] = []
@@ -111,7 +115,7 @@ def classify_candidate(
         anchor_hits = _matches(combined, spec.get("anchors", []))
         title_anchor_hits = _matches(title_text, spec.get("anchors", []))
         strong_hits = _matches(combined, spec.get("strong_anchors", []))
-        if categories and anchor_hits and (title_anchor_hits or strong_hits or len(anchor_hits) >= 2):
+        if (categories or not require_category) and anchor_hits and (title_anchor_hits or strong_hits or len(anchor_hits) >= 2):
             topics.append(topic)
             discovery_terms.extend(anchor_hits)
             dimensions[topic] = (

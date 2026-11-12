@@ -337,3 +337,122 @@ def test_collector_is_registered_and_documented():
     assert all(source["name_zh"] in readme for source in config["sources"])
     assert "付费墙" in readme and "标题级线索" in readme
 
+
+
+# ---- 多源采集内核：RSS、单主题、require_category、link_include_pattern ----
+
+def test_feed_parser_reads_rss_and_atom():
+    feeds = load_module("feeds")
+    rss = '<rss><channel><item><title>Iran strike</title><link>https://ex.com/a</link><pubDate>Tue, 10 Nov 2026 08:00:00 GMT</pubDate><description>s</description></item></channel></rss>'
+    atom = '<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Hormuz</title><link href="https://ex.com/b"/><updated>2026-11-10T08:00:00Z</updated></entry></feed>'
+    src = {"allowed_hosts": ["ex.com"]}
+    items = feeds.discover_feed_candidates(rss, "https://ex.com/f", src)
+    assert [c.url for c in items] == ["https://ex.com/a"]
+    assert items[0].published == "2026-11-10T08:00:00+00:00"
+    assert items[0].summary == "s"
+    atom_items = feeds.discover_feed_candidates(atom, "https://ex.com/f", src)
+    assert atom_items[0].discovery_method == "rss"
+    assert atom_items[0].url == "https://ex.com/b"
+    assert atom_items[0].published == "2026-11-10T08:00:00+00:00"
+
+
+def test_feed_parser_drops_foreign_hosts():
+    feeds = load_module("feeds")
+    rss = '<rss><channel><item><title>Iran strike</title><link>https://evil.com/a</link></item></channel></rss>'
+    assert feeds.discover_feed_candidates(rss, "https://ex.com/f", {"allowed_hosts": ["ex.com"]}) == []
+
+
+def test_feed_parser_rejects_non_xml_and_oversized():
+    import pytest
+    feeds = load_module("feeds")
+    src = {"allowed_hosts": ["ex.com"]}
+    with pytest.raises(feeds.FeedParseError):
+        feeds.discover_feed_candidates("<html><body>502</body>", "https://ex.com/f", src)
+    with pytest.raises(feeds.FeedParseError):
+        feeds.discover_feed_candidates("<rss>" + "x" * (5 * 1024 * 1024 + 1) + "</rss>", "https://ex.com/f", src)
+
+
+def test_load_config_accepts_single_topic(tmp_path):
+    import pytest
+    filtering = load_module("filtering")
+    config = json.loads((COLLECTOR / "config.json").read_text(encoding="utf-8"))
+    config["topics"] = ["usiran"]
+    config["sources"][0]["discovery_mode"] = "rss"
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    assert filtering.load_config(path)["topics"] == ["usiran"]
+    config["topics"] = ["taiwan"]
+    path.write_text(json.dumps(config), encoding="utf-8")
+    with pytest.raises(ValueError):
+        filtering.load_config(path)
+    config["topics"] = []
+    path.write_text(json.dumps(config), encoding="utf-8")
+    with pytest.raises(ValueError):
+        filtering.load_config(path)
+
+
+def test_require_category_false_accepts_anchor_only():
+    filtering = load_module("filtering")
+    config = filtering.load_config(COLLECTOR / "config.json")
+    title = "Iran Tehran weekly column"
+    assert not filtering.classify_candidate(title, "", "", "en", config)["accepted"]
+    relaxed = {**config, "require_category": False}
+    result = filtering.classify_candidate(title, "", "", "en", relaxed)
+    assert result["accepted"] and "usiran" in result["topics"]
+
+
+def _rss_config(tmp_path, filtering, sources):
+    config = filtering.load_config(COLLECTOR / "config.json")
+    config["request"].update({"rate_limit_seconds": 0, "max_candidates_per_source": 10})
+    config["sources"] = sources
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def test_rss_source_failure_marks_partial(tmp_path):
+    filtering = load_module("filtering")
+    web = load_module("web")
+    monitor = load_module("geopolitical_source_monitor")
+    base = {"tier": "T1", "language": "en", "content_policy": "metadata_only"}
+    path = _rss_config(tmp_path, filtering, [
+        {**base, "id": "feed", "name_zh": "订阅", "publisher": "Feed", "entry_urls": ["https://feed.example/rss"],
+         "allowed_hosts": ["feed.example"], "discovery_mode": "rss"},
+        {**base, "id": "meta", "name_zh": "列表", "publisher": "Media", "entry_urls": ["https://meta.example/list"],
+         "allowed_hosts": ["meta.example"], "discovery_mode": "public_metadata"},
+    ])
+    responses = {
+        "https://feed.example/rss": web.FetchResult(200, "<html><body>502 Bad Gateway</body>", "https://feed.example/rss", {}),
+        "https://meta.example/list": web.FetchResult(
+            200, '<a href="/item">Russia sanctions restrict oil exports during Ukraine war</a>',
+            "https://meta.example/list", {}),
+    }
+    report = monitor.run_collection(path, tmp_path / "out", FakeClient(responses))
+    assert report["collection_status"] == "partial"
+    assert report["sources"]["feed"]["state"] == "failed"
+    assert report["sources"]["feed"]["error"] == "PARSE_ERROR"
+    assert report["sources"]["meta"]["state"] == "ok"
+
+
+def test_rss_source_collects_and_link_include_pattern_filters(tmp_path):
+    filtering = load_module("filtering")
+    web = load_module("web")
+    monitor = load_module("geopolitical_source_monitor")
+    path = _rss_config(tmp_path, filtering, [{
+        "id": "feed", "name_zh": "订阅", "publisher": "Feed", "tier": "T1", "language": "en",
+        "content_policy": "metadata_only", "entry_urls": ["https://feed.example/rss"],
+        "allowed_hosts": ["feed.example"], "discovery_mode": "rss",
+        "link_include_pattern": r"/world/",
+    }])
+    xml = (
+        "<rss><channel>"
+        "<item><title>Iran missile strike raises regional conflict risk</title><link>https://feed.example/world/1</link></item>"
+        "<item><title>Iran missile strike raises regional conflict risk again</title><link>https://feed.example/sport/2</link></item>"
+        "</channel></rss>"
+    )
+    responses = {"https://feed.example/rss": web.FetchResult(200, xml, "https://feed.example/rss", {})}
+    report = monitor.run_collection(path, tmp_path / "out", FakeClient(responses))
+    assert report["sources"]["feed"]["candidates"] == 1
+    assert report["sources"]["feed"]["state"] == "ok"
+    payload = json.loads((tmp_path / "out" / "geo-v6.json").read_text(encoding="utf-8"))
+    assert [r["url"] for r in payload["records"]] == ["https://feed.example/world/1"]

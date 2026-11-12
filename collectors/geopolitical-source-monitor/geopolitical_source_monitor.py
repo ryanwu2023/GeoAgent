@@ -19,6 +19,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
+from feeds import FeedParseError, discover_feed_candidates  # noqa: E402
 from filtering import classify_candidate, load_config  # noqa: E402
 from web import (  # noqa: E402
     Candidate,
@@ -275,7 +276,20 @@ def run_collection(
                 status["error"] = "access_challenge"
                 counts["restricted"] += 1
                 continue
-            candidates = discover_candidates(listing.body, listing.final_url or entry_url, source)
+            base_url = listing.final_url or entry_url
+            if source.get("discovery_mode") == "rss":
+                try:
+                    candidates = discover_feed_candidates(listing.body, base_url, source)
+                except FeedParseError:
+                    status["error"] = "PARSE_ERROR"
+                    status["state"] = "failed"
+                    counts["errors"] += 1
+                    continue
+            else:
+                candidates = discover_candidates(listing.body, base_url, source)
+            pattern = source.get("link_include_pattern")
+            if pattern:
+                candidates = [item for item in candidates if re.search(pattern, item.url)]
             candidates = candidates[: int(source.get("max_candidates_per_source", 80))]
             status["candidates"] += len(candidates)
             counts["candidates"] += len(candidates)
