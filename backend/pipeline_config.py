@@ -81,6 +81,14 @@ def _validate_row(row: Any) -> dict[str, Any]:
     topic = row.get("topic")
     if topic not in VALID_TOPICS:
         raise PipelineConfigError("row.topic", f"主题只能是 {'、'.join(VALID_TOPICS)}")
+    schedule = validate_schedule(row)
+    return {"name": name, "description": description, "topic": topic, **schedule}
+
+
+def validate_schedule(row: Any) -> dict[str, Any]:
+    """只校验调度相关字段（interval_sec / daily_times / timezone），返回规范化后的三项。"""
+    if not isinstance(row, dict):
+        raise PipelineConfigError("row", "必须是对象")
     tz_name = row.get("timezone") or "Asia/Shanghai"
     try:
         ZoneInfo(tz_name)
@@ -103,8 +111,7 @@ def _validate_row(row: Any) -> dict[str, Any]:
         daily = sorted(set(daily))
         if len(daily) > MAX_DAILY_TIMES:
             raise PipelineConfigError("row.daily_times", f"每日定时最多 {MAX_DAILY_TIMES} 个")
-    return {"name": name, "description": description, "topic": topic, "timezone": tz_name,
-            "interval_sec": interval, "daily_times": daily}
+    return {"timezone": tz_name, "interval_sec": interval, "daily_times": daily}
 
 
 # ---------------------------------------------------------------- URL / SSRF
