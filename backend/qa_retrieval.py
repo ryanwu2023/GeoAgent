@@ -92,6 +92,9 @@ def _published_timestamp(value: Any) -> float:
 
 def _tier_score(record: dict[str, Any]) -> float:
     tier = str(record.get("tier") or "").upper()
+    if tier == "T1" and record.get("source_role") == "party_official":
+        # A party's own ministry or state media proves its position, not the event itself.
+        return 0.8
     return {"T1": 1.0, "T2": 0.72, "T3": 0.34}.get(tier, 0.15)
 
 

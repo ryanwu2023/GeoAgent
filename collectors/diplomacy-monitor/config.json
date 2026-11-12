@@ -7,7 +7,14 @@
   "request_timeout": 30,
   "min_interval_per_host": 1.2,
   "per_source_max": 200,
+  "google_news_resolve_max": 0,
+  "body_fetch_max": 20,
+  "body_fetch_seconds": 120,
+  "body_timeout": 20,
+  "body_max_chars": 6000,
+  "body_ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
   "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "fallback_ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
   "buckets": {
     "qatar_mediation": {
       "label": "卡塔尔斡旋",
@@ -636,6 +643,7 @@
       "id": "app-pk",
       "url": "https://www.app.com.pk/feed/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Associated Press of Pakistan",
       "enabled": true,
       "note": "巴基斯坦国家通讯社 WordPress feed，9-19 实测 rss-ok"
@@ -670,7 +678,8 @@
       "tier": "T3",
       "publisher": "Al Jazeera",
       "enabled": true,
-      "note": "半岛（卡塔尔背景，按加工方定级 T3），9-19 实测 rss-ok"
+      "note": "半岛（卡塔尔背景，按加工方定级 T3），9-19 实测 rss-ok",
+      "body": true
     },
     {
       "id": "bbc-mideast",
@@ -678,7 +687,8 @@
       "tier": "T3",
       "publisher": "BBC",
       "enabled": true,
-      "note": "9-19 实测 rss-ok"
+      "note": "9-19 实测 rss-ok",
+      "body": true
     },
     {
       "id": "guardian-iran",
@@ -686,7 +696,8 @@
       "tier": "T3",
       "publisher": "The Guardian",
       "enabled": true,
-      "note": "9-19 实测 rss-ok"
+      "note": "9-19 实测 rss-ok",
+      "body": true
     },
     {
       "id": "nyt-mideast",
@@ -694,15 +705,253 @@
       "tier": "T3",
       "publisher": "NYT",
       "enabled": true,
-      "note": "9-19 实测 rss-ok"
+      "note": "9-19 实测 rss-ok",
+      "outlets": [
+        "The New York Times"
+      ]
+    },
+    {
+      "id": "pbs-world",
+      "url": "https://www.pbs.org/newshour/feeds/rss/world",
+      "tier": "T3",
+      "publisher": "PBS",
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+      "enabled": true,
+      "body": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。PBS NewsHour 国际版。2026-11-05 本机实测：全局 UA（Chrome/124）返回 202 空响应，Safari UA 200·20 条，按源覆盖 UA"
+    },
+    {
+      "id": "cnbc-world",
+      "url": "https://www.cnbc.com/id/100727362/device/rss/rss.html",
+      "tier": "T3",
+      "publisher": "CNBC",
+      "enabled": true,
+      "body": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。CNBC World；Pro 文章由付费墙标记识别后只留摘要。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "bbc-world",
+      "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+      "tier": "T3",
+      "publisher": "BBC",
+      "enabled": true,
+      "body": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。BBC World（bbc-mideast 之外的美伊/海湾报道）。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "cbs-world",
+      "url": "https://www.cbsnews.com/latest/rss/world",
+      "tier": "T3",
+      "publisher": "CBS News",
+      "enabled": true,
+      "body": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。CBS News World。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "nbc-world",
+      "url": "https://feeds.nbcnews.com/nbcnews/public/world",
+      "tier": "T3",
+      "publisher": "NBC News",
+      "enabled": true,
+      "body": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。NBC News World。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "npr-world",
+      "url": "https://feeds.npr.org/1004/rss.xml",
+      "tier": "T3",
+      "publisher": "NPR",
+      "enabled": true,
+      "body": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。NPR World。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "axios",
+      "url": "https://api.axios.com/feed/",
+      "tier": "T3",
+      "publisher": "Axios",
+      "enabled": true,
+      "body": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。Axios 全站（量大，靠桶与锚定过滤）。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "iranintl",
+      "url": "https://www.iranintl.com/en/feed",
+      "tier": "T3",
+      "publisher": "Iran International",
+      "enabled": true,
+      "body": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。伊朗国际英文版（海外反对派背景媒体，非当事方官方，按加工方定级 T3）。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "almonitor",
+      "url": "https://www.al-monitor.com/rss",
+      "tier": "T3",
+      "publisher": "Al-Monitor",
+      "enabled": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。Al-Monitor；部分付费，不抓正文。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "jpost-me",
+      "url": "https://www.jpost.com/rss/rssfeedsmiddleeastnews.aspx",
+      "tier": "T3",
+      "publisher": "The Jerusalem Post",
+      "enabled": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。耶路撒冷邮报中东频道；部分付费，不抓正文。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "toi",
+      "url": "https://www.timesofisrael.com/feed/",
+      "tier": "T3",
+      "publisher": "The Times of Israel",
+      "enabled": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。以色列时报全站；文章页对抓取返回 403，不抓正文。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "france24-me",
+      "url": "https://www.france24.com/en/middle-east/rss",
+      "tier": "T3",
+      "publisher": "France 24",
+      "enabled": true,
+      "body": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。France 24 中东频道。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "gulfnews",
+      "url": "https://gulfnews.com/feed",
+      "tier": "T3",
+      "publisher": "Gulf News",
+      "enabled": true,
+      "body": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。海湾新闻（阿联酋背景，按加工方定级 T3）。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "thehill-intl",
+      "url": "https://thehill.com/policy/international/feed/",
+      "tier": "T3",
+      "publisher": "The Hill",
+      "enabled": true,
+      "body": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。The Hill 国际政策。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "politico",
+      "url": "https://rss.politico.com/politics-news.xml",
+      "tier": "T3",
+      "publisher": "Politico",
+      "enabled": true,
+      "body": true,
+      "note": "头部媒体直连 RSS，替代谷歌新闻副本（同标题+同发布方去重）。Politico 政治新闻（量大，靠桶与锚定过滤）。2026-11-05 本机实测 200"
+    },
+    {
+      "id": "nyt-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.nytimes.com/sitemaps/new/news.xml.gz",
+      "tier": "T3",
+      "publisher": "The New York Times",
+      "per_source_max": 1000,
+      "enabled": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·857 条（带 keywords）；付费墙，不抓正文。2026-11-05 本机实测"
+    },
+    {
+      "id": "wsj-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.wsj.com/wsjsitemaps/wsj_google_news.xml",
+      "tier": "T3",
+      "publisher": "The Wall Street Journal",
+      "per_source_max": 1000,
+      "enabled": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·595 条（带 keywords）；付费墙，不抓正文。2026-11-05 本机实测"
+    },
+    {
+      "id": "bloomberg-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.bloomberg.com/sitemaps/news/latest.xml",
+      "tier": "T3",
+      "publisher": "Bloomberg",
+      "per_source_max": 1000,
+      "outlets": [
+        "Bloomberg.com"
+      ],
+      "enabled": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·587 条；付费墙，不抓正文。2026-11-05 本机实测"
+    },
+    {
+      "id": "cnn-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.cnn.com/sitemap/news.xml",
+      "tier": "T3",
+      "publisher": "CNN",
+      "per_source_max": 1000,
+      "enabled": true,
+      "body": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·227 条（CNN 官方 RSS 自 2023 年停更）。2026-11-05 本机实测"
+    },
+    {
+      "id": "aljazeera-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.aljazeera.com/news-sitemap.xml",
+      "tier": "T3",
+      "publisher": "Al Jazeera",
+      "per_source_max": 1000,
+      "enabled": true,
+      "body": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·228 条，覆盖约 48 小时（all.xml RSS 只有约 9 小时）。2026-11-05 本机实测"
+    },
+    {
+      "id": "bbc-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.bbc.com/sitemaps/https-index-com-news.xml",
+      "tier": "T3",
+      "publisher": "BBC",
+      "per_source_max": 1000,
+      "language": "en",
+      "sitemap_children": 3,
+      "enabled": true,
+      "body": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。站点地图索引，含各语种，按 news:language=en 过滤；200。2026-11-05 本机实测"
+    },
+    {
+      "id": "cbs-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.cbsnews.com/xml-sitemap/news.xml",
+      "tier": "T3",
+      "publisher": "CBS News",
+      "per_source_max": 1000,
+      "enabled": true,
+      "body": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·588 条（含地方台）。2026-11-05 本机实测"
+    },
+    {
+      "id": "nbc-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.nbcnews.com/sitemap/nbcnews/sitemap-news",
+      "tier": "T3",
+      "publisher": "NBC News",
+      "per_source_max": 1000,
+      "enabled": true,
+      "body": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·152 条。2026-11-05 本机实测"
+    },
+    {
+      "id": "toi-sitemap",
+      "kind": "news_sitemap",
+      "url": "https://www.timesofisrael.com/news-sitemap.xml",
+      "tier": "T3",
+      "publisher": "The Times of Israel",
+      "per_source_max": 1000,
+      "enabled": true,
+      "note": "新闻站点地图（媒体向谷歌新闻提交的最近约 48 小时文章清单，带原文链接与发布时间，无摘要）。200·216 条；文章页 403，不抓正文。2026-11-05 本机实测"
     },
     {
       "id": "mee",
       "url": "https://www.middleeasteye.net/rss",
       "tier": "T3",
       "publisher": "Middle East Eye",
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
       "enabled": true,
-      "note": "9-19 实测 rss-ok"
+      "note": "2026-11-05 本机复测：配置全局 UA（Chrome/124）被站点按 UA 拦截返回 404，Chrome/130 与 Safari UA 均 200 RSS 20 条——线上 Sealos 404 应是同因而非出口问题；改为按源覆盖 UA，URL 不变；线上待复测",
+      "body": true
     },
     {
       "id": "dawn",
@@ -868,6 +1117,7 @@
       "id": "qna-rss",
       "url": "https://www.qna.org.qa/en/rss",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "QNA",
       "enabled": false,
       "note": "2026-09-19 实测 404 无 RSS（mideast 项目同期同结论）；卡塔尔官方口径经 aljazeera/dohanews/gn-qatar 覆盖"
@@ -876,6 +1126,7 @@
       "id": "ona-oman",
       "url": "https://ona.gov.om/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Oman News Agency",
       "enabled": false,
       "note": "2026-09-19 实测连接失败(status 0)；阿官方口径经 gn-oman 覆盖"
@@ -884,6 +1135,7 @@
       "id": "radiopk",
       "url": "https://www.radio.gov.pk/rss",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Radio Pakistan",
       "enabled": false,
       "note": "2026-09-19 实测 404；巴方口径经 app-pk(T1)/dawn 覆盖"
@@ -946,11 +1198,15 @@
     },
     {
       "id": "thenational",
-      "url": "https://www.thenationalnews.com/rss?latest",
+      "url": "https://www.thenationalnews.com/arc/outboundfeeds/rss/?outputType=xml",
       "tier": "T3",
       "publisher": "The National",
-      "enabled": false,
-      "note": "2026-09-19 实测 404"
+      "enabled": true,
+      "note": "阿联酋英文报（阿联酋背景，按加工方定级 T3）。2026-11-05 本机实测 Arc outboundfeeds 200 RSS 100 条（旧 /rss?latest 404）；全站流量大，靠桶与锚定过滤；线上未复测",
+      "outlets": [
+        "The National News"
+      ],
+      "body": true
     },
     {
       "id": "presstv",
@@ -1020,6 +1276,7 @@
       "id": "qatar-mofa",
       "url": "https://www.mofa.gov.qa/en/rss.xml",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Qatar MOFA",
       "enabled": false,
       "note": "2026-09-19 实测 404（rss 与 newsroom 页均 404）；卡方口径经 aljazeera/dohanews/gn-qatar 覆盖"
@@ -1028,38 +1285,43 @@
       "id": "pakistan-mofa",
       "url": "https://mofa.gov.pk/feed/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Pakistan MOFA",
       "enabled": false,
       "note": "2026-09-19 实测连接失败(status 0)；巴方口径经 app-pk(T1)/dawn 覆盖"
     },
     {
       "id": "state-gov",
-      "url": "https://www.state.gov/press-releases/feed/",
+      "url": "https://www.state.gov/rss-feed/press-releases/feed/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "US State Dept",
-      "enabled": false,
-      "note": "2026-09-19 实测 407（代理认证拒绝）；美方口径经 gn-trump/gn-talks 覆盖"
+      "enabled": true,
+      "note": "2026-11-05 本机实测 /rss-feed/press-releases/feed/ 200 RSS 10 条（旧 /press-releases/feed/ 200 但空频道；9-19 线上 407 为代理认证问题）；同址 meeting-calendar-monitor 在用；线上未复测"
     },
     {
       "id": "whitehouse-feed",
-      "url": "https://www.whitehouse.gov/feed/",
+      "url": "https://www.whitehouse.gov/news/feed/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "White House",
-      "enabled": false,
-      "note": "2026-09-19 实测 404"
+      "enabled": true,
+      "note": "2026-11-05 本机实测 /news/feed/ 200 RSS 30 条（旧 /feed/ 已 404）；线上经 Sealos 隧道出境，未在线上复测"
     },
     {
       "id": "defense-gov",
-      "url": "https://www.defense.gov/News/Releases/",
+      "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=9&Site=945&max=60",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "US DoD",
-      "enabled": false,
-      "note": "2026-09-19 实测 403"
+      "enabled": true,
+      "note": "五角大楼新闻稿（ContentType=9=Releases，链接落 war.gov）。2026-11-05 本机实测 200 RSS 60 条（旧 /News/Releases/ 为 HTML 页 403）；readiness-monitor 同接口在用；线上未复测"
     },
     {
       "id": "kuna",
       "url": "https://www.kuna.net.kw/EnglishRSSNews.aspx",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "KUNA Kuwait",
       "enabled": false,
       "note": "2026-09-19 实测连接失败(status 0，两条路径)"
@@ -1068,6 +1330,7 @@
       "id": "wam-uae",
       "url": "https://www.wam.ae/en/rss",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "WAM UAE",
       "enabled": false,
       "note": "2026-09-19 实测 200 但返回 JS 壳 HTML（非 RSS）"
@@ -1076,6 +1339,7 @@
       "id": "spa-saudi",
       "url": "https://www.spa.gov.sa/en/rss.xml",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "SPA Saudi",
       "enabled": false,
       "note": "2026-09-19 实测 200 但返回 JS 壳 HTML（非 RSS）"
@@ -1084,6 +1348,7 @@
       "id": "china-mofa",
       "url": "https://www.fmprc.gov.cn/mfa_eng/xw/fyyl/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "China MFA",
       "enabled": false,
       "note": "2026-09-19 实测 200 HTML 列表页，无 RSS；中方口径经 gn-china 覆盖"
@@ -1092,6 +1357,7 @@
       "id": "iran-mofa",
       "url": "https://en.mfa.gov.ir/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Iran MOFA",
       "enabled": false,
       "note": "2026-09-19 实测 307 重定向链失败；伊方口径经 tehrantimes/gn 覆盖"

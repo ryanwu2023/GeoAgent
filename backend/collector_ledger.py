@@ -351,6 +351,38 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
+def _process_identity(pid: int) -> str | None:
+    """Boot id plus kernel start time of ``pid`` (Linux), or None where /proc is absent.
+
+    In a container the web server is always PID 1, so a PID alone cannot tell a
+    lock left by the previous container from one held by the current process.
+    """
+    try:
+        boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        stat = Path(f"/proc/{pid}/stat").read_text()
+    except OSError:
+        return None
+    # Field 22 (starttime) follows the parenthesised command name, which may contain spaces.
+    fields = stat[stat.rfind(")") + 2:].split()
+    return f"{boot}:{fields[19]}" if len(fields) > 19 else None
+
+
+_held_locks: set[str] = set()
+
+
+def _lock_is_stale(path: Path, owner: dict) -> bool:
+    pid = owner.get("pid")
+    if not isinstance(pid, int):
+        return False  # malformed: leave for manual inspection
+    if pid == os.getpid():
+        # Threads share the PID; only a lock this process actually took is live.
+        return str(path) not in _held_locks
+    recorded = owner.get("process")
+    if recorded and _process_identity(pid) not in (None, recorded):
+        return True  # the PID now belongs to a different process
+    return not _pid_alive(pid)
+
+
 def _lock_owner(path: Path) -> dict:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -364,8 +396,9 @@ def service_lock(path: Path) -> Iterator[None]:
     """Acquire a cross-platform single-instance lock.
 
     ``O_EXCL`` makes acquisition atomic on local filesystems.  A lock left by a
-    crashed process is removed only when its recorded PID is no longer alive;
-    malformed locks are left in place for manual inspection.
+    crashed process is removed when its recorded PID is no longer alive, now runs
+    a different process, or is this process without it holding the lock (a
+    restarted container reuses PID 1); malformed locks are left for inspection.
     """
 
     lock_path = Path(path)
@@ -378,7 +411,7 @@ def service_lock(path: Path) -> Iterator[None]:
         except FileExistsError:
             owner = _lock_owner(lock_path)
             pid = owner.get("pid")
-            if attempt == 0 and isinstance(pid, int) and not _pid_alive(pid):
+            if attempt == 0 and _lock_is_stale(lock_path, owner):
                 try:
                     lock_path.unlink()
                 except FileNotFoundError:
@@ -389,11 +422,13 @@ def service_lock(path: Path) -> Iterator[None]:
     if fd is None:
         raise RuntimeError(f"unable to acquire collector service lock: {lock_path}")
     try:
-        metadata = {"pid": os.getpid(), "created_at": utc_timestamp()}
+        metadata = {"pid": os.getpid(), "process": _process_identity(os.getpid()), "created_at": utc_timestamp()}
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(metadata, handle, ensure_ascii=False)
+        _held_locks.add(str(lock_path))
         yield
     finally:
+        _held_locks.discard(str(lock_path))
         try:
             lock_path.unlink()
         except FileNotFoundError:

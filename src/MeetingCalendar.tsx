@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from "react";
 import {AlertTriangle,CalendarDays,ChevronLeft,ChevronRight,Clock3,Download,ExternalLink,MapPin,RefreshCw,Users,X} from "lucide-react";
-import {apiMeetingDetail,apiMeetingExport,apiMeetings} from "./api";
+import {apiMeetingDetail,apiMeetingExport,apiMeetings,dateText} from "./api";
 import {buildMeetingMonth,formatMeetingMonthLabel,meetingDateLabel,meetingDates,meetingOccursOn,meetingPersonLabel,meetingStatusMeta,shiftMeetingMonth,sortMeetings} from "./meeting_calendar";
 import type {Meeting,MeetingDetail,MeetingListResponse} from "./types";
 
@@ -88,7 +88,7 @@ export default function MeetingCalendar({snapshotId,onEvidence}:Props){
       <select aria-label="筛选会晤人物" value={person} onChange={event=>setPerson(event.target.value)}><option value="">全部人物</option>{persons.map(value=><option value={value.id} key={value.id}>{meetingPersonLabel(value)}</option>)}</select>
       <label><input type="checkbox" checked={includeInactive} onChange={event=>setIncludeInactive(event.target.checked)}/>包含取消、推迟、否认、过期和已举行</label>
     </div>
-    {payload&&<p className="meeting-basis">当前范围：{calendarTopic==="all"?"全部外交日程":calendarTopic==="usiran"?"美伊相关日程":"俄乌相关日程"} · 数据截至 {payload.as_of?.replace("T"," ").slice(0,16)} · {payload.basis}</p>}
+    {payload&&<p className="meeting-basis">当前范围：{calendarTopic==="all"?"全部外交日程":calendarTopic==="usiran"?"美伊相关日程":"俄乌相关日程"} · 数据截至 {dateText(payload.as_of)} · {payload.basis}</p>}
     {error&&<div className="meeting-error" role="alert">{error}</div>}
     {loading&&!payload&&<div className="meeting-empty"><RefreshCw className="spin"/>正在读取冻结快照中的会晤日历…</div>}
 

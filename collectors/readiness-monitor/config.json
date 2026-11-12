@@ -905,6 +905,7 @@
       "channel": "官方声明/新闻稿",
       "publisher": "美国国防部（五角大楼）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "官方一手发布，即该方表态的原始出处",
       "topic_anchored": true,
       "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=9&Site=945&max=60"
@@ -917,6 +918,7 @@
       "channel": "记者会/简报逐字稿",
       "publisher": "美国国防部（五角大楼）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "官方一手逐字稿，战备表态密度最高的源",
       "topic_anchored": true,
       "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=13&Site=945&max=60",
@@ -930,6 +932,7 @@
       "channel": "官方新闻",
       "publisher": "美国国防部（五角大楼）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "官方一手发布",
       "topic_anchored": true,
       "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=60"
@@ -942,6 +945,7 @@
       "channel": "战区司令部官方影像/新闻稿",
       "publisher": "美国中央司令部公共事务办公室（DVIDS）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "★ 第 5 轮探测新增。DVIDS 是国防部官方影像分发平台，本条为 CENTCOM 公共事务办公室自营feed（unit 72）。它是 centcom.mil 被 CDN 封堵后**唯一可直接取到 CENTCOM 原文**的官方通道，含完整 description，故为 T1（对比 centcom-gnews 仅能拿到标题层、只能计 T3）。",
       "topic_anchored": true,
       "url": "https://www.dvidshub.net/rss/unit/72",
@@ -956,6 +960,7 @@
       "channel": "空军组成部队官方影像/新闻稿",
       "publisher": "美国中央空军司令部（DVIDS）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "★ 第 5 轮探测新增。CENTCOM 空军组成部队官方发布，可提供空中加油/战斗机部署等战备一手材料。",
       "topic_anchored": true,
       "url": "https://www.dvidshub.net/rss/unit/407",
@@ -970,6 +975,7 @@
       "channel": "陆战队组成部队官方影像/新闻稿",
       "publisher": "美国海军陆战队中央司令部（DVIDS）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "★ 第 5 轮探测新增。CENTCOM 陆战队组成部队官方发布。",
       "topic_anchored": true,
       "url": "https://www.dvidshub.net/rss/unit/809",
@@ -984,6 +990,7 @@
       "channel": "总统文件/授权",
       "publisher": "美国白宫",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "官方一手法律文件层",
       "topic_anchored": false,
       "url": "https://www.whitehouse.gov/presidential-actions/feed/"
@@ -1012,7 +1019,7 @@
       "topic_anchored": false,
       "url": "https://api.congress.gov/v3/crsreport?limit=40&format=json&api_key=DEMO_KEY",
       "json_path": "CRSReports",
-      "note": "DEMO_KEY 约 30 次/小时限流，实测会返回 HTTP 429。建议申请个人 API key 后替换 url 中的 api_key。"
+      "note": "DEMO_KEY 约 30 次/小时限流，实测会返回 HTTP 429。设置环境变量 DATA_GOV_API_KEY 后，请求时自动换成个人 key。"
     },
     {
       "id": "centcom-gnews",
@@ -1111,6 +1118,7 @@
       "channel": "革命卫队官方通讯社",
       "publisher": "Sepah News（伊朗伊斯兰革命卫队官方新闻社）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "伊方官方一手发布（革命卫队自营通讯社）。等级含义是「该方表态的原始出处」，不等于其事实主张已获证实。",
       "topic_anchored": false,
       "url": "https://sepahnews.ir/fa/rss/allnews",
@@ -1127,6 +1135,7 @@
       "channel": "革命卫队系军事媒体",
       "publisher": "Defa Press（دفاع مقدس，伊朗军事/国防新闻社）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "伊方军方背景军事媒体的官方一手发布",
       "topic_anchored": true,
       "url": "https://defapress.ir/fa/rss/allnews"
@@ -1139,6 +1148,7 @@
       "channel": "革命卫队系新闻",
       "publisher": "Mashregh News（مشرق، 与革命卫队关系密切）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "伊方革命卫队系媒体的官方一手发布",
       "topic_anchored": false,
       "url": "https://www.mashreghnews.ir/rss"
@@ -1163,6 +1173,7 @@
       "channel": "国家广播对外频道",
       "publisher": "Pars Today（伊朗国家广播 IRIB 对外台）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "伊方国家广播机构官方对外发布",
       "topic_anchored": false,
       "url": "https://parstoday.ir/en/rss",
@@ -1176,6 +1187,7 @@
       "channel": "国家通讯社",
       "publisher": "IRNA（伊朗伊斯兰共和国通讯社，官方）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "伊方国家通讯社官方一手发布",
       "topic_anchored": false,
       "url": "https://en.irna.ir/rss"
@@ -1308,6 +1320,7 @@
       "channel": "战区司令部新闻稿（直连）",
       "publisher": "美国中央司令部（CENTCOM）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "本应是最优源",
       "url": "https://www.centcom.mil/MEDIA/PRESS-RELEASES/",
       "note": "【勘误 2026-09-18 晚 · 原『整站 CDN 拦截』结论有误，已更正】原记录（当日早）称『首页 / MEDIA / PRESS-RELEASES / STATEMENTS / Article 详情页 全部 HTTP 403，Server=AkamaiGHost』。复核发现该结论**叠加了两个可修复的本地因素**，不等于站点封锁：(a) **本地代理出口已过期** —— 原测量走的端口现为 502 不可用，换到存活端口后同一 URL 返回 **HTTP 200**；(b) **请求头组合不足** —— 只带 User-Agent 时确实 403，补齐 Accept/Accept-Language/Sec-Fetch-* 后 200（与 README §6「只带 UA 会被 Akamai 拦」一致）。★ 仍保持 enabled:false，但**理由改为**：该 URL 是 **JS 渲染的 HTML 列表页**（实测 200 / text/html / 293KB，但 HTML 里**不含任何 Article 链接**），静态解析取不到条目；启用需引入无头浏览器，与「不做风控绕过」的轻量原则相悖。替代仍为 centcom-gnews（聚合器取标题+链接）。"
@@ -1320,6 +1333,7 @@
       "channel": "革命卫队系通讯社（直连）",
       "publisher": "Tasnim News Agency",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "本应是最优伊方源",
       "url": "https://www.tasnimnews.com/en/rss/feed/0/7/0/all-news",
       "note": "【实测停用 2026-09-18】网络层不可达：www.tasnimnews.com DNS 无法解析（gaierror 11001），HTTP 通道返回 502。非本机代码问题。替代：tasnim-gnews。"
@@ -1332,6 +1346,7 @@
       "channel": "革命卫队系通讯社（直连）",
       "publisher": "Fars News Agency",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "本应是最优伊方源",
       "url": "https://www.farsnews.ir/rss",
       "note": "【实测停用 2026-09-18】证书链含自签名根，无法校验；且 /rss 路径 404（首页可达，未声明 feed）。首页未发现可用 feed 声明。替代：farsnews-gnews。"
@@ -1356,6 +1371,7 @@
       "channel": "最高领袖办公室",
       "publisher": "Khamenei.ir（最高领袖官方英文站）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "伊方最高权威一手表态，价值很高",
       "url": "https://english.khamenei.ir/rss",
       "note": "【实测停用 2026-09-18】证书链含自签名根，无法校验；且返回 302 重定向后关机校验仍失败。此项若日后接通，对「革命卫队最高层表态」这一点会有明显增益。"
@@ -1380,6 +1396,7 @@
       "channel": "海军官网（候选，未接通）",
       "publisher": "美国海军",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "本应为美方官方一手源",
       "url": "https://www.navy.mil/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=1060&max=25",
       "note": "【实测停用 2026-09-18 第5轮】HTTP 200 但**响应体为空**（0 字节，XML 解析报 no element found）。与 centcom.mil 同一现象：AFPIMS 的 RSS.ashx 在 Site id 不匹配时返回 200 空体，不报错。navy.mil 的真实 Site/Category id 未能反查（首页未暴露 rss 链接）。★ 若日后接通，对「军舰/航母部署」这一点增益最大——目前该议题的美方一侧几乎只能靠 T3 聚合器。"
@@ -1392,6 +1409,7 @@
       "channel": "陆军官网（候选，未接通）",
       "publisher": "美国陆军",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "本应为美方官方一手源",
       "url": "https://www.army.mil/rss/",
       "note": "【实测停用 2026-09-18 第5轮】SSL 校验失败：证书自签名。★ 注意甄别：本机经 127.0.0.1 代理出网，**代理的 TLS 中间人也会造成同样的『自签名』报错**，因此该结论不等于站点本身有问题（第 2 轮已用同样方法证实 sepahnews 的报错是真实的链不完整）。未加 tls.verify=false，避免把代理解密引入链路。【补测 2026-09-18 晚】换到存活代理出口复测：`https://www.army.mil/rss/` 返回 **HTTP 404**（不再报证书错），说明该路径本身不存在、而不是 TLS 问题 —— 原「证书自签名」很可能也是过期出口造成的假象。现**双重原因停用**：路径 404（端点已变更）+ 未定位到可用的 feed 端点。"
@@ -1404,6 +1422,7 @@
       "channel": "参联会官网（候选，未接通）",
       "publisher": "美国参谋长联席会议",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "本应为美方官方一手源（主席/副主席表态）",
       "url": "https://www.jcs.mil/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=1084&max=25",
       "note": "【实测停用 2026-09-18 第5轮】读取超时（TimeoutError，25s）。与 navy-rss 同属 AFPIMS 家族，Site id 疑为猜测值。"
@@ -1416,6 +1435,7 @@
       "channel": "DVIDS 全站（候选，未接通）",
       "publisher": "国防部影像分发服务（DVIDS）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "本应为美方官方一手源",
       "url": "https://www.dvidshub.net/rss/",
       "note": "【实测停用 2026-09-18 第5轮】HTTP 404（Server: Apache）。该站不提供全站 feed，只提供**按单位**的 feed（/rss/unit/<id>）。已据此接通 dvids-centcom / dvids-afcent / dvids-marcent 三个单位源。"
@@ -1428,6 +1448,7 @@
       "channel": "合同公告（可选，未启用）",
       "publisher": "美国国防部（五角大楼）",
       "tier": "T1",
+      "source_role": "party_official",
       "tier_note": "官方一手发布",
       "url": "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=25",
       "note": "【实测可达 2026-09-18 第5轮，但**主动不启用**】实测 200/25 条。不启用的理由是**口径**：合同公告是采购/授标信息（obligation 层），不是战备表态，与本项目「表态监测」的口径不同，混入会污染信号统计。留档以备日后做「采购→战备」联动时启用。"

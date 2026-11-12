@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timezone
 
 import pytest
@@ -276,3 +277,26 @@ def test_explicit_ids_with_no_results_still_skip_import(tmp_path):
     report = execute_once(report_root=tmp_path, registry=[], ids=["zzz"], auto_import=True,
                           runner=lambda *a, **k: [], importer=lambda r: called.append(r))
     assert report["import_status"] == "skipped_no_results" and not called
+
+
+def test_service_lock_left_by_previous_container_is_reclaimed(tmp_path, monkeypatch):
+    # A restarted container's web server is PID 1 again, so the stale lock's PID looks alive.
+    lock_path = tmp_path / "service.lock"
+    lock_path.write_text(json.dumps({"pid": os.getpid(), "created_at": "2026-11-05T08:20:18+00:00"}))
+    with service_lock(lock_path):
+        assert json.loads(lock_path.read_text())["pid"] == os.getpid()
+    assert not lock_path.exists()
+
+
+def test_service_lock_reclaims_pid_now_owned_by_another_process(tmp_path, monkeypatch):
+    from backend import collector_ledger
+    lock_path = tmp_path / "service.lock"
+    lock_path.write_text(json.dumps({"pid": 4242, "process": "boot-a:100"}))
+    monkeypatch.setattr(collector_ledger, "_pid_alive", lambda pid: True)
+    monkeypatch.setattr(collector_ledger, "_process_identity", lambda pid: "boot-a:999" if pid == 4242 else None)
+    with service_lock(lock_path):
+        pass
+    lock_path.write_text(json.dumps({"pid": 4242, "process": "boot-a:999"}))  # same process: still held
+    with pytest.raises(RuntimeError, match="lock is held"):
+        with service_lock(lock_path):
+            pass

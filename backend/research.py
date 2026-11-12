@@ -51,7 +51,8 @@ def metric_view(obs, start="", end=""):
         delta = current["value"] - previous["value"]
         pct = delta / abs(previous["value"]) * 100 if previous["value"] else None
     if delta is not None and abs(delta)<1e-10:delta=0.0
-    if obs['unit'] in ('基点','个百分点','σ'):pct=None
+    # z 分数等标准化/差值单位可跨零，百分比变化无意义，只给变化额。
+    if obs['unit'] in ('基点','个百分点','σ','z'):pct=None
     delta_unit=obs['unit']
     if obs['unit']=='%':
         delta_unit='基点' if obs.get('bucket')=='rates' else '个百分点'
@@ -1330,9 +1331,9 @@ def _brief_relevance(record, topic):
         score += 2
     if metadata["situation_signal"] != "unknown":
         score += 2
-    if record.get("tier") == "T1":
+    if record.get("tier") == "T1" and record.get("source_role") != "party_official":
         score += 2
-    elif record.get("tier") == "T2":
+    elif record.get("tier") in {"T1", "T2"}:
         score += 1
     if BRIEF_LOW_INFORMATION.search(title) and not BRIEF_CONCRETE_ACTION.search(title):
         return None

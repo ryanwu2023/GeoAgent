@@ -64,6 +64,7 @@ def test_explicit_reasoning_and_transport_controls(tmp_path, monkeypatch):
     def handler(request):
         payload=json.loads(request.content)
         assert payload['thinking']=={'type':'disabled'}
+        assert payload['chat_template_kwargs']=={'thinking':False,'enable_thinking':False}
         assert payload['max_tokens']==321
         assert payload['temperature']==0.25
         return httpx.Response(200,json={'choices':[{'finish_reason':'stop','message':{'content':'ok'}}]})

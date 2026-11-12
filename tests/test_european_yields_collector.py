@@ -107,3 +107,23 @@ def test_partial_tradingview_failure_keeps_other_series_and_omits_spread(monkeyp
     failed = [item for item in payload["source_status"] if item["state"] == "failed"]
     assert any(item["source"] == "tradingview-fr10y" for item in failed)
 
+
+
+def test_fred_fetch_keeps_curl_default_user_agent(monkeypatch):
+    module = load_module()
+    commands = []
+
+    class Completed:
+        returncode = 0
+        stdout = b"observation_date,IRLTLT01DEM156N\n2026-09-01,3.47\n2026-10-01,.\n"
+        stderr = b""
+
+    def fake_run(command, **kwargs):
+        commands.append(command)
+        return Completed()
+
+    monkeypatch.setattr(module, "_proxy_candidates", lambda: [None])
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    _, rows = module.fetch_fred_monthly("IRLTLT01DEM156N")
+    assert rows == [{"date": "2026-09-01", "value": 3.47}]
+    assert not any("User-Agent" in str(part) for part in commands[0])

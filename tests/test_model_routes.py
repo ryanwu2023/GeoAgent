@@ -217,6 +217,7 @@ def test_evidence_translator_shares_saved_model_and_validates_before_persisting(
     assert result["ok"] is not bad_body
     if bad_body:
         assert stored == []  # Even the valid title must not replace existing data.
+        assert "数字或外文残留校验" in result["message"]
     else:
         assert [entry[:2] for entry in stored] == [
             (record["title"], "报告列出12艘船。"), (record["text"], "舰队拥有20艘船。"),

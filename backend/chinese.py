@@ -5,6 +5,7 @@ import subprocess
 import sys
 import os
 import json
+import time
 from .store import db, digest, now, ROOT, data_dir, snapshots, get_snapshot, get_working_snapshot_id
 from .events import event_metadata
 from .translation_quality import language, normalize_terms, quality
@@ -13,13 +14,16 @@ def table(c):
     c.execute('CREATE TABLE IF NOT EXISTS translations (hash TEXT PRIMARY KEY, original TEXT NOT NULL, chinese TEXT NOT NULL, method TEXT NOT NULL, created_at TEXT NOT NULL)')
 
 def save_translation(original, chinese, method='本地机器翻译（术语校准）'):
-    global _translation_memory
+    global _translation_memory, local_translation_epoch
     _translation_memory = None
+    # Translations a user requests in this process must show at once; cached views key on this.
+    local_translation_epoch += 1
     with db() as c:
         table(c)
         c.execute('INSERT INTO translations VALUES (%s,%s,%s,%s,%s) ON CONFLICT(hash) DO UPDATE SET original=excluded.original,chinese=excluded.chinese,method=excluded.method,created_at=excluded.created_at',(digest(original),original,chinese,method,now()))
 
 _translation_memory = None
+local_translation_epoch = 0
 
 def _translation_marker():
     """Cheap cross-process cache version for the persisted translation table."""
@@ -30,19 +34,40 @@ def _translation_marker():
     return (int(row['count']), str(row['latest']), overrides.stat().st_mtime_ns)
 
 def translation_cache():
+    """Translation lookup shared by every view.
+
+    While the background worker translates a new snapshot it writes rows every few
+    seconds; re-reading all ~56k rows on each change made every page request pay
+    about a second. Rows are upserted with a fresh ``created_at``, so later changes
+    are applied incrementally from the previous high-water mark.
+    """
     global _translation_memory
     key=str(data_dir().resolve())
     marker = _translation_marker()
-    if _translation_memory and _translation_memory[0]==key and _translation_memory[1]==marker:
-        return _translation_memory[2]
-    result=_read_translation_cache()
+    memory = _translation_memory
+    if memory and memory[0]==key and memory[1]==marker:
+        return memory[2]
+    if memory and memory[0]==key and memory[1][2]==marker[2] and marker[0]>=memory[1][0]:
+        result=_read_translation_cache(dict(memory[2]), since=memory[1][1])
+    else:
+        result=_read_translation_cache()
     _translation_memory=(key,marker,result)
     return result
 
-def _read_translation_cache():
+def _usable_translation(r):
+    return r['method'] != '本地机器翻译' and is_chinese(r['chinese']) and (r['method'].startswith(('模型翻译','模型批量翻译')) or language(r['original']) not in ('cyrillic','hebrew','arabic_unknown'))
+
+def _read_translation_cache(cache=None, since=None):
     with db() as c:
         table(c)
-        cache={r['hash']:r['chinese'] for r in c.execute("SELECT hash,chinese,original,method FROM translations WHERE method != '本地机器翻译'") if is_chinese(r['chinese']) and (r['method'].startswith(('模型翻译','模型批量翻译')) or language(r['original']) not in ('cyrillic','hebrew','arabic_unknown'))}
+        if since is None:
+            cache={r['hash']:r['chinese'] for r in c.execute("SELECT hash,chinese,original,method FROM translations WHERE method != '本地机器翻译'") if _usable_translation(r)}
+        else:
+            for r in c.execute("SELECT hash,chinese,original,method FROM translations WHERE created_at >= %s", (since,)):
+                if _usable_translation(r):
+                    cache[r['hash']]=r['chinese']
+                else:
+                    cache.pop(r['hash'], None)
     overrides=json.loads((ROOT/'backend'/'zh_overrides.json').read_text(encoding='utf-8'))
     cache.update({digest(k):v for k,v in overrides.items()})
     return cache
@@ -404,6 +429,7 @@ def start_translation():
         _worker_snapshot_id=target
 
 _translation_status_memory = None
+TRANSLATION_STATUS_TTL = 60
 
 def translation_status(snapshot_id=None):
     global _translation_status_memory
@@ -418,15 +444,20 @@ def translation_status(snapshot_id=None):
     running = bool(worker_running and worker_id and worker_id == selected_id)
     counts = {'pending': 0, 'ready': 0, 'total': 0}
     if selected_id:
-        status_key = (str(data_dir().resolve()), selected_id, _translation_marker())
-        if _translation_status_memory and _translation_status_memory[0] == status_key:
-            counts = _translation_status_memory[1]
+        # Counting walks every record (~1.5 s for 12k). The page polls status every few
+        # seconds while the worker keeps changing the marker, so recount at most once
+        # per TRANSLATION_STATUS_TTL for the same snapshot.
+        status_key = (str(data_dir().resolve()), selected_id)
+        marker = _translation_marker()
+        memory = _translation_status_memory
+        if memory and memory[0] == status_key and (memory[1] == marker or time.monotonic() - memory[2] < TRANSLATION_STATUS_TTL):
+            counts = memory[3]
         else:
             records=get_snapshot(selected_id)['records']
             cache=translation_cache()
             ready=sum(record_translation(r,cache)['translation_state']=='ready' for r in records)
             counts = {'pending':len(records)-ready,'ready':ready,'total':len(records)}
-            _translation_status_memory = (status_key, counts)
+            _translation_status_memory = (status_key, marker, time.monotonic(), counts)
     blocked_reason = None
     if not selected_id:
         blocked_reason, message = 'no_snapshot', '尚无可翻译快照。'

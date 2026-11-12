@@ -1,4 +1,5 @@
 import {sessionFetch as fetch} from "./sessionFetch";
+import {dateText} from "./api";
 import { useEffect, useState } from "react";
 
 type User = { username: string; phone: string; pichat_user_id: string | null; created_by: string | null; created_at: string; updated_by: string | null; updated_at: string | null };
@@ -17,7 +18,7 @@ async function request<T>(path: string, method = "GET", body?: unknown): Promise
   return data;
 }
 
-const time = (value: string) => new Date(value).toLocaleString("zh-CN", { hour12: false });
+const time = (value: string) => dateText(value);
 
 export default function UserAdmin({ onClose }: { onClose: () => void }) {
   const [listing, setListing] = useState<Listing | null>(null);

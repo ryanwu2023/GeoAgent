@@ -197,6 +197,11 @@ async def complete_response(
             reasoning_mode = "enabled" if reasoning else "disabled"
         if reasoning_mode in {"enabled", "disabled"}:
             payload["thinking"]={"type":reasoning_mode}
+            if c["provider"] == "openai-compatible":
+                # 自建 vLLM 不认 DeepSeek 官方的 thinking 字段，靠聊天模板参数开关思考；
+                # 不同模板分别用 thinking / enable_thinking，未用到的键会被忽略。
+                enabled = reasoning_mode == "enabled"
+                payload["chat_template_kwargs"] = {"thinking": enabled, "enable_thinking": enabled}
         response=await client.post(model_settings.endpoint_for(c),headers={'Authorization':'Bearer '+c["api_key"]},json=payload)
         if tools and _tools_rejected(response):
             raise ToolProtocolUnsupported("模型网关明确拒绝原生工具字段")

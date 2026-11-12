@@ -1,6 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {HostViewBridge,validView,trustedViewSource,panelEntryScope} = process.env.GEO_HOST_BRIDGE_JS ? require(process.env.GEO_HOST_BRIDGE_JS) : require('./load_ts.cjs')('src/hostViewContext.ts');
+const {HostViewBridge,validView,trustedViewSource,panelEntryScope,requestId} = process.env.GEO_HOST_BRIDGE_JS ? require(process.env.GEO_HOST_BRIDGE_JS) : require('./load_ts.cjs')('src/hostViewContext.ts');
 test('explicit entry preserves legacy scopes; active range switches never navigate',()=>{
   const first=panelEntryScope('',false,'old-snapshot');
   assert.equal(first,'.geo-research-assistant/old-snapshot');
@@ -52,4 +52,11 @@ test('invalid dates, extra acknowledgement fields, rejection/reset cannot remain
   assert.equal(b.result({...p,type:'finance:view-context:result',ok:false}), 'failed');
   assert.equal(b.result(ack(p)),null);
   b.reset();assert.equal(b.send(view),null);
+});
+test('request ids work on plain-http intranet pages without crypto.randomUUID',()=>{
+  const insecure={getRandomValues:(a)=>globalThis.crypto.getRandomValues(a)};
+  const a=requestId(insecure),b=requestId(insecure);
+  assert.match(a,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.notEqual(a,b);
+  assert.equal(requestId({randomUUID:()=>'native-id',getRandomValues:insecure.getRandomValues}),'native-id');
 });

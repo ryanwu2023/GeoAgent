@@ -62,7 +62,7 @@ def interval_change(metric, start, end):
     if len(points) >= 2 and not metric.get('quality_issue'):
         difference = points[-1]['value'] - points[0]['value']
         result.update(status='comparable', delta=round(difference * (100 if metric.get('unit') == '%' and metric.get('bucket') == 'rates' else 1), 10))
-        if metric.get('unit') not in ('%', '基点', '个百分点', 'σ') and points[0]['value']:
+        if metric.get('unit') not in ('%', '基点', '个百分点', 'σ', 'z') and points[0]['value']:
             result['pct'] = difference / abs(points[0]['value']) * 100
     return result
 

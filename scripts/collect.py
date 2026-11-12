@@ -249,6 +249,13 @@ def _run_one_unlocked(
     history: list[dict] = []
     first_started: str | None = None
     last_result: dict = {"id": item["id"], "returncode": "failed"}
+    legacy_output = collector_dir / "output"
+    live_output = data_root / item["id"] / "output"
+    if item.get("legacy_output") and not verify_only and live_output.is_dir():
+        # Legacy collectors keep cumulative archives and history next to their source,
+        # and a new container starts that directory empty; publishing then replaced the
+        # persistent output with a fresh archive on every deploy. Seed it first.
+        _copy_missing(live_output, legacy_output)
     for attempt in range(1, max_attempts + 1):
         if output_stage.exists():
             shutil.rmtree(output_stage)

@@ -25,6 +25,7 @@ _REPO = str(Path(__file__).resolve().parents[2])
 if _REPO not in sys.path:
     sys.path.insert(0, _REPO)
 from scripts.collector_http_runtime import HttpRuntime, prepare_output, source_results
+from scripts.google_news import annotate_outlets, is_google_news, prefer_direct, resolve_records, split_outlet
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CFG_PATH = os.path.join(BASE, "config.json")
@@ -99,6 +100,17 @@ def proxy_candidates():
         if u not in cands:
             cands.append(u)
     return cands + [None]
+
+def _open_via_egress(req, timeout):
+    """按出口池顺序发请求（谷歌新闻原文解析用，含 POST）。"""
+    err = None
+    for proxy in live_proxies() or [None]:
+        try:
+            with _opener_for(proxy).open(req, timeout=timeout) as r:
+                return r.read()
+        except Exception as e:
+            err = e
+    raise err
 
 def _opener_for(proxy):
     if not hasattr(_opener_local, "cache"):
@@ -318,8 +330,9 @@ def annotate_corroboration(records):
             continue
         groups.setdefault(tk, []).append(r)
     for g in groups.values():
-        pubs = sorted({(r.get("publisher") or r.get("source_id") or "?") for r in g})
-        tiers = {(r.get("tier") or "") for r in g}
+        pubs = sorted({(r.get("outlet") or r.get("publisher") or r.get("source_id") or "?") for r in g})
+        # 当事方官方（source_role=party_official）单源只代表其自身口径，不自动算印证
+        tiers = {(r.get("tier") or "") for r in g if r.get("source_role") != "party_official"}
         confirmed = bool(len(pubs) >= 2 or "T1" in tiers)
         for r in g:
             r["corroboration"] = {"n_records": len(g), "n_publishers": len(pubs),
@@ -761,8 +774,10 @@ def parse_rss(body, cap=200):
                     link = le.get("href", "")
             pub = gt("pubDate") or gt("published") or gt("updated")
             desc = gt("description") or gt("summary") or gt("{http://purl.org/rss/1.0/modules/content/}encoded")
+            se = n.find("source")
             items.append({"title": strip_tags(title), "link": link.strip(),
-                          "pub": pub, "desc": desc})
+                          "pub": pub, "desc": desc,
+                          "source_name": strip_tags(se.text or "") if se is not None else ""})
     except ET.ParseError:
         # 宽松退路：块级正则
         for blk in re.findall(r"<item>(.*?)</item>", body, re.S)[:200]:
@@ -817,6 +832,13 @@ def make_records(cfg, eng, fetched, run_dt):
                     "source_id": sid, "publisher": src["publisher"],
                     "tier": src["tier"], "run_date": run_dt,
                     "cfg_ver": eng.cfg_ver}
+            if src.get("source_role"):
+                base["source_role"] = src["source_role"]
+            if is_google_news(link):
+                # 谷歌新闻是聚合层：真实发布方取自 <source> 或标题「 - Outlet」后缀
+                outlet = split_outlet(it["title"], it.get("source_name", ""))[1]
+                if outlet:
+                    base["outlet"] = outlet
             if cls is None:
                 empty += 1
                 continue
@@ -836,7 +858,8 @@ def make_records(cfg, eng, fetched, run_dt):
                                     "no_anchor": empty, "too_old": too_old}
     # 站内去重：url id + title_key
     seen_tk, deduped = {}, []
-    for r in records:
+    # 同标题以直连源为准：谷歌新闻副本排在最后参与去重（sorted 稳定，其余顺序不变）
+    for r in sorted(records, key=lambda x: is_google_news(x.get("url") or "")):
         tk = title_key(r["title"])
         if tk and tk in seen_tk:
             audit["per_source"][r["source_id"]]["kept"] -= 1
@@ -931,7 +954,12 @@ STANCE_LABEL = {"antiwar_signal": "反战", "pro_war_signal": "挺战",
                 "mixed_signal": "多空混存", "unclassified": "未分类"}
 
 def _row_link(r):
-    return f"[原文]({r['url']})" if r.get("url") else "—"
+    url = r.get("original_url") or r.get("url")
+    return f"[原文]({url})" if url else "—"
+
+def _pub_label(r):
+    """谷歌新闻记录展示真实发布方，聚合层只作注记。"""
+    return f"{r['outlet']}（经{r['publisher']}）" if r.get("outlet") else r["publisher"]
 
 def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdir):
     W = []
@@ -998,7 +1026,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
             st = STANCE_LABEL.get(r.get("stance"), "—")
             summ = (r.get("summary") or "")[:150].replace("|", "/")
             W.append(f"- `{r['published'][:10] if r['published'] else '—'}` **[{KIND_LABEL[r['kind']]}·{st}]** "
-                     f"{r['title']} — 人物: {ents} ｜ {r['publisher']}({r['tier']}) ｜ {_row_link(r)}")
+                     f"{r['title']} — 人物: {ents} ｜ {_pub_label(r)}({r['tier']}) ｜ {_row_link(r)}")
             if summ:
                 W.append(f"  > {summ}")
     else:
@@ -1029,7 +1057,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
             st = STANCE_LABEL.get(r.get("stance"), "—")
             W.append(f"- `{r['published'][:10] if r['published'] else '—'}` "
                      f"[{KIND_LABEL[r['kind']]}·{st}] {r['title']} — 议员: {ents} "
-                     f"｜ {r['publisher']}({r['tier']}) ｜ {_row_link(r)}")
+                     f"｜ {_pub_label(r)}({r['tier']}) ｜ {_row_link(r)}")
     else:
         W.append("（本窗口无国会条目——注意『无条目≠无活动』，历史见累积档 ALL-records.jsonl）")
     W.append("")
@@ -1040,7 +1068,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
     if prot:
         for r in sorted(prot, key=lambda x: x.get("published") or "", reverse=True):
             W.append(f"- `{r['published'][:10] if r['published'] else '—'}` {r['title']} "
-                     f"｜ {r['publisher']}({r['tier']}) ｜ {_row_link(r)}")
+                     f"｜ {_pub_label(r)}({r['tier']}) ｜ {_row_link(r)}")
     else:
         W.append("（本窗口无街头行动条目——注意『无条目≠无活动』：9 月至今未监测到新集会，"
                  "3-7 月的 No Kings 等历史集会见累积档 ALL-records.jsonl）")
@@ -1052,7 +1080,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
     if ele:
         for r in sorted(ele, key=lambda x: x.get("published") or "", reverse=True)[:30]:
             W.append(f"- `{r['published'][:10] if r['published'] else '—'}` {r['title']} "
-                     f"｜ {r['publisher']}({r['tier']}) ｜ {_row_link(r)}")
+                     f"｜ {_pub_label(r)}({r['tier']}) ｜ {_row_link(r)}")
     else:
         W.append("（本窗口无选举压力条目）")
     W.append("")
@@ -1061,7 +1089,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
     W.append("")
     if undated:
         for r in undated[:40]:
-            W.append(f"- （日期未知）{r['title']} ｜ {r['publisher']}({r['tier']}) ｜ {_row_link(r)}")
+            W.append(f"- （日期未知）{r['title']} ｜ {_pub_label(r)}({r['tier']}) ｜ {_row_link(r)}")
         W.append(f"\n共 {len(undated)} 条；`published=Thu, 01 Jan 1970` 类纪元零值已按『日期未知』处理。")
     else:
         W.append("（无）")
@@ -1213,8 +1241,21 @@ def main():
             json.dump({"run": as_of.isoformat(), "src": src_stats}, f, ensure_ascii=False, indent=1)
 
     records, audit = make_records(cfg, eng, fetched, as_of.isoformat())
+    # 直连源已有的文章（同标题+同发布方）不再保留谷歌新闻副本，含累积档里的旧副本
+    annotate_outlets(archive.values())
+    records, n_gn_dup = prefer_direct(records, archive, cfg["sources"])
+    if n_gn_dup:
+        print(f"[gnews] 直连源已收录，去掉谷歌新闻副本 {n_gn_dup} 条")
     n_new = merge_archive(archive, records)
     n_bf = backfill_archive(cfg, eng, archive)
+    gn_max = int(cfg.get("google_news_resolve_max") or 0)
+    if gn_max and not args.from_file:
+        gs = resolve_records([r for r in archive.values() if r.get("kind") != "excluded"],
+                             _open_via_egress, max_new=gn_max, ua=cfg.get("ua") or "Mozilla/5.0",
+                             timeout=cfg.get("request_timeout", 30))
+        print(f"[gnews] 原文链接解析 {gs['resolved']}/{min(gn_max, gs['pending'])}"
+              f"（待解析 {gs['pending']}，失败 {gs['failed']}"
+              f"{'，连续失败已熔断' if gs['stopped'] else ''}，留待下次）")
     with open(arch_path, "w", encoding="utf-8") as f:
         for r in archive.values():
             f.write(json.dumps(r, ensure_ascii=False) + "\n")

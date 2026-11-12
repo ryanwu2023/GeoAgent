@@ -278,11 +278,11 @@
     },
     {
       "id": "national-rss",
-      "url": "https://www.thenationalnews.com/rss",
+      "url": "https://www.thenationalnews.com/arc/outboundfeeds/rss/?outputType=xml",
       "tier": "T3",
       "publisher": "The National",
-      "enabled": false,
-      "note": "2026-09-19 实测 404（变体 /news/mena/rss.xml、/feed 均 404）。阿联酋 Akamai 防护。替代：aawsat + gn-* 通道转述层"
+      "enabled": true,
+      "note": "2026-11-05 本机实测 Arc outboundfeeds 200 RSS 100 条（旧 /rss 2026-09-19 实测 404）；线上 Sealos 未复测"
     },
     {
       "id": "arabnews-rss",
@@ -336,6 +336,7 @@
       "id": "ina-en",
       "url": "https://en.ina-news.org/rss",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Iraqi News Agency",
       "enabled": false,
       "note": "2026-09-19 实测 SSL 连接被重置（UNEXPECTED_EOF）。伊拉克官方通讯社不可达"
@@ -360,6 +361,7 @@
       "id": "qna-rss",
       "url": "https://qna.org.qa/en/News-Area/rss",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "Qatar News Agency",
       "enabled": false,
       "note": "2026-09-19 实测 404（变体 /en/rss 同）。卡塔尔官方表态靠 aljazeera（卡塔尔系）+ gn-qatar-mediate"
@@ -368,6 +370,7 @@
       "id": "centcom-rss",
       "url": "https://www.centcom.mil/MEDIA/PRESS-RELEASES/rss/",
       "tier": "T1",
+      "source_role": "party_official",
       "publisher": "CENTCOM",
       "enabled": false,
       "note": "2026-09-19 实测 403。美军伤亡/拦截声明靠 gn-us-troops-gulf 转述层（口径：转述非一手）"

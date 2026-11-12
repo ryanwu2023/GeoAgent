@@ -52,6 +52,29 @@ def _running_run_id():
     return None
 
 
+# Scheduled hourly news batches run in ~13 min and only archive; a caller that
+# reused one would wait for a batch that never produces a snapshot.
+COLLECT_ONLY_RETRY_SEC = 900
+
+
+def _reusable(run_id, now):
+    """Return the running batch if it will import a snapshot; refuse a collect-only one."""
+    try:
+        state = json.loads((_runs_root() / run_id / "state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state = {}
+    if state.get("auto_import", True):
+        return run_id
+    try:
+        elapsed = (now - datetime.fromisoformat(state["started_at"])).total_seconds()
+    except (KeyError, TypeError, ValueError):
+        elapsed = 0
+    retry = max(60, int(COLLECT_ONLY_RETRY_SEC - elapsed))
+    raise MCPError("GEO_COLLECTOR_BUSY",
+                   f"定时新闻采集进行中（只采集、不导入快照），约 {max(1, round(retry / 60))} 分钟后可触发；已有快照可直接同步",
+                   {"run_id": run_id, "retry_after_sec": retry})
+
+
 def _validate(ids):
     known = {item["id"] for item in load_registry(project_root() / "collectors" / "collectors.json") if item.get("enabled", True)}
     unknown = sorted(set(ids) - known)
@@ -76,7 +99,7 @@ def request_collection(principal, ids=(), topic="", *, jobs=None, now=None):
     with _request_lock:
         running = _running_run_id()
         if running:
-            return {"run_id": running, "request_id": None, "reused": True, "min_interval_sec": interval}
+            return {"run_id": _reusable(running, now), "request_id": None, "reused": True, "min_interval_sec": interval}
         try:
             state = json.loads(_state_path().read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -95,7 +118,7 @@ def request_collection(principal, ids=(), topic="", *, jobs=None, now=None):
             # A scheduled or page-started run took the lock after the scan above.
             running = _running_run_id()
             if running:
-                return {"run_id": running, "request_id": None, "reused": True, "min_interval_sec": interval}
+                return {"run_id": _reusable(running, now), "request_id": None, "reused": True, "min_interval_sec": interval}
             raise MCPError("GEO_COLLECTOR_BUSY", "采集服务正忙，请稍后重试")
         _runs_root().mkdir(parents=True, exist_ok=True)
         _state_path().write_text(json.dumps({"run_id": job.run_id, "requested_at": now.isoformat(),

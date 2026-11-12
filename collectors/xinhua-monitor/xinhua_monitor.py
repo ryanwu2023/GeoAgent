@@ -109,14 +109,7 @@ def main():
         for record,error in pool.map(fetch,candidates.items()):
             if error:errors.append(error)
             elif record:captured.append(record)
-    # Same-title same-day mirrors share one evidence record, preserving aliases in the archive.
-    by_origin={r['origin_id']:r for r in records.values()}
-    for r in captured:
-        existing=by_origin.get(r['origin_id'])
-        if existing:
-            r['aliases']=sorted(set(existing.get('aliases',[])+[existing['link'],r['link']]))
-        by_origin[r['origin_id']]=r
-    payload={'schema_version':'geo.v6/1','name':'新华网中文国际动态','as_of':stamp.isoformat(),'records':list(by_origin.values()),'observations':[]}
+    payload={'schema_version':'geo.v6/1','name':'新华网中文国际动态','as_of':stamp.isoformat(),'records':merge_captured(records,captured),'observations':[]}
     (run/'geo-v6.json').write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8')
     temp=out/'geo-v6.tmp';temp.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8');temp.replace(prior)
     report={'run_at':stamp.isoformat(),'listing_url':list_url,'listed':len(rows),'candidate_count':len(candidates),'captured':len(captured),'errors':errors,'target_discovered_urls':discovered,'target_direct_captured':any(r['link']==TARGET for r in captured),'target_title_captured':any(r['title']==TARGET_TITLE for r in captured),'archive':str(run)}
@@ -124,6 +117,19 @@ def main():
     (out/'LATEST.md').write_text('# 新华中文采集\n\n'+json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps(report,ensure_ascii=False),flush=True)
     return 0 if captured else 1
+
+def merge_captured(records,captured):
+    # Same-title same-day mirrors share one evidence record, preserving aliases in the archive.
+    by_origin={r['origin_id']:r for r in records.values()}
+    for r in captured:
+        # Xinhua edits headlines in place (e.g. ｜→丨): the same URL keeps its id, so drop the
+        # old-title entry; two entries with one id make the snapshot import reject the batch.
+        same=[k for k,v in by_origin.items() if v['id']==r['id'] and k!=r['origin_id']]
+        existing=[by_origin.pop(k) for k in same]+([by_origin[r['origin_id']]] if r['origin_id'] in by_origin else [])
+        if existing:
+            r['aliases']=sorted({u for e in existing for u in e.get('aliases',[])+[e['link']]}|{r['link']})
+        by_origin[r['origin_id']]=r
+    return list(by_origin.values())
 
 def selftest():
     source='<h1><span>伊朗谈判</span></h1>2026-09-20 23:00:07<span id="detailContent"><p>报道正文</p></span><div>'

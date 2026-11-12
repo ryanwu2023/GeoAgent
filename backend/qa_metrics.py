@@ -166,7 +166,8 @@ def _series_row(result: dict[str, Any]) -> dict[str, Any] | None:
     minimum = min(points, key=lambda item: item["value"])
     maximum = max(points, key=lambda item: item["value"])
     change = latest["value"] - first["value"]
-    change_pct = change / first["value"] * 100 if first["value"] else None
+    ratio_unit = metric.get("unit") not in ("%", "基点", "个百分点", "σ", "z")
+    change_pct = change / first["value"] * 100 if first["value"] and ratio_unit else None
     anchor, observed = _day(result.get("as_of")), _day(latest["date"])
     lag_days = max(0, (anchor - observed).days) if anchor and observed else None
     return {

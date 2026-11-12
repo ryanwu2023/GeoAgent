@@ -1,5 +1,6 @@
 """Conservative display checks, not semantic verification."""
 import re
+from decimal import Decimal, InvalidOperation
 
 GLOSSARY={'Zelenskyy':'泽连斯基','Zelensky':'泽连斯基','Kyiv':'基辅','Kiev':'基辅','Zaporizhzhia':'扎波罗热','Houthis':'胡塞武装','Houthi':'胡塞武装','IRGC':'伊朗伊斯兰革命卫队','Hormuz':'霍尔木兹'}
 
@@ -31,10 +32,30 @@ MONTH_WORDS = {
     12: ('december','décembre','decembre','декабр','груд'),
 }
 
+SCALES = {
+    'thousand': 10**3, 'million': 10**6, 'mn': 10**6, 'billion': 10**9, 'bn': 10**9, 'trillion': 10**12,
+    'k': 10**3, 'm': 10**6, 'b': 10**9,
+    '万亿': 10**12, '千亿': 10**11, '百亿': 10**10, '亿': 10**8, '千万': 10**7, '百万': 10**6, '万': 10**4,
+}
+NUMBER = re.compile(
+    r'(?<![A-Za-z0-9_])(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:[.,]\d+)*)(%|％)?'
+    r'(?:\s*(thousand|million|billion|trillion|bn|mn)\b|([kKmMbB])\b|(万亿|千亿|百亿|亿|千万|百万|万))?',
+    re.I,
+)
+
+def _value(digits, percent, scale):
+    # 60 billion 与 600亿、1,200 与 1200 是同一个数；按数值比较而不是按字面比较。
+    if re.fullmatch(r'\d{1,3}(?:,\d{3})+(?:\.\d+)?', digits):digits=digits.replace(',','')
+    try:number=Decimal(digits)
+    except InvalidOperation:return digits+(percent or '')
+    if scale:number*=SCALES[scale.lower()]
+    text=format(number.normalize(),'f')
+    return text+'%' if percent else text
+
 def numeric_tokens(text):
     # Chinese dates and quantities commonly attach digits directly to 年/月/日.
     # Exclude only Latin identifier prefixes instead of all Unicode word chars.
-    tokens=set(re.findall(r'(?<![A-Za-z0-9_])\d+(?:[.,]\d+)*(?:%|％)?',text))
+    tokens={_value(m.group(1),m.group(2),m.group(3) or m.group(4) or m.group(5)) for m in NUMBER.finditer(text)}
     lowered=text.lower()
     for number,words in MONTH_WORDS.items():
         if any(word in lowered for word in words):tokens.add(str(number))

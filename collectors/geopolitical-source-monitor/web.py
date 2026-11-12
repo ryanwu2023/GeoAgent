@@ -70,9 +70,13 @@ class ParsedArticle:
     error_type: str = ""
 
 
+_SCRIPT_BLOCKS = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.I | re.S)
+
+
 def is_restricted_document(html_text: str) -> bool:
     """识别登录墙、反自动化验证页和只负责循环跳转的网关页。"""
-    lowered = str(html_text or "").casefold()
+    # 只看页面可见部分：公开文章页的脚本里常带 reCAPTCHA 等字样，不能据此判成验证页
+    lowered = _SCRIPT_BLOCKS.sub(" ", str(html_text or "")).casefold()
     return any(marker.casefold() in lowered for marker in RESTRICTED_MARKERS)
 
 
@@ -250,12 +254,14 @@ class _DocumentParser(HTMLParser):
         self.meta: dict[str, str] = {}
         self.json_ld: list[str] = []
         self.headings: list[str] = []
+        self.h1: list[str] = []
         self.paragraphs: list[str] = []
         self._anchor_href = ""
         self._anchor_text: list[str] = []
         self._capture_json = False
         self._json_parts: list[str] = []
         self._capture_heading = False
+        self._heading_tag = ""
         self._heading_parts: list[str] = []
         self._capture_paragraph = False
         self._paragraph_parts: list[str] = []
@@ -274,6 +280,7 @@ class _DocumentParser(HTMLParser):
             self._json_parts = []
         elif tag in {"h1", "h2", "h3"}:
             self._capture_heading = True
+            self._heading_tag = tag
             self._heading_parts = []
         elif tag == "p":
             self._capture_paragraph = True
@@ -291,6 +298,8 @@ class _DocumentParser(HTMLParser):
             value = _clean_text(" ".join(self._heading_parts))
             if value:
                 self.headings.append(value)
+                if self._heading_tag == "h1":
+                    self.h1.append(value)
             self._capture_heading = False
         elif tag == "p" and self._capture_paragraph:
             value = _clean_text(" ".join(self._paragraph_parts))
@@ -376,16 +385,16 @@ def parse_public_article(html_text: str, url: str, source: dict[str, Any]) -> Pa
     objects = _json_objects(parser)
     article = next((item for item in objects if str(item.get("@type") or "").lower() in {"newsarticle", "article", "reportagenewsarticle"}), {})
     title = _clean_text(
-        article.get("headline") or parser.meta.get("og:title") or parser.meta.get("twitter:title") or (parser.headings[0] if parser.headings else "")
+        article.get("headline") or parser.meta.get("og:title") or parser.meta.get("twitter:title")
+        # Navigation menus often use h2/h3 before the article (mid.ru: "About the Ministry"); h1 is the article.
+        or (parser.h1[0] if parser.h1 else parser.headings[0] if parser.headings else "")
     )
     summary = _clean_text(article.get("description") or parser.meta.get("description") or parser.meta.get("og:description"))
     published = _clean_text(article.get("datePublished") or parser.meta.get("article:published_time") or parser.meta.get("date"))
     article_body = _clean_text(article.get("articleBody"))
     paragraphs = [value for value in parser.paragraphs if len(value) >= 30]
     body = article_body or "\n".join(paragraphs)
-    lowered = _clean_text(html_text).casefold()
-    restricted = any(marker in lowered for marker in RESTRICTED_MARKERS)
-    if restricted:
+    if is_restricted_document(html_text):
         return ParsedArticle(title, summary, "", published, "restricted_metadata_only")
     if body and len(body) >= 120:
         return ParsedArticle(title, summary, body, published, "public_fulltext")

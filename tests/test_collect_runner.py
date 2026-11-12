@@ -267,3 +267,32 @@ p.mkdir(parents=True, exist_ok=True)
     written = (data_root / 'pipeline-p-1' / 'output' / 'env.txt').read_text(encoding='utf-8')
     assert written == '/tmp/cfg.json|true|' + str(data_root / 'pipeline-p-1' / 'state')
     assert not (source_root / 'pipeline-p-1').exists()
+
+
+def test_legacy_collector_output_is_seeded_from_last_published_output(tmp_path, monkeypatch):
+    # A new container starts the collector's own output directory empty; without seeding,
+    # publishing replaced the persistent cumulative archive with a fresh one.
+    source_root = tmp_path / "collectors"
+    data_root = tmp_path / "data"
+    live_output = data_root / "demo" / "output"
+    (live_output / "history").mkdir(parents=True)
+    (live_output / "history" / "SERIES.jsonl").write_text('{"date": "2026-10-25", "value": 3}\n', encoding="utf-8")
+    item = _write_collector_script(
+        source_root,
+        "demo",
+        """
+from pathlib import Path
+out = Path(__file__).parent / 'output'
+history = (out / 'history' / 'SERIES.jsonl').read_text(encoding='utf-8')
+(out / 'LATEST.md').write_text('rows=%d' % len(history.splitlines()), encoding='utf-8')
+""",
+    )
+    item["legacy_output"] = True
+    monkeypatch.setattr("scripts.collect.collector_source_root", lambda: source_root)
+    monkeypatch.setattr("scripts.collect.collector_data_root", lambda: data_root)
+
+    result = run_one(item, timeout=10, staging_root=tmp_path / "staging")
+
+    assert result["returncode"] == 0 and result["published"] is True
+    assert (live_output / "LATEST.md").read_text() == "rows=1"
+    assert (live_output / "history" / "SERIES.jsonl").exists()

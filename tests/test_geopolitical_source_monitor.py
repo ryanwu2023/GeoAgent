@@ -316,6 +316,37 @@ def test_merge_records_revalidates_history_and_merges_aliases():
     assert {item["source_id"] for item in merged[0]["source_mentions"]} == {"wire-a", "wire-b"}
 
 
+def test_merge_records_never_emits_duplicate_ids_for_same_link():
+    filtering = load_module("filtering")
+    monitor = load_module("geopolitical_source_monitor")
+    config = filtering.load_config(COLLECTOR / "config.json")
+    link = "https://mid.ru/en/foreign_policy/news/2161615/"
+    stale = {
+        "id": "e0650e36", "title": "About the Ministry", "origin_id": "geo-source:nav-title", "link": link,
+        "summary": "Question: What do you expect from the upcoming talks in Abu Dhabi on Ukraine and Russia?",
+        "source_id": "russia-mfa", "content_access": "public_fulltext", "fetched_at": "2026-11-10T01:00:00+00:00",
+    }
+    fresh = {
+        **stale, "title": "Foreign Minister Sergey Lavrov's answer on talks with Ukraine and Russia",
+        "origin_id": "", "fetched_at": "2026-11-11T01:00:00+00:00",
+    }
+    merged = monitor.merge_records([stale], [fresh], config)
+    assert len(merged) == 1
+    assert merged[0]["title"].startswith("Foreign Minister Sergey Lavrov")
+    assert len({item["id"] for item in monitor.merge_records([stale, fresh], [stale], config)}) == 1
+
+
+def test_article_title_prefers_h1_over_navigation_headings():
+    web = load_module("web")
+    html = (
+        "<html><body><nav><h3>About the Ministry</h3></nav>"
+        "<h1>Foreign Minister Sergey Lavrov's answer to a media question</h1>"
+        "<p>" + "Lavrov answered a question about the talks in Abu Dhabi. " * 4 + "</p></body></html>"
+    )
+    article = web.parse_public_article(html, "https://mid.ru/en/foreign_policy/news/1/", {"allowed_hosts": ["mid.ru"]})
+    assert article.title == "Foreign Minister Sergey Lavrov's answer to a media question"
+
+
 def test_collector_is_registered_and_documented():
     registry = json.loads((ROOT / "collectors" / "collectors.json").read_text(encoding="utf-8"))
     matches = [item for item in registry["collectors"] if item["id"] == "geopolitical-source-monitor"]
@@ -328,6 +359,7 @@ def test_collector_is_registered_and_documented():
         "entrypoint": "geopolitical_source_monitor.py",
         "selftest_args": ["--selftest"],
         "output_kind": "geo-v6",
+        "cadence": "hourly",
         "enabled": True,
     }
     assert (COLLECTOR / item["entrypoint"]).is_file()

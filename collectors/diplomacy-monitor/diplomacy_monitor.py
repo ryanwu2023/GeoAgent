@@ -28,6 +28,9 @@ _REPO = str(Path(__file__).resolve().parents[2])
 if _REPO not in sys.path:
     sys.path.insert(0, _REPO)
 from scripts.collector_http_runtime import HttpRuntime, prepare_output, source_results
+from scripts.article_body import fetch_bodies, make_client
+from scripts.news_sitemap import coverage_gap, is_news_sitemap, parse_news_sitemap, sitemap_children
+from scripts.google_news import annotate_outlets, is_google_news, prefer_direct, resolve_records, split_outlet
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CFG_PATH = os.path.join(BASE, "config.json")
@@ -87,6 +90,17 @@ def proxy_candidates():
         if u not in cands:
             cands.append(u)
     return cands + [None]
+
+def _open_via_egress(req, timeout):
+    """按出口池顺序发请求（谷歌新闻原文解析用，含 POST）。"""
+    err = None
+    for proxy in live_proxies() or [None]:
+        try:
+            with _opener_for(proxy).open(req, timeout=timeout) as r:
+                return r.read()
+        except Exception as e:
+            err = e
+    raise err
 
 def _opener_for(proxy):
     if not hasattr(_opener_local, "cache"):
@@ -191,7 +205,8 @@ def demote_proxy(proxy):
 def http_get(url, timeout=30, min_iv=1.2, ua=None, retries=1):
     return _http_runtime.fetch(_http_get_uncached, url, timeout=timeout,
                                min_iv=min_iv, ua=ua, retries=retries,
-                               valid_body=lambda body: bool(parse_rss(body, cap=1)))
+                               valid_body=lambda body: bool(parse_rss(body, cap=1)) or is_news_sitemap(body)
+                               or bool(sitemap_children(body)))
 
 def _http_get_uncached(url, timeout=30, min_iv=1.2, ua=None, retries=1):
     host = urlparse(url).netloc
@@ -247,8 +262,12 @@ def _http_get_uncached(url, timeout=30, min_iv=1.2, ua=None, retries=1):
                 time.sleep(1.5)
     return {"status": 0, "body": "", "ms": 0, "err": err, "proxy": None}
 
-def update_source_health(outdir, src_stats):
-    """跨运行跟踪信源连续失败；写 output/_source_health.json，返回 (ok, fail, alerts)。"""
+def update_source_health(outdir, src_stats, fetched=None):
+    """跨运行跟踪信源健康；写 output/_source_health.json，返回 (ok, fail, alerts)。
+
+    告警：连续失败≥3 次；需要 UA 回退才能取到（应在源上固定 ua）；
+    覆盖缺口——本轮最旧一条已晚于上次成功抓取，中间的文章可能已滚出源而漏抓（应提高频率）。
+    """
     hp = os.path.join(outdir, "_source_health.json")
     health = {}
     if os.path.exists(hp):
@@ -259,11 +278,20 @@ def update_source_health(outdir, src_stats):
             health = {}
     alerts, ok_n, fail_n = [], 0, 0
     today = time.strftime("%Y-%m-%d")
+    now = now_utc().isoformat(timespec="seconds")
     for sid, st in src_stats.items():
         h = health.setdefault(sid, {"consec_fail": 0, "last_ok": None})
         if st.get("ok"):
+            gap = coverage_gap((fetched or {}).get(sid) or [], h.get("last_ok_at") or "")
+            if gap:
+                h["gaps"] = int(h.get("gaps", 0)) + 1
+                alerts.append("- `%s` 覆盖缺口：本轮最旧一条 %s 晚于上次成功抓取 %s，中间文章可能已漏抓"
+                              "——建议提高抓取频率或改用站点地图" % (sid, gap, h["last_ok_at"]))
+            if st.get("ua_fallback"):
+                alerts.append("- `%s` 全局 UA 被拒，靠 fallback_ua 才取到——建议在源上固定 `ua`" % sid)
             h["consec_fail"] = 0
             h["last_ok"] = today
+            h["last_ok_at"] = now
             ok_n += 1
         else:
             h["consec_fail"] = int(h.get("consec_fail", 0)) + 1
@@ -293,11 +321,17 @@ FLAG_NOTE_ZH = {
     "strings_attached": "附带条件（用途限制/监督条款）",
 }
 
+def tier_label(x):
+    """等级展示：当事方官方（source_role=party_official）在 T 级后标注，避免被当中立一手。"""
+    t = x.get("tier") or "?"
+    return f"{t}·当事方官方" if x.get("source_role") == "party_official" else t
+
 def annotate_corroboration(records):
     """跨源印证标注：只计数、不判真伪。
 
-    同一事件（归一化标题键）出现在 ≥2 个**不同发布方**，或出自 T1 原始出处 → 已印证。
-    单源且非 T1 一律「待证」——表态与承诺尤其不能拿单源当事实用。
+    同一事件（归一化标题键）出现在 ≥2 个**不同发布方**，或出自非当事方的 T1 原始出处 → 已印证。
+    单源且非 T1 一律「待证」；当事方官方（伊朗/巴基斯坦/卡塔尔等官媒、外交部）单源同样「待证」——
+    它只证明该方这么说了。表态与承诺尤其不能拿单源当事实用。
     """
     groups = {}
     for r in records:
@@ -306,8 +340,9 @@ def annotate_corroboration(records):
             continue
         groups.setdefault(tk, []).append(r)
     for g in groups.values():
-        pubs = sorted({(r.get("publisher") or r.get("source_id") or "?") for r in g})
-        tiers = {(r.get("tier") or "") for r in g}
+        pubs = sorted({(r.get("outlet") or r.get("publisher") or r.get("source_id") or "?") for r in g})
+        # 当事方官方（source_role=party_official）单源只代表其自身口径，不自动算印证
+        tiers = {(r.get("tier") or "") for r in g if r.get("source_role") != "party_official"}
         confirmed = bool(len(pubs) >= 2 or "T1" in tiers)
         for r in g:
             r["corroboration"] = {"n_records": len(g), "n_publishers": len(pubs),
@@ -349,21 +384,21 @@ def append_verification_section(latest_path, records, cfg):
     corr = [r for r in records if isinstance(r.get("corroboration"), dict)]
     multi = [r for r in corr if r["corroboration"]["confirmed"]]
     single = [r for r in corr if not r["corroboration"]["confirmed"]]
-    L.append(f"- 跨源印证：本窗口 **{len(multi)}** 条已被 ≥2 个发布方报道或出自 T1 原始出处"
+    L.append(f"- 跨源印证：本窗口 **{len(multi)}** 条已被 ≥2 个发布方报道或出自非当事方 T1 原始出处"
              f"（**已印证**）；**{len(single)}** 条为单源（**待证**）。")
     if multi:
         L += ["", "**已印证（可当事实引用，按印证方数量排序）**：", ""]
         for r in sorted(multi, key=lambda x: -x["corroboration"]["n_publishers"])[:12]:
             c = r["corroboration"]
             L.append(f"- {str(r.get('published') or '—')[:10]} · {(r.get('title') or '')[:88]}"
-                     f" · {r.get('publisher', '?')} / {r.get('tier', '?')}"
+                     f" · {r.get('publisher', '?')} / {tier_label(r)}"
                      f" · 印证方 {c['n_publishers']} 个："
                      f"{'、'.join(c['publishers'])[:110]}")
     if single:
         L += ["", "**单源待证（表态/承诺类尤甚：不可当已发生的事实引用）**：", ""]
         for r in sorted(single, key=lambda x: x.get("published") or "", reverse=True)[:8]:
             L.append(f"- {str(r.get('published') or '—')[:10]} · {(r.get('title') or '')[:88]}"
-                     f" · {r.get('publisher', '?')} / {r.get('tier', '?')}"
+                     f" · {r.get('publisher', '?')} / {tier_label(r)}"
                      f" · kind={r.get('kind', '')}")
     kinds = {}
     for r in records:
@@ -381,7 +416,7 @@ def append_verification_section(latest_path, records, cfg):
         L += ["", "**旗标统计（不同旗标不可相加）**：", ""]
         for f_, v in sorted(fl.items(), key=lambda x: -x[1]):
             L.append(f"- `{f_}` {v} 条{'　—— ' + FLAG_NOTE_ZH.get(f_, '')}")
-    L += ["", "> 口径提醒：上述「已印证」只说明**多个信源都这么报道**或**出自 T1 原始出处**，",
+    L += ["", "> 口径提醒：上述「已印证」只说明**多个信源都这么报道**或**出自非当事方 T1 原始出处**，",
           "> 不等于事件在物理上确已发生；`opinion_statement`（表态）永远只代表说了什么。",
           "> 援助类的承诺额与交付额分别标注，**两者不可相加**。"]
     gh = glossary_hits(records, cfg)
@@ -396,17 +431,17 @@ def append_verification_section(latest_path, records, cfg):
         pass
 
 
-def append_health_alert(latest_path, src_stats, outdir):
+def append_health_alert(latest_path, src_stats, outdir, fetched=None):
     """把信源健康告警追加到 LATEST.md（仅在真实抓取运行后调用）。"""
     if not src_stats:
         return
-    ok_n, fail_n, alerts = update_source_health(outdir, src_stats)
-    if fail_n == 0:
+    ok_n, fail_n, alerts = update_source_health(outdir, src_stats, fetched)
+    if fail_n == 0 and not alerts:
         return
     lines = ["", "## 信源健康", "",
              "本轮 %d 个信源正常、**%d 个失败**（已自动尝试全部存活出口）。" % (ok_n, fail_n)]
     if alerts:
-        lines += ["", "**连续失败≥3 次（需处理）**：", ""]
+        lines += ["", "**需处理**（连续失败≥3 次 / 覆盖缺口 / UA 回退）：", ""]
         lines += alerts
     lines += ["", "明细见 `output/_fetch_stats.json` 与 `output/_source_health.json`。"]
     try:
@@ -694,8 +729,10 @@ def parse_rss(body, cap=200):
                     link = le.get("href", "")
             pub = gt("pubDate") or gt("published") or gt("updated")
             desc = gt("description") or gt("summary") or gt("{http://purl.org/rss/1.0/modules/content/}encoded")
+            se = n.find("source")
             items.append({"title": strip_tags(title), "link": link.strip(),
-                          "pub": pub, "desc": desc})
+                          "pub": pub, "desc": desc,
+                          "source_name": strip_tags(se.text or "") if se is not None else ""})
     except ET.ParseError:
         for blk in re.findall(r"<item>(.*?)</item>", body, re.S)[:200]:
             title = re.search(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", blk, re.S)
@@ -710,19 +747,42 @@ def parse_rss(body, cap=200):
     return items[: cap]
 
 # ---------------------------------------------------------------- pipeline
-def fetch_source(src, cfg):
+def _fetch_items(src, cfg, ua):
     # 备用源：主 URL 失败时依次尝试 alt_urls（须同源同解析器，防聚合器陷阱）
     r = None
     for _u in [src["url"]] + list(src.get("alt_urls") or []):
         r = http_get(_u, timeout=cfg.get("request_timeout", 30),
-                     min_iv=cfg.get("min_interval_per_host", 1.2), ua=cfg.get("ua"))
+                     min_iv=cfg.get("min_interval_per_host", 1.2), ua=ua)
         if r["status"] == 200 and r["body"]:
             break
     if r["status"] != 200 or not r["body"]:
         return None, r
-    items = parse_rss(r["body"], cap=int(src.get("per_source_max") or cfg.get("per_source_max") or 200))
+    cap = int(src.get("per_source_max") or cfg.get("per_source_max") or 200)
+    body = r["body"]
+    if src.get("kind") == "news_sitemap":
+        # 站点地图索引：取前几个子地图（新闻地图通常按时间切片，最新的在前）
+        children = sitemap_children(body, int(src.get("sitemap_children") or 3))
+        bodies = [body] if not children else [
+            c["body"] for c in (http_get(u, timeout=cfg.get("request_timeout", 30),
+                                         min_iv=cfg.get("min_interval_per_host", 1.2), ua=ua)
+                                for u in children) if c["status"] == 200 and c["body"]]
+        items = [it for b in bodies for it in parse_news_sitemap(b, src.get("language", ""), cap)][:cap]
+    else:
+        items = parse_rss(body, cap=cap)
     if not items:
         return None, dict(r, err="ok-empty(200 但 0 条)")
+    return items, r
+
+def fetch_source(src, cfg):
+    # 个别站点按 UA 版本拦截（MEE 404、PBS 202 空响应），允许按源覆盖 UA；
+    # 未覆盖的源失败时自动换 fallback_ua 再试一次，结果记入健康档提示固定下来
+    ua = src.get("ua") or cfg.get("ua")
+    items, r = _fetch_items(src, cfg, ua)
+    fb = cfg.get("fallback_ua")
+    if items is None and fb and fb != ua:
+        items2, r2 = _fetch_items(src, cfg, fb)
+        if items2 is not None:
+            return items2, dict(r2, ua_fallback=True)
     return items, r
 
 def make_records(cfg, eng, fetched, run_dt):
@@ -739,7 +799,8 @@ def make_records(cfg, eng, fetched, run_dt):
                 too_old += 1
                 continue
             summary = clean_text(it.get("desc", ""), cfg.get("summary_max_chars", 1200))
-            cls = eng.classify(it["title"], summary)
+            # 站点地图没有摘要，用 news:keywords 辅助主题判断（不写进摘要）
+            cls = eng.classify(it["title"], (summary + " " + it.get("keywords", "")).strip())
             link = norm_link(it["link"])
             base = {"id": sha(link or it["title"]), "url": link,
                     "title": it["title"], "summary": summary,
@@ -748,6 +809,13 @@ def make_records(cfg, eng, fetched, run_dt):
                     "source_id": sid, "publisher": src["publisher"],
                     "tier": src["tier"], "run_date": run_dt,
                     "cfg_ver": eng.cfg_ver}
+            if src.get("source_role"):
+                base["source_role"] = src["source_role"]
+            if is_google_news(link):
+                # 谷歌新闻是聚合层：真实发布方取自 <source> 或标题「 - Outlet」后缀
+                outlet = split_outlet(it["title"], it.get("source_name", ""))[1]
+                if outlet:
+                    base["outlet"] = outlet
             if cls is None:
                 empty += 1
                 continue
@@ -767,7 +835,9 @@ def make_records(cfg, eng, fetched, run_dt):
                                     "anchor_no_bucket": blocked_anchor,
                                     "no_anchor": empty, "too_old": too_old}
     seen_tk, deduped = {}, []
-    for r in records:
+    # 同标题按渠道优先级保留：RSS（带摘要）> 新闻站点地图 > 谷歌新闻（sorted 稳定，其余顺序不变）
+    for r in sorted(records, key=lambda x: (is_google_news(x.get("url") or ""),
+                                            smap[x["source_id"]].get("kind") == "news_sitemap")):
         tk = title_key(r["title"])
         if tk and tk in seen_tk:
             audit["per_source"][r["source_id"]]["kept"] -= 1
@@ -862,7 +932,12 @@ FLAG_LABEL = {"talk_open": "愿谈", "talk_close": "拒谈",
               "meeting": "会晤/访问"}
 
 def _row_link(r):
-    return f"[原文]({r['url']})" if r.get("url") else "—"
+    url = r.get("original_url") or r.get("url")
+    return f"[原文]({url})" if url else "—"
+
+def _pub_label(r):
+    """谷歌新闻记录展示真实发布方，聚合层只作注记。"""
+    return f"{r['outlet']}（经{r['publisher']}）" if r.get("outlet") else r["publisher"]
 
 def _flag_cell(r):
     fl = [FLAG_LABEL[k] for k in (r.get("flags") or {}) if r["flags"].get(k) and k in FLAG_LABEL]
@@ -948,7 +1023,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
             W.append(f"- `{r['published'][:10] if r['published'] else '—'}` "
                      f"[{KIND_LABEL[r['kind']]}·{STANCE_LABEL.get(r.get('stance'), '—')}] "
                      f"{r['title']} — 子信号: {_flag_cell(r)} "
-                     f"｜ {r['publisher']}({r['tier']}) ｜ {_row_link(r)}")
+                     f"｜ {_pub_label(r)}({r['tier']}) ｜ {_row_link(r)}")
     else:
         W.append("（本窗口无特朗普信号条目——『无条目≠无表态』，历史见累积档）")
     W.append("")
@@ -967,7 +1042,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
         for r in sorted(mm, key=lambda x: x.get("published") or "", reverse=True)[:30]:
             W.append(f"- `{r['published'][:10] if r['published'] else '—'}` "
                      f"[{KIND_LABEL[r['kind']]}] {r['title']} — 子信号: {_flag_cell(r)} "
-                     f"｜ {r['publisher']}({r['tier']}) ｜ {_row_link(r)}")
+                     f"｜ {_pub_label(r)}({r['tier']}) ｜ {_row_link(r)}")
     else:
         W.append("（本窗口无备忘录条目——『无条目≠无动向』，历史见累积档）")
     W.append("")
@@ -1011,7 +1086,7 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
     W.append("")
     if undated:
         for r in undated[:40]:
-            W.append(f"- （日期未知）{r['title']} ｜ {r['publisher']}({r['tier']}) ｜ {_row_link(r)}")
+            W.append(f"- （日期未知）{r['title']} ｜ {_pub_label(r)}({r['tier']}) ｜ {_row_link(r)}")
         W.append(f"\n共 {len(undated)} 条；纪元零值已按『日期未知』处理。")
     else:
         W.append("（无）")
@@ -1031,11 +1106,12 @@ def render_report(cfg, records, undated, audit, stats, as_of, verify_note, outdi
     W.append("|---|---|---|---|---|")
     for s_ in cfg["sources"]:
         st = "启用" if s_.get("enabled") else "停用"
-        W.append(f"| {s_['id']} | {s_['tier']} | {s_['publisher']} | {st} | {(s_.get('note') or '')[:120]} |")
+        W.append(f"| {s_['id']} | {tier_label(s_)} | {s_['publisher']} | {st} | {(s_.get('note') or '')[:120]} |")
     W.append("")
     W.append("## 附录B 等级定义与分类学")
     W.append("")
-    W.append("- **T1** 官方一手（本监测期仅 APP 巴基斯坦联合通讯社；QNA/ONA/Radio Pakistan 停用留档）；")
+    W.append("- **T1** 官方一手；其中「T1·当事方官方」= 当事/斡旋方政府与官媒（APP 巴基斯坦联合通讯社——")
+    W.append("  非美联社 AP——白宫、各国外交部等），只代表该方口径，单源不算已印证；中立机构（联合国）为纯 T1；")
     W.append("  **T2** 机构分析（ICG / Atlantic Council）；**T3** 媒体转述（含 Tehran Times 官媒窗口、")
     W.append("  Google News 聚合层）；**T4** 自媒体——不采用。")
     W.append("- 事实（完成态事件）≠ 表态（『他说了X』是事实，X 是观点）≠ 启发式判断（立场词表）。")
@@ -1051,7 +1127,7 @@ def _sect(W, rows):
             W.append(f"- `{r['published'][:10] if r['published'] else '—'}` "
                      f"[{KIND_LABEL[r['kind']]}·{STANCE_LABEL.get(r.get('stance'), '—')}] "
                      f"{r['title']} — 实体: {ents} — 子信号: {_flag_cell(r)} "
-                     f"｜ {r['publisher']}({r['tier']}) ｜ {_row_link(r)}")
+                     f"｜ {_pub_label(r)}({r['tier']}) ｜ {_row_link(r)}")
     else:
         W.append("（本窗口无条目——『无条目≠无活动』，历史见累积档 ALL-records.jsonl）")
     W.append("")
@@ -1181,13 +1257,40 @@ def main():
             else:
                 fetched[s["id"]] = items
                 src_stats[s["id"]] = {"ok": True, "status": r["status"], "n": len(items)}
-                print(f"  ✅ [{i}/{len(enabled)}] {s['id']}: {len(items)} 条")
+                if r.get("ua_fallback"):
+                    src_stats[s["id"]]["ua_fallback"] = True
+                print(f"  ✅ [{i}/{len(enabled)}] {s['id']}: {len(items)} 条"
+                      f"{'（UA 回退）' if r.get('ua_fallback') else ''}")
         with open(os.path.join(outdir, "_fetch_stats.json"), "w", encoding="utf-8") as f:
             json.dump({"run": as_of.isoformat(), "src": src_stats}, f, ensure_ascii=False, indent=1)
 
     records, audit = make_records(cfg, eng, fetched, as_of.isoformat())
+    # 直连源已有的文章（同标题+同发布方）不再保留谷歌新闻副本，含累积档里的旧副本
+    annotate_outlets(archive.values())
+    records, n_gn_dup = prefer_direct(records, archive, cfg["sources"])
+    if n_gn_dup:
+        print(f"[gnews] 直连源已收录，去掉谷歌新闻副本 {n_gn_dup} 条")
     n_new = merge_archive(archive, records)
     n_bf = backfill_archive(cfg, eng, archive)
+    gn_max = int(cfg.get("google_news_resolve_max") or 0)
+    if gn_max and not args.from_file:
+        gs = resolve_records([r for r in archive.values() if r.get("kind") != "excluded"],
+                             _open_via_egress, max_new=gn_max, ua=cfg.get("ua") or "Mozilla/5.0",
+                             timeout=cfg.get("request_timeout", 30))
+        print(f"[gnews] 原文链接解析 {gs['resolved']}/{min(gn_max, gs['pending'])}"
+              f"（待解析 {gs['pending']}，失败 {gs['failed']}"
+              f"{'，连续失败已熔断' if gs['stopped'] else ''}，留待下次）")
+    body_max = int(cfg.get("body_fetch_max") or 0)
+    if body_max and not args.from_file:
+        # 只抓 "body": true 的直连源（公开站）；付费墙站点保留标题+摘要
+        bs = fetch_bodies([r for r in archive.values() if r.get("kind") != "excluded"], cfg["sources"],
+                          make_client(cfg.get("body_ua") or cfg.get("ua") or "Mozilla/5.0"),
+                          max_new=body_max, max_chars=int(cfg.get("body_max_chars") or 6000),
+                          timeout=float(cfg.get("body_timeout") or 20),
+                          budget_seconds=float(cfg.get("body_fetch_seconds") or 0))
+        print(f"[body] 正文抓取 全文 {bs['fulltext']}，其他 {bs['other']}"
+              f"（待抓 {bs['pending']}，本轮上限 {body_max}"
+              f"{'，时间预算用完' if bs['stopped'] else ''}）")
     with open(arch_path, "w", encoding="utf-8") as f:
         for r in archive.values():
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -1204,7 +1307,7 @@ def main():
     paths = write_outputs(cfg, recs, undated, audit, stats, as_of, outdir,
                           verify_last_note(outdir))
     print(f"[backfill] 回填 {n_bf} 条；新增 {n_new}；快照 {len(recs)}（无日期 {len(undated)}）")
-    append_health_alert(paths["latest"], src_stats, outdir)
+    append_health_alert(paths["latest"], src_stats, outdir, fetched)
     append_verification_section(paths["latest"], recs, cfg)
     print(f"[done] {paths['latest']}")
 
@@ -1400,6 +1503,86 @@ def run_selftest(cfg, eng):
        for s in cfg["sources"] if s.get("enabled")))
     ck("无启用 T4 源", all(s.get("tier") != "T4" for s in cfg["sources"] if s.get("enabled")))
     ck("停用源有留档", all(s.get("note") for s in cfg["sources"] if not s.get("enabled")))
+    # --- 当事方官方 ≠ 中立一手 ---
+    smap_ = {s["id"]: s for s in cfg["sources"]}
+    ck("APP/白宫标当事方官方，联合国不标",
+       smap_["app-pk"].get("source_role") == "party_official"
+       and smap_["whitehouse-feed"].get("source_role") == "party_official"
+       and not smap_["un-press"].get("source_role"))
+    cr = annotate_corroboration([
+        {"title": "Pakistan says Iran US talks to resume in Islamabad", "publisher": "APP",
+         "tier": "T1", "source_role": "party_official"},
+        {"title": "Secretary-General welcomes Iran US talks resumption", "publisher": "United Nations",
+         "tier": "T1"}])
+    ck("当事方官方单源不自动印证、中立 T1 仍印证",
+       cr[0]["corroboration"]["confirmed"] is False and cr[1]["corroboration"]["confirmed"] is True)
+    # --- 谷歌新闻：拆出真实发布方，印证按发布方计数 ---
+    gn_rss = ('<rss><channel><item><title>Pakistan offers to mediate US Iran talks in Islamabad - Reuters</title>'
+              '<link>https://news.google.com/rss/articles/CBMiAU_yqLx?oc=5</link>'
+              '<pubDate>Thu, 05 Nov 2026 10:00:00 GMT</pubDate><description>x</description>'
+              '<source url="https://www.reuters.com">Reuters</source></item></channel></rss>')
+    gi = parse_rss(gn_rss)
+    ck("谷歌新闻 <source> 解析", gi and gi[0]["source_name"] == "Reuters")
+    gcfg = dict(cfg, max_age_days=0)
+    grecs, _ = make_records(gcfg, eng, {"gn-trump": gi}, "2026-11-05")
+    ck("谷歌新闻记录写入 outlet", bool(grecs) and grecs[0].get("outlet") == "Reuters"
+       and grecs[0]["publisher"] == "Google News")
+    ck("谷歌新闻展示真实发布方", bool(grecs) and _pub_label(grecs[0]) == "Reuters（经Google News）")
+    gc = annotate_corroboration([
+        {"title": "Iran rejects US proposal - Reuters", "publisher": "Google News", "outlet": "Reuters", "tier": "T3"},
+        {"title": "Iran rejects US proposal - AP News", "publisher": "Google News", "outlet": "AP News", "tier": "T3"}])
+    ck("两家媒体经谷歌新闻报道算 2 个发布方", gc[0]["corroboration"]["n_publishers"] == 2)
+    drss = ('<rss><channel><item><title>Pakistan offers to mediate US Iran talks in Islamabad</title>'
+            '<link>https://www.pbs.org/newshour/world/pakistan-mediate</link>'
+            '<pubDate>Thu, 05 Nov 2026 11:00:00 GMT</pubDate><description>x</description></item></channel></rss>')
+    pcfg = dict(gcfg, sources=gcfg["sources"] + [{"id": "pbs-x", "publisher": "Reuters", "tier": "T3"}])
+    drecs, _ = make_records(pcfg, eng, {"gn-trump": gi, "pbs-x": parse_rss(drss)}, "2026-11-05")
+    ck("同标题直连源优先于谷歌新闻副本", [r["source_id"] for r in drecs] == ["pbs-x"])
+    darch = {"g": dict(grecs[0])}
+    kept, ndup = prefer_direct(drecs, darch, pcfg["sources"])
+    ck("累积档里的谷歌新闻副本被直连源替换", not darch and ndup == 1 and len(kept) == 1)
+    # --- 新闻站点地图：与 RSS 同文时 RSS（带摘要）优先，谷歌新闻最后 ---
+    smx = ('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+           'xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"><url>'
+           '<loc>https://www.pbs.org/newshour/world/pakistan-mediate</loc><news:news>'
+           '<news:publication><news:name>PBS</news:name><news:language>en</news:language></news:publication>'
+           '<news:publication_date>2026-11-05T11:00:00Z</news:publication_date>'
+           '<news:title>Pakistan offers to mediate US Iran talks in Islamabad</news:title>'
+           '<news:keywords>Iran, Pakistan</news:keywords></news:news></url></urlset>')
+    smi = parse_news_sitemap(smx, "en")
+    ck("站点地图解析出标题/时间/关键词", smi and smi[0]["keywords"] == "Iran, Pakistan")
+    scfg = dict(pcfg, sources=pcfg["sources"] + [{"id": "pbs-sm", "kind": "news_sitemap",
+                                                 "publisher": "PBS", "tier": "T3"}])
+    srecs, _ = make_records(scfg, eng, {"gn-trump": gi, "pbs-sm": smi, "pbs-x": parse_rss(drss)}, "2026-11-05")
+    ck("渠道优先级 RSS > 站点地图 > 谷歌新闻", [r["source_id"] for r in srecs] == ["pbs-x"])
+    srecs2, _ = make_records(scfg, eng, {"gn-trump": gi, "pbs-sm": smi}, "2026-11-05")
+    ck("站点地图优先于谷歌新闻", [r["source_id"] for r in srecs2] == ["pbs-sm"])
+    # --- UA 回退与覆盖缺口告警 ---
+    global _fetch_items
+    _orig_fetch = _fetch_items
+    def _fake_fetch(src, cfg_, ua):
+        return ([{"title": "t", "link": "https://x.example/a", "pub": "", "desc": ""}], {"status": 200}) \
+            if ua == "SAFARI" else (None, {"status": 202, "err": "ok-empty(200 但 0 条)"})
+    _fetch_items = _fake_fetch
+    try:
+        fi, fr = fetch_source({"id": "x", "url": "https://x.example/rss"}, {"ua": "CHROME", "fallback_ua": "SAFARI"})
+        ck("全局 UA 被拒时自动用 fallback_ua 重试", fi is not None and fr.get("ua_fallback") is True)
+        fi2, _ = fetch_source({"id": "x", "url": "https://x.example/rss", "ua": "SAFARI"},
+                              {"ua": "CHROME", "fallback_ua": "SAFARI"})
+        ck("已固定 UA 的源不重复回退", fi2 is not None)
+    finally:
+        _fetch_items = _orig_fetch
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        with open(os.path.join(td, "_source_health.json"), "w", encoding="utf-8") as f:
+            json.dump({"aj": {"consec_fail": 0, "last_ok_at": "2026-11-05T00:00:00+00:00"}}, f)
+        _, _, al = update_source_health(td, {"aj": {"ok": True, "ua_fallback": True}},
+                                        {"aj": [{"pub": "Thu, 05 Nov 2026 09:00:00 GMT"}]})
+        ck("覆盖缺口与 UA 回退写入告警", any("覆盖缺口" in a for a in al) and any("fallback_ua" in a for a in al))
+    ck("原文链接优先", _row_link({"url": "https://news.google.com/x", "original_url": "https://reuters.com/a"})
+       == "[原文](https://reuters.com/a)")
+    ck("等级展示标注当事方", tier_label(smap_["app-pk"]) == "T1·当事方官方"
+       and tier_label(smap_["un-press"]) == "T1")
     for bl in ("mediator_baseline", "trump_baseline", "memo_baseline",
                "military_baseline", "talks_baseline"):
         ck(f"{bl} 字段完整",
