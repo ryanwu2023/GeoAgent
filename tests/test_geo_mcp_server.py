@@ -377,7 +377,12 @@ async def test_official_mcp_client_can_initialize_list_and_call() -> None:
                     names = {tool.name for tool in tools.tools}
                     assert {'geo_business_catalog', 'geo_metric_changes', 'geo_source_health', 'geo_collector_runs', 'geo_brief_compare', 'geo_risk_map',
                             'geo_meeting_list', 'geo_meeting_get'} <= names
+                    pipeline_writes = {"geo_pipeline_preview", "geo_pipeline_create", "geo_pipeline_update", "geo_pipeline_trial",
+                                       "geo_pipeline_set_enabled", "geo_pipeline_delete", "geo_pipeline_rollback"}
                     for tool in tools.tools:
+                        if tool.name in pipeline_writes:
+                            assert tool.annotations.readOnlyHint is False
+                            continue
                         assert tool.annotations.readOnlyHint is True
                         for parameter in tool.inputSchema.get('properties', {}).values():
                             assert parameter.get('description'), tool.name

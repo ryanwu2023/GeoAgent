@@ -145,10 +145,21 @@ def test_registered_on_server():
     from backend.geo_mcp.server import create_server
     listed = asyncio.run(create_server().list_tools())
     found = {t.name: t for t in listed if t.name.startswith("geo_pipeline_")}
-    assert set(found) == {"geo_pipeline_list", "geo_pipeline_get", "geo_pipeline_versions", "geo_pipeline_runs",
-                          "geo_pipeline_run_items", "geo_pipeline_recent_results"}
+    reads = {"geo_pipeline_list", "geo_pipeline_get", "geo_pipeline_versions", "geo_pipeline_runs",
+             "geo_pipeline_run_items", "geo_pipeline_recent_results"}
+    writes = {"geo_pipeline_preview", "geo_pipeline_create", "geo_pipeline_update", "geo_pipeline_trial",
+              "geo_pipeline_set_enabled", "geo_pipeline_delete", "geo_pipeline_rollback"}
+    assert set(found) == reads | writes
+    for name, tool in found.items():
+        if name in reads:
+            assert tool.annotations.readOnlyHint is True and tool.annotations.destructiveHint is False
+        else:
+            assert tool.annotations.readOnlyHint is False
+    assert found["geo_pipeline_delete"].annotations.destructiveHint is True
+    assert found["geo_pipeline_set_enabled"].annotations.destructiveHint is True
+    assert "启用前先向用户展示最近一次测试运行结果并取得明确同意" in found["geo_pipeline_set_enabled"].description
+    assert "默认停用" in found["geo_pipeline_create"].description
     for tool in found.values():
-        assert tool.annotations.readOnlyHint is True and tool.annotations.destructiveHint is False
         assert tool.description
         for parameter in tool.inputSchema.get("properties", {}).values():
             assert parameter.get("description")
@@ -187,3 +198,174 @@ def test_tool_authorization(principal):
     assert "GEO_TOOL_NOT_ALLOWED" in text(call({"geo_snapshot_list"}))
     assert "GEO_TOOL_NOT_ALLOWED" not in text(call({"*"}))
     assert "GEO_TOOL_NOT_ALLOWED" not in text(call({"geo_pipeline_list"}))
+
+
+ROW = {"name": "写入管线", "description": "d", "topics": ["usiran"]}
+
+
+def test_create_then_update_with_version(principal):
+    p = tools.pipeline_create(principal, ROW, cfg(), "初版", resolve=resolve)
+    assert p["enabled"] is False and p["current_version"] == 1 and p["created_by"] == "mcp:hft-key"
+    new = cfg()
+    new["filters"]["include_any"].append("gas")
+    up = tools.pipeline_update(principal, p["id"], 1, {"description": "新描述"}, new, "加词", resolve=resolve)
+    assert up["current_version"] == 2 and up["description"] == "新描述"
+    with pytest.raises(MCPError) as err:
+        tools.pipeline_update(principal, p["id"], 1, {"description": "x"}, None, resolve=resolve)
+    assert err.value.code == "GEO_VERSION_CONFLICT" and err.value.details["current_version"] == 2
+    rolled = tools.pipeline_rollback(principal, p["id"], 1, 2, resolve=resolve)
+    assert rolled["current_version"] == 3
+    assert tools.pipeline_set_enabled(principal, p["id"], True)["enabled"] is True
+    assert tools.pipeline_set_enabled(principal, p["id"], False)["enabled"] is False
+    assert tools.pipeline_delete(principal, p["id"]) == {"deleted": True}
+    with pytest.raises(MCPError) as err:
+        tools.pipeline_get(principal, p["id"])
+    assert err.value.code == "GEO_NOT_FOUND"
+
+
+def test_update_requires_expected_version(principal):
+    p = tools.pipeline_create(principal, {**ROW, "name": "需版本"}, cfg(), resolve=resolve)
+    for bad in (None, "1", True, 0):
+        with pytest.raises(MCPError) as err:
+            tools.pipeline_update(principal, p["id"], bad, {"description": "x"}, None, resolve=resolve)
+        assert err.value.code == "GEO_INVALID_ARGUMENT" and err.value.details["field"] == "expected_version"
+
+
+def test_update_dry_run_no_write(principal):
+    p = tools.pipeline_create(principal, {**ROW, "name": "干跑"}, cfg(), resolve=resolve)
+    new = cfg()
+    new["filters"]["include_any"] = ["gas"]
+    out = tools.pipeline_update(principal, p["id"], 1, {"description": "改"}, new, dry_run=True, resolve=resolve)
+    assert out["current_version"] == 1
+    assert out["changes"]["description"] == ["d", "改"]
+    assert out["changes"]["config"][1]["filters"]["include_any"] == ["gas"]
+    after = tools.pipeline_get(principal, p["id"])
+    assert after["current_version"] == 1 and after["description"] == "d"
+    assert len(tools.pipeline_versions(principal, p["id"])) == 1
+    with pytest.raises(MCPError) as err:  # 干跑仍校验
+        tools.pipeline_update(principal, p["id"], 1, {"name": ""}, None, dry_run=True, resolve=resolve)
+    assert err.value.code == "GEO_INVALID_ARGUMENT"
+    with pytest.raises(MCPError) as err:
+        tools.pipeline_update(principal, p["id"], 9, {}, None, dry_run=True, resolve=resolve)
+    assert err.value.code == "GEO_VERSION_CONFLICT"
+    dry = tools.pipeline_create(principal, {**ROW, "name": "只校验"}, cfg(), dry_run=True, resolve=resolve)
+    assert dry["row"]["name"] == "只校验" and dry["config"]["sources"][0]["id"] == "rss-a"
+    assert tools.pipeline_list(principal, q="只校验")["total"] == 0
+
+
+def test_create_rejects_bad_types(principal):
+    for row, config in (("x", cfg()), (ROW, "x"), (ROW, {"sources": []}), ({**ROW, "topics": "a"}, cfg())):
+        with pytest.raises(MCPError) as err:
+            tools.pipeline_create(principal, row, config, resolve=resolve)
+        assert err.value.code == "GEO_INVALID_ARGUMENT"
+    with pytest.raises(MCPError) as err:
+        tools.pipeline_preview(principal, ROW, cfg(), limit="x", resolve=resolve)
+    assert err.value.code == "GEO_INVALID_ARGUMENT"
+
+
+def test_preview_passes_limit(principal, monkeypatch):
+    seen = {}
+
+    def fake(row, config, *, limit, **kw):
+        seen.update(row=row, limit=limit)
+        return {"sources": []}
+    monkeypatch.setattr(tools._runs_module, "preview_pipeline", fake)
+    assert tools.pipeline_preview(principal, ROW, cfg(), limit=99) == {"sources": []}
+    assert seen["limit"] == 20
+
+
+def test_trial_returns_immediately(principal, monkeypatch):
+    import threading
+    p = tools.pipeline_create(principal, {**ROW, "name": "试跑"}, cfg(), resolve=resolve)
+    started, release = threading.Event(), threading.Event()
+
+    def fake_trial(pid, *, actor):
+        assert actor == "mcp:hft-key"
+        started.set()
+        release.wait(5)
+    monkeypatch.setattr(tools._runs_module, "run_trial", fake_trial)
+    out = tools.pipeline_trial(principal, p["id"])
+    assert out["accepted"] is True and out["pipeline_id"] == p["id"] and "geo_pipeline_runs" in out["hint"]
+    assert started.wait(5)
+    release.set()
+    with pytest.raises(MCPError) as err:
+        tools.pipeline_trial(principal, "不存在")
+    assert err.value.code == "GEO_NOT_FOUND"
+    monkeypatch.setattr(tools._runs_module, "trial_running", lambda pid: True)
+    with pytest.raises(MCPError) as err:
+        tools.pipeline_trial(principal, p["id"])
+    assert err.value.code == "GEO_CONFLICT"
+
+
+def add_builtin():
+    with db() as conn:
+        conn.execute("INSERT INTO collection_pipelines(id,kind,name,description,topics,enabled,current_version,owner,created_by) "
+                     "VALUES ('b-1','builtin','内置','',ARRAY['usiran'],true,1,'system','system')")
+    return "b-1"
+
+
+def test_builtin_write_rejected(principal):
+    bid = add_builtin()
+    with pytest.raises(MCPError) as err:
+        tools.pipeline_update(principal, bid, 1, {"description": "x"}, None, resolve=resolve)
+    assert err.value.code == "GEO_INVALID_ARGUMENT"
+    with pytest.raises(MCPError) as err:
+        tools.pipeline_update(principal, bid, 1, {"description": "x"}, None, dry_run=True, resolve=resolve)
+    assert err.value.code == "GEO_INVALID_ARGUMENT"
+    for call in (lambda: tools.pipeline_delete(principal, bid), lambda: tools.pipeline_trial(principal, bid),
+                 lambda: tools.pipeline_rollback(principal, bid, 1, 1)):
+        with pytest.raises(MCPError) as err:
+            call()
+        assert err.value.code == "GEO_INVALID_ARGUMENT"
+
+
+def test_remote_mode_blocks_writes(principal, monkeypatch):
+    p = tools.pipeline_create(principal, {**ROW, "name": "远端"}, cfg(), resolve=resolve)
+    monkeypatch.setenv("GEO_COLLECTION_MODE", "remote")
+    calls = (lambda: tools.pipeline_preview(principal, ROW, cfg()),
+             lambda: tools.pipeline_create(principal, ROW, cfg()),
+             lambda: tools.pipeline_update(principal, p["id"], 1, {}, None),
+             lambda: tools.pipeline_trial(principal, p["id"]),
+             lambda: tools.pipeline_set_enabled(principal, p["id"], True),
+             lambda: tools.pipeline_delete(principal, p["id"]),
+             lambda: tools.pipeline_rollback(principal, p["id"], 1, 1))
+    for call in calls:
+        with pytest.raises(MCPError) as err:
+            call()
+        assert err.value.code == "GEO_REMOTE_READ_ONLY"
+    assert tools.pipeline_get(principal, p["id"])["id"] == p["id"]
+
+
+def test_versions_record_mcp_channel(principal):
+    p = tools.pipeline_create(principal, {**ROW, "name": "渠道"}, cfg(), "初版", resolve=resolve)
+    new = cfg()
+    new["filters"]["exclude"] = ["x"]
+    tools.pipeline_update(principal, p["id"], 1, {}, new, "改", resolve=resolve)
+    versions = tools.pipeline_versions(principal, p["id"])
+    assert [v["source_channel"] for v in versions] == ["mcp", "mcp"]
+    assert versions[0]["created_by"] == "mcp:hft-key"
+
+
+def test_write_tools_check_whitelist_only(principal):
+    import asyncio
+    from mcp.server.fastmcp import FastMCP
+    seen = {}
+
+    async def fake_run_tool(*, ctx, tool, handler):
+        try:
+            return handler(seen["principal"], "req")[0]
+        except MCPError as exc:
+            return exc.code
+
+    server = FastMCP("t")
+    tools.register_pipeline_tools(server, fake_run_tool)
+
+    def call(allowed, read_only):
+        scope = frozenset({"*"})
+        seen["principal"] = Principal("k", "a", "p", scope, scope, scope, frozenset(allowed), read_only)
+        result = asyncio.run(server.call_tool("geo_pipeline_delete", {"pipeline_id": "不存在"}))
+        return result[0][0].text if isinstance(result, tuple) else result[0].text
+
+    assert "GEO_TOOL_NOT_ALLOWED" in call({"geo_pipeline_list"}, False)
+    assert "GEO_NOT_FOUND" in call({"geo_pipeline_delete"}, False)
+    assert "GEO_NOT_FOUND" in call({"*"}, True)
