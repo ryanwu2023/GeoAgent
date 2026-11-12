@@ -331,3 +331,60 @@ def test_runner_requires_pipeline_config(tmp_path):
     completed = subprocess.run([sys.executable, str(runner)], cwd=runner.parent, env=env,
                                capture_output=True, text=True, timeout=60)
     assert completed.returncode == 2 and "configuration_required" in completed.stdout
+
+
+def _builtin():
+    with db() as conn:
+        conn.execute("INSERT INTO collection_pipelines(id,kind,name,topic,enabled,current_version,interval_sec,owner,created_by) "
+                     "VALUES ('bi1','builtin','内置采集器','usiran',true,1,3600,'system','system')")
+        conn.execute("INSERT INTO collection_pipeline_versions(pipeline_id,version,config,source_channel) "
+                     "VALUES ('bi1',1,'{\"schema_version\":\"pipeline/1\",\"builtin\":true}','migration')")
+
+
+def builtin_executor(status="success", import_status="succeeded", calls=None, error_message=None):
+    def run(**kw):
+        if calls is not None:
+            calls.append(kw)
+        return {"status": status, "snapshot_id": "snap-b" if import_status == "succeeded" else None,
+                "import_status": import_status, "error_message": error_message, "results": []}
+    return run
+
+
+def test_run_builtin_success_writes_run_without_items():
+    _builtin()
+    calls = []
+    run = pipeline_runs.run_builtin("bi1", trigger="schedule", actor="scheduler",
+                                    executor=builtin_executor(calls=calls))
+    assert run["status"] == "success" and run["snapshot_id"] == "snap-b" and run["trigger"] == "schedule"
+    kw = calls[0]
+    assert kw["ids"] == ["bi1"] and kw["auto_import"] is True and kw["allow_partial_import"] is True
+    assert kw["run_id_override"] == run["run_id"]
+    after = get_pipeline("bi1")
+    assert after["last_status"] == "success" and after["last_new_items"] == 0 and after["last_run_id"] == run["run_id"]
+    assert count("collection_pipeline_run_items") == 0
+
+
+def test_run_builtin_failed_and_partial():
+    _builtin()
+    failed = pipeline_runs.run_builtin("bi1", trigger="manual", actor="a",
+                                       executor=builtin_executor("failed", "skipped_collection_status", error_message="炸了"))
+    assert failed["status"] == "failed" and "炸了" in failed["error"]
+    partial = pipeline_runs.run_builtin("bi1", trigger="manual", actor="a", executor=builtin_executor("partial"))
+    assert partial["status"] == "partial"
+
+
+def test_run_builtin_busy_discards_row():
+    _builtin()
+
+    def busy(**kw):
+        raise CollectorBusyError("lock is held")
+
+    with pytest.raises(CollectorBusyError):
+        pipeline_runs.run_builtin("bi1", trigger="schedule", actor="scheduler", executor=busy)
+    assert count("collection_pipeline_runs") == 0 and get_pipeline("bi1")["last_run_id"] is None
+
+
+def test_run_builtin_rejects_configurable():
+    p = make()
+    with pytest.raises(PipelineError):
+        pipeline_runs.run_builtin(p["id"], trigger="manual", actor="a", executor=builtin_executor())

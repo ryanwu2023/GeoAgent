@@ -84,6 +84,18 @@ def _result_message(item: dict) -> str | None:
     return None
 
 
+def _with_scheduled_builtin(exclude_ids: list[str] | None) -> list[str] | None:
+    """整批采集时排除已有单独调度的内置管线；开关关闭或查询失败则保持原样。"""
+    try:
+        from backend.pipeline_scheduler import pipelines_enabled, scheduled_builtin_ids
+        if not pipelines_enabled():
+            return exclude_ids
+        extra = scheduled_builtin_ids()
+    except Exception:
+        return exclude_ids
+    return list(dict.fromkeys([*(exclude_ids or []), *extra])) if extra else exclude_ids
+
+
 def execute_once(
     *,
     ids: list[str] | None = None,
@@ -105,6 +117,8 @@ def execute_once(
     """Run one scheduled batch and persist an explicit running/completed state."""
     if retry_attempts < 1:
         raise ValueError("retry_attempts must be at least 1")
+    if not ids:
+        exclude_ids = _with_scheduled_builtin(exclude_ids)
     started = now or utc_now()
     report_root = report_root or project_root() / "data" / "collection-runs"
     report_root.mkdir(parents=True, exist_ok=True)

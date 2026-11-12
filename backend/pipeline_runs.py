@@ -249,6 +249,39 @@ def run_pipeline(pipeline_id: str, *, trigger: str, actor: str | None,
                    error=error, actor=actor, records=records, source_types=source_types)
 
 
+def run_builtin(pipeline_id: str, *, trigger: str, actor: str | None,
+                executor: Callable[..., dict] = execute_once) -> dict:
+    """同步运行一次内置采集器并写运行记录（无逐条“本次新增”）。锁被占用时抛 CollectorBusyError。"""
+    pipeline = get_pipeline(pipeline_id)
+    if pipeline["kind"] != "builtin":
+        raise PipelineError("INVALID", "只有内置管线可以由内置运行入口运行", {"id": pipeline_id})
+    started = _now()
+    run_id = _new_run_id(pipeline_id, started)
+    previous = _start(pipeline, run_id, trigger, actor, started)
+    try:
+        report = executor(ids=[pipeline_id], auto_import=True, allow_partial_import=True, run_id_override=run_id)
+    except Exception as exc:
+        if _is_busy(exc):
+            _discard(pipeline_id, run_id, previous)
+            if isinstance(exc, CollectorBusyError):
+                raise
+            raise CollectorBusyError(str(exc)) from exc
+        return _finish(pipeline_id, run_id, status="failed", stats={}, snapshot_id=None,
+                       error=f"{type(exc).__name__}: {exc}", actor=actor, records=None, source_types={})
+    status = report.get("status") if report.get("status") in ("success", "partial", "failed") else "failed"
+    import_status = report.get("import_status")
+    stats = {"import_status": import_status, "collector_status": report.get("status")}
+    error = None
+    if status == "failed":
+        failed = next((r for r in report.get("results") or [] if r.get("id") == pipeline_id), None)
+        error = _collector_error(failed, report)
+    if import_status == "failed":
+        status = "partial" if status == "success" else status
+        error = f"导入失败：{report.get('import_error_message') or report.get('import_error_type') or '未知错误'}"
+    return _finish(pipeline_id, run_id, status=status, stats=stats, snapshot_id=report.get("snapshot_id"),
+                   error=error, actor=actor, records=None, source_types={})
+
+
 def _run_process(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int) -> subprocess.CompletedProcess:
     return subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True, encoding="utf-8",
                           errors="replace", timeout=timeout,

@@ -68,6 +68,23 @@ class ProjectMCP:
     async def __call__(self, scope, receive, send):
         await app.state.geo_mcp(scope, receive, send)
 
+def _start_pipelines():
+    """启用管线功能时恢复遗留运行、同步内置采集器并启动调度；任何失败只记日志，不阻塞启动。"""
+    from . import pipeline_scheduler as scheduler
+    from .pipeline_runs import recover_interrupted_pipeline_runs
+    if not scheduler.pipelines_enabled():
+        return
+    for label, step in (
+        ("恢复中断的管线运行", lambda: recover_interrupted_pipeline_runs(datetime.now(timezone.utc))),
+        ("同步内置采集器", lambda: scheduler.sync_builtin_pipelines(load_registry(ROOT / "collectors" / "collectors.json"))),
+        ("启动管线调度", scheduler.start_scheduler),
+    ):
+        try:
+            step()
+        except Exception:
+            logging.getLogger(__name__).exception("%s失败", label)
+
+
 @asynccontextmanager
 async def lifespan(app):
     if web_auth_enabled():
@@ -75,6 +92,7 @@ async def lifespan(app):
     recover_interrupted_runs()
     start_translation()
     start_remote_collection()
+    _start_pipelines()
     mcp_app = create_mcp_app(auth_config=mcp_config, managed_keys=True, project_transport=True)
     app.state.geo_mcp = mcp_app
     async with mcp_app.router.lifespan_context(mcp_app):
