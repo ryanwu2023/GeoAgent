@@ -145,10 +145,15 @@ export function hostsFromUrls(urls: string[]): string[] {
   const hosts = urls.map((u) => { try { const url = new URL(u); return /^https?:$/.test(url.protocol) ? url.hostname.toLowerCase() : ""; } catch { return ""; } });
   return [...new Set(hosts.filter(Boolean))];
 }
+/** 内置采集器的配置只有 {schema_version, builtin}，没有来源与关键词，不能当编辑配置用。 */
+const isEditableConfig = (config: unknown): config is PipelineConfig =>
+  !!config && Array.isArray((config as PipelineConfig).sources) && !!(config as PipelineConfig).filters;
+export const sourceCountOf = (p: {config?: PipelineConfig; source_count?: number}): number | undefined =>
+  isEditableConfig(p.config) ? p.config.sources.length : p.source_count;
 export function draftOf(p: PipelineRow & {config?: PipelineConfig}): PipelineDraft {
   return {
     row: {name: p.name, description: p.description ?? "", topics: [...p.topics]},
-    config: p.config ? withoutRemovedKeys(JSON.parse(JSON.stringify(p.config))) : emptyDraft([]).config,
+    config: isEditableConfig(p.config) ? withoutRemovedKeys(JSON.parse(JSON.stringify(p.config))) : emptyDraft([]).config,
   };
 }
 /** 早期版本可能带已移除的翻页项（max_pages_per_source），后端现按未知字段拒绝，载入时去掉。 */

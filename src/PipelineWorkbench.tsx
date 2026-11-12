@@ -3,7 +3,7 @@ import {useCallback, useEffect, useRef, useState} from "react";
 import {FlaskConical, Play, Plus, RefreshCw, Save, Search, Trash2, Workflow} from "lucide-react";
 import {dateText} from "./api";
 import {
-  conflictMessage, createPipeline, deletePipeline, draftOf, emptyDraft, fieldHit, getPipeline, latestTrial,
+  conflictMessage, createPipeline, deletePipeline, draftOf, emptyDraft, sourceCountOf, fieldHit, getPipeline, latestTrial,
   listPipelines, listRunItems, listRuns, listVersions, newItemsOf, PipelineApiError, previewPipeline, readSeen, recentlyUpdated,
   rollbackPipeline, runLabel, setPipelineEnabled, tabForField, trialOutcome, trialPipeline, unseenCount, updatePipeline, writeSeen,
   type DetailTab, type Pipeline, type PipelineDraft, type PipelineRun, type PipelineRunItem, type PipelineVersion, type PreviewResult,
@@ -31,7 +31,7 @@ type TrialWatch = {id: string; before: string | null; deadline: number};
 type ItemsState = {runId: string; items: PipelineRunItem[]; total: number; loading: boolean; error: string};
 
 const errText = (e: unknown) => e instanceof Error ? e.message : String(e);
-const withCount = (p: Pipeline): Pipeline => p.config ? {...p, source_count: p.config.sources.length} : p;
+const withCount = (p: Pipeline): Pipeline => ({...p, source_count: sourceCountOf(p) ?? p.source_count});
 /** changed_since 往前留 2 秒余量，避免查询与 server_time 之间提交的修改被漏掉（重复条目按 id 合并）。 */
 const since = (t: string) => { const ms = Date.parse(t); return Number.isNaN(ms) ? t : new Date(ms - 2000).toISOString(); };
 

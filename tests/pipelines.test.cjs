@@ -165,6 +165,14 @@ test("draftOf 深拷贝管线为可编辑草稿", () => {
   const b = m.draftOf({name: "b", description: "", topics: ["ukraine"]});
   assert.deepEqual(b.config, m.emptyDraft([]).config, "内置管线没有 config 时用空骨架");
 });
+test("内置采集器的真实配置形态不会让草稿与来源计数崩溃", () => {
+  // 后端 GET /api/pipelines/<内置 id> 返回的 config 只有这两项（无 sources / filters）。
+  const builtin = {name: "TACO", description: "", topics: ["usiran"], source_count: 0, config: {schema_version: "pipeline/1", builtin: true}};
+  assert.deepEqual(m.draftOf(builtin).config, m.emptyDraft([]).config);
+  assert.equal(m.sourceCountOf(builtin), 0);
+  assert.equal(m.sourceCountOf({source_count: 3, config: m.emptyDraft(["usiran"]).config}), 0);
+  assert.equal(m.sourceCountOf({source_count: 3}), 3);
+});
 test("类型与后端形态一致", () => {
   const src = fs.readFileSync(path.join(__dirname, "..", "src", "pipelines.ts"), "utf8");
   assert.ok(/export type PreviewResult = \{sources: Array<\{source_id: string; state: string; error: string \| null; candidates: Array<\{title: string; url: string; accepted: boolean; reason: string; matched: string\[\]\}>\}>\}/.test(src));
