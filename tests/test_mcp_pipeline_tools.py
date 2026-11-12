@@ -401,3 +401,52 @@ def test_workbench_write_tools_admin_only(monkeypatch):
     assert call("geo_pipeline_delete", "root")  # 管理员放行（管线不存在，返回工具错误体）
     assert call("geo_pipeline_delete", None, enabled=False)  # 未启用网页登录视为本机管理员
     assert call("geo_pipeline_get", "bob")  # 只读工具不受限
+
+
+def test_write_tools_survive_real_envelope(principal, monkeypatch):
+    """走真实 _execute_tool/success_envelope：写工具返回值必须可 JSON 序列化。"""
+    import asyncio
+    import socket
+    from mcp.server.fastmcp import FastMCP
+    from backend.geo_mcp import server as srv
+    monkeypatch.setattr(socket, "getaddrinfo", lambda host, *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
+    monkeypatch.setattr(srv, "_context_principal", lambda ctx: principal)
+    monkeypatch.setattr(srv, "request_id_from_context", lambda ctx: "req-1")
+    monkeypatch.setattr(tools._runs_module, "run_trial", lambda pid, *, actor: None)
+
+    async def real_run_tool(*, ctx, tool, handler):
+        return srv._execute_tool(ctx=ctx, tool=tool, handler=handler)
+
+    server = FastMCP("t")
+    tools.register_pipeline_tools(server, real_run_tool)
+
+    def call(name, **args):
+        result = asyncio.run(server.call_tool(name, args))
+        text = result[0][0].text if isinstance(result, tuple) else result[0].text
+        payload = json.loads(text)
+        assert payload["ok"] is True, payload
+        return payload["data"]
+
+    created = call("geo_pipeline_create", row={**ROW, "name": "信封"}, config=cfg(), change_note="初版")
+    pid = created["id"]
+    assert created["enabled"] is False and isinstance(created["created_at"], str)
+    new = cfg()
+    new["filters"]["include_any"] = ["gas"]
+    assert call("geo_pipeline_update", pipeline_id=pid, expected_version=1, config=new)["current_version"] == 2
+    assert call("geo_pipeline_rollback", pipeline_id=pid, to_version=1, expected_version=2)["current_version"] == 3
+    assert call("geo_pipeline_set_enabled", pipeline_id=pid, enabled=True)["enabled"] is True
+    assert call("geo_pipeline_trial", pipeline_id=pid)["accepted"] is True
+    assert call("geo_pipeline_get", pipeline_id=pid)["id"] == pid
+    assert call("geo_pipeline_delete", pipeline_id=pid) == {"deleted": True}
+
+
+def test_runs_projection_includes_error_message(principal):
+    p = make("错误信息")
+    stats = {"candidates": 0, "accepted": 0, "new_items": 0, "sources": {
+        "rss-a": {"state": "no_data", "error": "LINKS_OUTSIDE_ALLOWED_HOSTS", "error_message": "域名不在允许列表：x（2 条）",
+                  "candidates": 0, "accepted": 0}}}
+    with db() as conn:
+        conn.execute("INSERT INTO collection_pipeline_runs(run_id,pipeline_id,version,trigger,status,started_at,finished_at,stats,data_timestamp) "
+                     "VALUES ('r-e',%s,1,'trial','success',now(),now(),%s,now())", (p["id"], json.dumps(stats)))
+    source = tools.pipeline_runs(principal, p["id"])[0]["stats"]["sources"]["rss-a"]
+    assert source["error"] == "LINKS_OUTSIDE_ALLOWED_HOSTS" and "x（2 条）" in source["error_message"]

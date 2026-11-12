@@ -38,6 +38,7 @@
 - `type=rss` 另需 `feed_url`，不得带 `entry_urls`；`type=web` 另需 `entry_urls`（1–10 个链接），不得带 `feed_url`。链接的主机必须在 `allowed_hosts` 内。
 - 可选：`language`（默认 `en`）、`link_include_pattern`（正则，≤200 字）。
 - `filters`、`request` 整块可省略，默认值：`include_any/include_strong/exclude` 为空数组，`require_category=true`，`lookback_days=14`（1–90），`max_candidates_per_source=80`（1–200），`timeout_seconds=25`（1–60），`rate_limit_seconds=1.5`（0–30）。词总数上限 200，单词最长 100 字符。
+- `allowed_hosts` 必须包含文章链接所在的全部域名，而不只是订阅源自身的域名。例：订阅源 `https://feeds.bbci.co.uk/news/world/middle_east/rss.xml` 的条目链接在 `www.bbc.co.uk`，则应写 `["feeds.bbci.co.uk","www.bbc.co.uk"]`；否则条目被静默丢弃，来源状态为 `no_data`、`error=LINKS_OUTSIDE_ALLOWED_HOSTS`，`error_message` 列出被丢弃的域名（最多 5 个）和条数，试跑（`geo_pipeline_preview`）与运行记录（`geo_pipeline_runs` 的 `stats.sources`）都会带上。
 - 来源地址会做域名与解析地址校验，内网、回环地址会被拒绝。
 
 ## 工具

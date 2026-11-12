@@ -35,7 +35,7 @@ CONFIG_SHAPE = (
     '(小写字母数字连字符，≤64位，不重复)、type(web 或 rss)、name、allowed_hosts(1到10个小写主机名，不含协议路径端口)、'
     'tier(T1/T2/T3)、content_policy(public_fulltext 或 metadata_only)；rss 来源另需 feed_url 且不得带 entry_urls，'
     'web 来源另需 entry_urls(1到10个链接)且不得带 feed_url；可选 language(默认 en)、link_include_pattern(正则，≤200字)。'
-    '链接的主机必须在 allowed_hosts 内。filters 与 request 可省略，默认值：filters={"include_any":[],"include_strong":[],'
+    '链接的主机必须在 allowed_hosts 内；allowed_hosts 必须包含文章链接所在的全部域名，而不只是订阅源自身的域名（如订阅源在 feeds.bbci.co.uk、文章链接在 www.bbc.co.uk 时两者都要写），否则条目被丢弃，来源报 LINKS_OUTSIDE_ALLOWED_HOSTS 并在 error_message 列出被丢弃的域名。filters 与 request 可省略，默认值：filters={"include_any":[],"include_strong":[],'
     '"exclude":[],"require_category":true,"lookback_days":14(1到90),"max_candidates_per_source":80(1到200)}，'
     'request={"timeout_seconds":25(1到60),"rate_limit_seconds":1.5(0到30)}。')
 PROVENANCE = {"kind": "live", "source": "collection-pipelines", "live": True}
@@ -104,9 +104,8 @@ def pipeline_list(principal, topic: str = "", status: str = "", kind: str = "", 
     return {"items": items, "total": len(rows)}
 
 
-def pipeline_get(principal, pipeline_id: str) -> dict:
-    _guard(write=False)
-    row = _read(pipeline_service.get_pipeline, pipeline_id)
+def _project(row: dict) -> dict:
+    """管线行的 JSON 安全投影（时间转 ISO 字符串）；读、写工具共用。"""
     return {
         "id": row["id"], "name": row["name"], "kind": row["kind"], "description": row["description"],
         "topics": list(row["topics"]), "enabled": row["enabled"], "current_version": row["current_version"],
@@ -116,6 +115,11 @@ def pipeline_get(principal, pipeline_id: str) -> dict:
         "updated_by": row["updated_by"], "updated_at": _iso(row["updated_at"]),
         "config": row.get("config"),
     }
+
+
+def pipeline_get(principal, pipeline_id: str) -> dict:
+    _guard(write=False)
+    return _project(_read(pipeline_service.get_pipeline, pipeline_id))
 
 
 def _term_count(config: dict) -> int:
@@ -136,7 +140,8 @@ def pipeline_versions(principal, pipeline_id: str, limit: int = 20) -> list[dict
 def _stats(stats: dict | None) -> dict:
     stats = stats or {}
     sources = {sid: {"state": s.get("state"), "error": s.get("error", ""),
-                     "candidates": s.get("candidates", 0), "accepted": s.get("accepted", 0)}
+                     "candidates": s.get("candidates", 0), "accepted": s.get("accepted", 0),
+                     **({"error_message": s["error_message"]} if s.get("error_message") else {})}
                for sid, s in (stats.get("sources") or {}).items()}
     return {"candidates": stats.get("candidates", 0), "accepted": stats.get("accepted", 0),
             "new_items": stats.get("new_items", 0), "sources": sources}
@@ -227,7 +232,8 @@ def pipeline_create(principal, row: dict, config: dict, change_note: str = "", d
         except PipelineConfigError as exc:
             raise MCPError("GEO_INVALID_ARGUMENT", exc.message, {"field": exc.field}) from exc
         return {"dry_run": True, "row": clean_row, "config": clean_config}
-    return _write(pipeline_service.create_pipeline, _actor(principal), row, config, change_note or "", resolve=resolve)
+    return _project(_write(pipeline_service.create_pipeline, _actor(principal), row, config, change_note or "",
+                           resolve=resolve))
 
 
 def _update_changes(current: dict, expected_version: int, row_patch: dict, config: dict | None, resolve) -> dict:
@@ -266,8 +272,8 @@ def pipeline_update(principal, pipeline_id: str, expected_version: int, row_patc
         current = _write(pipeline_service.get_pipeline, pipeline_id)
         changes = _write(_update_changes, current, version, patch, config, resolve)
         return {"dry_run": True, "current_version": current["current_version"], "changes": changes}
-    return _write(pipeline_service.update_pipeline, _actor(principal), pipeline_id, expected_version=version,
-                  row_patch=patch, config=config, change_note=change_note or "", resolve=resolve)
+    return _project(_write(pipeline_service.update_pipeline, _actor(principal), pipeline_id, expected_version=version,
+                           row_patch=patch, config=config, change_note=change_note or "", resolve=resolve))
 
 
 def _background_trial(pipeline_id: str, username: str) -> None:
@@ -295,7 +301,7 @@ def pipeline_set_enabled(principal, pipeline_id: str, enabled: bool) -> dict:
     _guard(write=True)
     if not isinstance(enabled, bool):
         raise MCPError("GEO_INVALID_ARGUMENT", "enabled 必须是布尔值", {"field": "enabled"})
-    return _write(pipeline_service.set_enabled, _actor(principal), pipeline_id, enabled)
+    return _project(_write(pipeline_service.set_enabled, _actor(principal), pipeline_id, enabled))
 
 
 def pipeline_delete(principal, pipeline_id: str) -> dict:
@@ -307,9 +313,9 @@ def pipeline_delete(principal, pipeline_id: str) -> dict:
 def pipeline_rollback(principal, pipeline_id: str, to_version: int, expected_version: int, *,
                       resolve=default_resolve) -> dict:
     _guard(write=True)
-    return _write(pipeline_service.rollback, _actor(principal), pipeline_id,
-                  to_version=_int(to_version, "to_version", 1),
-                  expected_version=_int(expected_version, "expected_version", 1), resolve=resolve)
+    return _project(_write(pipeline_service.rollback, _actor(principal), pipeline_id,
+                           to_version=_int(to_version, "to_version", 1),
+                           expected_version=_int(expected_version, "expected_version", 1), resolve=resolve))
 
 
 PipelineId = Annotated[str, Field(max_length=120, description="管线ID，从geo_pipeline_list获取。")]

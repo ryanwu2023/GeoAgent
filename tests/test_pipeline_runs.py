@@ -667,6 +667,30 @@ def test_runner_preview_classifies_candidates_without_writing(tmp_path):
     assert list(tmp_path.iterdir()) == [path]
 
 
+def test_runner_preview_reports_links_outside_allowed_hosts(tmp_path):
+    runner = _load_runner()
+    from backend.pipeline_config import to_monitor_config, validate_pipeline
+    row, config = validate_pipeline(ROW, cfg(), resolve=resolve)
+    base = json.loads((ROOT / "collectors" / "geopolitical-source-monitor" / "config.json").read_text(encoding="utf-8"))
+    path = tmp_path / "monitor.json"
+    path.write_text(json.dumps(to_monitor_config(row, config, base)), encoding="utf-8")
+    feed = ("<rss><channel>" + "".join(
+        f"<item><title>Iran talks {i}</title><link>https://elsewhere.example.org/{i}</link></item>" for i in range(4))
+        + "</channel></rss>")
+
+    def transport(request, timeout):
+        from web import TransportResponse
+        if request.full_url.startswith("https://example.com"):
+            return TransportResponse(200, {"Content-Type": "application/rss+xml"}, feed.encode(), request.full_url)
+        return TransportResponse(503, {}, b"", request.full_url)
+
+    from web import PolicyHttpClient
+    client = PolicyHttpClient(user_agent="t", transport=transport, sleep=lambda _: None, robots_fetcher=lambda _: "")
+    rss = {s["source_id"]: s for s in runner.preview(path, 2, client=client)["sources"]}["rss-a"]
+    assert rss["state"] == "no_data" and rss["error"] == "LINKS_OUTSIDE_ALLOWED_HOSTS" and rss["candidates"] == []
+    assert "elsewhere.example.org（4 条）" in rss["error_message"]
+
+
 def test_runner_selftest_passes_offline():
     runner = ROOT / "collectors" / "pipeline-runner" / "pipeline_runner.py"
     completed = subprocess.run([sys.executable, str(runner), "--selftest"], cwd=runner.parent,

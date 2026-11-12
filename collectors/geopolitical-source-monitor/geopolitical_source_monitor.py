@@ -19,7 +19,8 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from feeds import FeedParseError, discover_feed_candidates  # noqa: E402
+from feeds import (LINKS_OUTSIDE_ALLOWED_HOSTS, FeedParseError, discover_feed_candidates, merge_dropped,
+                   outside_hosts_message)  # noqa: E402
 from filtering import classify_candidate, load_config, lookback_cutoff, outside_lookback  # noqa: E402
 from web import (  # noqa: E402
     Candidate,
@@ -278,6 +279,7 @@ def run_collection(
             "candidates": 0, "accepted": 0, "excluded": 0, "http_statuses": [], "error": None,
         }
         source_records: list[dict[str, Any]] = []
+        dropped_hosts: dict[str, int] = {}
         link_filter = None
         if source.get("link_include_pattern"):
             try:
@@ -307,6 +309,7 @@ def run_collection(
             if source.get("discovery_mode") == "rss":
                 try:
                     candidates = discover_feed_candidates(listing.body, base_url, source)
+                    merge_dropped(dropped_hosts, candidates)
                 except FeedParseError:
                     status["error"] = "PARSE_ERROR"
                     status["state"] = "failed"
@@ -367,6 +370,9 @@ def run_collection(
             status["error"] = None
         elif status["state"] not in {"failed", "restricted"}:
             status["state"] = "no_data"
+        if not status["candidates"] and dropped_hosts and not status["error"]:
+            status["error"] = LINKS_OUTSIDE_ALLOWED_HOSTS
+            status["error_message"] = outside_hosts_message(dropped_hosts)
         status['elapsed_sec'] = round(time.monotonic() - started, 3)
         print(f"[source:done] {source['id']} state={status['state']} candidates={status['candidates']} accepted={status['accepted']} elapsed={status['elapsed_sec']}s", flush=True)
         return source_records, status, counts

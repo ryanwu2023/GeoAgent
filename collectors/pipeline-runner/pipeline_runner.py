@@ -25,7 +25,8 @@ for _path in (REPO_ROOT, MONITOR_DIR):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from feeds import FeedParseError, discover_feed_candidates  # noqa: E402
+from feeds import (LINKS_OUTSIDE_ALLOWED_HOSTS, FeedParseError, discover_feed_candidates, merge_dropped,
+                   outside_hosts_message)  # noqa: E402
 from filtering import LOOKBACK_REASON, classify_candidate, load_config, lookback_cutoff, outside_lookback  # noqa: E402
 from geopolitical_source_monitor import _source_error_state, run_collection  # noqa: E402
 from web import PolicyHttpClient, TransportResponse, discover_candidates, is_restricted_document  # noqa: E402
@@ -36,6 +37,7 @@ def _preview_source(configured: dict[str, Any], defaults: dict[str, Any], config
     source = {**defaults, **configured}
     result: dict[str, Any] = {"source_id": source["id"], "state": "no_data", "error": None, "candidates": []}
     link_filter = None
+    dropped_hosts: dict[str, int] = {}
     if source.get("link_include_pattern"):
         try:
             link_filter = re.compile(str(source["link_include_pattern"]))
@@ -55,6 +57,7 @@ def _preview_source(configured: dict[str, Any], defaults: dict[str, Any], config
         if source.get("discovery_mode") == "rss":
             try:
                 candidates = discover_feed_candidates(listing.body, base_url, source)
+                merge_dropped(dropped_hosts, candidates)
             except FeedParseError:
                 result["state"], result["error"] = "failed", "PARSE_ERROR"
                 continue
@@ -75,6 +78,9 @@ def _preview_source(configured: dict[str, Any], defaults: dict[str, Any], config
             })
     if result["candidates"]:
         result["state"], result["error"] = "ok", None
+    elif dropped_hosts and not result["error"]:
+        result["error"] = LINKS_OUTSIDE_ALLOWED_HOSTS
+        result["error_message"] = outside_hosts_message(dropped_hosts)
     return result
 
 

@@ -89,6 +89,28 @@ def _without_declaration(xml_text: str) -> str:
     return body
 
 
+LINKS_OUTSIDE_ALLOWED_HOSTS = "LINKS_OUTSIDE_ALLOWED_HOSTS"
+
+
+class CandidateList(list):
+    """候选列表；dropped_hosts 记录因域名不在 allowed_hosts 而被丢弃的条目链接（域名 -> 条数）。"""
+
+    def __init__(self, items=(), dropped_hosts: dict[str, int] | None = None):
+        super().__init__(items)
+        self.dropped_hosts: dict[str, int] = dict(dropped_hosts or {})
+
+
+def merge_dropped(total: dict[str, int], candidates: object) -> None:
+    for host, count in getattr(candidates, "dropped_hosts", {}).items():
+        total[host] = total.get(host, 0) + count
+
+
+def outside_hosts_message(dropped: dict[str, int]) -> str:
+    top = sorted(dropped.items(), key=lambda kv: (-kv[1], kv[0]))[:5]
+    listed = "、".join(f"{host}（{count} 条）" for host, count in top)
+    return f"订阅源条目链接的域名不在允许列表：{listed}，请把这些域名加入 allowed_hosts"
+
+
 def discover_feed_candidates(xml_text: str, base_url: str, source: dict[str, Any]) -> list[Candidate]:
     if len(xml_text.encode("utf-8", errors="ignore")) > MAX_FEED_BYTES:
         raise FeedParseError("订阅源超过 5 MB 上限")
@@ -100,6 +122,7 @@ def discover_feed_candidates(xml_text: str, base_url: str, source: dict[str, Any
         raise FeedParseError(f"订阅源不是有效 XML：{exc}") from exc
     allowed = {host.lower() for host in source.get("allowed_hosts", [])}
     found: dict[str, Candidate] = {}
+    dropped: dict[str, int] = {}
     for element in root.iter():
         if _local(element.tag) not in {"item", "entry"}:
             continue
@@ -109,7 +132,12 @@ def discover_feed_candidates(xml_text: str, base_url: str, source: dict[str, Any
             continue
         url = canonicalize_url(urljoin(base_url, href))
         split = urlsplit(url)
-        if split.scheme not in {"http", "https"} or (split.hostname or "").lower() not in allowed:
+        if split.scheme not in {"http", "https"}:
+            continue
+        if (split.hostname or "").lower() not in allowed:
+            host = (split.hostname or "").lower()
+            if host:
+                dropped[host] = dropped.get(host, 0) + 1
             continue
         found[url] = Candidate(
             url,
@@ -118,4 +146,4 @@ def discover_feed_candidates(xml_text: str, base_url: str, source: dict[str, Any
             _iso_utc(_text(element, "pubdate", "published", "updated", "date")),
             "rss",
         )
-    return list(found.values())
+    return CandidateList(found.values(), dropped)

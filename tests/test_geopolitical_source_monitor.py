@@ -466,6 +466,27 @@ def test_rss_source_failure_marks_partial(tmp_path):
     assert report["sources"]["meta"]["state"] == "ok"
 
 
+def test_rss_links_outside_allowed_hosts_are_reported(tmp_path):
+    filtering = load_module("filtering")
+    web = load_module("web")
+    monitor = load_module("geopolitical_source_monitor")
+    feeds = load_module("feeds")
+    path = _rss_config(tmp_path, filtering, [{
+        "id": "bbc", "name_zh": "订阅", "publisher": "BBC", "tier": "T1", "language": "en",
+        "content_policy": "metadata_only", "entry_urls": ["https://feeds.bbci.co.uk/rss.xml"],
+        "allowed_hosts": ["feeds.bbci.co.uk"], "discovery_mode": "rss"}])
+    items = "".join(f"<item><title>Iran talks {n}</title><link>https://www.bbc.co.uk/news/{n}</link></item>" for n in range(3))
+    xml = f"<rss><channel>{items}</channel></rss>"
+    found = feeds.discover_feed_candidates(xml, "https://feeds.bbci.co.uk/rss.xml", {"allowed_hosts": ["feeds.bbci.co.uk"]})
+    assert found == [] and found.dropped_hosts == {"www.bbc.co.uk": 3}
+    responses = {"https://feeds.bbci.co.uk/rss.xml": web.FetchResult(200, xml, "https://feeds.bbci.co.uk/rss.xml", {})}
+    report = monitor.run_collection(path, tmp_path / "out", FakeClient(responses))
+    source = report["sources"]["bbc"]
+    assert source["state"] == "no_data" and source["candidates"] == 0
+    assert source["error"] == "LINKS_OUTSIDE_ALLOWED_HOSTS"
+    assert "www.bbc.co.uk（3 条）" in source["error_message"] and "allowed_hosts" in source["error_message"]
+
+
 def test_rss_source_collects_and_link_include_pattern_filters(tmp_path):
     filtering = load_module("filtering")
     web = load_module("web")
