@@ -55,7 +55,7 @@ def registry_item(pipeline: dict, config_path: Path) -> dict:
     return {
         "id": collector_id(pipeline["id"]),
         "name_zh": pipeline["name"],
-        "topics": [pipeline["topic"]],
+        "topics": list(pipeline["topics"]),
         "entrypoint": RUNNER_ENTRYPOINT,
         "source_dir": RUNNER_DIR,
         "selftest_args": ["--selftest"],
@@ -86,8 +86,8 @@ def record_new_items(conn, *, pipeline_id: str, run_id: str, records: list[dict]
                        (run_id,)).fetchone()
     if run is None:
         raise PipelineError("NOT_FOUND", "运行记录不存在", {"run_id": run_id})
-    pipeline = conn.execute("SELECT topic FROM collection_pipelines WHERE id=%s", (pipeline_id,)).fetchone()
-    topic = pipeline["topic"] if pipeline else None
+    pipeline = conn.execute("SELECT topics FROM collection_pipelines WHERE id=%s", (pipeline_id,)).fetchone()
+    topics = list(pipeline["topics"]) if pipeline else []
     started, actor = run["started_at"], run["created_by"]
     fresh: list[dict] = []
     seen_now: set[str] = set()
@@ -113,15 +113,16 @@ def record_new_items(conn, *, pipeline_id: str, run_id: str, records: list[dict]
         published = _parse_time(record.get("published"))
         terms = list(dict.fromkeys([*(record.get("matched_discovery_terms") or []),
                                     *(record.get("matched_admission_terms") or [])]))
-        dimension = (record.get("dimensions") or {}).get(topic) if topic else None
+        raw_dims = record.get("dimensions") or {}
+        dimensions = {t: raw_dims[t] for t in topics if raw_dims.get(t)}
         conn.execute(
             "INSERT INTO collection_pipeline_run_items(run_id,seq,pipeline_id,record_id,evidence_id,source_id,source_type,"
-            "title,published_at,language,matched_terms,dimension,summary,created_by,data_timestamp) "
+            "title,published_at,language,matched_terms,dimensions,summary,created_by,data_timestamp) "
             "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
             (run_id, base + offset, pipeline_id, str(record["id"]), normalize(record, monitor)["id"],
              str(record.get("source_id") or ""), source_types.get(record.get("source_id"), "web"),
              str(record.get("title") or "无标题"), published, str(record.get("language") or ""),
-             json.dumps(terms, ensure_ascii=False), dimension,
+             json.dumps(terms, ensure_ascii=False), json.dumps(dimensions, ensure_ascii=False),
              str(record.get("summary") or "")[:SUMMARY_LIMIT], actor, published or started))
     return len(fresh)
 

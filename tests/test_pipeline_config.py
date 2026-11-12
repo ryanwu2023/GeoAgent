@@ -22,7 +22,7 @@ BASE = json.loads((COLLECTOR / "config.json").read_text(encoding="utf-8"))
 
 PUBLIC = lambda host: ["93.184.216.34"]  # noqa: E731
 
-ROW = {"name": "测试管线", "description": "", "topic": "usiran", "interval_sec": 3600,
+ROW = {"name": "测试管线", "description": "", "topics": ["usiran"], "interval_sec": 3600,
        "daily_times": None, "timezone": "Asia/Shanghai"}
 CFG = {
     "schema_version": "pipeline/1",
@@ -105,7 +105,7 @@ def test_rejects_unresolvable():
 
 
 def test_rejects_unknown_topic():
-    assert fail(row(topic="taiwan"), CFG).field == "row.topic"
+    assert fail(row(topics=["taiwan"]), CFG).field == "row.topics"
 
 
 def test_rejects_interval_and_daily_times_together():
@@ -135,7 +135,7 @@ def test_daily_times_normalized_and_validated():
 def test_empty_daily_times_is_unset_and_row_is_whitelisted():
     r, _ = validate_pipeline(row(interval_sec=3600, daily_times=[], extra="x"), CFG, resolve=PUBLIC)
     assert r["daily_times"] is None and "extra" not in r
-    assert set(r) == {"name", "description", "topic", "interval_sec", "daily_times", "timezone"}
+    assert set(r) == {"name", "description", "topics", "interval_sec", "daily_times", "timezone"}
 
 
 def test_rejects_cgnat_literal_and_resolved():
@@ -268,3 +268,20 @@ def test_next_run_daily_times_crosses_midnight():
 def test_next_run_strictly_later():
     r = {"daily_times": ["08:00", "20:00"], "timezone": "Asia/Shanghai", "interval_sec": None}
     assert next_run_at(r, datetime(2026, 11, 11, 0, 0, tzinfo=UTC)) == datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
+
+
+def test_topics_multi_select_validated():
+    r, _ = validate_pipeline(row(topics=["ukraine", "usiran", "usiran"]), CFG, resolve=PUBLIC)
+    assert r["topics"] == ["usiran", "ukraine"] and "topic" not in r
+    for bad in ([], ["taiwan"], ["usiran", "taiwan"], "usiran", None):
+        assert fail(row(topics=bad), CFG).field == "row.topics"
+
+
+def test_to_monitor_config_multi_topics_and_hints():
+    r, c = validate_pipeline(row(topics=["ukraine", "usiran"]), CFG, resolve=PUBLIC)
+    out = to_monitor_config(r, c, BASE)
+    shared = {"anchors": ["Iran", "Hormuz"], "strong_anchors": ["Hormuz"]}
+    assert out["topics"] == ["usiran", "ukraine"]
+    assert out["topic_terms"] == {"usiran": shared, "ukraine": shared}
+    assert out["topic_hints"] == {t: BASE["topic_terms"][t]["anchors"] for t in ("usiran", "ukraine")}
+    assert "topic_hints" not in BASE

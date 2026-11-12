@@ -10,7 +10,7 @@ from backend.store import db
 ADMIN = Actor("admin", True)
 ALICE = Actor("alice", False)
 BOB = Actor("bob", False)
-ROW = {"name": "路透社", "description": "d", "topic": "usiran", "interval_sec": 3600}
+ROW = {"name": "路透社", "description": "d", "topics": ["usiran"], "interval_sec": 3600}
 
 
 def resolve(host):
@@ -48,8 +48,8 @@ def test_create_starts_disabled_with_version_1():
 
 def test_create_invalid_maps_error_and_duplicate_name():
     with pytest.raises(PipelineError) as e:
-        create_pipeline(ADMIN, {**ROW, "topic": "x"}, cfg(), resolve=resolve)
-    assert e.value.code == "INVALID" and e.value.details["field"] == "row.topic"
+        create_pipeline(ADMIN, {**ROW, "topics": ["x"]}, cfg(), resolve=resolve)
+    assert e.value.code == "INVALID" and e.value.details["field"] == "row.topics"
     make()
     with pytest.raises(PipelineError) as e:
         make()
@@ -172,8 +172,8 @@ def test_recreate_after_delete_has_fresh_seen():
 
 def _builtin(pid="b-news"):
     with db() as conn:
-        conn.execute("INSERT INTO collection_pipelines(id,kind,name,topic,current_version,owner,interval_sec) "
-                     "VALUES (%s,'builtin','内置新闻','usiran',1,'system',3600)", (pid,))
+        conn.execute("INSERT INTO collection_pipelines(id,kind,name,topics,current_version,owner,interval_sec) "
+                     "VALUES (%s,'builtin','内置新闻',ARRAY['usiran'],1,'system',3600)", (pid,))
     return pid
 
 
@@ -192,7 +192,7 @@ def test_builtin_only_schedule_editable():
     assert e.value.code == "FORBIDDEN"
     u = upd(pid, expected_version=1, row_patch={"interval_sec": 1200, "timezone": "UTC"})
     assert u["interval_sec"] == 1200 and u["timezone"] == "UTC"
-    for kw in ({"row_patch": {"name": "x"}}, {"row_patch": {"topic": "ukraine"}}, {"config": cfg()}):
+    for kw in ({"row_patch": {"name": "x"}}, {"row_patch": {"topics": ["ukraine"]}}, {"config": cfg()}):
         with pytest.raises(PipelineError) as e:
             upd(pid, expected_version=1, **kw)
         assert e.value.code == "BUILTIN_READONLY"
@@ -219,7 +219,7 @@ def test_list_filters_and_source_count():
     assert [p["name"] for p in list_pipelines(kind="builtin")] == ["内置新闻"]
     assert [p["name"] for p in list_pipelines(q="ALP")] == ["Alpha"]
     with db() as conn:
-        conn.execute("UPDATE collection_pipelines SET topic='ukraine', last_status='failed' WHERE id=%s", (b["id"],))
+        conn.execute("UPDATE collection_pipelines SET topics=ARRAY['ukraine'], last_status='failed' WHERE id=%s", (b["id"],))
     assert [p["name"] for p in list_pipelines(topic="ukraine")] == ["Beta"]
     assert [p["name"] for p in list_pipelines(status="failed")] == ["Beta"]
     with pytest.raises(PipelineError) as e:
@@ -275,3 +275,14 @@ def test_rollback_rejects_current_version_and_revalidates():
     assert e.value.code == "INVALID"
     assert get_pipeline(p["id"])["current_version"] == 2
     assert rollback(ADMIN, p["id"], to_version=1, expected_version=2, resolve=resolve)["current_version"] == 3
+
+
+def test_list_filter_topic_matches_any():
+    a = make(name="Alpha")
+    b = make(name="Beta")
+    with db() as conn:
+        conn.execute("UPDATE collection_pipelines SET topics=ARRAY['usiran','ukraine'] WHERE id=%s", (a["id"],))
+        conn.execute("UPDATE collection_pipelines SET topics=ARRAY['ukraine'] WHERE id=%s", (b["id"],))
+    assert {p["name"] for p in list_pipelines(topic="ukraine")} == {"Alpha", "Beta"}
+    assert {p["name"] for p in list_pipelines(topic="usiran")} == {"Alpha"}
+    assert get_pipeline(a["id"])["topics"] == ["usiran", "ukraine"]

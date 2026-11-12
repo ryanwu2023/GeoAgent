@@ -14,7 +14,7 @@ from scripts.collector_service import execute_once
 
 ADMIN = Actor("admin", True)
 NOW = datetime(2026, 11, 11, 8, 0, tzinfo=timezone.utc)
-ROW = {"name": "测试管线", "description": "", "topic": "usiran", "interval_sec": 3600}
+ROW = {"name": "测试管线", "description": "", "topics": ["usiran"], "interval_sec": 3600}
 CFG = {"sources": [{"id": "rss-a", "type": "rss", "name": "RSS 源", "feed_url": "https://example.com/feed.xml",
                     "allowed_hosts": ["example.com"], "language": "en", "tier": "T2",
                     "content_policy": "metadata_only"}], "filters": {"include_any": ["iran"]}}
@@ -137,7 +137,7 @@ def test_sync_builtin_creates_disabled_rows_and_is_idempotent():
         versions = conn.execute("SELECT * FROM collection_pipeline_versions ORDER BY pipeline_id").fetchall()
     assert [r["id"] for r in rows] == ["c1", "c2", "c3"]
     r = rows[0]
-    assert (r["name"], r["topic"], r["enabled"], r["owner"], r["current_version"]) == ("采集器c1", "ukraine", False, "system", 1)
+    assert (r["name"], r["topics"], r["enabled"], r["owner"], r["current_version"]) == ("采集器c1", ["ukraine", "usiran"], False, "system", 1)
     assert len(versions) == 3 and versions[0]["source_channel"] == "migration"
     assert versions[0]["config"] == {"schema_version": "pipeline/1", "builtin": True}
     assert scheduled_builtin_ids() == []
@@ -240,3 +240,13 @@ def test_restore_does_not_overwrite_user_change():
         conn.execute("UPDATE collection_pipelines SET next_run_at=%s WHERE id=%s", (later, p["id"]))
     pipeline_scheduler._restore(p["id"], claimed)
     assert get_pipeline(p["id"])["next_run_at"] == later
+
+
+def test_builtin_sync_keeps_all_registry_topics_and_skips_empty(caplog):
+    reg = registry("c1") + [{**registry("c2")[0], "topics": []}]
+    with caplog.at_level("WARNING"):
+        sync_builtin_pipelines(reg)
+    with db() as conn:
+        rows = conn.execute("SELECT id,topics FROM collection_pipelines WHERE kind='builtin' ORDER BY id").fetchall()
+    assert [(r["id"], r["topics"]) for r in rows] == [("c1", ["ukraine", "usiran"])]
+    assert "c2" in caplog.text

@@ -78,15 +78,17 @@ def _validate_row(row: Any) -> dict[str, Any]:
     name = _text(row.get("name"), "row.name", max_len=100)
     description = row.get("description") or ""
     description = _text(description, "row.description", max_len=2000, min_len=0)
-    topic = row.get("topic")
-    if topic not in VALID_TOPICS:
-        raise PipelineConfigError("row.topic", f"主题只能是 {'、'.join(VALID_TOPICS)}")
+    raw = row.get("topics")
+    if (not isinstance(raw, list) or not raw
+            or any(not isinstance(t, str) or t not in VALID_TOPICS for t in raw)):
+        raise PipelineConfigError("row.topics", f"主题至少选一个，且只能是 {'、'.join(VALID_TOPICS)}")
+    topics = [t for t in VALID_TOPICS if t in raw]
     schedule = validate_schedule(row)
-    return {"name": name, "description": description, "topic": topic, **schedule}
+    return {"name": name, "description": description, "topics": topics, **schedule}
 
 
 def validate_row(row: Any) -> dict[str, Any]:
-    """只校验行字段（name/description/topic/调度），不涉及配置。"""
+    """只校验行字段（name/description/topics/调度），不涉及配置。"""
     return _validate_row(row)
 
 
@@ -330,11 +332,13 @@ def to_monitor_config(row: dict, config: dict, base: dict) -> dict:
     """把管线配置翻译为 geopolitical-source-monitor 的配置（不修改入参）。"""
     out = copy.deepcopy(base)
     filters = config["filters"]
-    topic = row["topic"]
+    topics = list(row["topics"])
     out["name"] = row.get("name") or out.get("name")
-    out["topics"] = [topic]
-    out["topic_terms"] = {topic: {"anchors": [*filters["include_any"], *filters["include_strong"]],
-                                  "strong_anchors": list(filters["include_strong"])}}
+    out["topics"] = topics
+    out["topic_terms"] = {t: {"anchors": [*filters["include_any"], *filters["include_strong"]],
+                              "strong_anchors": list(filters["include_strong"])} for t in topics}
+    # 准入后归属哪些主题，参考多源采集器内置的主题锚词（设计 §6.2.1）
+    out["topic_hints"] = {t: list((base.get("topic_terms", {}).get(t) or {}).get("anchors", [])) for t in topics}
     out["exclusion_terms"] = [*base.get("exclusion_terms", []), *filters["exclude"]]
     out["require_category"] = filters["require_category"]
     out["lookback_days"] = filters["lookback_days"]

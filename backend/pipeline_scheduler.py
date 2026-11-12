@@ -27,13 +27,16 @@ def pipelines_enabled() -> bool:
 def sync_builtin_pipelines(registry: list[dict]) -> None:
     """为注册表中尚无管线行的采集器建 builtin 行（停用）；已存在不覆盖，重名用户管线则跳过并告警。"""
     for item in registry:
-        topics = item.get("topics") or []
+        topics = list(item.get("topics") or [])
+        if not topics:
+            log.warning("内置采集器 %s 未声明主题，已跳过同步", item.get("id"))
+            continue
         try:
             with db() as conn:
                 inserted = conn.execute(
-                    "INSERT INTO collection_pipelines(id,kind,name,description,topic,enabled,current_version,owner,created_by) "
+                    "INSERT INTO collection_pipelines(id,kind,name,description,topics,enabled,current_version,owner,created_by) "
                     "VALUES (%s,'builtin',%s,'',%s,false,1,'system','system') ON CONFLICT (id) DO NOTHING RETURNING id",
-                    (item["id"], item["name_zh"], topics[0] if topics else "usiran")).fetchone()
+                    (item["id"], item["name_zh"], topics)).fetchone()
                 if inserted:
                     conn.execute(
                         "INSERT INTO collection_pipeline_versions(pipeline_id,version,config,change_note,source_channel,created_by) "

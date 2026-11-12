@@ -277,7 +277,7 @@ CREATE TABLE IF NOT EXISTS collection_pipelines (
  kind TEXT NOT NULL CHECK (kind IN ('configurable','builtin')),
  name TEXT NOT NULL,
  description TEXT NOT NULL DEFAULT '',
- topic TEXT NOT NULL,
+ topics TEXT[] NOT NULL CHECK (cardinality(topics) >= 1),
  enabled BOOLEAN NOT NULL DEFAULT false,
  current_version INTEGER NOT NULL,
  interval_sec INTEGER NULL,
@@ -355,7 +355,7 @@ CREATE TABLE IF NOT EXISTS collection_pipeline_run_items (
  published_at TIMESTAMPTZ NULL,
  language TEXT NOT NULL DEFAULT '',
  matched_terms JSONB NOT NULL DEFAULT '[]',
- dimension TEXT NULL,
+ dimensions JSONB NOT NULL DEFAULT '{}',
  summary TEXT NOT NULL DEFAULT '',
  created_by TEXT NULL,
  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -372,7 +372,7 @@ COMMENT ON COLUMN collection_pipelines.id IS '管线唯一标识，由应用生�
 COMMENT ON COLUMN collection_pipelines.kind IS '管线类型：configurable 为用户配置的网页/RSS 管线，builtin 为内置采集器';
 COMMENT ON COLUMN collection_pipelines.name IS '管线名称；有效（未删除）记录内唯一，删除后可重用';
 COMMENT ON COLUMN collection_pipelines.description IS '管线说明，可为空字符串';
-COMMENT ON COLUMN collection_pipelines.topic IS '所属主题，目前仅 usiran 或 ukraine';
+COMMENT ON COLUMN collection_pipelines.topics IS '所属主题列表（至少一个，可多选），元素目前仅 usiran 或 ukraine，按该顺序存放；由应用校验';
 COMMENT ON COLUMN collection_pipelines.enabled IS '是否启用定时调度：false 不调度（默认），true 按调度配置运行';
 COMMENT ON COLUMN collection_pipelines.current_version IS '当前生效的配置版本号，对应 collection_pipeline_versions.version';
 COMMENT ON COLUMN collection_pipelines.interval_sec IS '固定间隔调度，单位秒，取值 600~604800；与 daily_times 二选一，未使用时为空';
@@ -445,7 +445,7 @@ COMMENT ON COLUMN collection_pipeline_run_items.title IS '条目标题';
 COMMENT ON COLUMN collection_pipeline_run_items.published_at IS '条目源站发布时间；未知为空';
 COMMENT ON COLUMN collection_pipeline_run_items.language IS '内容语种代码，未识别为空字符串';
 COMMENT ON COLUMN collection_pipeline_run_items.matched_terms IS '命中的锚词、强锚词列表（JSON 数组），默认空数组';
-COMMENT ON COLUMN collection_pipeline_run_items.dimension IS '归入的研究维度；未归类为空';
+COMMENT ON COLUMN collection_pipeline_run_items.dimensions IS '各所选主题下归入的研究维度（JSON 对象，键为主题，值为维度）；未归类为空对象，默认空对象';
 COMMENT ON COLUMN collection_pipeline_run_items.summary IS '条目摘要，取采集记录的 summary 并截断到 1000 字；无摘要为空字符串';
 COMMENT ON COLUMN collection_pipeline_run_items.created_by IS '写入该条目的操作者或服务身份；未知为空';
 COMMENT ON COLUMN collection_pipeline_run_items.created_at IS '条目明细首次写入时间';

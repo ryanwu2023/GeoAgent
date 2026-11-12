@@ -23,7 +23,7 @@ def test_pipeline_tables_have_common_fields_and_comments():
 
 def _insert(conn, pid, name):
     conn.execute(
-        "INSERT INTO collection_pipelines(id,kind,name,topic,current_version,owner) VALUES (%s,'configurable',%s,'usiran',1,'admin')",
+        "INSERT INTO collection_pipelines(id,kind,name,topics,current_version,owner) VALUES (%s,'configurable',%s,ARRAY['usiran'],1,'admin')",
         (pid, name))
 
 

@@ -10,7 +10,7 @@ from backend.collector_jobs import CollectorBusyError
 from backend.pipeline_service import Actor, PipelineError, create_pipeline
 from backend.store import db
 
-ROW = {"name": "路透社", "description": "d", "topic": "usiran", "interval_sec": 3600}
+ROW = {"name": "路透社", "description": "d", "topics": ["usiran"], "interval_sec": 3600}
 
 
 def cfg(term="iran"):
@@ -92,8 +92,8 @@ def test_invalid_config_is_422_with_field(client):
     r = client.post("/api/pipelines", json={"row": ROW, "config": {"sources": [], "filters": {"include_any": ["a"]}}})
     assert r.status_code == 422
     assert r.json()["detail"]["field"] and r.json()["detail"]["message"]
-    r = client.post("/api/pipelines", json=body(topic="x"))
-    assert r.status_code == 422 and r.json()["detail"]["field"] == "row.topic"
+    r = client.post("/api/pipelines", json=body(topics=["x"]))
+    assert r.status_code == 422 and r.json()["detail"]["field"] == "row.topics"
 
 
 def test_missing_pipeline_is_404(client):

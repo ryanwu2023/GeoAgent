@@ -55,7 +55,7 @@
 | ``kind`` | text | 否 | — | CHECK：`configurable` 用户配置管线 / `builtin` 内置采集器 |
 | ``name`` | text | 否 | — | 管线名称，有效记录内唯一 |
 | ``description`` | text | 否 | `''` | 管线说明 |
-| ``topic`` | text | 否 | — | 所属主题，目前仅 `usiran`、`ukraine`（由应用校验） |
+| ``topics`` | text[] | 否 | — | 所属主题列表，至少一个、可多选，元素目前仅 `usiran`、`ukraine`，按该顺序存放（数据库检查非空，元素由应用校验） |
 | ``enabled`` | boolean | 否 | `false` | 是否启用定时调度 |
 | ``current_version`` | integer | 否 | — | 当前生效配置版本号，对应 `collection_pipeline_versions.version` |
 | ``interval_sec`` | integer | 是 | — | 固定间隔调度（秒），600~604800，与 `daily_times` 二选一（由应用校验） |
@@ -183,7 +183,7 @@
 | ``published_at`` | timestamptz | 是 | — | 源站发布时间，未知为空 |
 | ``language`` | text | 否 | `''` | 语种代码，未识别为空串 |
 | ``matched_terms`` | jsonb | 否 | `'[]'` | 命中的锚词、强锚词（JSON 数组） |
-| ``dimension`` | text | 是 | — | 归入的研究维度，未归类为空 |
+| ``dimensions`` | jsonb | 否 | `'{}'` | 各所选主题下归入的研究维度（键为主题，值为维度），未归类为空对象 |
 | ``summary`` | text | 否 | `''` | 条目摘要，截断到 1000 字，无摘要为空串 |
 | `created_by` | text | 是 | — | 写入该条目的操作者或服务身份 |
 | `created_at` | timestamptz | 否 | `CURRENT_TIMESTAMP` | 记录首次写入时间，更新不重置 |

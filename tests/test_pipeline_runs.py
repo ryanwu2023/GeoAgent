@@ -18,7 +18,7 @@ from scripts.collector_service import execute_once
 
 ROOT = Path(__file__).resolve().parents[1]
 ADMIN = Actor("admin", True)
-ROW = {"name": "测试管线", "description": "", "topic": "usiran", "interval_sec": 3600}
+ROW = {"name": "测试管线", "description": "", "topics": ["usiran"], "interval_sec": 3600}
 
 
 def resolve(host):
@@ -113,7 +113,7 @@ def test_first_run_all_items_are_new(data_root):
     assert [i["seq"] for i in items] == [1, 2, 3]
     assert [i["record_id"] for i in items] == ["r2", "r1", "r3"]  # 发布时间倒序，无时间排最后
     first = items[0]
-    assert first["source_type"] == "rss" and first["dimension"] == "diplomacy" and first["language"] == "en"
+    assert first["source_type"] == "rss" and first["dimensions"] == {"usiran": "diplomacy"} and first["language"] == "en"
     assert first["matched_terms"] == ["iran", "talks"] and first["title"] == "标题 2"
     from backend.adapters import normalize
     assert first["evidence_id"] == normalize(rec(2), f"pipeline-{p['id']}")["id"]
@@ -307,7 +307,7 @@ def test_preview_writes_nothing(monkeypatch, data_root):
 
 def test_preview_maps_errors(monkeypatch):
     with pytest.raises(PipelineError) as e:
-        preview_pipeline({**ROW, "topic": "bad"}, cfg(), resolve=resolve)
+        preview_pipeline({**ROW, "topics": ["bad"]}, cfg(), resolve=resolve)
     assert e.value.code == "INVALID"
 
     monkeypatch.setattr(pipeline_runs, "_run_process",
@@ -408,8 +408,8 @@ def test_runner_requires_pipeline_config(tmp_path):
 
 def _builtin():
     with db() as conn:
-        conn.execute("INSERT INTO collection_pipelines(id,kind,name,topic,enabled,current_version,interval_sec,owner,created_by) "
-                     "VALUES ('bi1','builtin','内置采集器','usiran',true,1,3600,'system','system')")
+        conn.execute("INSERT INTO collection_pipelines(id,kind,name,topics,enabled,current_version,interval_sec,owner,created_by) "
+                     "VALUES ('bi1','builtin','内置采集器',ARRAY['usiran'],true,1,3600,'system','system')")
         conn.execute("INSERT INTO collection_pipeline_versions(pipeline_id,version,config,source_channel) "
                      "VALUES ('bi1',1,'{\"schema_version\":\"pipeline/1\",\"builtin\":true}','migration')")
 
@@ -475,3 +475,16 @@ def test_run_builtin_unpublished_output_is_failed_and_not_backfilled():
     assert run["status"] == "failed" and "发布门禁" in run["error"]
     assert pipeline_runs.backfill_merged_runs("s1", imported_before=datetime.now(timezone.utc)) == 0
     assert list_runs("bi1")[0]["snapshot_id"] is None
+
+
+def test_run_items_store_dimensions_json(data_root):
+    p = make()
+    with db() as conn:
+        conn.execute("UPDATE collection_pipelines SET topics=ARRAY['usiran','ukraine'] WHERE id=%s", (p["id"],))
+    r = rec(1)
+    r["topics"] = ["usiran", "ukraine", "taiwan"]
+    r["dimensions"] = {"usiran": "diplomacy", "ukraine": "aid", "taiwan": "x"}
+    run = run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, [r, rec(2)]))
+    items = {i["record_id"]: i for i in list_run_items(run["run_id"])}
+    assert items["r1"]["dimensions"] == {"usiran": "diplomacy", "ukraine": "aid"}
+    assert items["r2"]["dimensions"] == {"usiran": "diplomacy"}

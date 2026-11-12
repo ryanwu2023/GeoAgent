@@ -529,3 +529,32 @@ def test_invalid_link_pattern_fails_only_that_source_at_runtime(tmp_path):
     assert report["sources"]["bad"]["state"] == "failed"
     assert report["sources"]["bad"]["error"] == "CONFIG_ERROR"
     assert report["sources"]["meta"]["state"] == "ok"
+
+
+def _hint_config(filtering, hints):
+    config = filtering.load_config(COLLECTOR / "config.json")
+    config["topic_terms"] = {t: {"anchors": ["Iran", "Ukraine"], "strong_anchors": ["Iran", "Ukraine"]} for t in ("usiran", "ukraine")}
+    if hints is not None:
+        config["topic_hints"] = hints
+    return config
+
+
+def test_classify_topic_hints_narrow_assignment():
+    filtering = load_module("filtering")
+    config = _hint_config(filtering, {"usiran": ["Iran"], "ukraine": ["Kyiv"]})
+    result = filtering.classify_candidate("Iran talks and Ukraine aid", "ceasefire negotiations", "", "en", config)
+    assert result["accepted"] and result["topics"] == ["usiran"] and set(result["dimensions"]) == {"usiran"}
+
+
+def test_classify_topic_hints_fallback_all():
+    filtering = load_module("filtering")
+    config = _hint_config(filtering, {"usiran": ["Tehran"], "ukraine": ["Kyiv"]})
+    result = filtering.classify_candidate("Iran talks and Ukraine aid", "ceasefire negotiations", "", "en", config)
+    assert result["topics"] == ["usiran", "ukraine"] and set(result["dimensions"]) == {"usiran", "ukraine"}
+
+
+def test_classify_without_hints_unchanged():
+    filtering = load_module("filtering")
+    config = _hint_config(filtering, None)
+    result = filtering.classify_candidate("Iran talks and Ukraine aid", "ceasefire negotiations", "", "en", config)
+    assert result["topics"] == ["usiran", "ukraine"]

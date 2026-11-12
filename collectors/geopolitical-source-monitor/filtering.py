@@ -130,6 +130,14 @@ def classify_candidate(
                 else _ukraine_dimension(combined, categories)
             )
 
+    # 管线配置带 topic_hints 时，多个准入主题只保留其内置锚词也命中的主题；都没命中则全保留。
+    hints = config.get("topic_hints")
+    if hints and len(topics) > 1:
+        hinted = [t for t in topics if _matches(combined, hints.get(t, []))]
+        if hinted:
+            topics = hinted
+            dimensions = {t: dimensions[t] for t in hinted}
+
     # 明显体育、娱乐或文化内容只在具有明确战争/伤亡/制裁语义时保留。
     hard_categories = {"military", "sanctions", "humanitarian", "nuclear_strategic"}
     if exclusions and not hard_categories.intersection(categories):

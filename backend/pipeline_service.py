@@ -18,7 +18,7 @@ from backend.pipeline_config import (PipelineConfigError, default_resolve, next_
 from backend.store import db
 
 STATUSES = ("enabled", "disabled", "running", "success", "partial", "failed")
-ROW_FIELDS = {"name", "description", "topic", "interval_sec", "daily_times", "timezone"}
+ROW_FIELDS = {"name", "description", "topics", "interval_sec", "daily_times", "timezone"}
 SCHEDULE_FIELDS = {"interval_sec", "daily_times", "timezone"}
 BUILTIN_EDITABLE = SCHEDULE_FIELDS | {"enabled"}
 
@@ -95,7 +95,7 @@ def list_pipelines(*, topic: str | None = None, status: str | None = None, kind:
         raise PipelineError("INVALID", f"status 只能是 {'、'.join(STATUSES)}", {"field": "status"})
     where, params = ["NOT p.is_deleted"], []
     if topic:
-        where.append("p.topic=%s")
+        where.append("%s = ANY(p.topics)")
         params.append(topic)
     if kind:
         where.append("p.kind=%s")
@@ -149,9 +149,9 @@ def create_pipeline(actor: Actor, row: dict, config: dict, change_note: str = ""
     try:
         with db() as conn:
             conn.execute(
-                "INSERT INTO collection_pipelines(id,kind,name,description,topic,enabled,current_version,interval_sec,"
+                "INSERT INTO collection_pipelines(id,kind,name,description,topics,enabled,current_version,interval_sec,"
                 "daily_times,timezone,owner,created_by) VALUES (%s,'configurable',%s,%s,%s,false,1,%s,%s,%s,%s,%s)",
-                (pid, clean_row["name"], clean_row["description"], clean_row["topic"], clean_row["interval_sec"],
+                (pid, clean_row["name"], clean_row["description"], clean_row["topics"], clean_row["interval_sec"],
                  clean_row["daily_times"] or [], clean_row["timezone"], actor.username, actor.username))
             _add_version(conn, actor, pid, 1, clean_config, change_note)
     except psycopg.errors.UniqueViolation as exc:
@@ -202,9 +202,9 @@ def update_pipeline(actor: Actor, pipeline_id: str, *, expected_version: int, ro
             elif sched_changed:
                 nxt = _schedule_next({**clean_row, "daily_times": daily}, now)
             conn.execute(
-                "UPDATE collection_pipelines SET name=%s,description=%s,topic=%s,interval_sec=%s,daily_times=%s,"
+                "UPDATE collection_pipelines SET name=%s,description=%s,topics=%s,interval_sec=%s,daily_times=%s,"
                 "timezone=%s,current_version=%s,next_run_at=%s,updated_by=%s,updated_at=%s WHERE id=%s",
-                (clean_row["name"], clean_row["description"], clean_row["topic"], clean_row["interval_sec"], daily,
+                (clean_row["name"], clean_row["description"], clean_row["topics"], clean_row["interval_sec"], daily,
                  clean_row["timezone"], new_version, nxt, actor.username, now, pipeline_id))
     except psycopg.errors.UniqueViolation as exc:
         raise PipelineError("INVALID", "已存在同名管线", {"field": "row.name"}) from exc
