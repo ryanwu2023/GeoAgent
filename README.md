@@ -6,6 +6,8 @@ React / TypeScript + MapLibre GL / deck.gl + FastAPI / PostgreSQL。双主题、
 
 [抓取说明与采集器维护手册](docs/抓取说明/README.md)
 
+[采集管线配置使用说明](docs/采集管线配置.md)：管理员在页面添加网页/RSS 采集源，试跑、测试运行，确认启用后随整批采集进入快照。
+
 [客户 MCP 数据下载与同步协议](deploy/mcp-data-sync.md)：客户自行决定拉取频率，服务端提供冻结采集数据的版本检查、分块下载与完整性校验。
 
 [客户配置与远程发布方案（当前版本）](deploy/客户测试与正式双环境远程发布方案.md) · [中文拓扑与流程讲解页](deploy/客户双环境远程发布讲解页.html) · [客户准备清单](deploy/客户接入与服务器准备清单.md)：正式 8 核/32GB、测试 6 核/24GB，各自安装 GitLab、Runner、GeoAgent 和 PostgreSQL；通过 VPN 与堡垒机远程推送代码、测试、发布与回滚，无额外备份或应急虚拟机。
