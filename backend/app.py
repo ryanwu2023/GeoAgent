@@ -28,7 +28,7 @@ from .chinese import present_record, present_record_summary, present_map_record,
 from .paths import collector_read_root, collector_data_root, sync_local_collector_outputs
 from .collector_monitor import load_latest_run, load_runs, load_ledger_events, load_ledger_runs, load_source_status
 from .collector_jobs import CollectorBusyError, collector_jobs, recover_interrupted_runs
-from .collector_config import apply_config, load_config, save_config
+from .collector_config import apply_config, load_config, update_config
 from .collector_import import import_collector_output
 from .collector_ledger import CollectorLedger
 from .collector_scheduler import start_background as start_collector_schedule
@@ -466,14 +466,16 @@ def update_collector_config(request: CollectorConfigRequest):
     # list; the service itself still only runs enabled collectors.
     known = {item["id"] for item in registry}
     try:
-        config = save_config(
-            {
+        # 整体替换，但与管线页启停 builtin 共用同一把读改写锁；坏文件也允许由此覆盖修复
+        config = update_config(
+            lambda _current: {
                 "interval_sec": request.interval_sec,
                 "exclude_ids": request.exclude_ids,
                 "auto_import": True,
                 "allow_partial_import": request.allow_partial_import,
             },
             known_ids=known,
+            require_readable=False,
         )
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc

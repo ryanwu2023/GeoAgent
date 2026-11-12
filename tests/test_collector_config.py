@@ -101,3 +101,53 @@ def test_apply_config_reports_install_failure(tmp_path, monkeypatch):
     assert calls[0][3] == "uninstall"
     assert calls[0][-1] == "macos"
     assert calls[1][3] == "install"
+
+
+def test_save_uses_unique_temp_file_and_leaves_no_temp(tmp_path, monkeypatch):
+    config_path = tmp_path / "settings.json"
+    monkeypatch.setattr(collector_config, "CONFIG_PATH", config_path)
+    (tmp_path / "settings.tmp").write_text("其他写入者的临时文件", encoding="utf-8")
+    collector_config.save_config({"interval_sec": 3600, "exclude_ids": []}, known_ids=set())
+    assert (tmp_path / "settings.tmp").read_text(encoding="utf-8") == "其他写入者的临时文件"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["settings.json", "settings.tmp"]
+
+
+def test_update_config_serializes_concurrent_read_modify_write(tmp_path, monkeypatch):
+    import threading
+    import time
+    monkeypatch.setattr(collector_config, "CONFIG_PATH", tmp_path / "settings.json")
+    monkeypatch.setattr(collector_config, "project_root", lambda: tmp_path)
+    ids = [f"c{i}" for i in range(8)]
+    barrier = threading.Barrier(len(ids))
+
+    def add(cid):
+        def mutate(current):
+            time.sleep(0.02)  # 放大读改写窗口
+            return {**current, "exclude_ids": [*current["exclude_ids"], cid]}
+        barrier.wait()
+        collector_config.update_config(mutate, known_ids=set(ids))
+
+    threads = [threading.Thread(target=add, args=(cid,)) for cid in ids]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert collector_config.load_config()["exclude_ids"] == ids
+
+
+def test_update_config_refuses_unreadable_file_unless_replacing(tmp_path, monkeypatch):
+    path = tmp_path / "settings.json"
+    monkeypatch.setattr(collector_config, "CONFIG_PATH", path)
+    path.write_text("{坏的 JSON", encoding="utf-8")
+    with pytest.raises(collector_config.ConfigUnreadableError):
+        collector_config.update_config(lambda c: c, known_ids=set())
+    assert path.read_text(encoding="utf-8") == "{坏的 JSON"
+    saved = collector_config.update_config(lambda c: {"interval_sec": 600, "exclude_ids": []}, known_ids=set(),
+                                           require_readable=False)
+    assert saved["interval_sec"] == 600 and saved["source"] == "project-settings"
+
+
+def test_update_config_passes_normalized_settings_without_metadata(tmp_path, monkeypatch):
+    monkeypatch.setattr(collector_config, "CONFIG_PATH", tmp_path / "settings.json")
+    monkeypatch.setattr(collector_config, "project_root", lambda: tmp_path)
+    seen = []
+    collector_config.update_config(lambda c: seen.append(dict(c)) or c, known_ids=set())
+    assert seen[0] == {"interval_sec": 86400, "exclude_ids": [], "auto_import": True, "allow_partial_import": False}

@@ -26,8 +26,7 @@ from scripts.integrate_collectors import load_registry
 STATUSES = ("enabled", "disabled", "running", "success", "partial", "failed")
 ROW_FIELDS = ("name", "description", "topics")
 REGISTRY_DISABLED = "注册表已停用该采集器，不能在此启用"
-# load_config() 附带的元信息，不是配置项，写回时去掉（updated_at 由 save_config 重新盖章）
-CONFIG_META = {"path", "platform", "source", "updated_at"}
+CONFIG_UNREADABLE = "采集配置文件无法读取，请先在采集监控页修复"
 
 
 class PipelineError(Exception):
@@ -82,16 +81,18 @@ def _write_exclusion(collector_id: str, enabled: bool) -> None:
         raise PipelineError("INVALID", REGISTRY_DISABLED, {"id": collector_id})
     if item is None:
         return  # 注册表已没有该采集器：本来就不会运行，排除列表也不接受未知 id
-    config = collector_config.load_config()
-    current = set(config.get("exclude_ids", []))
-    wanted = current - {collector_id} if enabled else current | {collector_id}
-    if wanted == current:
-        return
-    payload = {k: v for k, v in config.items() if k not in CONFIG_META}
-    payload["exclude_ids"] = sorted(wanted)
+
+    def mutate(current: dict) -> dict:
+        excluded = set(current.get("exclude_ids", []))
+        excluded = excluded - {collector_id} if enabled else excluded | {collector_id}
+        return {**current, "exclude_ids": sorted(excluded)}
+
     try:
-        # 已在列表里的旧 id 原样保留，不因注册表变动而让本次保存失败
-        collector_config.save_config(payload, known_ids=set(items) | current)
+        # 加锁读改写，其它配置项原样写回；已在列表里的旧 id 保留，不因注册表变动让保存失败
+        collector_config.update_config(
+            mutate, known_ids=lambda current: set(items) | set(current.get("exclude_ids", [])))
+    except collector_config.ConfigUnreadableError as exc:
+        raise PipelineError("INVALID", CONFIG_UNREADABLE, {"field": "exclude_ids"}) from exc
     except ValueError as exc:
         raise PipelineError("INVALID", str(exc), {"field": "exclude_ids"}) from exc
 

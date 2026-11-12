@@ -250,6 +250,49 @@ def test_builtin_enabled_reflects_monitor_exclusion(registry):
     assert [p["id"] for p in list_pipelines(status="disabled")] == [pid]
 
 
+def test_concurrent_toggles_of_two_builtins_both_persist(registry, monkeypatch):
+    import threading
+    import time
+    registry.extend([reg_item("b-one"), reg_item("b-two")])
+    _builtin("b-one")
+    with db() as conn:
+        conn.execute("INSERT INTO collection_pipelines(id,kind,name,topics,current_version,owner) "
+                     "VALUES ('b-two','builtin','内置二',ARRAY['usiran'],1,'system')")
+    real_load = collector_config.load_config
+
+    def slow_load():
+        value = real_load()
+        time.sleep(0.05)  # 放大“读后写前”的窗口
+        return value
+
+    monkeypatch.setattr(collector_config, "load_config", slow_load)
+    barrier = threading.Barrier(2)
+    errors = []
+
+    def off(pid):
+        try:
+            barrier.wait()
+            set_enabled(ADMIN, pid, False)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=off, args=(pid,)) for pid in ("b-one", "b-two")]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert errors == []
+    assert real_load()["exclude_ids"] == ["b-one", "b-two"]
+
+
+def test_corrupt_settings_file_blocks_builtin_toggle(registry):
+    registry.append(reg_item("b-news"))
+    pid = _builtin()
+    collector_config.CONFIG_PATH.write_text("{坏的 JSON", encoding="utf-8")
+    with pytest.raises(PipelineError) as e:
+        set_enabled(ADMIN, pid, False)
+    assert e.value.code == "INVALID" and e.value.message == "采集配置文件无法读取，请先在采集监控页修复"
+    assert collector_config.CONFIG_PATH.read_text(encoding="utf-8") == "{坏的 JSON"
+
+
 def test_builtin_disabled_in_registry_cannot_be_enabled(registry):
     registry.append(reg_item("b-news", enabled=False))
     pid = _builtin()

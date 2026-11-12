@@ -13,9 +13,17 @@ import os
 import plistlib
 import subprocess
 import sys
+import tempfile
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterator
+
+try:  # POSIX 才有 fcntl；Windows 退回只用进程内线程锁
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
 
 from .paths import project_root
 
@@ -23,6 +31,12 @@ from .paths import project_root
 CONFIG_PATH = project_root() / "data" / "service-config" / "collector-settings.json"
 MIN_INTERVAL_SEC = 60
 MAX_INTERVAL_SEC = 7 * 24 * 60 * 60
+METADATA_KEYS = {"path", "platform", "source", "updated_at"}
+_update_lock = threading.RLock()
+
+
+class ConfigUnreadableError(ValueError):
+    """配置文件存在但无法解析；读改写时拒绝，避免用默认值覆盖它。"""
 
 
 def platform_name() -> str:
@@ -111,10 +125,60 @@ def save_config(payload: dict[str, Any], *, known_ids: set[str]) -> dict[str, An
         raise ValueError(f"排除列表包含未知采集器：{', '.join(unknown)}")
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     stamped = {**result, "updated_at": datetime.now(timezone.utc).isoformat()}
-    temporary = CONFIG_PATH.with_suffix(".tmp")
-    temporary.write_text(json.dumps(stamped, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporary.replace(CONFIG_PATH)
+    # 每次写入用同目录下唯一的临时文件再原子替换，并发写入者不会互相覆盖半成品
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=CONFIG_PATH.parent,
+                                     prefix=f".{CONFIG_PATH.name}.", suffix=".tmp", delete=False) as handle:
+        temporary = Path(handle.name)
+        try:
+            handle.write(json.dumps(stamped, ensure_ascii=False, indent=2))
+        except BaseException:
+            handle.close()
+            temporary.unlink(missing_ok=True)
+            raise
+    try:
+        os.replace(temporary, CONFIG_PATH)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
     return load_config()
+
+
+@contextmanager
+def _exclusive() -> Iterator[None]:
+    """进程内线程锁 + 跨进程文件锁（旁路 .lock 文件；无 fcntl 时只有线程锁）。"""
+    with _update_lock:
+        if fcntl is None:
+            yield
+            return
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(CONFIG_PATH.with_name(CONFIG_PATH.name + ".lock"), "a+") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def update_config(mutate: Callable[[dict[str, Any]], dict[str, Any]], *,
+                  known_ids: set[str] | Callable[[dict[str, Any]], set[str]],
+                  require_readable: bool = True) -> dict[str, Any]:
+    """加锁读改写：mutate 收到当前设置（不含元信息），返回要保存的完整设置。
+
+    require_readable=True 时，若配置文件存在但无法解析则抛 ConfigUnreadableError、不覆盖文件；
+    整体替换的写入者（采集监控页保存）传 False，以便修复坏文件。
+    """
+    with _exclusive():
+        if require_readable and CONFIG_PATH.is_file():
+            try:
+                raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                raise ConfigUnreadableError(f"采集配置文件无法读取：{CONFIG_PATH}") from exc
+            if not isinstance(raw, dict):
+                raise ConfigUnreadableError(f"采集配置文件格式不正确：{CONFIG_PATH}")
+        current = {k: v for k, v in load_config().items() if k not in METADATA_KEYS}
+        payload = mutate(dict(current))
+        known = known_ids(current) if callable(known_ids) else known_ids
+        return save_config(payload, known_ids=known)
 
 
 def apply_config(config: dict[str, Any]) -> dict[str, Any]:

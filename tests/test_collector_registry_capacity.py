@@ -96,3 +96,11 @@ def test_disabled_collectors_cannot_be_queued(registry_ids, monkeypatch):
     assert response.status_code == 422
     assert disabled_id in response.json()["detail"]
     assert "采集器不存在或已停用" in response.json()["detail"]
+
+
+def test_put_config_overwrites_unreadable_settings_file(registry_ids, tmp_path):
+    collector_config.CONFIG_PATH.write_text("{坏的 JSON", encoding="utf-8")
+    response = TestClient(module.app).put("/api/collector/config", json={"exclude_ids": registry_ids[:1]})
+    assert response.status_code == 200
+    assert collector_config.load_config()["exclude_ids"] == registry_ids[:1]
+    assert collector_config.load_config()["source"] == "project-settings"
