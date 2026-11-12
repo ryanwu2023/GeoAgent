@@ -1,6 +1,6 @@
 import {AlertTriangle, FlaskConical, X} from "lucide-react";
 import type {ReactNode} from "react";
-import type {PreviewResult} from "../pipelines";
+import {isWebUrl, type PreviewResult} from "../pipelines";
 
 export function Modal({title, kicker, onClose, busy, children, actions}: {
   title: string; kicker?: string; onClose: () => void; busy?: boolean; children: ReactNode; actions: ReactNode;
@@ -46,7 +46,7 @@ export function PreviewDrawer({loading, result, error, sourceNames, onClose}: {
           <ul>
             {src.candidates.map((c, i) => <li key={i} className={c.accepted ? "accepted" : "rejected"}>
               <span className="pipeline-tag">{c.accepted ? "入选" : "未入选"}</span>
-              <div><a href={c.url} target="_blank" rel="noreferrer noopener">{c.title || c.url}</a>
+              <div>{isWebUrl(c.url) ? <a href={c.url} target="_blank" rel="noreferrer noopener">{c.title || c.url}</a> : <span>{c.title || c.url}</span>}
                 <small>{c.reason || (c.accepted ? "符合过滤条件" : "未通过过滤")}{c.matched.length ? ` · 命中：${c.matched.join("、")}` : ""}</small></div>
             </li>)}
           </ul>

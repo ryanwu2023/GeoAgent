@@ -101,11 +101,13 @@ def list_all(topic: str | None = None, status: str | None = None, kind: str | No
                                       "field": "changed_since"}) from None
         if since.tzinfo is None:
             since = since.replace(tzinfo=timezone.utc)
+    # 先取时间再查询：查询期间提交的修改，下一轮以此为 changed_since 时仍会返回。
+    server_time = datetime.now(timezone.utc)
     try:
         items = list_pipelines(topic=topic, status=status, kind=kind, q=q, changed_since=since)
     except PipelineError as exc:
         raise _http(exc) from exc
-    return {"items": items, "server_time": datetime.now(timezone.utc).isoformat()}
+    return {"items": items, "server_time": server_time.isoformat()}
 
 
 @router.post("", status_code=201)

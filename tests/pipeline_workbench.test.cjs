@@ -70,3 +70,18 @@ test("样式限定在页面根类下", () => {
 test("主文件保持精简", () => {
   assert.ok(read("src/PipelineWorkbench.tsx").split("\n").length <= 650);
 });
+
+test("修正一轮：测试运行反馈、重载竞态、链接与弹窗", () => {
+  const s = read("src/PipelineWorkbench.tsx");
+  const all = pageSources();
+  assert.ok(all.includes("测试运行未开始或超时，请查看运行记录"));
+  assert.ok(all.includes("无法确认最近测试运行"));
+  assert.ok(s.includes("trialOutcome"));
+  assert.ok(s.includes("p.last_trigger"));
+  assert.ok(/key=\{activeRun\?\.run_id/.test(s), "本次新增按运行重置展开状态");
+  assert.ok(/r\.status === "running" && r\.trigger === "trial"/.test(s));
+  assert.ok(!/disabled=\{[^}]*runs\.some\(\(r\) => r\.status === "running"\)/.test(s), "整批运行不阻止测试运行");
+  assert.ok(/background && dirtyRef\.current/.test(s), "后台重载前再次检查未保存修改");
+  assert.ok(read("src/pipeline/Dialogs.tsx").includes("isWebUrl(c.url)"));
+  assert.ok(read("src/pipeline/RunPanels.tsx").includes("dimensionLabel"));
+});

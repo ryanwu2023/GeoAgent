@@ -15,7 +15,7 @@ export type PipelineConfig = {
 export type PipelineRow = {name: string; description: string; topics: string[]};
 export type Pipeline = PipelineRow & {
   id: string; kind: "builtin" | "configurable"; enabled: boolean; current_version: number; owner: string | null;
-  last_run_id: string | null; last_status: string | null; last_finished_at: string | null; last_new_items: number;
+  last_run_id: string | null; last_trigger: "batch" | "trial" | null; last_status: string | null; last_finished_at: string | null; last_new_items: number;
   source_count: number; config?: PipelineConfig; updated_at?: string | null; created_at?: string;
 };
 export type PipelineVersion = {pipeline_id: string; version: number; config: PipelineConfig; change_note: string; source_channel: string; created_by: string | null; created_at: string};
@@ -27,7 +27,6 @@ export type PipelineRunItem = {
   title: string; summary: string | null; source_id: string; source_type: string; published_at: string | null;
   language: string | null; matched_terms: string[]; dimensions: Record<string, unknown>; evidence_id: string | null;
 };
-export type PreviewCandidate = {title: string; url: string; accepted: boolean; reason: string; matched: string[]};
 export type PreviewResult = {sources: Array<{source_id: string; state: string; error: string | null; candidates: Array<{title: string; url: string; accepted: boolean; reason: string; matched: string[]}>}>};
 export type PipelineDraft = {row: PipelineRow; config: PipelineConfig};
 export type PipelineWriteBody = {row: Partial<PipelineRow>; config: PipelineConfig | null; change_note?: string};
@@ -152,8 +151,23 @@ export function draftOf(p: PipelineRow & {config?: PipelineConfig}): PipelineDra
     config: p.config ? JSON.parse(JSON.stringify(p.config)) : emptyDraft([]).config,
   };
 }
-/** 列表行只带 last_run_id：整批运行记录 ID 为 “<整批 run_id>:<管线 id>”，测试运行没有冒号。 */
-export const lastRunTrigger = (p: {last_run_id: string | null}): "batch" | "trial" | null =>
-  p.last_run_id ? (p.last_run_id.includes(":") ? "batch" : "trial") : null;
 export const recentlyUpdated = (rows: {last_new_items: number; last_finished_at: string | null}[], now = Date.now()): number =>
   rows.filter((p) => p.last_new_items > 0 && p.last_finished_at && now - Date.parse(p.last_finished_at) <= 86_400_000).length;
+export const isWebUrl = (url: string): boolean => /^https?:\/\//i.test(url);
+
+// 与 App.tsx 研究维度下拉一致的中文名（采集器 filtering.py 输出的维度 id）。
+const TOPIC_NAMES: Record<string, string> = {usiran: "美伊", ukraine: "俄乌"};
+const DIMENSION_NAMES: Record<string, Record<string, string>> = {
+  usiran: {us_readiness: "美军战备", iran_readiness: "伊朗战备", financial: "金融战线", us_opinion: "美国民意", israel: "以色列动向",
+    regional: "中东各国", iran_domestic: "伊朗内政", diplomacy: "外交斡旋"},
+  ukraine: {frontline: "军事战线", aid: "乌克兰后援", russia_domestic: "俄罗斯内政", eu_domestic: "欧盟内政", diplomacy: "外交斡旋"},
+};
+export const dimensionLabel = (topic: string, id: string): string =>
+  `${TOPIC_NAMES[topic] || topic}：${DIMENSION_NAMES[topic]?.[id] || id}`;
+
+/** 点击“测试运行”后：before 为点击前最近一次测试运行的 run_id；新出现的测试运行是否已结束。 */
+export function trialOutcome(runs: {run_id: string; trigger: string; status: string}[], before: string | null): "waiting" | "running" | "finished" {
+  const t = latestTrial(runs);
+  if (!t || t.run_id === before) return "waiting";
+  return t.status === "running" ? "running" : "finished";
+}

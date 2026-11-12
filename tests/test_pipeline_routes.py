@@ -1,4 +1,5 @@
 import threading
+from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -347,3 +348,17 @@ def test_actor_requires_login_when_auth_enabled(authed):
     with pytest.raises(Exception) as e:
         pipeline_routes.actor_of(req)
     assert e.value.status_code == 401 and e.value.detail == "请先登录"
+
+
+def test_server_time_taken_before_query(client, monkeypatch):
+    """server_time 必须早于查询：查询期间提交的修改在下一轮 changed_since 里不会漏掉。"""
+    import backend.pipeline_routes as routes
+    seen = {}
+
+    def slow_list(**kw):
+        seen["query_at"] = datetime.now(timezone.utc)
+        return []
+
+    monkeypatch.setattr(routes, "list_pipelines", slow_list)
+    data = r_ok(client.get("/api/pipelines"))
+    assert datetime.fromisoformat(data["server_time"]) <= seen["query_at"]

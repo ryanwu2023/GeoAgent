@@ -3,9 +3,9 @@ import {useCallback, useEffect, useRef, useState} from "react";
 import {FlaskConical, Play, Plus, RefreshCw, Save, Search, Trash2, Workflow} from "lucide-react";
 import {dateText} from "./api";
 import {
-  conflictMessage, createPipeline, deletePipeline, draftOf, emptyDraft, fieldHit, getPipeline, lastRunTrigger, latestTrial,
+  conflictMessage, createPipeline, deletePipeline, draftOf, emptyDraft, fieldHit, getPipeline, latestTrial,
   listPipelines, listRunItems, listRuns, listVersions, newItemsOf, PipelineApiError, previewPipeline, readSeen, recentlyUpdated,
-  rollbackPipeline, runLabel, setPipelineEnabled, tabForField, trialPipeline, unseenCount, updatePipeline, writeSeen,
+  rollbackPipeline, runLabel, setPipelineEnabled, tabForField, trialOutcome, trialPipeline, unseenCount, updatePipeline, writeSeen,
   type DetailTab, type Pipeline, type PipelineDraft, type PipelineRun, type PipelineRunItem, type PipelineVersion, type PreviewResult,
 } from "./pipelines";
 import SourceEditor from "./pipeline/SourceEditor";
@@ -17,6 +17,7 @@ const TOPICS: [string, string][] = [["usiran", "美伊"], ["ukraine", "俄乌"]]
 const TOPIC_LABEL: Record<string, string> = Object.fromEntries(TOPICS);
 const POLL_MS = 15000;
 const RUN_POLL_MS = 4000;
+const TRIAL_START_TIMEOUT_MS = 60_000;
 const MAX_TERMS = 200;
 const TABS: [DetailTab, string][] = [["basic", "基本信息"], ["sources", "来源"], ["keywords", "关键词"], ["items", "本次新增"], ["versions", "版本历史"], ["runs", "运行记录"]];
 const BUILTIN_TABS = new Set<DetailTab>(["basic", "sources", "items", "runs"]);
@@ -24,7 +25,9 @@ const BUILTIN_NOTE = "内置采集器随整批采集运行，来源由代码维�
 
 type Filters = {topic: string; status: string; kind: string; q: string};
 type SaveError = {message: string; field?: string; conflict?: boolean};
-type ToggleState = {pipeline: Pipeline; on: boolean; runs: PipelineRun[] | null; error: string};
+type ToggleState = {pipeline: Pipeline; on: boolean; runs: PipelineRun[] | null; runsFailed?: boolean; error: string};
+/** 点击“测试运行”后的跟踪：before 为点击前最近一次测试运行，deadline 内新运行仍未出现则提示。 */
+type TrialWatch = {id: string; before: string | null; deadline: number};
 type ItemsState = {runId: string; items: PipelineRunItem[]; total: number; loading: boolean; error: string};
 
 const errText = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -57,7 +60,7 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
   const [runItems, setRunItems] = useState<ItemsState | null>(null);
   const [preview, setPreview] = useState<{loading: boolean; result: PreviewResult | null; error: string} | null>(null);
   const [trialStarting, setTrialStarting] = useState(false);
-  const [trialWatch, setTrialWatch] = useState<string | null | false>(false);
+  const [watchingTrial, setWatchingTrial] = useState(false);
   const [toggle, setToggle] = useState<ToggleState | null>(null);
   const [toggling, setToggling] = useState("");
   const [busy, setBusy] = useState(false);
@@ -69,6 +72,8 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
   const dirty = draft != null && JSON.stringify(draft) !== baseline;
   const dirtyRef = useRef(dirty); dirtyRef.current = dirty;
   const detailSeq = useRef(0);
+  const trialWatch = useRef<TrialWatch | null>(null);
+  const stopTrialWatch = () => { trialWatch.current = null; setWatchingTrial(false); };
 
   const isNew = selectedId === "new";
   const isBuiltin = detail?.kind === "builtin";
@@ -100,14 +105,27 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
       const next = await listRuns(id);
       if (detailRef.current?.id !== id) return;
       const wasRunning = runsRef.current.some((r) => r.status === "running");
-      setRuns(next);
-      setTrialWatch((watch) => watch !== false && (latestTrial(next)?.run_id ?? null) !== watch ? false : watch);
-      if (wasRunning && !next.some((r) => r.status === "running")) {
-        const done = next[0];
-        if (done) setNotice(`${runLabel(done)}已结束：${statusLabel(done.status)}，新增 ${newItemsOf(done) ?? 0} 条`);
+      runsRef.current = next; setRuns(next);
+      let refresh = wasRunning && !next.some((r) => r.status === "running");
+      const watch = trialWatch.current;
+      if (watch && watch.id === id) {
+        const outcome = trialOutcome(next, watch.before);
+        const trial = latestTrial(next);
+        if (outcome === "finished" && trial) {
+          // 第一次拉取就已结束也要反馈
+          trialWatch.current = null; setWatchingTrial(false); refresh = true;
+          setNotice(`测试运行已结束：${statusLabel(trial.status)}，新增 ${newItemsOf(trial) ?? 0} 条（不进快照）`);
+        } else if (outcome === "waiting" && Date.now() > watch.deadline) {
+          trialWatch.current = null; setWatchingTrial(false);
+          setNotice("测试运行未开始或超时，请查看运行记录");
+        }
+      } else if (refresh && next[0]) {
+        setNotice(`${runLabel(next[0])}已结束：${statusLabel(next[0].status)}，新增 ${newItemsOf(next[0]) ?? 0} 条`);
+      }
+      if (refresh) {
         const fresh = await getPipeline(id);
         upsertRows([fresh]);
-        setDetail((d) => d && d.id === id ? {...d, last_run_id: fresh.last_run_id, last_status: fresh.last_status, last_finished_at: fresh.last_finished_at, last_new_items: fresh.last_new_items, enabled: fresh.enabled} : d);
+        setDetail((d) => d && d.id === id ? {...d, last_run_id: fresh.last_run_id, last_trigger: fresh.last_trigger, last_status: fresh.last_status, last_finished_at: fresh.last_finished_at, last_new_items: fresh.last_new_items, enabled: fresh.enabled} : d);
       }
     } catch (e) { if (!quiet) setNotice(`运行记录读取失败：${errText(e)}`); } finally { if (!quiet) setRunsLoading(false); }
   }, [upsertRows]);
@@ -124,12 +142,14 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
     setDetail(p); setDraft(d); setBaseline(JSON.stringify(d)); setStaleVersion(null); setSaveError(null);
   }, []);
 
-  const loadDetail = useCallback(async (id: string) => {
+  /** background：轮询发现新版本时的静默重载；请求期间用户开始编辑则不覆盖草稿，只提示有新版本。 */
+  const loadDetail = useCallback(async (id: string, background = false) => {
     const seq = ++detailSeq.current;
     setDetailError("");
     try {
       const p = await getPipeline(id);
       if (seq !== detailSeq.current) return;
+      if (background && dirtyRef.current) { setStaleVersion(p.current_version); upsertRows([p]); return; }
       applyLoaded(p); upsertRows([p]);
       void loadRuns(id);
       if (p.kind === "configurable") void loadVersions(id); else setVersions([]);
@@ -154,24 +174,24 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
         const row = cur && r.items.find((p) => p.id === cur.id);
         if (!cur || !row) return;
         if (row.current_version !== cur.current_version) {
-          if (dirtyRef.current) setStaleVersion(row.current_version); else void loadDetail(cur.id);
+          if (dirtyRef.current) setStaleVersion(row.current_version); else void loadDetail(cur.id, true);
           return;
         }
-        setDetail((d) => d && d.id === row.id ? {...d, enabled: row.enabled, last_run_id: row.last_run_id, last_status: row.last_status, last_finished_at: row.last_finished_at, last_new_items: row.last_new_items} : d);
+        setDetail((d) => d && d.id === row.id ? {...d, enabled: row.enabled, last_run_id: row.last_run_id, last_trigger: row.last_trigger, last_status: row.last_status, last_finished_at: row.last_finished_at, last_new_items: row.last_new_items} : d);
         if (row.last_run_id !== cur.last_run_id || row.last_status !== cur.last_status) void loadRuns(cur.id, true);
       } catch { /* 网络抖动时等下一轮 */ }
     }, POLL_MS);
     return () => window.clearInterval(timer);
   }, [upsertRows, loadDetail, loadRuns]);
 
-  // 测试运行进行中（或刚提交、记录尚未出现）时，每 4 秒刷新运行记录。
-  const runActive = runs.some((r) => r.status === "running") || trialWatch !== false;
+  // 有运行进行中，或刚提交测试运行、等待其结束时，每 4 秒刷新运行记录。
+  const runActive = runs.some((r) => r.status === "running") || watchingTrial;
+  const trialRunning = runs.some((r) => r.status === "running" && r.trigger === "trial");
   useEffect(() => {
     const id = detail?.id;
     if (!id || !runActive) return;
     const timer = window.setInterval(() => void loadRuns(id, true), RUN_POLL_MS);
-    const giveUp = window.setTimeout(() => setTrialWatch(false), 60_000);
-    return () => { window.clearInterval(timer); window.clearTimeout(giveUp); };
+    return () => window.clearInterval(timer);
   }, [detail?.id, runActive, loadRuns]);
 
   const activeRun = (itemsRunId ? runs.find((r) => r.run_id === itemsRunId) : runs.find((r) => r.status !== "running")) || null;
@@ -201,7 +221,7 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
   function select(id: string) {
     if (id === selectedId || !confirmDiscard()) return;
     setSelectedId(id); setTab("basic"); setItemsRunId(null); setRunItems(null); setRuns([]); setVersions([]); setDetail(null); setDraft(null);
-    setChangeNote(""); setSaveError(null); setTrialWatch(false);
+    setChangeNote(""); setSaveError(null); stopTrialWatch();
     void loadDetail(id);
   }
   function startNew() {
@@ -262,7 +282,8 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
     try {
       const before = latestTrial(runs)?.run_id ?? null;
       await trialPipeline(detail.id);
-      setTrialWatch(before); setTab("runs");
+      trialWatch.current = {id: detail.id, before, deadline: Date.now() + TRIAL_START_TIMEOUT_MS};
+      setWatchingTrial(true); setTab("runs");
       setNotice("已开始测试运行（不进快照），完成后在“运行记录”和“本次新增”查看结果");
       void loadRuns(detail.id, true);
     } catch (e) {
@@ -274,7 +295,7 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
     if (p.kind === "builtin") { void applyToggle(p, !p.enabled); return; }
     setToggle({pipeline: p, on: !p.enabled, runs: p.enabled ? [] : null, error: ""});
     if (!p.enabled) listRuns(p.id).then((r) => setToggle((t) => t && t.pipeline.id === p.id ? {...t, runs: r} : t))
-      .catch((e) => setToggle((t) => t && t.pipeline.id === p.id ? {...t, runs: [], error: `最近运行读取失败：${errText(e)}`} : t));
+      .catch((e) => setToggle((t) => t && t.pipeline.id === p.id ? {...t, runs: [], runsFailed: true, error: ""} : t));
   }
   async function applyToggle(p: Pipeline, on: boolean) {
     setToggling(p.id);
@@ -351,7 +372,7 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
           {!listError && !listLoading && !rows.length && <p className="pipeline-empty">没有符合条件的管线。</p>}
           {rows.map((p) => {
             const unseen = unseenCount(p, seen);
-            const trigger = lastRunTrigger(p);
+            const trigger = p.last_trigger;
             return <div key={p.id} className={`pipeline-row ${p.id === selectedId ? "selected" : ""} ${p.enabled ? "" : "is-disabled"}`}>
               <button type="button" className="pipeline-row-main" onClick={() => select(p.id)}>
                 <strong>{p.name}<span className={`pipeline-tag ${p.kind}`}>{p.kind === "builtin" ? "内置" : "配置"}</span>{unseen > 0 && <span className="pipeline-new">新增 {unseen} 条</span>}</strong>
@@ -412,7 +433,7 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
                 <label>每个来源最多候选（1~200）<input type="number" min={1} max={200} className={hit("filters.max_candidates_per_source") ? "invalid" : ""} value={draft.config.filters.max_candidates_per_source} onChange={(e) => patchFilters({max_candidates_per_source: Number(e.target.value)})} /></label>
                 <FieldError show={hit("filters.lookback_days") || hit("filters.max_candidates_per_source")} message={saveError?.message} />
               </div>}
-              {tab === "items" && detail && <NewItems run={activeRun} items={runItems?.items || []} total={runItems?.total || 0} loading={!!runItems?.loading} error={runItems?.error || ""}
+              {tab === "items" && detail && <NewItems key={activeRun?.run_id ?? "none"} run={activeRun} items={runItems?.items || []} total={runItems?.total || 0} loading={!!runItems?.loading} error={runItems?.error || ""}
                 sourceNames={sourceNames} onOpenEvidence={onOpenEvidence} onMore={() => activeRun && void loadItems(detail.id, activeRun, runItems?.items.length || 0)} />}
               {tab === "versions" && detail && <VersionList versions={versions} current={detail.current_version} loading={versionsLoading} busy={busy} onRollback={(v) => void rollback(v)} />}
               {tab === "runs" && detail && <RunList runs={runs} loading={runsLoading} onShowItems={(run) => { setItemsRunId(run.run_id); setTab("items"); }} />}
@@ -424,8 +445,8 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
               <input aria-label="修改说明" placeholder="修改说明（可选，记入版本历史）" value={changeNote} maxLength={200} onChange={(e) => setChangeNote(e.target.value)} />
               <button type="button" disabled={!draft.config.sources.length || preview?.loading} onClick={() => void runPreview()} title="按当前表单抓取少量候选，不写任何数据"><FlaskConical size={14} /> 试跑</button>
               <button type="button" className="primary" disabled={saving || (!dirty && !isNew)} onClick={() => void save()}><Save size={14} /> {saving ? "保存中…" : isNew ? "创建" : "保存"}</button>
-              {!isNew && <button type="button" disabled={trialStarting || dirty || runs.some((r) => r.status === "running")} onClick={() => void startTrial()}
-                title={dirty ? "有未保存修改，请先保存再测试运行" : "按已保存版本完整运行一次，结果进“本次新增”，不进快照"}><Play size={14} /> {runs.some((r) => r.status === "running" && r.trigger === "trial") ? "测试运行中…" : "测试运行"}</button>}
+              {!isNew && <button type="button" disabled={trialStarting || dirty || trialRunning} onClick={() => void startTrial()}
+                title={dirty ? "有未保存修改，请先保存再测试运行" : "按已保存版本完整运行一次，结果进“本次新增”，不进快照"}><Play size={14} /> {trialRunning ? "测试运行中…" : "测试运行"}</button>}
               {!isNew && <button type="button" className="pipeline-danger" disabled={busy} onClick={() => void remove()}><Trash2 size={14} /> 删除</button>}
             </footer>}
           </>}
@@ -441,10 +462,12 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
             <div className="pipeline-trial-summary">
               <b>最近一次测试运行</b>
               {toggle.runs === null ? <span>正在读取…</span>
+                : toggle.runsFailed ? <span>无法确认最近测试运行</span>
                 : lastTrial ? <span>{statusLabel(lastTrial.status)} · 新增 {newItemsOf(lastTrial) ?? "—"} 条 · {lastTrial.finished_at ? `完成于 ${dateText(lastTrial.finished_at)}` : "尚未结束"} · 第 {lastTrial.version} 版</span>
                 : <span>尚未测试运行</span>}
             </div>
-            {toggle.runs && !lastTrial && <Warning>这条管线尚未测试运行，建议先测试运行确认来源与过滤结果再启用。</Warning>}
+            {toggle.runsFailed && <Warning>运行记录读取失败，无法确认这条管线是否测试运行过、结果是否正常。仍可启用，但请确认来源与过滤结果无误。</Warning>}
+            {toggle.runs && !toggle.runsFailed && !lastTrial && <Warning>这条管线尚未测试运行，建议先测试运行确认来源与过滤结果再启用。</Warning>}
             {lastTrial && lastTrial.status !== "success" && lastTrial.status !== "running" && <Warning>最近一次测试运行未完全成功，请确认来源可用后再启用。</Warning>}
             {lastTrial && lastTrial.version !== toggle.pipeline.current_version && <Warning>最近一次测试运行基于第 {lastTrial.version} 版，当前已是第 {toggle.pipeline.current_version} 版。</Warning>}
             {dirty && detail?.id === toggle.pipeline.id && <Warning>表单中的未保存修改不会随启用生效，启用的是已保存的第 {detail.current_version} 版。</Warning>}

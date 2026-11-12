@@ -281,6 +281,7 @@ CREATE TABLE IF NOT EXISTS collection_pipelines (
  enabled BOOLEAN NOT NULL DEFAULT false,
  current_version INTEGER NOT NULL,
  last_run_id TEXT NULL,
+ last_trigger TEXT NULL CHECK (last_trigger IN ('batch','trial')),
  last_status TEXT NULL,
  last_finished_at TIMESTAMPTZ NULL,
  last_new_items INTEGER NOT NULL DEFAULT 0,
@@ -371,6 +372,7 @@ COMMENT ON COLUMN collection_pipelines.topics IS '所属主题列表（至少一
 COMMENT ON COLUMN collection_pipelines.enabled IS '是否启用：true 随整批采集运行，false 不参与（新建默认）；builtin 行为同步缓存，以注册表启用且不在 collector_config 排除列表为准';
 COMMENT ON COLUMN collection_pipelines.current_version IS '当前生效的配置版本号，对应 collection_pipeline_versions.version';
 COMMENT ON COLUMN collection_pipelines.last_run_id IS '最近一次运行的 run_id，尚未运行为空';
+COMMENT ON COLUMN collection_pipelines.last_trigger IS '最近一次运行的触发方式：batch 随整批运行、trial 测试运行；尚未运行为空';
 COMMENT ON COLUMN collection_pipelines.last_status IS '最近一次运行状态，取值同 collection_pipeline_runs.status；尚未运行为空';
 COMMENT ON COLUMN collection_pipelines.last_finished_at IS '最近一次运行结束时间；尚未运行或未结束为空';
 COMMENT ON COLUMN collection_pipelines.last_new_items IS '最近一次运行新增的条目数，默认 0';

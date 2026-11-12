@@ -59,6 +59,7 @@
 | ``enabled`` | boolean | 否 | `false` | 是否启用：`true` 随整批采集运行，`false` 不参与（新建默认）；`builtin` 行为同步缓存，以注册表启用且不在 `collector_config` 排除列表（`exclude_ids`）为准 |
 | ``current_version`` | integer | 否 | — | 当前生效配置版本号，对应 `collection_pipeline_versions.version` |
 | ``last_run_id`` | text | 是 | — | 最近一次运行 `run_id` |
+| ``last_trigger`` | text | 是 | — | CHECK：最近一次运行触发方式，`batch` 随整批运行 / `trial` 测试运行；尚未运行为空 |
 | ``last_status`` | text | 是 | — | 最近一次运行状态，取值同 `collection_pipeline_runs.status` |
 | ``last_finished_at`` | timestamptz | 是 | — | 最近一次运行结束时间 |
 | ``last_new_items`` | integer | 否 | `0` | 最近一次运行新增条目数 |

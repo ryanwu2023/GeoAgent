@@ -110,6 +110,7 @@ def test_trial_first_run_all_items_are_new(data_root):
 
     after = get_pipeline(p["id"])
     assert after["last_new_items"] == 3 and after["last_status"] == "success" and after["last_run_id"] == run["run_id"]
+    assert after["last_trigger"] == "trial"
     assert after["enabled"] is False
     items = list_run_items(run["run_id"])
     assert [i["seq"] for i in items] == [1, 2, 3]
@@ -189,7 +190,8 @@ def test_trial_same_pipeline_lock_held_is_conflict(data_root):
     assert e.value.code == "CONFLICT"
     assert count("collection_pipeline_runs") == 0
     after = get_pipeline(p["id"])
-    assert (after["last_status"], after["last_run_id"]) == (before["last_status"], before["last_run_id"])
+    assert (after["last_status"], after["last_run_id"], after["last_trigger"]) == \
+        (before["last_status"], before["last_run_id"], before["last_trigger"])
 
 
 def test_trial_run_not_imported_and_not_in_seen(data_root):
@@ -325,6 +327,7 @@ def test_batch_records_pipeline_runs_with_snapshot(batch_env, data_root):
     assert count("pipeline_seen_items") == 2
     after = get_pipeline(p["id"])
     assert after["last_run_id"] == run["run_id"] and after["last_status"] == "success" and after["last_new_items"] == 2
+    assert after["last_trigger"] == "batch"
     # 下一次整批：同样的条目不再算新增
     report2 = batch(batch_env, batch_runner({cid: ([rec(1), rec(2), rec(3)], "partial")}),
                     now=datetime(2026, 11, 12, 6, 0, tzinfo=timezone.utc))
@@ -583,6 +586,7 @@ def test_recover_marks_interrupted_runs(data_root):
     assert run["status"] == "failed" and run["error"] == "SERVICE_INTERRUPTED" and run["finished_at"] == now
     after = get_pipeline(p["id"])
     assert after["last_status"] == "failed" and after["last_finished_at"] == now and after["enabled"] is True
+    assert after["last_trigger"] == "trial"
     assert recover_interrupted_pipeline_runs(now) == []
 
 

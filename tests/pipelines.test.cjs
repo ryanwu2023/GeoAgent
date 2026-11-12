@@ -170,10 +170,33 @@ test("类型与后端形态一致", () => {
   assert.ok(/export type PreviewResult = \{sources: Array<\{source_id: string; state: string; error: string \| null; candidates: Array<\{title: string; url: string; accepted: boolean; reason: string; matched: string\[\]\}>\}>\}/.test(src));
   assert.ok(/export type PipelineRun = \{[^}]*version: number/.test(src));
 });
-test("lastRunTrigger 按运行 ID 区分整批与测试", () => {
-  assert.equal(m.lastRunTrigger({last_run_id: "20261111T000000Z-abc:p-1a2b"}), "batch");
-  assert.equal(m.lastRunTrigger({last_run_id: "pipeline-p-1a2b-20261111T000000Z-abc123"}), "trial");
-  assert.equal(m.lastRunTrigger({last_run_id: null}), null);
+test("列表行带 last_trigger，不再按运行 ID 推断", () => {
+  const src = fs.readFileSync(path.join(__dirname, "..", "src", "pipelines.ts"), "utf8");
+  assert.ok(/last_trigger: "batch" \| "trial" \| null/.test(src));
+  assert.equal(m.lastRunTrigger, undefined);
+  assert.ok(!src.includes("PreviewCandidate"), "PreviewResult 只保留一份候选类型");
+});
+test("dimensionLabel 使用应用已有的中文维度名", () => {
+  assert.equal(m.dimensionLabel("usiran", "diplomacy"), "美伊：外交斡旋");
+  assert.equal(m.dimensionLabel("usiran", "iran_readiness"), "美伊：伊朗战备");
+  assert.equal(m.dimensionLabel("ukraine", "frontline"), "俄乌：军事战线");
+  assert.equal(m.dimensionLabel("ukraine", "mystery"), "俄乌：mystery");
+  assert.equal(m.dimensionLabel("other", "x"), "other：x");
+});
+test("isWebUrl 只认 http/https", () => {
+  assert.equal(m.isWebUrl("https://a.b/c"), true);
+  assert.equal(m.isWebUrl("HTTP://a.b"), true);
+  assert.equal(m.isWebUrl("javascript:alert(1)"), false);
+  assert.equal(m.isWebUrl("/relative"), false);
+  assert.equal(m.isWebUrl(""), false);
+});
+test("trialOutcome 只认点击之后的新测试运行", () => {
+  const runs = (...xs) => xs.map(([run_id, trigger, status]) => ({run_id, trigger, status}));
+  assert.equal(m.trialOutcome(runs(["t1", "trial", "success"]), "t1"), "waiting", "还是旧的那次");
+  assert.equal(m.trialOutcome(runs(["b1", "batch", "running"], ["t1", "trial", "success"]), "t1"), "waiting");
+  assert.equal(m.trialOutcome(runs(["t2", "trial", "running"], ["t1", "trial", "success"]), "t1"), "running");
+  assert.equal(m.trialOutcome(runs(["t2", "trial", "failed"]), null), "finished", "首次拉取就已结束也要反馈");
+  assert.equal(m.trialOutcome([], null), "waiting");
 });
 test("recentlyUpdated 统计最近 24 小时有新增的管线", () => {
   const now = Date.parse("2026-11-12T12:00:00Z");

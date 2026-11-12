@@ -211,7 +211,7 @@ def _outcome(result: dict | None, output: Path, stats: dict) -> tuple[str, dict,
 
 def _complete(conn, pipeline_id: str, run_id: str, *, status: str, stats: dict, snapshot_id: str | None,
               error: str | None, actor: str | None, records: list[dict] | None, source_types: dict[str, str],
-              write_ledger: bool, finished: datetime) -> dict:
+              write_ledger: bool, finished: datetime, trigger: str) -> dict:
     new_items = 0
     if records:
         new_items = record_new_items(conn, pipeline_id=pipeline_id, run_id=run_id, records=records,
@@ -224,9 +224,9 @@ def _complete(conn, pipeline_id: str, run_id: str, *, status: str, stats: dict, 
          error[:ERROR_LIMIT] if error else None, actor, finished, run_id))
     # last_* 是运行态字段，不改动 updated_by/updated_at（那两项只反映配置修改）。
     conn.execute(
-        "UPDATE collection_pipelines SET last_run_id=%s,last_status=%s,last_finished_at=%s,last_new_items=%s "
-        "WHERE id=%s",
-        (run_id, status, finished, new_items, pipeline_id))
+        "UPDATE collection_pipelines SET last_run_id=%s,last_trigger=%s,last_status=%s,last_finished_at=%s,"
+        "last_new_items=%s WHERE id=%s",
+        (run_id, trigger, status, finished, new_items, pipeline_id))
     return dict(conn.execute("SELECT * FROM collection_pipeline_runs WHERE run_id=%s", (run_id,)).fetchone())
 
 
@@ -345,7 +345,7 @@ def record_batch_pipeline_runs(report: dict, snapshot_id: str | None) -> list[st
                           snapshot_id=snapshot_id if result.get("published") is True else None,
                           error=error, actor=BATCH_ACTOR, records=records,
                           source_types=meta["source_types"], write_ledger=True,
-                          finished=max(finished, started))
+                          finished=max(finished, started), trigger="batch")
             written.append(run_id)
         except Exception as exc:  # noqa: BLE001 - 不影响整批结果与其它管线
             log.warning("写入管线 %s 的整批运行记录失败：%s", pipeline_id, exc)
@@ -368,7 +368,8 @@ def trial_running(pipeline_id: str) -> bool:
 def _start_trial(pipeline: dict, run_id: str, actor: str | None, started: datetime) -> dict:
     with db() as conn:
         previous = conn.execute(
-            "SELECT last_run_id,last_status FROM collection_pipelines WHERE id=%s FOR UPDATE", (pipeline["id"],)).fetchone()
+            "SELECT last_run_id,last_trigger,last_status FROM collection_pipelines WHERE id=%s FOR UPDATE",
+            (pipeline["id"],)).fetchone()
         if conn.execute("SELECT 1 FROM collection_pipeline_runs WHERE pipeline_id=%s AND trigger='trial' "
                         "AND status='running' AND NOT is_deleted LIMIT 1", (pipeline["id"],)).fetchone():
             raise PipelineError("CONFLICT", TRIAL_CONFLICT, {"id": pipeline["id"]})
@@ -376,7 +377,7 @@ def _start_trial(pipeline: dict, run_id: str, actor: str | None, started: dateti
             "INSERT INTO collection_pipeline_runs(run_id,pipeline_id,version,trigger,status,started_at,created_by,data_timestamp) "
             "VALUES (%s,%s,%s,'trial','running',%s,%s,%s)",
             (run_id, pipeline["id"], pipeline["current_version"], started, actor, started))
-        conn.execute("UPDATE collection_pipelines SET last_run_id=%s,last_status='running' WHERE id=%s",
+        conn.execute("UPDATE collection_pipelines SET last_run_id=%s,last_trigger='trial',last_status='running' WHERE id=%s",
                      (run_id, pipeline["id"]))
     return dict(previous)
 
@@ -384,8 +385,9 @@ def _start_trial(pipeline: dict, run_id: str, actor: str | None, started: dateti
 def _discard(pipeline_id: str, run_id: str, previous: dict) -> None:
     with db() as conn:
         conn.execute("DELETE FROM collection_pipeline_runs WHERE run_id=%s AND status='running'", (run_id,))
-        conn.execute("UPDATE collection_pipelines SET last_run_id=%s,last_status=%s WHERE id=%s AND last_run_id=%s",
-                     (previous["last_run_id"], previous["last_status"], pipeline_id, run_id))
+        conn.execute("UPDATE collection_pipelines SET last_run_id=%s,last_trigger=%s,last_status=%s "
+                     "WHERE id=%s AND last_run_id=%s",
+                     (previous["last_run_id"], previous["last_trigger"], previous["last_status"], pipeline_id, run_id))
 
 
 def _finish_trial(pipeline_id: str, run_id: str, *, status: str, stats: dict, error: str | None,
@@ -393,7 +395,7 @@ def _finish_trial(pipeline_id: str, run_id: str, *, status: str, stats: dict, er
     with db() as conn:
         return _complete(conn, pipeline_id, run_id, status=status, stats=stats, snapshot_id=None, error=error,
                          actor=actor, records=records, source_types=source_types, write_ledger=False,
-                         finished=_now())
+                         finished=_now(), trigger="trial")
 
 
 def run_trial(pipeline_id: str, *, actor: str | None, runner: Callable[..., dict] = run_one,
@@ -485,11 +487,12 @@ def list_run_items(run_id: str, *, offset: int = 0, limit: int = 50) -> list[dic
 def recover_interrupted_pipeline_runs(now: datetime) -> list[str]:
     """服务重启后把遗留的 running 运行标记为失败（SERVICE_INTERRUPTED）。"""
     with db() as conn:
-        rows = conn.execute("SELECT run_id,pipeline_id FROM collection_pipeline_runs WHERE status='running' "
+        rows = conn.execute("SELECT run_id,pipeline_id,trigger FROM collection_pipeline_runs WHERE status='running' "
                             "AND NOT is_deleted ORDER BY started_at FOR UPDATE").fetchall()
         for row in rows:
             conn.execute("UPDATE collection_pipeline_runs SET status='failed',error='SERVICE_INTERRUPTED',finished_at=%s,"
                          "updated_at=%s WHERE run_id=%s", (now, now, row["run_id"]))
-            conn.execute("UPDATE collection_pipelines SET last_status='failed',last_finished_at=%s,last_new_items=0 "
-                         "WHERE id=%s AND last_run_id=%s", (now, row["pipeline_id"], row["run_id"]))
+            conn.execute("UPDATE collection_pipelines SET last_status='failed',last_trigger=%s,last_finished_at=%s,"
+                         "last_new_items=0 WHERE id=%s AND last_run_id=%s",
+                         (row["trigger"], now, row["pipeline_id"], row["run_id"]))
         return [r["run_id"] for r in rows]

@@ -2,7 +2,7 @@ import {useState} from "react";
 import {History, RotateCcw} from "lucide-react";
 import {dateText} from "../api";
 import {projectCollectorDiagnosis} from "../collectorDiagnostics";
-import {newItemsOf, runLabel, type PipelineRun, type PipelineRunItem, type PipelineVersion} from "../pipelines";
+import {dimensionLabel, newItemsOf, runLabel, type PipelineRun, type PipelineRunItem, type PipelineVersion} from "../pipelines";
 
 export const STATUS_LABEL: Record<string, string> = {running: "运行中", success: "成功", partial: "部分成功", failed: "失败"};
 export const statusLabel = (status: string | null | undefined) => status ? STATUS_LABEL[status] || status : "尚未运行";
@@ -39,7 +39,8 @@ export function RunList({runs, loading, onShowItems}: {runs: PipelineRun[]; load
 }
 
 function dimensionText(dimensions: Record<string, unknown>) {
-  return Object.entries(dimensions || {}).map(([k, v]) => `${k}：${Array.isArray(v) ? v.join("、") : typeof v === "object" && v ? JSON.stringify(v) : String(v)}`);
+  return Object.entries(dimensions || {}).flatMap(([topic, v]) =>
+    (Array.isArray(v) ? v : [v]).filter((x) => x != null && x !== "").map((x) => dimensionLabel(topic, typeof x === "object" ? JSON.stringify(x) : String(x))));
 }
 
 /** 本次新增：某次运行新进入的条目；测试运行标注不进快照，整批已并入快照的可打开证据。 */
