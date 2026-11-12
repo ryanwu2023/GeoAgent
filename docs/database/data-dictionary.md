@@ -63,7 +63,7 @@
 | ``last_status`` | text | 是 | — | 最近一次运行状态，取值同 `collection_pipeline_runs.status` |
 | ``last_finished_at`` | timestamptz | 是 | — | 最近一次运行结束时间 |
 | ``last_new_items`` | integer | 否 | `0` | 最近一次运行新增条目数 |
-| ``owner`` | text | 否 | — | 所有者账号，非管理员只能修改自己的管线 |
+| ``owner`` | text | 否 | — | 创建该管线的管理员账号，仅作记录 |
 | `created_by` | text | 是 | — | 创建该管线的操作者账号（未启用网页登录为 `local`） |
 | `created_at` | timestamptz | 否 | `CURRENT_TIMESTAMP` | 记录首次写入时间，更新不重置 |
 | `updated_by` | text | 是 | — | 最近修改该管线的操作者 |

@@ -150,6 +150,34 @@ def test_trial_failed_collector_does_not_read_stale_output(data_root):
     assert get_pipeline(p["id"])["last_status"] == "failed"
 
 
+def test_trial_clears_previous_trial_output_but_keeps_state(data_root):
+    """连续两次测试运行：第二次的“本次新增”只反映本次抓取，不重复计入第一次的旧条目；HTTP 缓存保留。"""
+    p = make(enabled=False)
+    seen_previous = []
+
+    def merging_runner(records):
+        # 模拟多源采集器：把上一次输出目录里的记录并入本次产物
+        def run(item, *, timeout, data_root):
+            out = Path(data_root) / item["id"] / "output"
+            previous = json.loads((out / "geo-v6.json").read_text())["records"] if (out / "geo-v6.json").is_file() else []
+            seen_previous.append([r["id"] for r in previous])
+            cache = Path(data_root) / item["id"] / "state" / "http-cache"
+            cache.mkdir(parents=True, exist_ok=True)
+            (cache / f"entry-{len(seen_previous)}").write_text("x")
+            write_output(out, [*previous, *records])
+            return {"id": item["id"], "returncode": 0, "published": True}
+        return run
+
+    first = run_trial(p["id"], actor="admin", runner=merging_runner([rec(1), rec(2)]))
+    second = run_trial(p["id"], actor="admin", runner=merging_runner([rec(2), rec(3)]))
+    assert first["stats"]["new_items"] == 2
+    assert seen_previous == [[], []]
+    assert second["stats"]["new_items"] == 2  # r2 本次又抓到所以仍计入；r1 不再出现
+    assert sorted(i["record_id"] for i in list_run_items(second["run_id"])) == ["r2", "r3"]
+    cache = data_root / ".pipeline-trials" / f"pipeline-{p['id']}" / "state" / "http-cache"
+    assert sorted(x.name for x in cache.iterdir()) == ["entry-1", "entry-2"]
+
+
 def test_trial_runner_exception_is_failed_run(data_root):
     p = make()
 

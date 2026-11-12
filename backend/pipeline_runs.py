@@ -6,7 +6,7 @@
   （trigger=batch、snapshot_id=本次快照）与本次新增，并写去重台账。
 - 测试运行：run_trial 在 collector_data_root()/.pipeline-trials/ 下用 run_one 运行，只占该管线自己的
   单采集器锁，不经过整批服务锁与整批台账；产物不被导入扫描到，永不进快照；本次新增对照去重台账
-  计算但不写台账。
+  计算但不写台账。每次测试运行前清空该管线的测试输出目录（保留 state/HTTP 缓存），不累积上次结果。
 - 停用/删除的配置化管线，其正式目录 pipeline-<id>（含 output 与 state 增量状态，如 HTTP 缓存）整体移到
   .pipeline-retired/；重新启用后从零抓取。整批导入前 sweep_stale_pipeline_outputs 再清扫一次，
   兜住整批进行中被停用、退役后又被本批发布的目录。
@@ -18,6 +18,7 @@ import re
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -414,6 +415,9 @@ def run_trial(pipeline_id: str, *, actor: str | None, runner: Callable[..., dict
     root = trial_root()
     stats: dict[str, Any] = {"import_status": "not_imported"}
     try:
+        # 每次测试运行从空输出开始，“本次新增”只反映本次抓取；state（含 HTTP 缓存）保留。
+        # 同一管线的测试运行已由 _start_trial 互斥，这里清理不会碰到进行中的另一次测试运行。
+        shutil.rmtree(root / collector_id(pipeline_id) / "output", ignore_errors=True)
         item = registry_item(pipeline, _write_monitor_config(pipeline, root))
         result = runner(item, timeout=timeout, data_root=root)
     except Exception as exc:

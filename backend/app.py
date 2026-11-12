@@ -800,6 +800,10 @@ def retry_collector_run(run_id: str):
     failed_ids = [item["id"] for item in run.get("collectors", []) if item.get("status") == "failed"]
     if not failed_ids:
         raise HTTPException(422, "该运行没有可重试的失败采集器")
+    # 配置化管线不在采集器注册表里，不能按采集器 id 单独重跑
+    failed_ids = [cid for cid in failed_ids if not str(cid).startswith("pipeline-")]
+    if not failed_ids:
+        raise HTTPException(422, "管线请在采集管线配置页测试运行")
     if collection_mode() == "remote":
         try:
             job = remote_jobs.submit(ids=failed_ids)

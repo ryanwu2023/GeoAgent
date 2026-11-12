@@ -70,3 +70,11 @@ def test_pipelines_have_no_schedule_columns_or_due_index():
             "SELECT indexname FROM pg_indexes WHERE schemaname=current_schema() AND tablename='collection_pipelines'")}
     assert not cols & {"interval_sec", "daily_times", "timezone", "next_run_at"}
     assert "collection_pipelines_due" not in idx
+
+
+def test_owner_comment_is_creator_record_only():
+    with db() as conn:
+        comment = conn.execute(
+            "SELECT col_description('collection_pipelines'::regclass, ordinal_position) AS c FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name='collection_pipelines' AND column_name='owner'").fetchone()["c"]
+    assert comment == "创建该管线的管理员账号，仅作记录"

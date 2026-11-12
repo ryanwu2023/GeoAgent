@@ -249,6 +249,39 @@ def test_collector_retry_action_only_queues_failed_items(tmp_path, monkeypatch):
     assert captured == [{"ids": ["xinhua-monitor"], "auto_import": True, "allow_partial_import": False, "exclude_ids": []}]
 
 
+def _write_failed_run(tmp_path, run_id, failed_ids):
+    run_dir = tmp_path / "data" / "collection-runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "results.json").write_text(json.dumps({
+        "run_kind": "scheduled-service", "status": "partial",
+        "results": [{"id": cid, "returncode": 1, "started_at": "2026-11-11T09:00:00+00:00"} for cid in failed_ids],
+    }), encoding="utf-8")
+
+
+def test_collector_retry_skips_configurable_pipelines(tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.app.load_config", lambda: {"exclude_ids": [], "allow_partial_import": False})
+
+    class Job:
+        def public(self):
+            return {"request_id": "req-3", "run_id": "manual-3", "status": "queued"}
+
+    captured = []
+    monkeypatch.setattr("backend.app.collector_jobs.submit", lambda **kwargs: captured.append(kwargs) or Job())
+    _write_failed_run(tmp_path, "run-mixed", ["xinhua-monitor", "pipeline-p-0a1b"])
+    response = TestClient(app).post("/api/collector/runs/run-mixed/retry")
+    assert response.status_code == 202
+    assert captured[0]["ids"] == ["xinhua-monitor"]
+
+
+def test_collector_retry_only_pipelines_is_422(tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.app.load_config", lambda: {"exclude_ids": [], "allow_partial_import": False})
+    monkeypatch.setattr("backend.app.collector_jobs.submit", lambda **kwargs: pytest.fail("不应提交"))
+    _write_failed_run(tmp_path, "run-pipes", ["pipeline-p-0a1b"])
+    response = TestClient(app).post("/api/collector/runs/run-pipes/retry")
+    assert response.status_code == 422
+    assert response.json()["detail"] == "管线请在采集管线配置页测试运行"
+
+
 def test_manual_run_rejects_explicitly_excluded_collector(monkeypatch):
     monkeypatch.setattr(
         "backend.app.load_config",

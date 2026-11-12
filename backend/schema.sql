@@ -376,7 +376,7 @@ COMMENT ON COLUMN collection_pipelines.last_trigger IS '最近一次运行的触
 COMMENT ON COLUMN collection_pipelines.last_status IS '最近一次运行状态，取值同 collection_pipeline_runs.status；尚未运行为空';
 COMMENT ON COLUMN collection_pipelines.last_finished_at IS '最近一次运行结束时间；尚未运行或未结束为空';
 COMMENT ON COLUMN collection_pipelines.last_new_items IS '最近一次运行新增的条目数，默认 0';
-COMMENT ON COLUMN collection_pipelines.owner IS '管线所有者账号；非管理员只能修改自己拥有的管线';
+COMMENT ON COLUMN collection_pipelines.owner IS '创建该管线的管理员账号，仅作记录';
 COMMENT ON COLUMN collection_pipelines.created_by IS '创建该管线的操作者账号，未启用网页登录时为 local';
 COMMENT ON COLUMN collection_pipelines.created_at IS '管线首次在本系统建立的时间；后续修改不重置';
 COMMENT ON COLUMN collection_pipelines.updated_by IS '最近一次修改该管线的操作者账号；尚未修改为空';
