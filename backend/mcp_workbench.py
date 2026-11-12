@@ -9,6 +9,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
+from . import web_auth
 from .integrations import admin, no_cache
 from .geo_mcp.audit import recent_calls
 from .geo_mcp.server import create_server, create_app
@@ -32,13 +33,25 @@ class Trial(BaseModel):
     arguments: dict = Field(default_factory=dict)
 
 
+def is_web_admin(request: Request) -> bool:
+    """与 pipeline_routes.actor_of 同口径：未启用网页登录为本机管理员，否则须在管理员名单中。"""
+    if not web_auth.enabled():
+        return True
+    username = getattr(request.state, "web_user", None)
+    return bool(username) and username in web_auth.users()
+
+
 @router.post("/call")
 async def trial(body: Trial, request: Request, response: Response):
     if len(json.dumps(body.arguments, ensure_ascii=False)) > 20_000:
         raise HTTPException(422, "参数超过20000字符")
     server = create_server(project_transport=True)
-    if body.tool not in {tool.name for tool in await server.list_tools()}:
+    tools = {tool.name: tool for tool in await server.list_tools()}
+    if body.tool not in tools:
         raise HTTPException(422, "未知业务工具")
+    annotations = tools[body.tool].annotations
+    if not (annotations and annotations.readOnlyHint) and not is_web_admin(request):
+        raise HTTPException(403, "仅管理员可以在工作台调用写入工具")
     # After the project's same-origin check: isolated in-process transport using
     # the same registered SDK tools. No credential is stored or sent to the UI;
     # the public /mcp endpoint remains Bearer-protected.

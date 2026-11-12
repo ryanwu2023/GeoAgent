@@ -30,12 +30,14 @@ MAX_ITEMS = 50
 SUMMARY_LIMIT = 500
 MAX_HOURS = 168
 CONFIG_SHAPE = (
-    ' config 形如 {"sources":[{"id":"小写字母数字连字符","type":"web或rss","name":"显示名","feed_url":"rss必填",'
-    '"entry_urls":["web必填的入口页，最多10个"],"allowed_hosts":["允许的域名"],"language":"zh或en","tier":"T1至T4",'
-    '"content_policy":"metadata_only等","link_include_pattern":"web可选正则"}],'
-    '"filters":{"include_any":[],"include_strong":[],"exclude":[],"require_category":true,"lookback_days":14,'
-    '"max_candidates_per_source":80},"request":{"timeout_seconds":25,"rate_limit_seconds":1.5}}；'
-    'row 形如 {"name":"","description":"","topics":["主题机器值"]}。')
+    ' row 形如 {"name":"必填","description":"可空","topics":["usiran","ukraine"]}（topics 至少 1 个，只能取这两个值）。'
+    'config 形如 {"sources":[来源...],"filters":{...},"request":{...}}，sources 1 到 30 个，每个来源必填 id'
+    '(小写字母数字连字符，≤64位，不重复)、type(web 或 rss)、name、allowed_hosts(1到10个小写主机名，不含协议路径端口)、'
+    'tier(T1/T2/T3)、content_policy(public_fulltext 或 metadata_only)；rss 来源另需 feed_url 且不得带 entry_urls，'
+    'web 来源另需 entry_urls(1到10个链接)且不得带 feed_url；可选 language(默认 en)、link_include_pattern(正则，≤200字)。'
+    '链接的主机必须在 allowed_hosts 内。filters 与 request 可省略，默认值：filters={"include_any":[],"include_strong":[],'
+    '"exclude":[],"require_category":true,"lookback_days":14(1到90),"max_candidates_per_source":80(1到200)}，'
+    'request={"timeout_seconds":25(1到60),"rate_limit_seconds":1.5(0到30)}。')
 PROVENANCE = {"kind": "live", "source": "collection-pipelines", "live": True}
 
 _ERROR_CODES = {
@@ -286,7 +288,7 @@ def pipeline_trial(principal, pipeline_id: str) -> dict:
         raise MCPError("GEO_CONFLICT", _runs_module.TRIAL_CONFLICT, {"id": pipeline_id})
     threading.Thread(target=_background_trial, args=(pipeline_id, _actor(principal).username), daemon=True,
                      name=f"pipeline-trial-{pipeline_id}").start()
-    return {"pipeline_id": pipeline_id, "accepted": True, "hint": "约 1–3 分钟后用 geo_pipeline_runs 查看"}
+    return {"pipeline_id": pipeline_id, "accepted": True, "hint": "通常需要数分钟，可多次调用 geo_pipeline_runs 查看；最长 15 分钟"}
 
 
 def pipeline_set_enabled(principal, pipeline_id: str, enabled: bool) -> dict:
@@ -391,7 +393,7 @@ def register_pipeline_tools(server, run_tool=None) -> None:
     ) -> str:
         return await run(ctx, "geo_pipeline_preview", lambda p: pipeline_preview(p, row, config, limit), write=True)
 
-    @write_tool("geo_pipeline_create", "新建采集管线。新管线默认停用，不参与整批采集；推荐流程：新建→geo_pipeline_preview 试跑→geo_pipeline_trial 测试运行→geo_pipeline_runs/geo_pipeline_run_items 展示结果→用户明确同意→geo_pipeline_set_enabled 启用。dry_run=true 只校验并返回规范化后的 row/config，不写库。" + CONFIG_SHAPE)
+    @write_tool("geo_pipeline_create", "新建采集管线。新管线默认停用，不参与整批采集；推荐流程：新建→geo_pipeline_preview 试跑→geo_pipeline_trial 测试运行→geo_pipeline_runs/geo_pipeline_run_items 展示结果→用户明确同意→geo_pipeline_set_enabled 启用。dry_run=true 只校验并返回规范化后的 row/config，不写库，也不检查同名管线是否已存在。" + CONFIG_SHAPE)
     async def geo_pipeline_create(
         ctx: Context, row: Row, config: Config, change_note: Note = "",
         dry_run: Annotated[bool, Field(description="true 时只校验并返回规范化结果，不创建。")] = False,
@@ -410,7 +412,7 @@ def register_pipeline_tools(server, run_tool=None) -> None:
         return await run(ctx, "geo_pipeline_update",
                          lambda p: pipeline_update(p, pipeline_id, expected_version, row_patch, config, change_note, dry_run), write=True)
 
-    @write_tool("geo_pipeline_trial", "对管线发起一次测试运行：后台执行，立即返回；产物写到测试目录，不进快照、不写去重台账。约 1–3 分钟后用 geo_pipeline_runs 查看状态、geo_pipeline_run_items 查看条目。内置管线不支持；同一管线已有测试运行时返回 GEO_CONFLICT。")
+    @write_tool("geo_pipeline_trial", "对管线发起一次测试运行：后台执行，立即返回；产物写到测试目录，不进快照、不写去重台账。通常需要数分钟（最长 15 分钟），可多次调用 geo_pipeline_runs 查看状态、geo_pipeline_run_items 查看条目。内置管线不支持；同一管线已有测试运行时返回 GEO_CONFLICT。")
     async def geo_pipeline_trial(ctx: Context, pipeline_id: PipelineId) -> str:
         return await run(ctx, "geo_pipeline_trial", lambda p: pipeline_trial(p, pipeline_id), write=True)
 

@@ -369,3 +369,35 @@ def test_write_tools_check_whitelist_only(principal):
     assert "GEO_TOOL_NOT_ALLOWED" in call({"geo_pipeline_list"}, False)
     assert "GEO_NOT_FOUND" in call({"geo_pipeline_delete"}, False)
     assert "GEO_NOT_FOUND" in call({"*"}, True)
+
+
+def test_doc_example_config_is_valid():
+    import re
+    from pathlib import Path
+    from backend.pipeline_config import validate_pipeline
+    doc = (Path(__file__).resolve().parents[1] / "docs/agent/geo-pipeline-mcp.md").read_text(encoding="utf-8")
+    example = json.loads(re.search(r"```json\n(.*?)\n```", doc, re.S).group(1))
+    row, config = validate_pipeline(example["row"], example["config"], resolve=resolve)
+    assert row["topics"] == ["usiran"] and len(config["sources"]) == 2
+
+
+def test_workbench_write_tools_admin_only(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    from backend import mcp_workbench, web_auth
+
+    def call(tool, user, enabled=True):
+        monkeypatch.setattr(web_auth, "enabled", lambda: enabled)
+        monkeypatch.setattr(web_auth, "users", lambda: {"root": object()})
+        req = SimpleNamespace(state=SimpleNamespace(web_user=user))
+        body = mcp_workbench.Trial(tool=tool, arguments={"pipeline_id": "不存在"})
+        return asyncio.run(mcp_workbench.trial(body, req, SimpleNamespace(status_code=200)))
+
+    for user in ("bob", None):
+        with pytest.raises(HTTPException) as err:
+            call("geo_pipeline_delete", user)
+        assert err.value.status_code == 403 and "仅管理员" in err.value.detail
+    assert call("geo_pipeline_delete", "root")  # 管理员放行（管线不存在，返回工具错误体）
+    assert call("geo_pipeline_delete", None, enabled=False)  # 未启用网页登录视为本机管理员
+    assert call("geo_pipeline_get", "bob")  # 只读工具不受限
