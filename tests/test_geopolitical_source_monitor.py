@@ -455,4 +455,4 @@ def test_rss_source_collects_and_link_include_pattern_filters(tmp_path):
     assert report["sources"]["feed"]["candidates"] == 1
     assert report["sources"]["feed"]["state"] == "ok"
     payload = json.loads((tmp_path / "out" / "geo-v6.json").read_text(encoding="utf-8"))
-    assert [r["url"] for r in payload["records"]] == ["https://feed.example/world/1"]
+    assert [r["link"] for r in payload["records"]] == ["https://feed.example/world/1"]
