@@ -114,6 +114,8 @@ from .qa_agent_routes import router as qa_agent_router
 app.include_router(qa_agent_router)
 from .mcp_workbench import router as workbench_router
 app.include_router(workbench_router)
+from .pipeline_routes import router as pipeline_router
+app.include_router(pipeline_router)
 # Delegate at the native path, with a fresh SDK session manager per lifecycle.
 app.router.routes.append(Route("/mcp", endpoint=ProjectMCP()))
 
