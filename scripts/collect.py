@@ -73,6 +73,8 @@ def _source_diagnostics(output: Path) -> dict:
 
 def _collector_environment(item: dict, env: dict) -> dict:
     result = dict(env)
+    # Shared runners (e.g. configurable pipelines) receive per-item settings here.
+    result.update({str(k): str(v) for k, v in (item.get("env") or {}).items()})
     result["GEO_COLLECTOR_MANAGED"] = "true"
     # Only reviewed domestic sources bypass the egress proxy, within this child.
     hosts = item.get("direct_hosts", [])
@@ -232,7 +234,9 @@ def _run_one_unlocked(
         raise ValueError("max_attempts must be at least 1")
     source_root = collector_source_root()
     data_root = collector_data_root()
-    collector_dir = source_root / item["id"]
+    # Several registry items may share one runner directory (source_dir); output,
+    # state and staging stay keyed by the item id.
+    collector_dir = source_root / item.get("source_dir", item["id"])
     entrypoint = (collector_dir / item["entrypoint"]).resolve()
     args = item.get("selftest_args", []) if verify_only else []
     if verify_only and not args:

@@ -247,3 +247,23 @@ def test_domestic_proxy_bypass_is_per_collector():
     assert direct['NO_PROXY']==direct['no_proxy']=='localhost,.svc,www.stcn.com'
     assert _collector_environment({},env)['NO_PROXY']=='localhost'
     assert env['NO_PROXY']=='localhost'
+
+
+def test_run_one_honours_source_dir_and_item_env(tmp_path, monkeypatch):
+    source_root, data_root = tmp_path / 'sources', tmp_path / 'data'
+    _write_collector_script(source_root, 'shared-runner', '''
+import os
+from pathlib import Path
+p = Path(os.environ['COLLECTOR_OUTPUT_ROOT'])
+p.mkdir(parents=True, exist_ok=True)
+(p / 'env.txt').write_text(os.environ['GEO_PIPELINE_CONFIG'] + '|' + os.environ['GEO_COLLECTOR_MANAGED'] + '|' + os.environ['COLLECTOR_STATE_ROOT'], encoding='utf-8')
+''')
+    monkeypatch.setattr('scripts.collect.collector_source_root', lambda: source_root)
+    monkeypatch.setattr('scripts.collect.collector_data_root', lambda: data_root)
+    item = {'id': 'pipeline-p-1', 'entrypoint': 'collector.py', 'source_dir': 'shared-runner',
+            'env': {'GEO_PIPELINE_CONFIG': '/tmp/cfg.json'}}
+    result = run_one(item, timeout=10, staging_root=tmp_path / 'staging')
+    assert result['returncode'] == 0 and result['published'] is True
+    written = (data_root / 'pipeline-p-1' / 'output' / 'env.txt').read_text(encoding='utf-8')
+    assert written == '/tmp/cfg.json|true|' + str(data_root / 'pipeline-p-1' / 'state')
+    assert not (source_root / 'pipeline-p-1').exists()
