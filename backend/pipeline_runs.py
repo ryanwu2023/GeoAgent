@@ -7,8 +7,13 @@
 - 测试运行：run_trial 在 collector_data_root()/.pipeline-trials/ 下用 run_one 运行，只占该管线自己的
   单采集器锁，不经过整批服务锁与整批台账；产物不被导入扫描到，永不进快照；本次新增对照去重台账
   计算但不写台账。
+- 停用/删除的配置化管线，其正式目录 pipeline-<id>（含 output 与 state 增量状态，如 HTTP 缓存）整体移到
+  .pipeline-retired/；重新启用后从零抓取。整批导入前 sweep_stale_pipeline_outputs 再清扫一次，
+  兜住整批进行中被停用、退役后又被本批发布的目录。
 """
 from __future__ import annotations
+
+import re
 
 import json
 import logging
@@ -26,7 +31,7 @@ from backend.adapters import normalize
 from backend.paths import collector_data_root, collector_source_root
 from backend.pipeline_config import PipelineConfigError, default_resolve, to_monitor_config, validate_pipeline
 from backend.pipeline_scheduler import pipelines_enabled
-from backend.pipeline_service import PipelineError, get_pipeline
+from backend.pipeline_service import PipelineError, get_pipeline, retire_pipeline_output
 from backend.store import db
 from scripts.collect import _collector_environment, run_one
 
@@ -46,6 +51,7 @@ BUILTIN_NO_TRIAL = "内置采集器随整批运行，不支持测试运行"
 TRIAL_CONFLICT = "该管线正在测试运行"
 UNPUBLISHED = "采集产物未通过发布门禁"
 RUN_META = "pipeline-run.json"
+PIPELINE_DIR_RE = re.compile(r"^pipeline-(p-[0-9a-f]+)$")
 
 
 def _now() -> datetime:
@@ -252,6 +258,36 @@ def batch_pipeline_items() -> list[dict]:
         except Exception as exc:  # noqa: BLE001 - 单条管线配置坏了不影响其它管线
             log.warning("管线 %s 配置无法翻译，本次整批跳过：%s", pipeline["id"], exc)
     return items
+
+
+def _enabled_configurable_ids() -> set[str]:
+    with db() as conn:
+        rows = conn.execute("SELECT id FROM collection_pipelines WHERE kind='configurable' AND enabled "
+                            "AND NOT is_deleted").fetchall()
+    return {r["id"] for r in rows}
+
+
+def sweep_stale_pipeline_outputs() -> list[str]:
+    """导入前退役不属于“已启用、未删除的配置化管线”的 pipeline-p-<hex> 目录；返回退役的管线 id。
+
+    查询失败只告警、不清扫（宁可多导入一次，也不误删正常管线的产物）。
+    """
+    root = collector_data_root()
+    try:
+        candidates = sorted(m.group(1) for d in root.iterdir() if d.is_dir() and (m := PIPELINE_DIR_RE.match(d.name)))
+    except FileNotFoundError:
+        return []
+    if not candidates:
+        return []
+    try:
+        active = _enabled_configurable_ids()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("查询已启用管线失败，本次导入前不清扫管线产物：%s", exc)
+        return []
+    retired = [pid for pid in candidates if pid not in active and retire_pipeline_output(pid) is not None]
+    if retired:
+        log.info("导入前退役了未启用管线的产物：%s", ", ".join(retired))
+    return retired
 
 
 def _report_time(value: Any, fallback: datetime) -> datetime:

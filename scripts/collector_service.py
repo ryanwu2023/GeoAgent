@@ -120,6 +120,14 @@ def _record_pipeline_runs(report: dict, snapshot_id: str | None) -> None:
         log.warning("写入整批管线运行记录失败：%s", exc)
 
 
+def _sweep_stale_pipeline_outputs() -> None:
+    try:
+        from backend import pipeline_runs
+        pipeline_runs.sweep_stale_pipeline_outputs()
+    except Exception as exc:  # noqa: BLE001 - 清扫失败不挡导入
+        log.warning("导入前清扫管线产物失败：%s", exc)
+
+
 def execute_once(
     *,
     ids: list[str] | None = None,
@@ -295,6 +303,9 @@ def execute_once(
                         status="running",
                         payload={"collector_status": status},
                     )
+                    if full_batch:
+                        # 整批进行中被停用/删除的管线可能已被本批重新发布，导入前再退役一次。
+                        _sweep_stale_pipeline_outputs()
                     try:
                         import_result = importer(collector_data_root())
                         snapshot_id = import_result.get("snapshot_id")

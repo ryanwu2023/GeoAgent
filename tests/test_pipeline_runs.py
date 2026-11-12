@@ -675,3 +675,58 @@ def test_run_items_store_dimensions_json(data_root):
     items = {i["record_id"]: i for i in list_run_items(run["run_id"])}
     assert items["r1"]["dimensions"] == {"usiran": "diplomacy", "ukraine": "aid"}
     assert items["r2"]["dimensions"] == {"usiran": "diplomacy"}
+
+
+def test_stale_pipeline_output_swept_before_import(batch_env, data_root):
+    """整批进行中被停用的管线可能在退役后又发布产物：导入前清扫，停用管线的产物不进快照。"""
+    from backend.adapters import load_bundle
+    on, off = make(enabled=True), make(enabled=False, name="已停用管线")
+    gone = make(enabled=True, name="已删除管线")
+    delete_pipeline(ADMIN, gone["id"])
+    for p in (off, gone):
+        write_output(data_root / f"pipeline-{p['id']}" / "output", [rec(7)])
+    (data_root / "pipeline-not-a-pipeline" / "output").mkdir(parents=True)  # 不合规的名字不动
+    seen_at_import = {}
+
+    def importer(root):
+        seen_at_import["adapters"] = {a for r in load_bundle(root)["records"] for a in r["adapters"]}
+        return {"snapshot_id": "snap-1"}
+
+    report = batch(batch_env, batch_runner({f"pipeline-{on['id']}": ([rec(1)], "ok"), "demo": ([rec(5)], "ok")}),
+                   registry=DEMO, importer=importer)
+    assert report["import_status"] == "succeeded"
+    assert f"pipeline-{on['id']}" in seen_at_import["adapters"]
+    assert f"pipeline-{off['id']}" not in seen_at_import["adapters"]
+    assert f"pipeline-{gone['id']}" not in seen_at_import["adapters"]
+    for p in (off, gone):
+        assert not (data_root / f"pipeline-{p['id']}").exists()
+        assert len(list((data_root / ".pipeline-retired").glob(f"pipeline-{p['id']}-*"))) == 1
+    assert (data_root / f"pipeline-{on['id']}" / "output" / "geo-v6.json").is_file()
+    assert (data_root / "pipeline-not-a-pipeline").is_dir()
+
+
+def test_sweep_skipped_when_lookup_fails(batch_env, data_root, monkeypatch, caplog):
+    off = make(enabled=False)
+    write_output(data_root / f"pipeline-{off['id']}" / "output", [rec(7)])
+
+    def broken():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(pipeline_runs, "_enabled_configurable_ids", broken)
+    with caplog.at_level("WARNING"):
+        assert pipeline_runs.sweep_stale_pipeline_outputs() == []
+    assert (data_root / f"pipeline-{off['id']}").is_dir()
+    assert any("清扫" in r.getMessage() for r in caplog.records)
+
+
+def test_pipelines_only_batch_gates_on_pipeline_results(batch_env, data_root):
+    """裁定：结果里没有内置采集器时，整批状态与门禁退回看管线结果。"""
+    p = make(enabled=True)
+    imported = []
+    report = batch(batch_env, batch_runner(failed={f"pipeline-{p['id']}"}),
+                   importer=lambda root: imported.append(root) or {"snapshot_id": "snap-1"})
+    assert report["status"] == "failed" and report["import_status"] == "skipped_collection_status" and not imported
+    report = batch(batch_env, batch_runner(unpublished={f"pipeline-{p['id']}"}),
+                   importer=lambda root: imported.append(root) or {"snapshot_id": "snap-1"},
+                   now=datetime(2026, 11, 12, 6, 0, tzinfo=timezone.utc))
+    assert report["import_status"] == "skipped_output_gate" and not imported
