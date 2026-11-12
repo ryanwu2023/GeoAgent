@@ -88,22 +88,22 @@ def _validate_row(row: Any) -> dict[str, Any]:
         raise PipelineConfigError("row.timezone", f"无效的时区：{tz_name}") from exc
 
     interval = row.get("interval_sec")
-    daily = row.get("daily_times")
+    daily = row.get("daily_times") or None  # 空数组等同未设置
     if interval is not None and daily is not None:
         raise PipelineConfigError("row.interval_sec", "间隔运行与每日定时只能二选一")
     if interval is not None:
         if isinstance(interval, bool) or not isinstance(interval, int) or not MIN_INTERVAL <= interval <= MAX_INTERVAL:
             raise PipelineConfigError("row.interval_sec", f"间隔必须是 {MIN_INTERVAL} ~ {MAX_INTERVAL} 秒的整数")
     if daily is not None:
-        if not isinstance(daily, list) or not daily:
-            raise PipelineConfigError("row.daily_times", "每日定时必须是非空数组（不定时请留空）")
+        if not isinstance(daily, list):
+            raise PipelineConfigError("row.daily_times", "每日定时必须是数组")
         for item in daily:
             if not isinstance(item, str) or not TIME_RE.match(item):
                 raise PipelineConfigError("row.daily_times", f"时间格式必须为 HH:MM（00:00-23:59）：{item!r}")
         daily = sorted(set(daily))
         if len(daily) > MAX_DAILY_TIMES:
             raise PipelineConfigError("row.daily_times", f"每日定时最多 {MAX_DAILY_TIMES} 个")
-    return {**row, "name": name, "description": description, "topic": topic, "timezone": tz_name,
+    return {"name": name, "description": description, "topic": topic, "timezone": tz_name,
             "interval_sec": interval, "daily_times": daily}
 
 
@@ -116,7 +116,8 @@ def _forbidden_address(raw: str) -> bool:
         return True  # 无法识别的地址按不安全处理
     if getattr(ip, "ipv4_mapped", None):
         ip = ip.ipv4_mapped
-    return (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+    # not is_global 另覆盖 100.64.0.0/10（CGNAT、含阿里云元数据 100.100.100.200）等共享地址段
+    return (not ip.is_global or ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
             or ip.is_multicast or ip.is_unspecified)
 
 
@@ -139,7 +140,7 @@ class _HostChecker:
         except ValueError:
             try:
                 addresses = list(self._resolve(host))
-            except OSError:
+            except (OSError, UnicodeError):
                 return f"无法解析域名：{host}"
             if not addresses:
                 return f"无法解析域名：{host}"
@@ -178,6 +179,15 @@ def _unknown_keys(obj: dict, allowed: set[str], prefix: str) -> None:
             raise PipelineConfigError(f"{prefix}{key}", "未知字段")
 
 
+_LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+
+
+def _valid_hostname(host: str) -> bool:
+    if not host or len(host) > 253 or host != host.lower():
+        return False
+    return all(_LABEL_RE.match(label) for label in host.split("."))
+
+
 def _validate_source(src: Any, index: int, checker: _HostChecker, seen: set[str]) -> dict[str, Any]:
     p = f"sources[{index}]"
     if not isinstance(src, dict):
@@ -202,8 +212,7 @@ def _validate_source(src: Any, index: int, checker: _HostChecker, seen: set[str]
     if not isinstance(hosts, list) or not hosts or len(hosts) > MAX_ALLOWED_HOSTS:
         raise PipelineConfigError(f"{p}.allowed_hosts", f"allowed_hosts 必须是 1 ~ {MAX_ALLOWED_HOSTS} 个域名的数组")
     for h in hosts:
-        if (not isinstance(h, str) or not h or h != h.lower() or h != h.strip()
-                or not re.match(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", h)):
+        if not isinstance(h, str) or not _valid_hostname(h):
             raise PipelineConfigError(f"{p}.allowed_hosts", f"必须是小写主机名（不含协议、路径、端口）：{h!r}")
     out: dict[str, Any] = {"id": sid, "type": stype, "name": name, "allowed_hosts": list(hosts),
                            "language": language, "tier": src["tier"], "content_policy": src["content_policy"]}

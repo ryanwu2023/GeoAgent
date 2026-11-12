@@ -126,10 +126,35 @@ def test_interval_bounds_ok():
 def test_daily_times_normalized_and_validated():
     r, _ = validate_pipeline(row(interval_sec=None, daily_times=["18:30", "08:00", "08:00"]), CFG, resolve=PUBLIC)
     assert r["daily_times"] == ["08:00", "18:30"]
-    for bad in (["24:00"], ["8:00"], ["12:60"], ["ab"], []):
+    for bad in (["24:00"], ["8:00"], ["12:60"], ["ab"], "08:00"):
         assert fail(row(interval_sec=None, daily_times=bad), CFG).field == "row.daily_times"
     many = [f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 30)]
     assert fail(row(interval_sec=None, daily_times=many), CFG).field == "row.daily_times"
+
+
+def test_empty_daily_times_is_unset_and_row_is_whitelisted():
+    r, _ = validate_pipeline(row(interval_sec=3600, daily_times=[], extra="x"), CFG, resolve=PUBLIC)
+    assert r["daily_times"] is None and "extra" not in r
+    assert set(r) == {"name", "description", "topic", "interval_sec", "daily_times", "timezone"}
+
+
+def test_rejects_cgnat_literal_and_resolved():
+    e = fail(ROW, cfg_with("http://100.100.100.200/f", ["100.100.100.200"]), PUBLIC)
+    assert "内网" in e.message
+    assert "内网" in fail(ROW, CFG, lambda h: ["100.64.0.1"]).message
+
+
+@pytest.mark.parametrize("host", ["a..b.com", "a" * 64 + ".com", "-a.com", "a-.com", ("a" * 60 + ".") * 5 + "com"])
+def test_rejects_malformed_allowed_host(host):
+    c = copy.deepcopy(CFG)
+    c["sources"][0]["allowed_hosts"] = [host]
+    assert fail(ROW, c).field == "sources[0].allowed_hosts"
+
+
+def test_unicode_error_from_resolver_is_unresolvable():
+    def boom(h):
+        raise UnicodeError("label too long")
+    assert "无法解析域名" in fail(ROW, CFG, boom).message
 
 
 def test_manual_only_allowed():
@@ -217,9 +242,12 @@ def test_to_monitor_config_maps_terms_and_rss():
     assert BASE["topics"] == ["usiran", "ukraine"]  # base untouched
 
 
-def test_to_monitor_config_passes_filtering_load_config(tmp_path):
-    sys.path.insert(0, str(COLLECTOR))
-    import filtering
+def test_to_monitor_config_passes_filtering_load_config(tmp_path, monkeypatch):
+    import importlib.util
+    monkeypatch.syspath_prepend(str(COLLECTOR))
+    spec = importlib.util.spec_from_file_location("filtering_for_pipeline_cfg_test", COLLECTOR / "filtering.py")
+    filtering = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(filtering)
     r, c = validate_pipeline(ROW, CFG, resolve=PUBLIC)
     p = tmp_path / "c.json"
     p.write_text(json.dumps(to_monitor_config(r, c, BASE), ensure_ascii=False), encoding="utf-8")
