@@ -253,7 +253,11 @@ def execute_once(
                 results = runner(ids or [], topic, timeout, registry=selected_registry)
             finished = utc_now()
             failed = [item for item in results if _result_status(item) == "failed"]
-            status = "failed" if results and len(failed) == len(results) else "partial" if failed else "success"
+            # 整批状态与导入门禁只看内置采集器：配置化管线的失败/未发布记在它自己的运行记录上，
+            # 不让整批变成 partial/failed，也不挡导入。只有管线时退回看全部结果。
+            gated = [item for item in results if not str(item.get("id", "")).startswith(PIPELINE_PREFIX)] or results
+            gated_failed = [item for item in gated if _result_status(item) == "failed"]
+            status = "failed" if gated and len(gated_failed) == len(gated) else "partial" if gated_failed else "success"
             if runner is not run_collectors:
                 for item in results:
                     ledger.event(
@@ -274,7 +278,7 @@ def execute_once(
                 allowed = status == "success" or (status == "partial" and allow_partial_import)
                 output_gate_failed = any(
                     _result_status(item) == "success" and item.get("published") is False
-                    for item in results
+                    for item in gated
                 )
                 if not results:
                     import_status = "skipped_no_results"

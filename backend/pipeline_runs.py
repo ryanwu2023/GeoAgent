@@ -45,6 +45,7 @@ BATCH_ACTOR = "system"
 BUILTIN_NO_TRIAL = "内置采集器随整批运行，不支持测试运行"
 TRIAL_CONFLICT = "该管线正在测试运行"
 UNPUBLISHED = "采集产物未通过发布门禁"
+RUN_META = "pipeline-run.json"
 
 
 def _now() -> datetime:
@@ -170,14 +171,18 @@ def _collector_error(result: dict | None, report: dict | None = None) -> str:
     return f"{text}：{detail[-500:]}" if detail else text
 
 
+def _atomic_write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(f".json.{uuid.uuid4().hex[:8]}.tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
 def _write_monitor_config(pipeline: dict, root: Path) -> Path:
     """把管线配置翻译成多源采集器配置，原子写到 <root>/pipeline-<id>/state/pipeline-config.json。"""
     monitor = to_monitor_config(pipeline, pipeline["config"], base_monitor_config())
     config_path = root / collector_id(pipeline["id"]) / "state" / "pipeline-config.json"
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = config_path.with_suffix(f".json.{uuid.uuid4().hex[:8]}.tmp")
-    tmp.write_text(json.dumps(monitor, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(config_path)
+    _atomic_write_json(config_path, monitor)
     return config_path
 
 
@@ -239,7 +244,11 @@ def batch_pipeline_items() -> list[dict]:
     for row in rows:
         pipeline = dict(row)
         try:
-            items.append(registry_item(pipeline, _write_monitor_config(pipeline, root)))
+            config_path = _write_monitor_config(pipeline, root)
+            # 记下本次实际运行的版本与来源类型，整批结束写运行记录时据此归属（期间配置可能被修改）。
+            _atomic_write_json(config_path.parent / RUN_META, {
+                "version": pipeline["current_version"], "source_types": _source_types(pipeline["config"])})
+            items.append(registry_item(pipeline, config_path))
         except Exception as exc:  # noqa: BLE001 - 单条管线配置坏了不影响其它管线
             log.warning("管线 %s 配置无法翻译，本次整批跳过：%s", pipeline["id"], exc)
     return items
@@ -247,6 +256,18 @@ def batch_pipeline_items() -> list[dict]:
 
 def _report_time(value: Any, fallback: datetime) -> datetime:
     return _parse_time(value) or fallback
+
+
+def _run_meta(conn, path: Path, pipeline_id: str) -> dict:
+    """整批开始时写下的版本与来源类型；文件缺失（如期间被停用退役）时回退到当前版本。"""
+    meta = _read_json(path)
+    if meta and isinstance(meta.get("version"), int) and isinstance(meta.get("source_types"), dict):
+        return meta
+    row = conn.execute(
+        "SELECT p.current_version,v.config FROM collection_pipelines p LEFT JOIN collection_pipeline_versions v "
+        "ON v.pipeline_id=p.id AND v.version=p.current_version AND NOT v.is_deleted WHERE p.id=%s",
+        (pipeline_id,)).fetchone()
+    return {"version": row["current_version"], "source_types": _source_types(row["config"] or {})}
 
 
 def record_batch_pipeline_runs(report: dict, snapshot_id: str | None) -> list[str]:
@@ -268,12 +289,11 @@ def record_batch_pipeline_runs(report: dict, snapshot_id: str | None) -> list[st
         run_id = f"{batch_run_id}:{pipeline_id}"
         try:
             with db() as conn:
-                pipeline = conn.execute(
-                    "SELECT p.id,p.kind,p.current_version,v.config FROM collection_pipelines p "
-                    "LEFT JOIN collection_pipeline_versions v ON v.pipeline_id=p.id AND v.version=p.current_version "
-                    "WHERE p.id=%s FOR UPDATE OF p", (pipeline_id,)).fetchone()
+                pipeline = conn.execute("SELECT id,kind FROM collection_pipelines WHERE id=%s FOR UPDATE",
+                                        (pipeline_id,)).fetchone()
                 if not pipeline or pipeline["kind"] != "configurable":
                     continue
+                meta = _run_meta(conn, root / cid / "state" / RUN_META, pipeline_id)
                 if conn.execute("SELECT 1 FROM collection_pipeline_runs WHERE run_id=%s", (run_id,)).fetchone():
                     continue
                 started = _report_time(result.get("started_at"), batch_started)
@@ -283,10 +303,12 @@ def record_batch_pipeline_runs(report: dict, snapshot_id: str | None) -> list[st
                 conn.execute(
                     "INSERT INTO collection_pipeline_runs(run_id,pipeline_id,version,trigger,status,started_at,"
                     "created_by,data_timestamp) VALUES (%s,%s,%s,'batch',%s,%s,%s,%s)",
-                    (run_id, pipeline_id, pipeline["current_version"], status, started, BATCH_ACTOR, started))
-                _complete(conn, pipeline_id, run_id, status=status, stats=stats, snapshot_id=snapshot_id,
+                    (run_id, pipeline_id, meta["version"], status, started, BATCH_ACTOR, started))
+                # 本次没有产物发布（失败或未过门禁）时，快照里没有它这次的数据，不挂快照。
+                _complete(conn, pipeline_id, run_id, status=status, stats=stats,
+                          snapshot_id=snapshot_id if result.get("published") is True else None,
                           error=error, actor=BATCH_ACTOR, records=records,
-                          source_types=_source_types(pipeline["config"] or {}), write_ledger=True,
+                          source_types=meta["source_types"], write_ledger=True,
                           finished=max(finished, started))
             written.append(run_id)
         except Exception as exc:  # noqa: BLE001 - 不影响整批结果与其它管线

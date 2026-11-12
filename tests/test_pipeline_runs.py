@@ -13,7 +13,8 @@ from backend.paths import collector_data_root
 from backend.pipeline_runs import (batch_pipeline_items, list_run_items, list_runs, preview_pipeline,
                                    record_batch_pipeline_runs, record_new_items, recover_interrupted_pipeline_runs,
                                    registry_item, run_trial, trial_running)
-from backend.pipeline_service import Actor, PipelineError, create_pipeline, get_pipeline, set_enabled
+from backend.pipeline_service import (Actor, PipelineError, create_pipeline, delete_pipeline, get_pipeline, set_enabled,
+                                      update_pipeline)
 from backend.store import db
 from scripts.collector_service import execute_once
 
@@ -332,18 +333,127 @@ def test_batch_records_pipeline_runs_with_snapshot(batch_env, data_root):
     assert run2["stats"]["new_items"] == 1 and count("pipeline_seen_items") == 3
 
 
+DEMO = [{"id": "demo", "topics": ["usiran"], "enabled": True}]
+
+
 def test_batch_pipeline_unpublished_is_failed(batch_env, data_root):
     gated, broken = make(enabled=True), make(enabled=True, name="失败管线")
+    imported = []
     report = batch(batch_env, batch_runner(unpublished={f"pipeline-{gated['id']}"},
-                                           failed={f"pipeline-{broken['id']}"}))
-    assert report["import_status"] == "skipped_output_gate" and report["snapshot_id"] is None
+                                           failed={f"pipeline-{broken['id']}"}),
+                   registry=DEMO, importer=lambda root: imported.append(root) or {"snapshot_id": "snap-1"})
+    # 管线失败或未发布不影响整批状态与导入门禁
+    assert report["status"] == "success" and report["import_status"] == "succeeded" and imported
     run = list_runs(gated["id"])[0]
-    assert run["status"] == "failed" and run["error"] == "采集产物未通过发布门禁" and run["snapshot_id"] is None
+    assert run["status"] == "failed" and run["error"] == "采集产物未通过发布门禁"
+    assert run["snapshot_id"] is None  # 本次没有产物进入快照
     assert run["stats"]["new_items"] == 0 and list_run_items(run["run_id"]) == []
     other = list_runs(broken["id"])[0]
-    assert other["status"] == "failed" and "炸了" in other["error"]
+    assert other["status"] == "failed" and "炸了" in other["error"] and other["snapshot_id"] is None
     assert count("pipeline_seen_items") == 0
     assert get_pipeline(gated["id"])["last_status"] == "failed"
+
+
+def test_failing_pipeline_does_not_make_batch_partial(batch_env, data_root):
+    p = make(enabled=True)
+    imported = []
+    report = batch(batch_env, batch_runner(failed={f"pipeline-{p['id']}"}), registry=DEMO,
+                   importer=lambda root: imported.append(root) or {"snapshot_id": "snap-1"},
+                   allow_partial_import=False)
+    assert report["status"] == "success" and report["import_status"] == "succeeded" and imported
+    assert report["snapshot_id"] == "snap-1"
+
+
+def test_builtin_failure_still_gates_batch(batch_env, data_root):
+    p = make(enabled=True)
+    report = batch(batch_env, batch_runner(failed={"demo"}), registry=DEMO + [{"id": "ok", "topics": ["usiran"]}])
+    assert report["status"] == "partial" and report["import_status"] == "skipped_collection_status"
+    report = batch(batch_env, batch_runner(unpublished={"demo"}), registry=DEMO,
+                   now=datetime(2026, 11, 12, 6, 0, tzinfo=timezone.utc))
+    assert report["import_status"] == "skipped_output_gate"
+    assert all(r["snapshot_id"] is None for r in list_runs(p["id"]))
+
+
+def test_topic_only_batch_includes_pipelines_and_exclusions(batch_env, data_root):
+    p = make(enabled=True)
+    collector_config.CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    collector_config.CONFIG_PATH.write_text(json.dumps({"exclude_ids": ["demo"]}), encoding="utf-8")
+    seen = []
+    report = batch(batch_env, batch_runner(seen=seen), topic="usiran",
+                   registry=DEMO + [{"id": "other", "topics": ["usiran"]}])
+    assert f"pipeline-{p['id']}" in seen[0] and "demo" in seen[0]  # 假 runner 收到完整注册表
+    assert report["excluded_collector_ids"] == ["demo"]
+
+
+def test_batch_run_keeps_version_and_source_types_actually_run(batch_env, data_root):
+    p = make(enabled=True)
+    cid = f"pipeline-{p['id']}"
+
+    def runner(ids, topic, timeout, *, registry):
+        # 整批进行中管线被修改：来源 rss-a 改成网页源、版本 +1
+        changed = cfg()
+        changed["sources"][0] = {"id": "rss-a", "type": "web", "name": "改成网页", "entry_urls": ["https://example.com/n"],
+                                 "allowed_hosts": ["example.com"], "language": "en", "tier": "T2",
+                                 "content_policy": "metadata_only"}
+        update_pipeline(ADMIN, p["id"], expected_version=1, row_patch={}, config=changed, resolve=resolve)
+        return batch_runner({cid: ([rec(1)], "ok")})(ids, topic, timeout, registry=registry)
+
+    batch(batch_env, runner)
+    assert get_pipeline(p["id"])["current_version"] == 2
+    run = list_runs(p["id"])[0]
+    assert run["version"] == 1
+    assert list_run_items(run["run_id"])[0]["source_type"] == "rss"
+
+
+def test_disable_and_delete_retire_published_output(batch_env, data_root):
+    from backend.adapters import load_bundle
+    p = make(enabled=True)
+    cid = f"pipeline-{p['id']}"
+    write_output(data_root / "demo" / "output", [rec(5)])
+    batch(batch_env, batch_runner({cid: ([rec(1)], "ok"), "demo": ([rec(5)], "ok")}), registry=DEMO)
+
+    def adapters():
+        return {a for r in load_bundle(data_root)["records"] for a in r["adapters"]}
+
+    assert cid in adapters()
+    set_enabled(ADMIN, p["id"], False)
+    assert not (data_root / cid).exists() and cid not in adapters() and "demo" in adapters()
+    retired = list((data_root / ".pipeline-retired").glob(f"{cid}-*"))
+    assert len(retired) == 1 and (retired[0] / "output" / "geo-v6.json").is_file()
+
+    set_enabled(ADMIN, p["id"], True)
+    batch(batch_env, batch_runner({cid: ([rec(2)], "ok"), "demo": ([rec(5)], "ok")}), registry=DEMO,
+          now=datetime(2026, 11, 12, 6, 0, tzinfo=timezone.utc))
+    payload = json.loads((data_root / cid / "output" / "geo-v6.json").read_text(encoding="utf-8"))
+    assert [r["id"] for r in payload["records"]] == ["r2"] and cid in adapters()
+
+    delete_pipeline(ADMIN, p["id"])
+    assert not (data_root / cid).exists() and cid not in adapters() and "demo" in adapters()
+    assert len(list((data_root / ".pipeline-retired").glob(f"{cid}-*"))) == 2
+
+
+def test_retire_failure_keeps_db_change(batch_env, data_root, monkeypatch, caplog):
+    import shutil
+    p = make(enabled=True)
+    (data_root / f"pipeline-{p['id']}" / "output").mkdir(parents=True)
+
+    def broken(*a, **k):
+        raise OSError("busy")
+
+    monkeypatch.setattr(shutil, "move", broken)
+    with caplog.at_level("WARNING"):
+        assert set_enabled(ADMIN, p["id"], False)["enabled"] is False
+    assert (data_root / f"pipeline-{p['id']}").exists()
+    assert any("退役" in r.getMessage() for r in caplog.records)
+
+
+def test_builtin_disable_does_not_retire(batch_env, data_root, monkeypatch):
+    from backend import pipeline_service
+    _builtin()
+    monkeypatch.setattr(pipeline_service, "_registry", lambda: [{"id": "bi1", "name_zh": "内置", "topics": ["usiran"]}])
+    (data_root / "bi1" / "output").mkdir(parents=True)
+    set_enabled(ADMIN, "bi1", False)
+    assert (data_root / "bi1" / "output").is_dir() and not (data_root / ".pipeline-retired").exists()
 
 
 def test_batch_import_failure_still_records_runs(batch_env, data_root):

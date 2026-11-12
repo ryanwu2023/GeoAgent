@@ -10,15 +10,18 @@ collector_config 的排除列表为唯一来源——注册表启用且不在 ex
 from __future__ import annotations
 
 import json
+import logging
+import shutil
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable
 
 import psycopg
 
 from backend import collector_config
-from backend.paths import project_root
+from backend.paths import collector_data_root, project_root
 from backend.pipeline_config import PipelineConfigError, default_resolve, validate_pipeline, validate_row
 from backend.store import db
 from scripts.integrate_collectors import load_registry
@@ -27,6 +30,8 @@ STATUSES = ("enabled", "disabled", "running", "success", "partial", "failed")
 ROW_FIELDS = ("name", "description", "topics")
 REGISTRY_DISABLED = "注册表已停用该采集器，不能在此启用"
 CONFIG_UNREADABLE = "采集配置文件无法读取，请先在采集监控页修复"
+RETIRED_DIR = ".pipeline-retired"
+log = logging.getLogger(__name__)
 
 
 class PipelineError(Exception):
@@ -256,7 +261,29 @@ def set_enabled(actor: Actor, pipeline_id: str, enabled: bool) -> dict:
             _write_exclusion(pipeline_id, bool(enabled))
         conn.execute("UPDATE collection_pipelines SET enabled=%s,updated_by=%s,updated_at=%s WHERE id=%s",
                      (bool(enabled), actor.username, datetime.now(timezone.utc), pipeline_id))
+    if cur["kind"] == "configurable" and not enabled:
+        retire_pipeline_output(pipeline_id)  # 事务已提交；停用后旧产物不再进入快照
     return get_pipeline(pipeline_id)
+
+
+def retire_pipeline_output(pipeline_id: str) -> Path | None:
+    """配置化管线停用或删除后，把正式目录 pipeline-<id> 移到 .pipeline-retired/（导入扫描不到）。
+
+    失败只告警：数据库变更已提交，不回滚。返回退役后的目录，没有可退役的目录时返回 None。
+    """
+    root = collector_data_root()
+    live = root / f"pipeline-{pipeline_id}"
+    if not live.exists():
+        return None
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    target = root / RETIRED_DIR / f"{live.name}-{stamp}"
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(live), str(target))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("管线 %s 的产物退役失败，仍会被整批导入扫描到：%s", pipeline_id, exc)
+        return None
+    return target
 
 
 def delete_pipeline(actor: Actor, pipeline_id: str) -> None:
@@ -268,6 +295,7 @@ def delete_pipeline(actor: Actor, pipeline_id: str) -> None:
         conn.execute("UPDATE collection_pipelines SET is_deleted=true,enabled=false,updated_by=%s,updated_at=%s "
                      "WHERE id=%s",
                      (actor.username, datetime.now(timezone.utc), pipeline_id))
+    retire_pipeline_output(pipeline_id)
 
 
 def rollback(actor: Actor, pipeline_id: str, *, to_version: int, expected_version: int,
