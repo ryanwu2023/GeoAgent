@@ -95,9 +95,13 @@ def test_recent_results_window(principal):
     add_run(c["id"], "c-1", finished_ago_h=30, new_items=50)
     rows = tools.pipeline_recent_results(principal, hours=24)
     assert [r["name"] for r in rows] == ["乙", "甲"]
-    assert rows[1] == {"pipeline_id": a["id"], "name": "甲", "runs": 2, "new_items": 3,
+    assert rows[1] == {"pipeline_id": a["id"], "name": "甲", "runs": 1, "new_items": 1,
                        "last_trigger": "batch", "last_finished_at": rows[1]["last_finished_at"]}
     assert len(tools.pipeline_recent_results(principal, hours=48)) == 3
+    only_trial = make("仅测试")
+    add_run(only_trial["id"], "t-1", finished_ago_h=1, new_items=99, trigger="trial")
+    assert "仅测试" not in [r["name"] for r in tools.pipeline_recent_results(principal, hours=24)]
+    assert rows[1]["runs"] == 1 and rows[1]["new_items"] == 1
     with pytest.raises(MCPError) as err:
         tools.pipeline_recent_results(principal, hours=200)
     assert err.value.code == "GEO_INVALID_ARGUMENT"
@@ -148,3 +152,38 @@ def test_registered_on_server():
         assert tool.description
         for parameter in tool.inputSchema.get("properties", {}).values():
             assert parameter.get("description")
+
+
+def test_invalid_paging_types(principal):
+    p = make("分页")
+    for kwargs in ({"offset": "x"}, {"offset": -1}, {"limit": "x"}, {"offset": 1.5}):
+        with pytest.raises(MCPError) as err:
+            tools.pipeline_run_items(principal, p["id"], **kwargs)
+        assert err.value.code == "GEO_INVALID_ARGUMENT"
+
+
+def test_tool_authorization(principal):
+    import asyncio
+    from mcp.server.fastmcp import FastMCP
+    seen = {}
+
+    async def fake_run_tool(*, ctx, tool, handler):
+        try:
+            return handler(seen["principal"], "req")[0]
+        except MCPError as exc:
+            return exc.code
+
+    server = FastMCP("t")
+    tools.register_pipeline_tools(server, fake_run_tool)
+
+    def call(allowed):
+        scope = frozenset({"*"})
+        seen["principal"] = Principal("k", "a", "p", scope, scope, scope, frozenset(allowed))
+        return asyncio.run(server.call_tool("geo_pipeline_list", {}))
+
+    def text(result):
+        return result[0][0].text if isinstance(result, tuple) else result[0].text
+
+    assert "GEO_TOOL_NOT_ALLOWED" in text(call({"geo_snapshot_list"}))
+    assert "GEO_TOOL_NOT_ALLOWED" not in text(call({"*"}))
+    assert "GEO_TOOL_NOT_ALLOWED" not in text(call({"geo_pipeline_list"}))

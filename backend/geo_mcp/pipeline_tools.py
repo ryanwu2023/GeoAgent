@@ -18,6 +18,7 @@ from backend.pipeline_service import Actor, PipelineError
 from backend.remote_collection import collection_mode
 from backend.store import db
 from .contracts import MCPError
+from .scope import authorize
 
 MAX_LIST = 50
 MAX_ITEMS = 50
@@ -57,10 +58,15 @@ def _iso(value: Any) -> Any:
 
 
 def _clamp(value: int, maximum: int, field: str = "limit") -> int:
-    try:
-        return max(1, min(int(value), maximum))
-    except (TypeError, ValueError):
+    if isinstance(value, bool) or not isinstance(value, int):
         raise MCPError("GEO_INVALID_ARGUMENT", f"{field} 必须是整数", {"field": field})
+    return max(1, min(value, maximum))
+
+
+def _int(value, field: str, minimum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise MCPError("GEO_INVALID_ARGUMENT", f"{field} 必须是不小于 {minimum} 的整数", {"field": field})
+    return value
 
 
 def _read(call, *args, **kwargs):
@@ -135,7 +141,7 @@ def pipeline_run_items(principal, pipeline_id: str, run_id: str = "", offset: in
     _guard(write=False)
     _read(pipeline_service.get_pipeline, pipeline_id)
     page = _clamp(limit, MAX_ITEMS)
-    start = max(0, int(offset))
+    start = _int(offset, "offset", 0)
     with db() as conn:
         if run_id:
             run = conn.execute("SELECT run_id, trigger FROM collection_pipeline_runs "
@@ -168,7 +174,7 @@ def pipeline_recent_results(principal, hours: int = 24) -> list[dict]:
             "COALESCE(sum(COALESCE((r.stats->>'new_items')::int,0)),0) AS new_items, "
             "(array_agg(r.trigger ORDER BY r.finished_at DESC))[1] AS last_trigger, max(r.finished_at) AS last_finished_at "
             "FROM collection_pipeline_runs r JOIN collection_pipelines p ON p.id=r.pipeline_id AND NOT p.is_deleted "
-            "WHERE NOT r.is_deleted AND r.finished_at IS NOT NULL AND r.finished_at >= now() - make_interval(hours => %s) "
+            "WHERE NOT r.is_deleted AND r.trigger='batch' AND r.finished_at IS NOT NULL AND r.finished_at >= now() - make_interval(hours => %s) "
             "GROUP BY p.id, p.name ORDER BY new_items DESC, p.name", (hours,)).fetchall()
     return [{"pipeline_id": r["pipeline_id"], "name": r["name"], "runs": r["runs"], "new_items": int(r["new_items"]),
              "last_trigger": r["last_trigger"], "last_finished_at": _iso(r["last_finished_at"])} for r in rows]
@@ -187,6 +193,7 @@ def register_pipeline_tools(server, run_tool=None) -> None:
 
     async def run(ctx: Context, name: str, call):
         def handler(principal, _):
+            authorize(principal, tool=name)
             return call(principal), PROVENANCE, []
         return await run_tool(ctx=ctx, tool=name, handler=handler)
 
@@ -228,7 +235,7 @@ def register_pipeline_tools(server, run_tool=None) -> None:
     ) -> str:
         return await run(ctx, "geo_pipeline_run_items", lambda p: pipeline_run_items(p, pipeline_id, run_id, offset, limit))
 
-    @tool("geo_pipeline_recent_results", "汇总最近若干小时内各管线的运行情况：运行次数、新增条数（按新增降序）、最近一次触发方式和完成时间。用于回答“最近采到了什么”，再用 geo_pipeline_run_items 看明细。")
+    @tool("geo_pipeline_recent_results", "汇总最近若干小时内各管线整批采集（batch，进快照）的运行情况，不含测试运行：运行次数、新增条数（按新增降序）、最近一次触发方式和完成时间。用于回答“最近采到了什么”，再用 geo_pipeline_run_items 看明细。")
     async def geo_pipeline_recent_results(
         ctx: Context,
         hours: Annotated[int, Field(description="回看小时数，1到168，默认24。")] = 24,
