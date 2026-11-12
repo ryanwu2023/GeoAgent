@@ -90,6 +90,22 @@ def admin(request: Request):
         raise HTTPException(403, "禁止跨站管理请求")
 
 
+def is_web_admin(request: Request) -> bool:
+    """与 pipeline_routes.actor_of 同口径：未启用网页登录为本机管理员，否则须在管理员名单中。"""
+    from . import web_auth
+    if not web_auth.enabled():
+        return True
+    username = getattr(request.state, "web_user", None)
+    return bool(username) and username in web_auth.users()
+
+
+def key_admin(request: Request):
+    """MCP Key 管理：同源校验之外，还要求网页管理员（Key 拥有全部工具，含管线写入）。"""
+    admin(request)
+    if not is_web_admin(request):
+        raise HTTPException(403, "仅管理员可以管理 MCP Key")
+
+
 def public_settings():
     cfg = settings()
     return {"origin": cfg["origin"], "agent_id": cfg["agent_id"], "product_user_id": cfg["product_user_id"],
@@ -138,7 +154,7 @@ def key_table(conn):
     conn.execute("ALTER TABLE integration_mcp_keys ADD COLUMN IF NOT EXISTS deleted_at TEXT")
 
 
-@router.get("/mcp-keys", dependencies=[Depends(admin)])
+@router.get("/mcp-keys", dependencies=[Depends(key_admin)])
 def keys():
     with db() as conn:
         key_table(conn)
@@ -149,7 +165,7 @@ class NewKey(BaseModel):
     label: str = Field(min_length=1, max_length=100)
 
 
-@router.post("/mcp-keys", dependencies=[Depends(admin)])
+@router.post("/mcp-keys", dependencies=[Depends(key_admin)])
 def create_key(body: NewKey):
     raw = "geo_" + secrets.token_urlsafe(32)
     key_id = secrets.token_hex(8)
@@ -161,7 +177,7 @@ def create_key(body: NewKey):
     return {"id": key_id, "label": body.label, "created_at": created, "key": raw}
 
 
-@router.delete("/mcp-keys/{key_id}", dependencies=[Depends(admin)])
+@router.delete("/mcp-keys/{key_id}", dependencies=[Depends(key_admin)])
 def revoke_key(key_id: str):
     with db() as conn:
         key_table(conn)
@@ -172,7 +188,7 @@ def revoke_key(key_id: str):
     return {"ok": True}
 
 
-@router.delete("/mcp-keys/{key_id}/record", dependencies=[Depends(admin)])
+@router.delete("/mcp-keys/{key_id}/record", dependencies=[Depends(key_admin)])
 def delete_revoked_key(key_id: str):
     # Retain a revoked tombstone, never restore the credential through cleanup.
     with db() as conn:

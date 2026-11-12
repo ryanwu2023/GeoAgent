@@ -279,22 +279,41 @@ def test_trial_returns_immediately(principal, monkeypatch):
     p = tools.pipeline_create(principal, {**ROW, "name": "试跑"}, cfg(), resolve=resolve)
     started, release = threading.Event(), threading.Event()
 
-    def fake_trial(pid, *, actor):
-        assert actor == "mcp:hft-key"
+    def fake_execute(claim, *, actor):
+        assert actor == "mcp:hft-key" and claim["pipeline_id"] == p["id"]
         started.set()
         release.wait(5)
-    monkeypatch.setattr(tools._runs_module, "run_trial", fake_trial)
+    monkeypatch.setattr(tools._runs_module, "execute_trial", fake_execute)
     out = tools.pipeline_trial(principal, p["id"])
-    assert out["accepted"] is True and out["pipeline_id"] == p["id"] and "geo_pipeline_runs" in out["hint"]
+    assert out["accepted"] is True and out["pipeline_id"] == p["id"] and out["run_id"] and "geo_pipeline_runs" in out["hint"]
     assert started.wait(5)
+    with pytest.raises(MCPError) as err:  # 同步占位：第二次并发调用立即冲突
+        tools.pipeline_trial(principal, p["id"])
+    assert err.value.code == "GEO_CONFLICT"
     release.set()
     with pytest.raises(MCPError) as err:
         tools.pipeline_trial(principal, "不存在")
     assert err.value.code == "GEO_NOT_FOUND"
-    monkeypatch.setattr(tools._runs_module, "trial_running", lambda pid: True)
+
+
+def test_trial_global_cap_and_preview_slots(principal, monkeypatch):
+    from backend import pipeline_runs
+    monkeypatch.setattr(tools._runs_module, "execute_trial", lambda claim, *, actor: None)
+    ids = [tools.pipeline_create(principal, {**ROW, "name": f"并发{i}"}, cfg(), resolve=resolve)["id"] for i in range(4)]
+    for pid in ids[:3]:
+        tools.pipeline_trial(principal, pid)
     with pytest.raises(MCPError) as err:
-        tools.pipeline_trial(principal, p["id"])
-    assert err.value.code == "GEO_CONFLICT"
+        tools.pipeline_trial(principal, ids[3])
+    assert err.value.code == "GEO_CONFLICT" and "上限（3）" in err.value.message
+    for _ in range(3):
+        assert pipeline_runs._PREVIEW_SLOTS.acquire(blocking=False)
+    try:
+        with pytest.raises(MCPError) as err:
+            tools.pipeline_preview(principal, ROW, cfg(), resolve=resolve)
+        assert err.value.code == "GEO_CONFLICT" and "试跑并发已满" in err.value.message
+    finally:
+        for _ in range(3):
+            pipeline_runs._PREVIEW_SLOTS.release()
 
 
 def add_builtin():
@@ -412,7 +431,7 @@ def test_write_tools_survive_real_envelope(principal, monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", lambda host, *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
     monkeypatch.setattr(srv, "_context_principal", lambda ctx: principal)
     monkeypatch.setattr(srv, "request_id_from_context", lambda ctx: "req-1")
-    monkeypatch.setattr(tools._runs_module, "run_trial", lambda pid, *, actor: None)
+    monkeypatch.setattr(tools._runs_module, "execute_trial", lambda claim, *, actor: None)
 
     async def real_run_tool(*, ctx, tool, handler):
         return srv._execute_tool(ctx=ctx, tool=tool, handler=handler)
@@ -420,10 +439,12 @@ def test_write_tools_survive_real_envelope(principal, monkeypatch):
     server = FastMCP("t")
     tools.register_pipeline_tools(server, real_run_tool)
 
-    def call(name, **args):
+    def raw(name, **args):
         result = asyncio.run(server.call_tool(name, args))
-        text = result[0][0].text if isinstance(result, tuple) else result[0].text
-        payload = json.loads(text)
+        return json.loads(result[0][0].text if isinstance(result, tuple) else result[0].text)
+
+    def call(name, **args):
+        payload = raw(name, **args)
         assert payload["ok"] is True, payload
         return payload["data"]
 
@@ -438,6 +459,13 @@ def test_write_tools_survive_real_envelope(principal, monkeypatch):
     assert call("geo_pipeline_trial", pipeline_id=pid)["accepted"] is True
     assert call("geo_pipeline_get", pipeline_id=pid)["id"] == pid
     assert call("geo_pipeline_delete", pipeline_id=pid) == {"deleted": True}
+    dry = call("geo_pipeline_create", row={**ROW, "name": "干跑信封"}, config=cfg(), dry_run=True)
+    assert dry["dry_run"] is True
+    other = call("geo_pipeline_create", row={**ROW, "name": "信封二"}, config=cfg())
+    changed = call("geo_pipeline_update", pipeline_id=other["id"], expected_version=1, row_patch={"description": "新"}, dry_run=True)
+    assert changed["changes"]["description"] == ["d", "新"]
+    err = raw("geo_pipeline_get", pipeline_id="不存在")
+    assert err["ok"] is False and err["error"]["code"] == "GEO_NOT_FOUND"
 
 
 def test_runs_projection_includes_error_message(principal):

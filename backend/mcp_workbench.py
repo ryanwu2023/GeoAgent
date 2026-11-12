@@ -9,12 +9,13 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from . import web_auth
-from .integrations import admin, no_cache
+from .integrations import admin, is_web_admin, no_cache
 from .geo_mcp.audit import recent_calls
 from .geo_mcp.server import create_server, create_app
 from .geo_mcp.auth import AuthConfig
 from .geo_mcp.contracts import Principal
+
+WORKBENCH_TIMEOUT = 150  # 管线试跑最长 120 秒，需留出余量
 
 router = APIRouter(prefix="/api/integrations/mcp-workbench", dependencies=[Depends(admin), Depends(no_cache)])
 
@@ -31,14 +32,6 @@ async def catalog():
 class Trial(BaseModel):
     tool: str = Field(min_length=1, max_length=100)
     arguments: dict = Field(default_factory=dict)
-
-
-def is_web_admin(request: Request) -> bool:
-    """与 pipeline_routes.actor_of 同口径：未启用网页登录为本机管理员，否则须在管理员名单中。"""
-    if not web_auth.enabled():
-        return True
-    username = getattr(request.state, "web_user", None)
-    return bool(username) and username in web_auth.users()
 
 
 @router.post("/call")
@@ -65,8 +58,8 @@ async def trial(body: Trial, request: Request, response: Response):
                 return await client.post("/mcp", headers={"Authorization": f"Bearer {credential}", "Accept": "application/json, text/event-stream"},
                                          json={"jsonrpc": "2.0", "id": f"workbench-{uuid.uuid4().hex}", "method": "tools/call", "params": {"name": body.tool, "arguments": body.arguments}})
     try:
-        result = await asyncio.wait_for(invoke(), timeout=30)
+        result = await asyncio.wait_for(invoke(), timeout=WORKBENCH_TIMEOUT)
     except asyncio.TimeoutError:
-        raise HTTPException(504, "MCP 试调用超过30秒")
+        raise HTTPException(504, "MCP 试调用超过150秒")
     response.status_code = result.status_code
     return result.json()

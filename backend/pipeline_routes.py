@@ -14,8 +14,7 @@ from pydantic import BaseModel, Field
 
 from . import web_auth
 from .pipeline_config import default_resolve
-from .pipeline_runs import (BUILTIN_NO_TRIAL, TRIAL_CONFLICT, list_run_items, list_runs, preview_pipeline, run_trial,
-                            trial_running)
+from .pipeline_runs import claim_trial, execute_trial, list_run_items, list_runs, preview_pipeline
 from .pipeline_scheduler import pipelines_enabled
 from .pipeline_service import (Actor, PipelineError, create_pipeline, delete_pipeline, get_pipeline,
                                list_pipelines, list_versions, rollback, set_enabled, update_pipeline)
@@ -25,7 +24,7 @@ from .store import db
 log = logging.getLogger(__name__)
 
 STATUS_BY_CODE = {"NOT_FOUND": 404, "FORBIDDEN": 403, "VERSION_CONFLICT": 409, "INVALID": 422,
-                  "BUILTIN_READONLY": 422}
+                  "BUILTIN_READONLY": 422, "CONFLICT": 409}
 
 
 def _feature_enabled(response: Response) -> None:
@@ -184,29 +183,32 @@ def roll_back(pipeline_id: str, body: RollbackBody, actor: Actor = Depends(_writ
         raise _http(exc) from exc
 
 
-def _background_trial(pipeline_id: str, username: str) -> None:
+def _background_trial(claim: dict, username: str) -> None:
     try:
-        run_trial(pipeline_id, actor=username)
+        execute_trial(claim, actor=username)
     except PipelineError as exc:
-        log.warning("管线 %s 测试运行未执行：%s", pipeline_id, exc.message)
+        log.warning("管线 %s 测试运行未完成：%s", claim["pipeline_id"], exc.message)
     except Exception:  # noqa: BLE001 - 后台线程不能让异常外泄
-        log.exception("管线 %s 测试运行失败", pipeline_id)
+        log.exception("管线 %s 测试运行失败", claim["pipeline_id"])
 
 
 @router.post("/{pipeline_id}/trial", status_code=202)
 def trial(pipeline_id: str, actor: Actor = Depends(_write)):
-    """测试运行：产物写到测试目录、不进快照、不写去重台账；不检查整批服务锁，整批进行中也可发起。"""
+    """测试运行：产物写到测试目录、不进快照、不写去重台账；不检查整批服务锁，整批进行中也可发起。
+
+    在请求线程内同步占位（同管线互斥、全局并发上限），再交给后台线程执行。
+    """
     try:
-        pipeline = get_pipeline(pipeline_id)
+        claim = claim_trial(pipeline_id, actor=actor.username)
     except PipelineError as exc:
+        if exc.code == "CONFLICT":
+            raise HTTPException(409, exc.message) from exc
+        if exc.code == "INVALID":
+            raise HTTPException(422, {"code": "INVALID", "message": exc.message}) from exc
         raise _http(exc) from exc
-    if pipeline["kind"] != "configurable":
-        raise HTTPException(422, {"code": "INVALID", "message": BUILTIN_NO_TRIAL})
-    if trial_running(pipeline_id):
-        raise HTTPException(409, TRIAL_CONFLICT)
-    threading.Thread(target=_background_trial, args=(pipeline_id, actor.username), daemon=True,
+    threading.Thread(target=_background_trial, args=(claim, actor.username), daemon=True,
                      name=f"pipeline-trial-{pipeline_id}").start()
-    return {"pipeline_id": pipeline_id, "accepted": True}
+    return {"pipeline_id": pipeline_id, "accepted": True, "run_id": claim["run_id"]}
 
 
 @router.get("/{pipeline_id}/versions")

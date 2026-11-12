@@ -38,7 +38,7 @@
 - `type=rss` 另需 `feed_url`，不得带 `entry_urls`；`type=web` 另需 `entry_urls`（1–10 个链接），不得带 `feed_url`。链接的主机必须在 `allowed_hosts` 内。
 - 可选：`language`（默认 `en`）、`link_include_pattern`（正则，≤200 字）。
 - `filters`、`request` 整块可省略，默认值：`include_any/include_strong/exclude` 为空数组，`require_category=true`，`lookback_days=14`（1–90），`max_candidates_per_source=80`（1–200），`timeout_seconds=25`（1–60），`rate_limit_seconds=1.5`（0–30）。词总数上限 200，单词最长 100 字符。
-- `allowed_hosts` 必须包含文章链接所在的全部域名，而不只是订阅源自身的域名。例：订阅源 `https://feeds.bbci.co.uk/news/world/middle_east/rss.xml` 的条目链接在 `www.bbc.co.uk`，则应写 `["feeds.bbci.co.uk","www.bbc.co.uk"]`；否则条目被静默丢弃，来源状态为 `no_data`、`error=LINKS_OUTSIDE_ALLOWED_HOSTS`，`error_message` 列出被丢弃的域名（最多 5 个）和条数，试跑（`geo_pipeline_preview`）与运行记录（`geo_pipeline_runs` 的 `stats.sources`）都会带上。
+- `allowed_hosts` 必须包含文章链接所在的全部域名，而不只是订阅源自身的域名。例：订阅源 `https://feeds.bbci.co.uk/news/world/middle_east/rss.xml` 的条目链接在 `www.bbc.co.uk`，则应写 `["feeds.bbci.co.uk","www.bbc.co.uk"]`；否则条目被丢弃，来源状态为 `no_data`、`error=LINKS_OUTSIDE_ALLOWED_HOSTS`，`error_message` 列出被丢弃的域名（最多 5 个）和条数；仅当该来源的全部条目都被丢弃（零候选）时才会提示，部分条目被丢弃不会报告，因此漏填域名时也请核对候选数是否偏少，试跑（`geo_pipeline_preview`）与运行记录（`geo_pipeline_runs` 的 `stats.sources`）都会带上。
 - 来源地址会做域名与解析地址校验，内网、回环地址会被拒绝。
 
 ## 工具
@@ -61,7 +61,7 @@
 | `geo_pipeline_preview` | `row`、`config`、`limit`(1–20，默认 5) | 每个来源的候选与过滤结果；不写库、不进快照，可能耗时数十秒 |
 | `geo_pipeline_create` | `row`、`config`、`change_note`、`dry_run` | 新管线（默认停用）；`dry_run=true` 只返回 `{dry_run,row,config}`（规范化后），不写库、不检查同名管线 |
 | `geo_pipeline_update` | `pipeline_id`、`expected_version`(必填)、`row_patch`、`config`、`change_note`、`dry_run` | 更新后的管线；`dry_run=true` 返回 `{dry_run,current_version,changes:{字段:[旧,新]}}`，不写库；其中 `changes.config` 为完整的旧配置与新配置，不是逐字段差异。配置变化生成新版本 |
-| `geo_pipeline_trial` | `pipeline_id` | `{pipeline_id,accepted:true,hint}`；后台运行，通常需要数分钟（最长 15 分钟），可多次用 `geo_pipeline_runs` 查看；产物不进快照、不写去重台账 |
+| `geo_pipeline_trial` | `pipeline_id` | `{pipeline_id,accepted:true,run_id,hint}`；调用时同步占位（并发调用立即得到 `GEO_CONFLICT`），后台运行，通常需要数分钟（最长 15 分钟），可多次用 `geo_pipeline_runs` 查看；产物不进快照、不写去重台账 |
 | `geo_pipeline_set_enabled` | `pipeline_id`、`enabled` | 管线。启用后从下一次整批采集起加入全量采集，结果进入快照；停用后旧产物不再进入快照 |
 | `geo_pipeline_delete` | `pipeline_id` | `{deleted:true}`（软删除，同时停用） |
 | `geo_pipeline_rollback` | `pipeline_id`、`to_version`、`expected_version` | 管线；以历史版本配置生成一个新版本，不能回滚到当前版本 |
@@ -77,8 +77,8 @@
 | `GEO_REMOTE_READ_ONLY` | 远端采集模式，写入被禁止 |
 | `GEO_NOT_FOUND` | 管线、版本或运行不存在 |
 | `GEO_VERSION_CONFLICT` | `expected_version` 与当前不一致，`details.current_version` 为最新版本，应重新读取后再改 |
-| `GEO_INVALID_ARGUMENT` | 参数或配置不合法、内置管线不支持该操作；`details.field` 指出字段 |
-| `GEO_CONFLICT` | 该管线已有测试运行在进行 |
+| `GEO_INVALID_ARGUMENT` | 参数或配置不合法、内置管线不支持该操作；校验类错误的 `details.field` 指出字段。同名管线新建或改名失败也属此类，`details.field=row.name`（`dry_run` 不检查同名） |
+| `GEO_CONFLICT` | 该管线已有测试运行在进行；或全局并发已满：试跑最多同时 3 个（立即返回，不排队）、测试运行最多同时 3 个，请稍后再试 |
 | `GEO_UPSTREAM_FAILED` | 试跑时来源抓取失败 |
 | `GEO_SCOPE_DENIED` | 无权修改该管线 |
 
@@ -92,7 +92,7 @@
 
 - 列表最多 50 条，运行条目每页最多 50 条，试跑每源最多 20 个候选。
 - 摘要截断 500 字；不返回源站正文与原始文件。
-- 同一管线同时只能有一个测试运行。
+- 同一管线同时只能有一个测试运行；全局同时最多 3 个测试运行、3 个试跑。
 - 写入工具不是幂等的：创建重试前先用 `geo_pipeline_list` 确认是否已创建。
 
 ## 最小示例

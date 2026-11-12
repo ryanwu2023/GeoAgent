@@ -168,13 +168,14 @@ def test_trial_returns_202_and_runs_in_background(client, monkeypatch):
     p = create(client)
     called, done = {}, threading.Event()
 
-    def fake(pid, *, actor, **kw):
-        called.update(pid=pid, actor=actor, **kw)
+    def fake(claim, *, actor, **kw):
+        called.update(pid=claim["pipeline_id"], run_id=claim["run_id"], actor=actor, **kw)
         done.set()
-    monkeypatch.setattr(pipeline_routes, "run_trial", fake)
+    monkeypatch.setattr(pipeline_routes, "execute_trial", fake)
     r = client.post(f"/api/pipelines/{p['id']}/trial")
-    assert r.status_code == 202 and r.json() == {"pipeline_id": p["id"], "accepted": True}
-    assert done.wait(5) and called == {"pid": p["id"], "actor": "local"}
+    body_ = r.json()
+    assert r.status_code == 202 and body_["pipeline_id"] == p["id"] and body_["accepted"] is True and body_["run_id"]
+    assert done.wait(5) and called == {"pid": p["id"], "run_id": body_["run_id"], "actor": "local"}
     assert client.post(f"/api/pipelines/{p['id']}/run").status_code in (404, 405)
 
 
@@ -198,7 +199,7 @@ def test_trial_route_rejects_builtin_and_concurrent(client, monkeypatch):
     from backend.pipeline_scheduler import sync_builtin_pipelines
     sync_builtin_pipelines([{"id": "bi1", "name_zh": "内置", "topics": ["usiran"]}])
     started = []
-    monkeypatch.setattr(pipeline_routes, "run_trial", lambda pid, **k: started.append(pid))
+    monkeypatch.setattr(pipeline_routes, "execute_trial", lambda claim, **k: started.append(claim))
     r = client.post("/api/pipelines/bi1/trial")
     assert r.status_code == 422 and r.json()["detail"]["message"] == "内置采集器随整批运行，不支持测试运行"
     assert client.post("/api/pipelines/nope/trial").status_code == 404
@@ -218,7 +219,7 @@ def test_trial_ignores_batch_service_lock(client, monkeypatch, tmp_path):
     def busy():
         raise CollectorBusyError("busy")
     monkeypatch.setattr(collector_jobs, "_preflight_lock", busy)
-    monkeypatch.setattr(pipeline_routes, "run_trial", lambda pid, **k: done.set())
+    monkeypatch.setattr(pipeline_routes, "execute_trial", lambda claim, **k: done.set())
     assert client.post(f"/api/pipelines/{p['id']}/trial").status_code == 202
     assert done.wait(5)
 
@@ -230,7 +231,7 @@ def test_trial_thread_swallows_exceptions(client, monkeypatch):
     def boom(*a, **k):
         done.set()
         raise RuntimeError("x")
-    monkeypatch.setattr(pipeline_routes, "run_trial", boom)
+    monkeypatch.setattr(pipeline_routes, "execute_trial", boom)
     assert client.post(f"/api/pipelines/{p['id']}/trial").status_code == 202
     assert done.wait(5)
 
@@ -286,7 +287,7 @@ def test_web_auth_admin_creates_and_owner_recorded(authed, monkeypatch):
         mine = c.post("/api/pipelines", json=body(), headers=h)
         assert mine.status_code == 201 and mine.json()["owner"] == "admin"
         assert c.post(f"/api/pipelines/{mine.json()['id']}/enable", headers=h).status_code == 200
-        monkeypatch.setattr(pipeline_routes, "run_trial", lambda *a, **k: None)
+        monkeypatch.setattr(pipeline_routes, "execute_trial", lambda *a, **k: None)
         assert c.post(f"/api/pipelines/{mine.json()['id']}/trial", headers=h).status_code == 202
 
 
@@ -362,3 +363,39 @@ def test_server_time_taken_before_query(client, monkeypatch):
     monkeypatch.setattr(routes, "list_pipelines", slow_list)
     data = r_ok(client.get("/api/pipelines"))
     assert datetime.fromisoformat(data["server_time"]) <= seen["query_at"]
+
+
+def test_trial_claims_synchronously_second_call_conflicts(client, monkeypatch):
+    p = create(client)
+    release = threading.Event()
+    monkeypatch.setattr(pipeline_routes, "execute_trial", lambda claim, **k: release.wait(5))
+    first = client.post(f"/api/pipelines/{p['id']}/trial")
+    second = client.post(f"/api/pipelines/{p['id']}/trial")
+    release.set()
+    assert first.status_code == 202 and second.status_code == 409
+    assert trial_running_rows(p["id"]) == 1
+
+
+def test_trial_global_cap_and_preview_slots(client, monkeypatch):
+    from backend import pipeline_runs
+    ps = [create(client, name=f"并发{i}") for i in range(4)]
+    monkeypatch.setattr(pipeline_routes, "execute_trial", lambda claim, **k: None)
+    for p in ps[:3]:
+        assert client.post(f"/api/pipelines/{p['id']}/trial").status_code == 202
+    r = client.post(f"/api/pipelines/{ps[3]['id']}/trial")
+    assert r.status_code == 409 and "上限（3）" in r.json()["detail"]
+    for _ in range(3):
+        assert pipeline_runs._PREVIEW_SLOTS.acquire(blocking=False)
+    try:
+        r = client.post("/api/pipelines/preview", json=body())
+        assert r.status_code == 409 and "试跑并发已满" in r.json()["detail"]["message"]
+    finally:
+        for _ in range(3):
+            pipeline_runs._PREVIEW_SLOTS.release()
+
+
+def trial_running_rows(pipeline_id):
+    from backend.store import db
+    with db() as conn:
+        return conn.execute("SELECT count(*) AS n FROM collection_pipeline_runs WHERE pipeline_id=%s AND trigger='trial' "
+                            "AND status='running'", (pipeline_id,)).fetchone()["n"]

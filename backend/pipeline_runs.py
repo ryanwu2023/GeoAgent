@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import uuid
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -366,14 +367,27 @@ def trial_running(pipeline_id: str) -> bool:
             "AND NOT is_deleted LIMIT 1", (pipeline_id,)).fetchone() is not None
 
 
+MAX_TRIALS = 3
+MAX_PREVIEWS = 3
+TRIAL_CAP_CONFLICT = f"同时进行的测试运行已达上限（{MAX_TRIALS}），请稍后再试"
+PREVIEW_BUSY = "试跑并发已满，请稍后再试"
+_TRIAL_CAP_LOCK = 7_203_517  # pg_advisory_xact_lock 键：串行化全局并发测试运行的计数与占位
+_PREVIEW_SLOTS = threading.BoundedSemaphore(MAX_PREVIEWS)
+
+
 def _start_trial(pipeline: dict, run_id: str, actor: str | None, started: datetime) -> dict:
     with db() as conn:
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (_TRIAL_CAP_LOCK,))
         previous = conn.execute(
             "SELECT last_run_id,last_trigger,last_status FROM collection_pipelines WHERE id=%s FOR UPDATE",
             (pipeline["id"],)).fetchone()
         if conn.execute("SELECT 1 FROM collection_pipeline_runs WHERE pipeline_id=%s AND trigger='trial' "
                         "AND status='running' AND NOT is_deleted LIMIT 1", (pipeline["id"],)).fetchone():
             raise PipelineError("CONFLICT", TRIAL_CONFLICT, {"id": pipeline["id"]})
+        running = conn.execute("SELECT count(*) AS n FROM collection_pipeline_runs WHERE trigger='trial' "
+                               "AND status='running' AND NOT is_deleted").fetchone()["n"]
+        if running >= MAX_TRIALS:
+            raise PipelineError("CONFLICT", TRIAL_CAP_CONFLICT, {"limit": MAX_TRIALS})
         conn.execute(
             "INSERT INTO collection_pipeline_runs(run_id,pipeline_id,version,trigger,status,started_at,created_by,data_timestamp) "
             "VALUES (%s,%s,%s,'trial','running',%s,%s,%s)",
@@ -399,11 +413,10 @@ def _finish_trial(pipeline_id: str, run_id: str, *, status: str, stats: dict, er
                          finished=_now(), trigger="trial")
 
 
-def run_trial(pipeline_id: str, *, actor: str | None, runner: Callable[..., dict] = run_one,
-              timeout: int = TRIAL_TIMEOUT_SEC) -> dict:
-    """同步测试运行一次配置化管线并返回运行行；不进快照、不写去重台账、不占整批锁。
+def claim_trial(pipeline_id: str, *, actor: str | None) -> dict:
+    """在请求线程内同步占位：校验管线、检查并发上限并写入 running 行；返回供 execute_trial 使用的占位。
 
-    同一管线已有测试运行进行中时抛 PipelineError("CONFLICT")。
+    同一管线已有测试运行、或全局测试运行已达上限时抛 PipelineError("CONFLICT")。
     """
     pipeline = get_pipeline(pipeline_id)
     if pipeline["kind"] != "configurable" or not pipeline.get("config"):
@@ -411,6 +424,13 @@ def run_trial(pipeline_id: str, *, actor: str | None, runner: Callable[..., dict
     started = _now()
     run_id = _new_run_id(pipeline_id, started)
     previous = _start_trial(pipeline, run_id, actor, started)
+    return {"pipeline": pipeline, "pipeline_id": pipeline_id, "run_id": run_id, "previous": previous}
+
+
+def execute_trial(claim: dict, *, actor: str | None, runner: Callable[..., dict] = run_one,
+                  timeout: int = TRIAL_TIMEOUT_SEC) -> dict:
+    """执行 claim_trial 占位的测试运行并返回运行行。"""
+    pipeline, pipeline_id, run_id, previous = claim["pipeline"], claim["pipeline_id"], claim["run_id"], claim["previous"]
     source_types = _source_types(pipeline["config"])
     root = trial_root()
     stats: dict[str, Any] = {"import_status": "not_imported"}
@@ -432,6 +452,12 @@ def run_trial(pipeline_id: str, *, actor: str | None, runner: Callable[..., dict
                          records=records, source_types=source_types)
 
 
+def run_trial(pipeline_id: str, *, actor: str | None, runner: Callable[..., dict] = run_one,
+              timeout: int = TRIAL_TIMEOUT_SEC) -> dict:
+    """同步测试运行一次配置化管线并返回运行行；不进快照、不写去重台账、不占整批锁。"""
+    return execute_trial(claim_trial(pipeline_id, actor=actor), actor=actor, runner=runner, timeout=timeout)
+
+
 def _run_process(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int) -> subprocess.CompletedProcess:
     return subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True, encoding="utf-8",
                           errors="replace", timeout=timeout,
@@ -440,7 +466,19 @@ def _run_process(command: list[str], *, cwd: Path, env: dict[str, str], timeout:
 
 def preview_pipeline(row: dict, config: dict, *, limit: int = 5, timeout: int = 120,
                      resolve: Callable[[str], list[str]] = default_resolve) -> dict:
-    """试跑：每源列出前 limit 个候选与过滤结果。不写任何表、不写输出目录、不导入。"""
+    """试跑：每源列出前 limit 个候选与过滤结果。不写任何表、不写输出目录、不导入。
+
+    全局最多 MAX_PREVIEWS 个并发；已满立即返回 CONFLICT，不排队等待。
+    """
+    if not _PREVIEW_SLOTS.acquire(blocking=False):
+        raise PipelineError("CONFLICT", PREVIEW_BUSY, {"limit": MAX_PREVIEWS})
+    try:
+        return _preview(row, config, limit=limit, timeout=timeout, resolve=resolve)
+    finally:
+        _PREVIEW_SLOTS.release()
+
+
+def _preview(row: dict, config: dict, *, limit: int, timeout: int, resolve) -> dict:
     try:
         clean_row, clean_config = validate_pipeline(row, config, resolve=resolve)
     except PipelineConfigError as exc:

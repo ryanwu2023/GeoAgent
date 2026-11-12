@@ -1,7 +1,7 @@
-"""采集管线 MCP 工具：只读查看管线、版本、运行与新增条目。
+"""采集管线 MCP 工具：查看管线、版本、运行与新增条目（只读），以及试跑、新建、更新、测试运行、启停、删除、回滚（写入）。
 
 所有持有有效 GeoAgent MCP Key 的调用方都可调用，操作者记为 mcp:<principal_id>。
-返回值是投影：不含源站正文与 raw_files，列表与分页有上限，摘要截断 500 字。
+返回值是投影（时间为 ISO 字符串）：不含源站正文与 raw_files，列表与分页有上限，摘要截断 500 字。
 写入类工具（预览、新建、更新、测试运行、启停、删除、回滚）同样不区分管理员，只校验工具白名单。
 """
 from __future__ import annotations
@@ -276,25 +276,23 @@ def pipeline_update(principal, pipeline_id: str, expected_version: int, row_patc
                            row_patch=patch, config=config, change_note=change_note or "", resolve=resolve))
 
 
-def _background_trial(pipeline_id: str, username: str) -> None:
+def _background_trial(claim: dict, username: str) -> None:
     try:
-        _runs_module.run_trial(pipeline_id, actor=username)
+        _runs_module.execute_trial(claim, actor=username)
     except PipelineError as exc:
-        log.warning("管线 %s 测试运行未执行：%s", pipeline_id, exc.message)
+        log.warning("管线 %s 测试运行未完成：%s", claim["pipeline_id"], exc.message)
     except Exception:  # noqa: BLE001 - 后台线程不能让异常外泄
-        log.exception("管线 %s 测试运行失败", pipeline_id)
+        log.exception("管线 %s 测试运行失败", claim["pipeline_id"])
 
 
 def pipeline_trial(principal, pipeline_id: str) -> dict:
     _guard(write=True)
-    pipeline = _write(pipeline_service.get_pipeline, pipeline_id)
-    if pipeline["kind"] != "configurable":
-        raise MCPError("GEO_INVALID_ARGUMENT", _runs_module.BUILTIN_NO_TRIAL, {"id": pipeline_id})
-    if _runs_module.trial_running(pipeline_id):
-        raise MCPError("GEO_CONFLICT", _runs_module.TRIAL_CONFLICT, {"id": pipeline_id})
-    threading.Thread(target=_background_trial, args=(pipeline_id, _actor(principal).username), daemon=True,
+    username = _actor(principal).username
+    claim = _write(_runs_module.claim_trial, pipeline_id, actor=username)  # 同步占位：并发调用立即得到 GEO_CONFLICT
+    threading.Thread(target=_background_trial, args=(claim, username), daemon=True,
                      name=f"pipeline-trial-{pipeline_id}").start()
-    return {"pipeline_id": pipeline_id, "accepted": True, "hint": "通常需要数分钟，可多次调用 geo_pipeline_runs 查看；最长 15 分钟"}
+    return {"pipeline_id": pipeline_id, "accepted": True, "run_id": claim["run_id"],
+            "hint": "通常需要数分钟，可多次调用 geo_pipeline_runs 查看；最长 15 分钟"}
 
 
 def pipeline_set_enabled(principal, pipeline_id: str, enabled: bool) -> dict:

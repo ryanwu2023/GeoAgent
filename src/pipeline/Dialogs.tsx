@@ -41,7 +41,7 @@ export function PreviewDrawer({loading, result, error, sourceNames, onClose}: {
         return <section key={src.source_id} className="pipeline-preview-source">
           <h3>{sourceNames[src.source_id] || src.source_id}<em className={`pipeline-status status-${src.state}`}>{STATE_LABEL[src.state] || src.state}</em>
             <small>候选 {src.candidates.length} 条 · 入选 {accepted} 条</small></h3>
-          {src.error && <p className="pipeline-error">{src.error}</p>}
+          {src.error && <p className="pipeline-error">{src.error_message || src.error}</p>}
           {!src.candidates.length && !src.error && <p className="pipeline-empty">没有抓到候选，检查入口页、订阅地址或链接匹配正则。</p>}
           <ul>
             {src.candidates.map((c, i) => <li key={i} className={c.accepted ? "accepted" : "rejected"}>

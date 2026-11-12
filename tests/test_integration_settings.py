@@ -225,3 +225,26 @@ def test_gateway_headers_not_required_but_cross_site_still_rejected(client, monk
     with TestClient(app, base_url="https://geo.example.com", client=("203.0.113.10", 8080)) as remote:
         assert remote.get("/api/integrations", headers=headers).status_code == 200
         assert remote.post("/api/integrations/mcp-keys", json={"label":"blocked"}, headers={"Origin":"https://evil.example"}).status_code == 403
+
+
+def test_mcp_key_management_requires_web_admin(client, monkeypatch):
+    from backend import web_auth
+    monkeypatch.setattr(web_auth, "enabled", lambda: True)
+    monkeypatch.setattr(web_auth, "users", lambda: {"root": object()})
+
+    from fastapi import HTTPException
+    from types import SimpleNamespace
+    from backend.integrations import key_admin
+    request = lambda user: SimpleNamespace(headers={}, state=SimpleNamespace(web_user=user))
+    key_admin(request("root"))
+    for user in ("bob", None):
+        with pytest.raises(HTTPException) as err:
+            key_admin(request(user))
+        assert err.value.status_code == 403 and err.value.detail == "仅管理员可以管理 MCP Key"
+    monkeypatch.setattr(web_auth, "enabled", lambda: False)
+    key_admin(request(None))  # 未启用网页登录：本机管理员
+    # 四条 Key 管理路由都挂了 key_admin
+    from backend.integrations import router
+    guarded = {(r.path, tuple(sorted(r.methods))) for r in router.routes
+               if "/mcp-keys" in r.path and any(d.call is key_admin for d in r.dependant.dependencies)}
+    assert len(guarded) == 4
