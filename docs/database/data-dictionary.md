@@ -184,6 +184,7 @@
 | ``language`` | text | 否 | `''` | 语种代码，未识别为空串 |
 | ``matched_terms`` | jsonb | 否 | `'[]'` | 命中的锚词、强锚词（JSON 数组） |
 | ``dimension`` | text | 是 | — | 归入的研究维度，未归类为空 |
+| ``summary`` | text | 否 | `''` | 条目摘要，截断到 1000 字，无摘要为空串 |
 | `created_by` | text | 是 | — | 写入该条目的操作者或服务身份 |
 | `created_at` | timestamptz | 否 | `CURRENT_TIMESTAMP` | 记录首次写入时间，更新不重置 |
 | `updated_by` | text | 是 | — | 最近修改的操作者（通常为空） |

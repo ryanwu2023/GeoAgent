@@ -30,6 +30,7 @@ RUNNER_ENTRYPOINT = "pipeline_runner.py"
 STATUS_MAP = {"ok": "success", "partial": "partial", "failed": "failed"}
 REPORT_COUNTS = ("records", "candidates", "accepted", "excluded", "errors", "restricted", "duplicates_merged")
 ERROR_LIMIT = 1000
+SUMMARY_LIMIT = 1000
 
 
 def _now() -> datetime:
@@ -115,12 +116,13 @@ def record_new_items(conn, *, pipeline_id: str, run_id: str, records: list[dict]
         dimension = (record.get("dimensions") or {}).get(topic) if topic else None
         conn.execute(
             "INSERT INTO collection_pipeline_run_items(run_id,seq,pipeline_id,record_id,evidence_id,source_id,source_type,"
-            "title,published_at,language,matched_terms,dimension,created_by,data_timestamp) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            "title,published_at,language,matched_terms,dimension,summary,created_by,data_timestamp) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
             (run_id, base + offset, pipeline_id, str(record["id"]), normalize(record, monitor)["id"],
              str(record.get("source_id") or ""), source_types.get(record.get("source_id"), "web"),
              str(record.get("title") or "无标题"), published, str(record.get("language") or ""),
-             json.dumps(terms, ensure_ascii=False), dimension, actor, published or started))
+             json.dumps(terms, ensure_ascii=False), dimension,
+             str(record.get("summary") or "")[:SUMMARY_LIMIT], actor, published or started))
     return len(fresh)
 
 
@@ -214,7 +216,7 @@ def run_pipeline(pipeline_id: str, *, trigger: str, actor: str | None,
         tmp.replace(config_path)
         item = registry_item(pipeline, config_path)
         report = executor(registry=[item], ids=[item["id"]], run_id_override=run_id,
-                          auto_import=True, allow_partial_import=True)
+                          auto_import=False)
     except Exception as exc:
         if _is_busy(exc):
             _discard(pipeline_id, run_id, previous)
@@ -225,8 +227,7 @@ def run_pipeline(pipeline_id: str, *, trigger: str, actor: str | None,
                        error=f"{type(exc).__name__}: {exc}", actor=actor, records=None, source_types=source_types)
 
     result = next((r for r in report.get("results") or [] if r.get("id") == item["id"]), None)
-    import_status = report.get("import_status")
-    stats: dict[str, Any] = {"import_status": import_status, "collector_status": report.get("status")}
+    stats: dict[str, Any] = {"import_status": "deferred", "collector_status": report.get("status")}
     if not result or result.get("published") is not True:
         # 未发布时输出目录仍是上一次的结果，不能当作本次数据读取。
         return _finish(pipeline_id, run_id, status="failed", stats=stats, snapshot_id=None,
@@ -241,11 +242,8 @@ def run_pipeline(pipeline_id: str, *, trigger: str, actor: str | None,
     error = None
     if status == "failed":
         error = "采集报告缺失或标记为失败"
-    if import_status == "failed":
-        status = "partial" if status == "success" else status
-        error = f"导入失败：{report.get('import_error_message') or report.get('import_error_type') or '未知错误'}"
     records = [r for r in payload.get("records") or [] if isinstance(r, dict)]
-    return _finish(pipeline_id, run_id, status=status, stats=stats, snapshot_id=report.get("snapshot_id"),
+    return _finish(pipeline_id, run_id, status=status, stats=stats, snapshot_id=None,
                    error=error, actor=actor, records=records, source_types=source_types)
 
 
@@ -259,7 +257,7 @@ def run_builtin(pipeline_id: str, *, trigger: str, actor: str | None,
     run_id = _new_run_id(pipeline_id, started)
     previous = _start(pipeline, run_id, trigger, actor, started)
     try:
-        report = executor(ids=[pipeline_id], auto_import=True, allow_partial_import=True, run_id_override=run_id)
+        report = executor(ids=[pipeline_id], auto_import=False, run_id_override=run_id)
     except Exception as exc:
         if _is_busy(exc):
             _discard(pipeline_id, run_id, previous)
@@ -269,17 +267,24 @@ def run_builtin(pipeline_id: str, *, trigger: str, actor: str | None,
         return _finish(pipeline_id, run_id, status="failed", stats={}, snapshot_id=None,
                        error=f"{type(exc).__name__}: {exc}", actor=actor, records=None, source_types={})
     status = report.get("status") if report.get("status") in ("success", "partial", "failed") else "failed"
-    import_status = report.get("import_status")
-    stats = {"import_status": import_status, "collector_status": report.get("status")}
+    stats = {"import_status": "deferred", "collector_status": report.get("status")}
     error = None
     if status == "failed":
         failed = next((r for r in report.get("results") or [] if r.get("id") == pipeline_id), None)
         error = _collector_error(failed, report)
-    if import_status == "failed":
-        status = "partial" if status == "success" else status
-        error = f"导入失败：{report.get('import_error_message') or report.get('import_error_type') or '未知错误'}"
-    return _finish(pipeline_id, run_id, status=status, stats=stats, snapshot_id=report.get("snapshot_id"),
+    return _finish(pipeline_id, run_id, status=status, stats=stats, snapshot_id=None,
                    error=error, actor=actor, records=None, source_types={})
+
+
+def backfill_merged_runs(snapshot_id: str, *, imported_before: datetime) -> int:
+    """整批导入成功后，把导入开始前已完成、尚未归属快照的运行回填为该快照；返回更新行数。"""
+    now = _now()
+    with db() as conn:
+        cur = conn.execute(
+            "UPDATE collection_pipeline_runs SET snapshot_id=%s,updated_at=%s WHERE snapshot_id IS NULL "
+            "AND status IN ('success','partial') AND finished_at <= %s AND NOT is_deleted",
+            (snapshot_id, now, imported_before))
+        return cur.rowcount
 
 
 def _run_process(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int) -> subprocess.CompletedProcess:

@@ -356,6 +356,7 @@ CREATE TABLE IF NOT EXISTS collection_pipeline_run_items (
  language TEXT NOT NULL DEFAULT '',
  matched_terms JSONB NOT NULL DEFAULT '[]',
  dimension TEXT NULL,
+ summary TEXT NOT NULL DEFAULT '',
  created_by TEXT NULL,
  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_by TEXT NULL,
@@ -445,6 +446,7 @@ COMMENT ON COLUMN collection_pipeline_run_items.published_at IS '条目源站发
 COMMENT ON COLUMN collection_pipeline_run_items.language IS '内容语种代码，未识别为空字符串';
 COMMENT ON COLUMN collection_pipeline_run_items.matched_terms IS '命中的锚词、强锚词列表（JSON 数组），默认空数组';
 COMMENT ON COLUMN collection_pipeline_run_items.dimension IS '归入的研究维度；未归类为空';
+COMMENT ON COLUMN collection_pipeline_run_items.summary IS '条目摘要，取采集记录的 summary 并截断到 1000 字；无摘要为空字符串';
 COMMENT ON COLUMN collection_pipeline_run_items.created_by IS '写入该条目的操作者或服务身份；未知为空';
 COMMENT ON COLUMN collection_pipeline_run_items.created_at IS '条目明细首次写入时间';
 COMMENT ON COLUMN collection_pipeline_run_items.updated_by IS '最近一次修改的操作者；通常为空';

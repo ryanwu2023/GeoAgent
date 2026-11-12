@@ -244,3 +244,35 @@ def test_failed_run_archive_never_borrows_previous_success(tmp_path):
     assert json.loads((target/'_source_artifact.json').read_text())['status']=='missing'
     _archive_source_artifacts(report,[{'id':'demo','published':False,'source_diagnostics':{'_source_status.json':{'collection_status':'failed','run_at':'new'}}}],tmp_path/'data')
     assert json.loads((target/'_source_status.json').read_text())['run_at']=='new'
+
+
+def test_full_batch_with_all_excluded_still_imports(tmp_path):
+    imported = []
+    registry = [{"id": "a", "enabled": True, "topics": ["usiran"]}]
+
+    def importer(root):
+        imported.append(root)
+        return {"snapshot_id": "s-all", "created": True}
+
+    report = execute_once(report_root=tmp_path, registry=registry, exclude_ids=["a"], auto_import=True,
+                          importer=importer)
+    assert imported and report["status"] == "success"
+    assert report["import_status"] == "succeeded" and report["snapshot_id"] == "s-all"
+
+
+def test_all_excluded_without_outputs_records_import_failure(tmp_path):
+    registry = [{"id": "a", "enabled": True, "topics": ["usiran"]}]
+
+    def importer(root):
+        raise ValueError("no published outputs")
+
+    report = execute_once(report_root=tmp_path, registry=registry, exclude_ids=["a"], auto_import=True,
+                          importer=importer)
+    assert report["import_status"] == "failed" and report["import_error_type"] == "ValueError"
+
+
+def test_explicit_ids_with_no_results_still_skip_import(tmp_path):
+    called = []
+    report = execute_once(report_root=tmp_path, registry=[], ids=["zzz"], auto_import=True,
+                          runner=lambda *a, **k: [], importer=lambda r: called.append(r))
+    assert report["import_status"] == "skipped_no_results" and not called

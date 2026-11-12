@@ -91,15 +91,15 @@ def test_first_run_all_items_are_new(data_root):
     calls = []
     run = run_pipeline(p["id"], trigger="manual", actor="admin",
                        executor=fake_executor(data_root, [rec(1), rec(2), rec(3, published=None)], calls=calls))
-    assert run["status"] == "success" and run["snapshot_id"] == "snap-1" and run["error"] is None
+    assert run["status"] == "success" and run["snapshot_id"] is None and run["error"] is None
     assert run["trigger"] == "manual" and run["version"] == 1 and run["created_by"] == "admin"
     assert run["stats"]["new_items"] == 3 and run["stats"]["candidates"] == 9
-    assert run["stats"]["import_status"] == "succeeded" and run["stats"]["sources"]["rss-a"]["state"] == "ok"
+    assert run["stats"]["import_status"] == "deferred" and run["stats"]["sources"]["rss-a"]["state"] == "ok"
     assert run["data_timestamp"] == run["started_at"] and run["finished_at"] is not None
     kw = calls[0]
     item = kw["registry"][0]
     assert kw["ids"] == [item["id"]] == [f"pipeline-{p['id']}"]
-    assert kw["run_id_override"] == run["run_id"] and kw["auto_import"] is True and kw["allow_partial_import"] is True
+    assert kw["run_id_override"] == run["run_id"] and kw["auto_import"] is False
     config_path = Path(item["env"]["GEO_PIPELINE_CONFIG"])
     assert config_path == data_root / f"pipeline-{p['id']}" / "state" / "pipeline-config.json"
     monitor = json.loads(config_path.read_text(encoding="utf-8"))
@@ -170,12 +170,76 @@ def test_partial_report_maps_to_partial(data_root):
     assert get_pipeline(p["id"])["last_status"] == "partial"
 
 
-def test_import_failure_maps_to_partial_with_error(data_root):
+def test_pipeline_run_does_not_import(data_root):
+    p = make()
+    calls = []
+    run = run_pipeline(p["id"], trigger="manual", actor="admin",
+                       executor=fake_executor(data_root, [rec(1)], calls=calls))
+    assert calls[0]["auto_import"] is False
+    assert run["status"] == "success" and run["snapshot_id"] is None
+    assert run["stats"]["import_status"] == "deferred"
+
+
+def test_import_failure_no_longer_affects_pipeline_run(data_root):
     p = make()
     run = run_pipeline(p["id"], trigger="manual", actor="admin",
                        executor=fake_executor(data_root, [rec(1)], import_status="failed", import_error="坏数据"))
-    assert run["status"] == "partial" and "坏数据" in run["error"] and run["snapshot_id"] is None
-    assert run["stats"]["import_status"] == "failed"
+    assert run["status"] == "success" and run["error"] is None and run["snapshot_id"] is None
+
+
+def test_run_items_store_truncated_summary(data_root):
+    p = make()
+    long = {**rec(1), "summary": "摘" * 1500}
+    run = run_pipeline(p["id"], trigger="manual", actor="admin",
+                       executor=fake_executor(data_root, [long, rec(2)]))
+    by_id = {i["record_id"]: i for i in list_run_items(run["run_id"])}
+    assert by_id["r1"]["summary"] == "摘" * 1000 and by_id["r2"]["summary"] == ""
+
+
+def test_backfill_merged_runs(data_root):
+    p = make()
+    run = run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, [rec(1)]))
+    failed = run_pipeline(p["id"], trigger="manual", actor="admin",
+                          executor=fake_executor(data_root, [], published=False))
+    after_cut = datetime.now(timezone.utc) - timedelta(hours=1)
+    assert pipeline_runs.backfill_merged_runs("s1", imported_before=after_cut) == 0
+    n = pipeline_runs.backfill_merged_runs("s1", imported_before=datetime.now(timezone.utc))
+    assert n == 1
+    rows = {r["run_id"]: r for r in list_runs(p["id"])}
+    assert rows[run["run_id"]]["snapshot_id"] == "s1" and rows[run["run_id"]]["updated_at"] is not None
+    assert rows[run["run_id"]]["data_timestamp"] == run["data_timestamp"]
+    assert rows[failed["run_id"]]["snapshot_id"] is None
+    assert pipeline_runs.backfill_merged_runs("s2", imported_before=datetime.now(timezone.utc)) == 0
+
+
+def test_batch_import_backfills_pipeline_runs(data_root, tmp_path, monkeypatch):
+    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
+    p = make()
+    run = run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, [rec(1)]))
+
+    def importer(root):
+        return {"snapshot_id": "s1", "created": True}
+
+    report = execute_once(report_root=tmp_path / "r", runner=lambda *a, **k: [{"id": "x", "returncode": 0}],
+                          registry=[], auto_import=True, importer=importer)
+    assert report["import_status"] == "succeeded"
+    assert list_runs(p["id"])[0]["snapshot_id"] == "s1"
+    later = run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, [rec(2)]))
+    assert later["snapshot_id"] is None
+    assert {r["run_id"]: r["snapshot_id"] for r in list_runs(p["id"])}[run["run_id"]] == "s1"
+
+
+def test_backfill_failure_does_not_fail_batch(tmp_path, monkeypatch, caplog):
+    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
+
+    def boom(*a, **k):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(pipeline_runs, "backfill_merged_runs", boom)
+    report = execute_once(report_root=tmp_path, runner=lambda *a, **k: [{"id": "x", "returncode": 0}],
+                          registry=[], auto_import=True, importer=lambda root: {"snapshot_id": "s1"})
+    assert report["status"] == "success" and report["import_status"] == "succeeded"
+    assert "db down" in caplog.text or any("回填" in r.message for r in caplog.records)
 
 
 def test_failed_collector_does_not_read_stale_output(data_root):
@@ -355,9 +419,10 @@ def test_run_builtin_success_writes_run_without_items():
     calls = []
     run = pipeline_runs.run_builtin("bi1", trigger="schedule", actor="scheduler",
                                     executor=builtin_executor(calls=calls))
-    assert run["status"] == "success" and run["snapshot_id"] == "snap-b" and run["trigger"] == "schedule"
+    assert run["status"] == "success" and run["snapshot_id"] is None and run["trigger"] == "schedule"
+    assert run["stats"]["import_status"] == "deferred"
     kw = calls[0]
-    assert kw["ids"] == ["bi1"] and kw["auto_import"] is True and kw["allow_partial_import"] is True
+    assert kw["ids"] == ["bi1"] and kw["auto_import"] is False
     assert kw["run_id_override"] == run["run_id"]
     after = get_pipeline("bi1")
     assert after["last_status"] == "success" and after["last_new_items"] == 0 and after["last_run_id"] == run["run_id"]
