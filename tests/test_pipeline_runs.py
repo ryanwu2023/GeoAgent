@@ -229,6 +229,15 @@ def test_batch_import_backfills_pipeline_runs(data_root, tmp_path, monkeypatch):
     assert {r["run_id"]: r["snapshot_id"] for r in list_runs(p["id"])}[run["run_id"]] == "s1"
 
 
+def test_run_finished_after_import_start_is_not_backfilled(data_root):
+    p = make()
+    cut = datetime.now(timezone.utc)
+    run = run_pipeline(p["id"], trigger="manual", actor="admin", executor=fake_executor(data_root, [rec(1)]))
+    assert run["finished_at"] > cut
+    assert pipeline_runs.backfill_merged_runs("s1", imported_before=cut) == 0
+    assert list_runs(p["id"])[0]["snapshot_id"] is None
+
+
 def test_backfill_failure_does_not_fail_batch(tmp_path, monkeypatch, caplog):
     monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
 
@@ -239,7 +248,7 @@ def test_backfill_failure_does_not_fail_batch(tmp_path, monkeypatch, caplog):
     report = execute_once(report_root=tmp_path, runner=lambda *a, **k: [{"id": "x", "returncode": 0}],
                           registry=[], auto_import=True, importer=lambda root: {"snapshot_id": "s1"})
     assert report["status"] == "success" and report["import_status"] == "succeeded"
-    assert "db down" in caplog.text or any("回填" in r.message for r in caplog.records)
+    assert any(r.levelname == "WARNING" and "回填" in r.getMessage() for r in caplog.records)
 
 
 def test_failed_collector_does_not_read_stale_output(data_root):
@@ -453,3 +462,16 @@ def test_run_builtin_rejects_configurable():
     p = make()
     with pytest.raises(PipelineError):
         pipeline_runs.run_builtin(p["id"], trigger="manual", actor="a", executor=builtin_executor())
+
+
+def test_run_builtin_unpublished_output_is_failed_and_not_backfilled():
+    _builtin()
+
+    def gated(**kw):
+        return {"status": "success", "import_status": "not_requested",
+                "results": [{"id": "bi1", "returncode": 0, "published": False}]}
+
+    run = pipeline_runs.run_builtin("bi1", trigger="schedule", actor="scheduler", executor=gated)
+    assert run["status"] == "failed" and "发布门禁" in run["error"]
+    assert pipeline_runs.backfill_merged_runs("s1", imported_before=datetime.now(timezone.utc)) == 0
+    assert list_runs("bi1")[0]["snapshot_id"] is None

@@ -66,3 +66,41 @@ def test_disabled_or_remote_mode_starts_nothing(monkeypatch):
     monkeypatch.setenv("GEO_COLLECTION_MODE", "local")
     cs.start_background()
     assert started and started[0]["name"] == "collector-schedule"
+
+
+def _hourly_tick(tmp_path, calls):
+    s = _scheduler(tmp_path, calls)
+    s._hourly_ids = ["diplomacy-monitor", "news-x"]
+    s.tick(T0)  # full
+    calls.clear()
+    return s.tick(T0 + timedelta(hours=1))
+
+
+def test_hourly_ids_drop_separately_scheduled_builtin(tmp_path, monkeypatch):
+    from backend import pipeline_scheduler
+    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
+    monkeypatch.setattr(pipeline_scheduler, "scheduled_builtin_ids", lambda: ["news-x"])
+    calls = []
+    assert _hourly_tick(tmp_path, calls) == "hourly"
+    assert calls[0]["ids"] == ["diplomacy-monitor"]
+
+
+def test_hourly_skipped_when_all_ids_scheduled_separately(tmp_path, monkeypatch):
+    from backend import pipeline_scheduler
+    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
+    monkeypatch.setattr(pipeline_scheduler, "scheduled_builtin_ids", lambda: ["diplomacy-monitor", "news-x"])
+    calls = []
+    assert _hourly_tick(tmp_path, calls) is None and calls == []
+
+
+def test_hourly_ids_unchanged_on_flag_off_or_lookup_error(tmp_path, monkeypatch, caplog):
+    from backend import pipeline_scheduler
+    monkeypatch.setattr(pipeline_scheduler, "scheduled_builtin_ids", lambda: ["news-x"])
+    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "false")
+    calls = []
+    assert _hourly_tick(tmp_path, calls) == "hourly" and calls[0]["ids"] == ["diplomacy-monitor", "news-x"]
+    monkeypatch.setenv("GEO_PIPELINES_ENABLED", "true")
+    monkeypatch.setattr(pipeline_scheduler, "scheduled_builtin_ids", lambda: (_ for _ in ()).throw(RuntimeError("db")))
+    calls = []
+    assert _hourly_tick(tmp_path / "b", calls) == "hourly" and calls[0]["ids"] == ["diplomacy-monitor", "news-x"]
+    assert any(r.levelname == "WARNING" for r in caplog.records)

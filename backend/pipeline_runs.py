@@ -269,9 +269,12 @@ def run_builtin(pipeline_id: str, *, trigger: str, actor: str | None,
     status = report.get("status") if report.get("status") in ("success", "partial", "failed") else "failed"
     stats = {"import_status": "deferred", "collector_status": report.get("status")}
     error = None
+    mine = next((r for r in report.get("results") or [] if r.get("id") == pipeline_id), None)
     if status == "failed":
-        failed = next((r for r in report.get("results") or [] if r.get("id") == pipeline_id), None)
-        error = _collector_error(failed, report)
+        error = _collector_error(mine, report)
+    elif mine is not None and mine.get("published") is not True:
+        # 退出码正常但产物未通过发布门禁：本次没有新产物，不能算成功，也不得被回填快照。
+        status, error = "failed", "采集产物未通过发布门禁"
     return _finish(pipeline_id, run_id, status=status, stats=stats, snapshot_id=None,
                    error=error, actor=actor, records=None, source_types={})
 

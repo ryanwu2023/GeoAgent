@@ -64,6 +64,19 @@ def hourly_collector_ids(registry_path: Path | None = None) -> list[str]:
     return [c["id"] for c in collectors if c.get("enabled") and c.get("cadence") == "hourly"]
 
 
+def _without_scheduled_builtin(ids: list[str]) -> list[str]:
+    """去掉已有单独调度的内置管线，避免与管线调度重复运行；开关关闭或查询失败则保持原样。"""
+    try:
+        from .pipeline_scheduler import pipelines_enabled, scheduled_builtin_ids
+        if not pipelines_enabled():
+            return ids
+        skip = set(scheduled_builtin_ids())
+    except Exception:
+        logger.warning("读取已调度的内置管线失败，每小时采集不做排除", exc_info=True)
+        return ids
+    return [i for i in ids if i not in skip]
+
+
 class CollectorScheduler:
     def __init__(self, config: ScheduleConfig, *, state_path: Path | None = None,
                  submit: Callable[..., object] | None = None, hourly_ids: list[str] | None = None):
@@ -101,6 +114,7 @@ class CollectorScheduler:
             kind, kwargs = "full", {"auto_import": True, "allow_partial_import": self.config.allow_partial_import}
         elif self._due(state.get("hourly_at"), self.config.hourly_interval_sec, now):
             ids = self._hourly_ids if self._hourly_ids is not None else hourly_collector_ids()
+            ids = _without_scheduled_builtin(ids)
             if not ids:
                 return None
             kind, kwargs = "hourly", {"ids": ids, "auto_import": False}
