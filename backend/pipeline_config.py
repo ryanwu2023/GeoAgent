@@ -33,11 +33,10 @@ SOURCE_KEYS = {"id", "type", "name", "feed_url", "entry_urls", "allowed_hosts", 
                "content_policy", "link_include_pattern"}
 FILTER_DEFAULTS = {"include_any": [], "include_strong": [], "exclude": [], "require_category": True,
                    "lookback_days": 14, "max_candidates_per_source": 80}
-REQUEST_DEFAULTS = {"timeout_seconds": 25, "rate_limit_seconds": 1.5, "max_pages_per_source": 3}
+REQUEST_DEFAULTS = {"timeout_seconds": 25, "rate_limit_seconds": 1.5}
 # (最小值, 最大值, 是否整数)
 FILTER_RANGES = {"lookback_days": (1, 90, True), "max_candidates_per_source": (1, 200, True)}
-REQUEST_RANGES = {"timeout_seconds": (1, 60, False), "rate_limit_seconds": (0, 30, False),
-                  "max_pages_per_source": (1, 5, True)}
+REQUEST_RANGES = {"timeout_seconds": (1, 60, False), "rate_limit_seconds": (0, 30, False)}
 
 
 class PipelineConfigError(ValueError):
@@ -197,6 +196,11 @@ def _validate_source(src: Any, index: int, checker: _HostChecker, seen: set[str]
     for h in hosts:
         if not isinstance(h, str) or not _valid_hostname(h):
             raise PipelineConfigError(f"{p}.allowed_hosts", f"必须是小写主机名（不含协议、路径、端口）：{h!r}")
+    # 每个允许域名都要能解析到公网：抓取期的跳转与正文链接只受 allowed_hosts 约束
+    for j, h in enumerate(hosts):
+        problem = checker.problem(h)
+        if problem:
+            raise PipelineConfigError(f"{p}.allowed_hosts[{j}]", problem)
     out: dict[str, Any] = {"id": sid, "type": stype, "name": name, "allowed_hosts": list(hosts),
                            "language": language, "tier": src["tier"], "content_policy": src["content_policy"]}
     if stype == "rss":
@@ -311,9 +315,13 @@ def to_monitor_config(row: dict, config: dict, base: dict) -> dict:
     out["exclusion_terms"] = [*base.get("exclusion_terms", []), *filters["exclude"]]
     out["require_category"] = filters["require_category"]
     out["lookback_days"] = filters["lookback_days"]
+    # 以下两个开关只由管线配置打开；多源采集器自己的 config.json 不带，行为不变
+    out["apply_lookback"] = True
     request = dict(out.get("request") or {})
+    request.pop("max_pages_per_source", None)  # 未实现的翻页项，不传给执行器
     request.update(config["request"])
     request["max_candidates_per_source"] = filters["max_candidates_per_source"]
+    request["enforce_public_hosts"] = True
     out["request"] = request
     sources = []
     for src in config["sources"]:

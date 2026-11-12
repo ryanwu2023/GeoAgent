@@ -20,7 +20,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 from feeds import FeedParseError, discover_feed_candidates  # noqa: E402
-from filtering import classify_candidate, load_config  # noqa: E402
+from filtering import classify_candidate, load_config, lookback_cutoff, outside_lookback  # noqa: E402
 from web import (  # noqa: E402
     Candidate,
     FetchResult,
@@ -177,7 +177,7 @@ def _verification(source: dict[str, Any], content_access: str) -> str:
 
 def _source_error_state(result: FetchResult) -> str:
     """将访问策略/网关限制与采集器自身技术故障分开。"""
-    if result.error_type == "robots_disallowed":
+    if result.error_type in {"robots_disallowed", "redirect_blocked", "host_not_public"}:
         return "restricted"
     if result.status in {401, 403} or 300 <= result.status < 400:
         return "restricted"
@@ -266,6 +266,7 @@ def run_collection(
     incoming: list[dict[str, Any]] = []
     statuses: dict[str, dict[str, Any]] = {}
     counts = {"candidates": 0, "accepted": 0, "excluded": 0, "errors": 0, "restricted": 0}
+    cutoff = lookback_cutoff(config)  # 仅管线配置启用；多源采集器自身配置为 None
 
     def collect_source(configured):
         started = time.monotonic()
@@ -319,6 +320,10 @@ def run_collection(
             status["candidates"] += len(candidates)
             counts["candidates"] += len(candidates)
             for candidate in candidates:
+                if outside_lookback(candidate.published, cutoff):
+                    status["excluded"] += 1
+                    counts["excluded"] += 1
+                    continue
                 initial = classify_candidate(candidate.title, candidate.summary, "", source.get("language", ""), config)
                 if not initial["accepted"]:
                     status["excluded"] += 1
@@ -342,7 +347,7 @@ def run_collection(
                 article = parse_public_article(fetched.body, fetched.final_url or candidate.url, source)
                 title = article.title or candidate.title
                 final = classify_candidate(title, article.summary or candidate.summary, article.body, source.get("language", ""), config)
-                if not final["accepted"]:
+                if not final["accepted"] or outside_lookback(article.published, cutoff):
                     status["excluded"] += 1
                     counts["excluded"] += 1
                     continue

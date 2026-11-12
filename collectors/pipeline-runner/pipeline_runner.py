@@ -26,7 +26,7 @@ for _path in (REPO_ROOT, MONITOR_DIR):
         sys.path.insert(0, str(_path))
 
 from feeds import FeedParseError, discover_feed_candidates  # noqa: E402
-from filtering import classify_candidate, load_config  # noqa: E402
+from filtering import LOOKBACK_REASON, classify_candidate, load_config, lookback_cutoff, outside_lookback  # noqa: E402
 from geopolitical_source_monitor import _source_error_state, run_collection  # noqa: E402
 from web import PolicyHttpClient, TransportResponse, discover_candidates, is_restricted_document  # noqa: E402
 
@@ -62,13 +62,15 @@ def _preview_source(configured: dict[str, Any], defaults: dict[str, Any], config
             candidates = discover_candidates(listing.body, base_url, source)
         if link_filter:
             candidates = [item for item in candidates if link_filter.search(item.url)]
+        cutoff = lookback_cutoff(config)
         for candidate in candidates[: limit - len(result["candidates"])]:
             verdict = classify_candidate(candidate.title, candidate.summary, "", source.get("language", ""), config)
+            too_old = outside_lookback(candidate.published, cutoff)
             result["candidates"].append({
                 "title": candidate.title,
                 "url": candidate.url,
-                "accepted": verdict["accepted"],
-                "reason": verdict["exclusion_reason"],
+                "accepted": verdict["accepted"] and not too_old,
+                "reason": LOOKBACK_REASON if too_old else verdict["exclusion_reason"],
                 "matched": list(dict.fromkeys([*verdict["matched_discovery_terms"], *verdict["matched_admission_terms"]])),
             })
     if result["candidates"]:

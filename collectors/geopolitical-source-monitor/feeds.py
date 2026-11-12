@@ -13,6 +13,10 @@ from web import Candidate, canonicalize_url
 
 
 MAX_FEED_BYTES = 5 * 1024 * 1024
+_XML_DECLARATION = re.compile(r"^\s*<\?xml\b[^>]*\?>", re.I)
+# 单字节西文编码与 UTF-16/32 不做乱码还原（前者解码本身无损，后者不兼容 ASCII）
+_NO_REDECODE = ("utf-16", "utf-32", "iso-8859", "iso8859", "latin", "windows-125", "cp125", "ascii", "us-ascii")
+_DECLARED_ENCODING = re.compile(r"""encoding\s*=\s*["']([A-Za-z0-9._-]+)["']""", re.I)
 
 
 class FeedParseError(ValueError):
@@ -64,14 +68,35 @@ def _iso_utc(value: str) -> str:
     return parsed.astimezone(timezone.utc).isoformat()
 
 
+def _without_declaration(xml_text: str) -> str:
+    """去掉 XML 声明：传进来的已是解码后的文本，声明里的 gb2312/gbk 等编码会让解析器按错误编码重读。
+
+    响应头没给 charset 时，HTTP 层可能先按 windows-1252 解出了乱码；能无损还原成字节时按声明的编码重解。
+    """
+    text = xml_text.lstrip("\ufeff").strip()
+    match = _XML_DECLARATION.match(text)
+    if not match:
+        return text
+    declared = _DECLARED_ENCODING.search(match.group(0))
+    body = text[match.end():]
+    name = declared.group(1).lower().replace("_", "-") if declared else ""
+    # 只对兼容 ASCII 的非 UTF-8 编码、且正文含非 ASCII 字符（可能是乱码）时尝试还原
+    if name and name not in {"utf-8", "utf8"} and not name.startswith(_NO_REDECODE) and not body.isascii():
+        try:
+            body = body.encode("windows-1252").decode(declared.group(1))
+        except (UnicodeError, LookupError, ValueError):
+            pass
+    return body
+
+
 def discover_feed_candidates(xml_text: str, base_url: str, source: dict[str, Any]) -> list[Candidate]:
     if len(xml_text.encode("utf-8", errors="ignore")) > MAX_FEED_BYTES:
         raise FeedParseError("订阅源超过 5 MB 上限")
     if "<!ENTITY" in xml_text:
         raise FeedParseError("订阅源含实体声明，已拒绝")
     try:
-        root = ET.fromstring(xml_text.strip().encode("utf-8"))
-    except (ET.ParseError, RecursionError) as exc:
+        root = ET.fromstring(_without_declaration(xml_text).encode("utf-8"))
+    except (ET.ParseError, RecursionError, ValueError, LookupError, UnicodeError) as exc:
         raise FeedParseError(f"订阅源不是有效 XML：{exc}") from exc
     allowed = {host.lower() for host in source.get("allowed_hosts", [])}
     found: dict[str, Candidate] = {}

@@ -66,7 +66,7 @@ def test_valid_config_fills_defaults():
     assert r == {"name": "测试管线", "description": "", "topics": ["usiran"]}
     assert c["filters"]["require_category"] is True and c["filters"]["lookback_days"] == 14
     assert c["filters"]["max_candidates_per_source"] == 80
-    assert c["request"] == {"timeout_seconds": 25, "rate_limit_seconds": 1.5, "max_pages_per_source": 3}
+    assert c["request"] == {"timeout_seconds": 25, "rate_limit_seconds": 1.5}
 
 
 def test_rejects_url_outside_allowed_hosts():
@@ -153,7 +153,7 @@ def test_limits():
                         exclude=[f"c{i}" for i in range(41)])
     assert fail(ROW, c).field.startswith("filters")
     c = copy.deepcopy(CFG)
-    c["request"]["max_pages_per_source"] = 6
+    c["request"]["max_pages_per_source"] = 3  # 翻页项已移除（未实现），按未知字段拒绝
     assert fail(ROW, c).field == "request.max_pages_per_source"
     c = copy.deepcopy(CFG)
     c["sources"][1]["link_include_pattern"] = "a" * 201
@@ -209,7 +209,10 @@ def test_to_monitor_config_maps_terms_and_rss():
     assert s0["discovery_mode"] == "rss" and s0["entry_urls"] == [c["sources"][0]["feed_url"]]
     assert s1["discovery_mode"] == "listing" and s1["link_include_pattern"] == "/releases/"
     assert s0["publisher"] == s0["name_zh"] == "路透世界"
-    assert out["lookback_days"] == 14 and out["request"]["max_pages_per_source"] == 3
+    assert out["lookback_days"] == 14 and "max_pages_per_source" not in out["request"]
+    # 只有管线配置开启公网主机强制与回看过滤；多源采集器自己的 config.json 不带这两个开关
+    assert out["request"]["enforce_public_hosts"] is True and out["apply_lookback"] is True
+    assert "enforce_public_hosts" not in BASE["request"] and "apply_lookback" not in BASE
     assert BASE["topics"] == ["usiran", "ukraine"]  # base untouched
 
 
@@ -240,3 +243,33 @@ def test_to_monitor_config_multi_topics_and_hints():
     assert out["topic_terms"] == {"usiran": shared, "ukraine": shared}
     assert out["topic_hints"] == {t: BASE["topic_terms"][t]["anchors"] for t in ("usiran", "ukraine")}
     assert "topic_hints" not in BASE
+
+
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1"])
+def test_rejects_allowed_host_that_is_internal_even_if_unused(host):
+    """allowed_hosts 每一项都要解析检查：未被任何 URL 使用的内网主机也会让抓取期跳转到内网。"""
+    c = copy.deepcopy(CFG)
+    c["sources"][1]["allowed_hosts"] = ["www.state.gov", host]
+    resolve = lambda h: ["127.0.0.1"] if h == "localhost" else ["93.184.216.34"]  # noqa: E731
+    e = fail(ROW, c, resolve)
+    assert e.field == "sources[1].allowed_hosts[1]" and "内网" in e.message
+
+
+def test_rejects_allowed_host_resolving_to_10_net():
+    c = copy.deepcopy(CFG)
+    c["sources"][0]["allowed_hosts"] = ["news.example", "intranet.example"]
+    resolve = lambda h: ["10.0.0.8"] if h == "intranet.example" else ["93.184.216.34"]  # noqa: E731
+    e = fail(ROW, c, resolve)
+    assert e.field == "sources[0].allowed_hosts[1]" and "内网" in e.message
+
+
+def test_rejects_unresolvable_allowed_host():
+    c = copy.deepcopy(CFG)
+    c["sources"][0]["allowed_hosts"] = ["news.example", "gone.example"]
+
+    def resolve(h):
+        if h == "gone.example":
+            raise OSError("nxdomain")
+        return ["93.184.216.34"]
+    e = fail(ROW, c, resolve)
+    assert e.field == "sources[0].allowed_hosts[1]" and "无法解析域名" in e.message

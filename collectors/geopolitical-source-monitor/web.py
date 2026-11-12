@@ -5,17 +5,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import unescape
 from html.parser import HTMLParser
+import ipaddress
 import json
 import os
 from pathlib import Path
 import sys
 import threading
 import re
+import socket
 import time
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 from urllib.robotparser import RobotFileParser
 
 
@@ -103,6 +105,80 @@ def _default_transport(request: Request, timeout: float) -> TransportResponse:
         raise exc
 
 
+class BlockedRequest(URLError):
+    """公网主机强制（enforce_public_hosts）拦下的请求：不重试，只让该请求失败。"""
+
+    def __init__(self, error_type: str, message: str):
+        super().__init__(message)
+        self.error_type = error_type
+        self.message = message
+
+
+def _forbidden_address(raw: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(raw.split("%", 1)[0])
+    except ValueError:
+        return True
+    if getattr(ip, "ipv4_mapped", None):
+        ip = ip.ipv4_mapped
+    return (not ip.is_global or ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+            or ip.is_multicast or ip.is_unspecified)
+
+
+def public_host_problem(host: str) -> str | None:
+    """主机解析结果含私网、回环、链路本地、保留等非公网地址或无法解析时返回原因，否则 None。"""
+    try:
+        ipaddress.ip_address(host)
+        addresses = [host]
+    except ValueError:
+        try:
+            addresses = sorted({info[4][0] for info in socket.getaddrinfo(host, None)})
+        except (OSError, UnicodeError):
+            return f"无法解析域名：{host}"
+    if not addresses:
+        return f"无法解析域名：{host}"
+    if any(_forbidden_address(str(a)) for a in addresses):
+        return f"域名 {host} 解析到内网或保留地址，已拒绝"
+    return None
+
+
+def _target_problem(url: str, allowed: set[str], host_problem: Callable[[str], str | None]) -> str | None:
+    split = urlsplit(url)
+    host = (split.hostname or "").lower()
+    if split.scheme not in {"http", "https"} or host not in allowed:
+        return f"目标主机 {host or '（空）'} 不在来源允许域名内"
+    return host_problem(host)
+
+
+class _GuardedRedirectHandler(HTTPRedirectHandler):
+    """跳转目标必须在来源 allowed_hosts 内且解析为公网地址。"""
+
+    def __init__(self, allowed: set[str], host_problem: Callable[[str], str | None]):
+        super().__init__()
+        self.allowed = allowed
+        self.host_problem = host_problem
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+        target = urljoin(req.full_url, newurl)
+        problem = _target_problem(target, self.allowed, self.host_problem)
+        if problem:
+            fp.close()
+            raise BlockedRequest("redirect_blocked", f"跳转被拒绝：{problem}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _guarded_transport(request: Request, timeout: float, allowed: set[str],
+                       host_problem: Callable[[str], str | None]) -> TransportResponse:
+    opener = build_opener(_GuardedRedirectHandler(allowed, host_problem))
+    with opener.open(request, timeout=timeout) as response:
+        return TransportResponse(
+            int(getattr(response, "status", 200)),
+            dict(response.headers.items()),
+            response.read(),
+            response.geturl(),
+        )
+
+
 def _decode(body: bytes, headers: dict[str, str]) -> str:
     content_type = next((value for key, value in headers.items() if key.lower() == "content-type"), "")
     match = re.search(r"charset=([\w-]+)", content_type, re.I)
@@ -125,9 +201,11 @@ class PolicyHttpClient:
         sleep: Callable[[float], None] = time.sleep,
         robots_fetcher: Callable[[str], str] | None = None,
         cache_dir: Path | None = None,
+        host_problem: Callable[[str], str | None] = public_host_problem,
     ):
         self.user_agent = user_agent
         self.transport = transport or _default_transport
+        self.host_problem = host_problem
         self.sleep = sleep
         self.robots_fetcher = robots_fetcher
         self.cache: dict[str, dict[str, Any]] = {}
@@ -138,7 +216,21 @@ class PolicyHttpClient:
         self.robot_cache: dict[str, RobotFileParser] = {}
         self.last_request_at: dict[str, float] = {}
 
-    def _robot_parser(self, url: str, timeout: float) -> RobotFileParser:
+    def _send(self, request: Request, timeout: float, source: dict[str, Any] | None) -> TransportResponse:
+        """发送请求；来源带 enforce_public_hosts（只有管线配置会带）时限制跳转与最终地址。"""
+        if not (source and source.get("enforce_public_hosts")):
+            return self.transport(request, timeout)
+        allowed = {str(host).lower() for host in source.get("allowed_hosts", [])}
+        if self.transport is _default_transport:
+            response = _guarded_transport(request, timeout, allowed, self.host_problem)
+        else:
+            response = self.transport(request, timeout)
+        problem = _target_problem(response.final_url or request.full_url, allowed, self.host_problem)
+        if problem:
+            raise BlockedRequest("redirect_blocked", f"跳转被拒绝：{problem}")
+        return response
+
+    def _robot_parser(self, url: str, timeout: float, source: dict[str, Any] | None = None) -> RobotFileParser:
         split = urlsplit(url)
         root = f"{split.scheme}://{split.netloc}"
         if root in self.robot_cache:
@@ -150,7 +242,7 @@ class PolicyHttpClient:
                 text = self.robots_fetcher(root + "/robots.txt")
             else:
                 request = Request(root + "/robots.txt", headers={"User-Agent": self.user_agent})
-                response = self.transport(request, timeout)
+                response = self._send(request, timeout, source)
                 text = _decode(response.body, response.headers) if response.status == 200 else ""
             parser.parse(text.splitlines())
         except Exception:
@@ -177,7 +269,12 @@ class PolicyHttpClient:
         if split.scheme not in {"http", "https"} or (split.hostname or "").lower() not in allowed:
             return FetchResult(0, "", clean_url, {}, "host_not_allowed", "URL 不在来源允许域名内")
         timeout = float(source.get("timeout_seconds", 25))
-        if not self._robot_parser(clean_url, timeout).can_fetch(self.user_agent, clean_url):
+        if source.get("enforce_public_hosts"):
+            # 连接前再查一次解析结果（覆盖保存配置后 DNS 改指内网的主要情形）
+            problem = self.host_problem((split.hostname or "").lower())
+            if problem:
+                return FetchResult(0, "", clean_url, {}, "host_not_public", problem)
+        if not self._robot_parser(clean_url, timeout, source).can_fetch(self.user_agent, clean_url):
             return FetchResult(0, "", clean_url, {}, "robots_disallowed", "robots.txt 禁止访问")
 
         host = (split.hostname or "").lower()
@@ -204,7 +301,7 @@ class PolicyHttpClient:
                 self.sleep(interval - elapsed)
             request = Request(clean_url, headers=headers)
             try:
-                response = self.transport(request, timeout)
+                response = self._send(request, timeout, source)
                 self.last_request_at[host] = time.monotonic()
                 if response.status in RETRYABLE and attempt < retries:
                     retry_after = float(response.headers.get("Retry-After", 0) or 0)
@@ -228,6 +325,9 @@ class PolicyHttpClient:
                         self.cache[clean_url] = self.disk_cache.get(cache_key) or self.cache[clean_url]
                 error = "" if 200 <= response.status < 400 else f"http_{response.status}"
                 return FetchResult(response.status, text, response.final_url, response.headers, error)
+            except BlockedRequest as exc:
+                self.last_request_at[host] = time.monotonic()
+                return FetchResult(0, "", clean_url, {}, exc.error_type, exc.message[:160])
             except HTTPError as exc:
                 self.last_request_at[host] = time.monotonic()
                 if exc.code == 304 and cached:

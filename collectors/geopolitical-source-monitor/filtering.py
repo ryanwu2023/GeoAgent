@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 import json
 from pathlib import Path
 import re
@@ -59,6 +61,44 @@ def load_config(path: Path) -> dict[str, Any]:
         if not source.get("entry_urls") or not source.get("allowed_hosts"):
             raise ValueError(f"来源入口或允许域名为空：{source_id}")
     return config
+
+
+LOOKBACK_REASON = "超出回看天数"
+
+
+def lookback_cutoff(config: dict[str, Any], now: datetime | None = None) -> datetime | None:
+    """只有管线配置（apply_lookback=true）按 lookback_days 过滤；多源采集器自身配置返回 None，不过滤。"""
+    if not config.get("apply_lookback"):
+        return None
+    try:
+        days = float(config.get("lookback_days") or 0)
+    except (TypeError, ValueError):
+        return None
+    if days <= 0:
+        return None
+    return (now or datetime.now(timezone.utc)) - timedelta(days=days)
+
+
+def _published_at(value: object) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            parsed = parsedate_to_datetime(text)
+        except (TypeError, ValueError, IndexError):
+            return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def outside_lookback(published: object, cutoff: datetime | None) -> bool:
+    """发布时间早于回看起点时为 True；发布时间缺失或无法识别时不因此排除。"""
+    if cutoff is None:
+        return False
+    parsed = _published_at(published)
+    return parsed is not None and parsed < cutoff
 
 
 def _usiran_dimension(text: str, categories: list[str]) -> str:
@@ -147,7 +187,8 @@ def classify_candidate(
     accepted = bool(topics)
     reason = "" if accepted else (
         "命中排除内容" if exclusions else
-        "未同时命中主题锚点与事项准入词"
+        "未同时命中主题锚点与事项准入词" if require_category else
+        "未命中锚词"
     )
     return {
         "accepted": accepted,
