@@ -270,3 +270,184 @@ COMMENT ON COLUMN web_users.updated_by IS '最近修改密码或删除该用户�
 COMMENT ON COLUMN web_users.updated_at IS '最近一次修改密码或删除的时间；尚未修改时为空';
 COMMENT ON COLUMN web_users.data_timestamp IS '用户由本系统创建，取创建时刻；修改密码或删除不改变';
 COMMENT ON COLUMN web_users.is_deleted IS '逻辑删除标记：false 为可登录用户，true 为已删除用户';
+
+-- 采集管线配置化：管线、配置版本、运行记录、去重台账、运行新增条目
+CREATE TABLE IF NOT EXISTS collection_pipelines (
+ id TEXT PRIMARY KEY,
+ kind TEXT NOT NULL CHECK (kind IN ('configurable','builtin')),
+ name TEXT NOT NULL,
+ description TEXT NOT NULL DEFAULT '',
+ topic TEXT NOT NULL,
+ enabled BOOLEAN NOT NULL DEFAULT false,
+ current_version INTEGER NOT NULL,
+ interval_sec INTEGER NULL,
+ daily_times TEXT[] NOT NULL DEFAULT '{}',
+ timezone TEXT NOT NULL DEFAULT 'Asia/Shanghai',
+ next_run_at TIMESTAMPTZ NULL,
+ last_run_id TEXT NULL,
+ last_status TEXT NULL,
+ last_finished_at TIMESTAMPTZ NULL,
+ last_new_items INTEGER NOT NULL DEFAULT 0,
+ owner TEXT NOT NULL,
+ created_by TEXT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_by TEXT NULL,
+ updated_at TIMESTAMPTZ NULL,
+ data_timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ is_deleted BOOLEAN NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS collection_pipelines_due ON collection_pipelines(enabled, next_run_at) WHERE NOT is_deleted;
+CREATE UNIQUE INDEX IF NOT EXISTS collection_pipelines_active_name ON collection_pipelines(name) WHERE NOT is_deleted;
+CREATE TABLE IF NOT EXISTS collection_pipeline_versions (
+ pipeline_id TEXT NOT NULL REFERENCES collection_pipelines(id) ON DELETE RESTRICT,
+ version INTEGER NOT NULL,
+ config JSONB NOT NULL,
+ change_note TEXT NOT NULL DEFAULT '',
+ source_channel TEXT NOT NULL CHECK (source_channel IN ('web','mcp','migration')),
+ created_by TEXT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_by TEXT NULL,
+ updated_at TIMESTAMPTZ NULL,
+ data_timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ is_deleted BOOLEAN NOT NULL DEFAULT false,
+ PRIMARY KEY (pipeline_id, version)
+);
+CREATE TABLE IF NOT EXISTS collection_pipeline_runs (
+ run_id TEXT PRIMARY KEY,
+ pipeline_id TEXT NOT NULL REFERENCES collection_pipelines(id) ON DELETE RESTRICT,
+ version INTEGER NOT NULL,
+ trigger TEXT NOT NULL CHECK (trigger IN ('schedule','manual','mcp')),
+ status TEXT NOT NULL CHECK (status IN ('queued','running','success','partial','failed','cancelled')),
+ started_at TIMESTAMPTZ NOT NULL,
+ finished_at TIMESTAMPTZ NULL,
+ stats JSONB NOT NULL DEFAULT '{}',
+ snapshot_id TEXT NULL,
+ error TEXT NULL,
+ created_by TEXT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_by TEXT NULL,
+ updated_at TIMESTAMPTZ NULL,
+ data_timestamp TIMESTAMPTZ NOT NULL,
+ is_deleted BOOLEAN NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS collection_pipeline_runs_by_pipeline ON collection_pipeline_runs(pipeline_id, started_at DESC);
+CREATE TABLE IF NOT EXISTS pipeline_seen_items (
+ pipeline_id TEXT NOT NULL REFERENCES collection_pipelines(id) ON DELETE RESTRICT,
+ record_id TEXT NOT NULL,
+ first_run_id TEXT NOT NULL,
+ created_by TEXT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_by TEXT NULL,
+ updated_at TIMESTAMPTZ NULL,
+ data_timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ is_deleted BOOLEAN NOT NULL DEFAULT false,
+ PRIMARY KEY (pipeline_id, record_id)
+);
+CREATE TABLE IF NOT EXISTS collection_pipeline_run_items (
+ run_id TEXT NOT NULL REFERENCES collection_pipeline_runs(run_id) ON DELETE RESTRICT,
+ seq INTEGER NOT NULL,
+ pipeline_id TEXT NOT NULL REFERENCES collection_pipelines(id) ON DELETE RESTRICT,
+ record_id TEXT NOT NULL,
+ evidence_id TEXT NULL,
+ source_id TEXT NOT NULL,
+ source_type TEXT NOT NULL CHECK (source_type IN ('web','rss','search')),
+ title TEXT NOT NULL,
+ published_at TIMESTAMPTZ NULL,
+ language TEXT NOT NULL DEFAULT '',
+ matched_terms JSONB NOT NULL DEFAULT '[]',
+ dimension TEXT NULL,
+ created_by TEXT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_by TEXT NULL,
+ updated_at TIMESTAMPTZ NULL,
+ data_timestamp TIMESTAMPTZ NOT NULL,
+ is_deleted BOOLEAN NOT NULL DEFAULT false,
+ PRIMARY KEY (run_id, seq)
+);
+CREATE INDEX IF NOT EXISTS collection_pipeline_run_items_by_pipeline ON collection_pipeline_run_items(pipeline_id, run_id);
+
+COMMENT ON TABLE collection_pipelines IS '采集管线：可配置（网页/RSS）或内置的一条采集任务，含启停、调度与最近一次运行摘要；只做逻辑删除';
+COMMENT ON COLUMN collection_pipelines.id IS '管线唯一标识，由应用生成；删除后同名重建会得到新的 id';
+COMMENT ON COLUMN collection_pipelines.kind IS '管线类型：configurable 为用户配置的网页/RSS 管线，builtin 为内置采集器';
+COMMENT ON COLUMN collection_pipelines.name IS '管线名称；有效（未删除）记录内唯一，删除后可重用';
+COMMENT ON COLUMN collection_pipelines.description IS '管线说明，可为空字符串';
+COMMENT ON COLUMN collection_pipelines.topic IS '所属主题，目前仅 usiran 或 ukraine';
+COMMENT ON COLUMN collection_pipelines.enabled IS '是否启用定时调度：false 不调度（默认），true 按调度配置运行';
+COMMENT ON COLUMN collection_pipelines.current_version IS '当前生效的配置版本号，对应 collection_pipeline_versions.version';
+COMMENT ON COLUMN collection_pipelines.interval_sec IS '固定间隔调度，单位秒，取值 600~604800；与 daily_times 二选一，未使用时为空';
+COMMENT ON COLUMN collection_pipelines.daily_times IS '每日定点调度时刻数组，格式 HH:MM，最多 24 个，按 timezone 解释；与 interval_sec 二选一';
+COMMENT ON COLUMN collection_pipelines.timezone IS '定点调度使用的 IANA 时区，默认 Asia/Shanghai';
+COMMENT ON COLUMN collection_pipelines.next_run_at IS '下一次计划运行时间；未启用或无调度时为空';
+COMMENT ON COLUMN collection_pipelines.last_run_id IS '最近一次运行的 run_id，尚未运行为空';
+COMMENT ON COLUMN collection_pipelines.last_status IS '最近一次运行状态，取值同 collection_pipeline_runs.status；尚未运行为空';
+COMMENT ON COLUMN collection_pipelines.last_finished_at IS '最近一次运行结束时间；尚未运行或未结束为空';
+COMMENT ON COLUMN collection_pipelines.last_new_items IS '最近一次运行新增的条目数，默认 0';
+COMMENT ON COLUMN collection_pipelines.owner IS '管线所有者账号；非管理员只能修改自己拥有的管线';
+COMMENT ON COLUMN collection_pipelines.created_by IS '创建该管线的操作者账号，未启用网页登录时为 local';
+COMMENT ON COLUMN collection_pipelines.created_at IS '管线首次在本系统建立的时间；后续修改不重置';
+COMMENT ON COLUMN collection_pipelines.updated_by IS '最近一次修改该管线的操作者账号；尚未修改为空';
+COMMENT ON COLUMN collection_pipelines.updated_at IS '最近一次实际修改的时间；尚未修改为空';
+COMMENT ON COLUMN collection_pipelines.data_timestamp IS '管线由本系统生成，取创建时刻；后续修改不改变';
+COMMENT ON COLUMN collection_pipelines.is_deleted IS '逻辑删除标记：false 为有效管线，true 为已删除';
+
+COMMENT ON TABLE collection_pipeline_versions IS '采集管线配置版本：每次保存配置追加一个版本，保留完整历史以便追溯与回滚';
+COMMENT ON COLUMN collection_pipeline_versions.pipeline_id IS '所属管线，引用 collection_pipelines.id';
+COMMENT ON COLUMN collection_pipeline_versions.version IS '版本号，同一管线内从 1 递增';
+COMMENT ON COLUMN collection_pipeline_versions.config IS '该版本的完整配置（来源、锚词、强锚词、排除词、抓取限制等）的 JSON';
+COMMENT ON COLUMN collection_pipeline_versions.change_note IS '本次变更说明，可为空字符串';
+COMMENT ON COLUMN collection_pipeline_versions.source_channel IS '产生该版本的渠道：web 页面、mcp 工具、migration 内置管线迁移';
+COMMENT ON COLUMN collection_pipeline_versions.created_by IS '保存该版本的操作者账号';
+COMMENT ON COLUMN collection_pipeline_versions.created_at IS '版本首次写入本系统的时间';
+COMMENT ON COLUMN collection_pipeline_versions.updated_by IS '最近一次修改该版本记录的操作者；版本内容不可变，通常为空';
+COMMENT ON COLUMN collection_pipeline_versions.updated_at IS '最近一次实际修改时间；通常为空';
+COMMENT ON COLUMN collection_pipeline_versions.data_timestamp IS '版本由本系统生成，取创建时刻';
+COMMENT ON COLUMN collection_pipeline_versions.is_deleted IS '逻辑删除标记：false 有效，true 已删除';
+
+COMMENT ON TABLE collection_pipeline_runs IS '采集管线运行记录：每次调度、手动或 MCP 触发的一次运行及其状态、统计与产出快照';
+COMMENT ON COLUMN collection_pipeline_runs.run_id IS '运行唯一标识，由应用生成';
+COMMENT ON COLUMN collection_pipeline_runs.pipeline_id IS '所属管线，引用 collection_pipelines.id';
+COMMENT ON COLUMN collection_pipeline_runs.version IS '运行时使用的配置版本号';
+COMMENT ON COLUMN collection_pipeline_runs.trigger IS '触发方式：schedule 定时调度、manual 页面手动、mcp MCP 工具';
+COMMENT ON COLUMN collection_pipeline_runs.status IS '运行状态：queued 排队、running 运行中、success 成功、partial 部分成功、failed 失败、cancelled 已取消';
+COMMENT ON COLUMN collection_pipeline_runs.started_at IS '运行开始时间';
+COMMENT ON COLUMN collection_pipeline_runs.finished_at IS '运行结束时间；未结束为空';
+COMMENT ON COLUMN collection_pipeline_runs.stats IS '运行统计 JSON（抓取、命中、新增、各来源错误数等），默认空对象';
+COMMENT ON COLUMN collection_pipeline_runs.snapshot_id IS '本次运行产出的数据快照标识；无产出为空';
+COMMENT ON COLUMN collection_pipeline_runs.error IS '失败或部分失败时的错误摘要；成功为空';
+COMMENT ON COLUMN collection_pipeline_runs.created_by IS '触发该运行的操作者账号；定时调度时为服务身份或空';
+COMMENT ON COLUMN collection_pipeline_runs.created_at IS '运行记录首次写入本系统的时间';
+COMMENT ON COLUMN collection_pipeline_runs.updated_by IS '最近一次更新该运行记录的操作者或服务身份；未更新为空';
+COMMENT ON COLUMN collection_pipeline_runs.updated_at IS '最近一次实际更新时间（如状态变化）；未更新为空';
+COMMENT ON COLUMN collection_pipeline_runs.data_timestamp IS '运行数据生成时间，取 started_at';
+COMMENT ON COLUMN collection_pipeline_runs.is_deleted IS '逻辑删除标记：false 有效，true 已删除';
+
+COMMENT ON TABLE pipeline_seen_items IS '管线去重台账：记录某管线已见过的条目，防止重复入库；软删除也保留防重证据';
+COMMENT ON COLUMN pipeline_seen_items.pipeline_id IS '所属管线，引用 collection_pipelines.id；管线删除后重建得到新 id，台账天然隔离';
+COMMENT ON COLUMN pipeline_seen_items.record_id IS '条目标识（由规范化 URL 等生成的稳定 ID），与 pipeline_id 共同构成主键';
+COMMENT ON COLUMN pipeline_seen_items.first_run_id IS '首次看到该条目的运行 run_id';
+COMMENT ON COLUMN pipeline_seen_items.created_by IS '写入该条目的操作者或服务身份；未知为空';
+COMMENT ON COLUMN pipeline_seen_items.created_at IS '台账记录首次写入时间';
+COMMENT ON COLUMN pipeline_seen_items.updated_by IS '最近一次修改台账记录的操作者；通常为空';
+COMMENT ON COLUMN pipeline_seen_items.updated_at IS '最近一次实际修改时间；通常为空';
+COMMENT ON COLUMN pipeline_seen_items.data_timestamp IS '首次看到该条目的时刻';
+COMMENT ON COLUMN pipeline_seen_items.is_deleted IS '逻辑删除标记：false 有效，true 已删除；删除不影响去重判断';
+
+COMMENT ON TABLE collection_pipeline_run_items IS '运行新增条目：每次运行中首次出现的条目明细，用于“本次新增”展示';
+COMMENT ON COLUMN collection_pipeline_run_items.run_id IS '所属运行，引用 collection_pipeline_runs.run_id';
+COMMENT ON COLUMN collection_pipeline_run_items.seq IS '条目在该次运行内的序号，从 1 起，与 run_id 共同构成主键';
+COMMENT ON COLUMN collection_pipeline_run_items.pipeline_id IS '所属管线，引用 collection_pipelines.id，冗余保存以便按管线查询';
+COMMENT ON COLUMN collection_pipeline_run_items.record_id IS '条目标识，对应 pipeline_seen_items.record_id';
+COMMENT ON COLUMN collection_pipeline_run_items.evidence_id IS '入库后对应的证据标识；尚未入库为空';
+COMMENT ON COLUMN collection_pipeline_run_items.source_id IS '来源标识，对应管线配置中的来源 id';
+COMMENT ON COLUMN collection_pipeline_run_items.source_type IS '来源类型：web 网页、rss 订阅、search 搜索（搜索源后续期开放）';
+COMMENT ON COLUMN collection_pipeline_run_items.title IS '条目标题';
+COMMENT ON COLUMN collection_pipeline_run_items.published_at IS '条目源站发布时间；未知为空';
+COMMENT ON COLUMN collection_pipeline_run_items.language IS '内容语种代码，未识别为空字符串';
+COMMENT ON COLUMN collection_pipeline_run_items.matched_terms IS '命中的锚词、强锚词列表（JSON 数组），默认空数组';
+COMMENT ON COLUMN collection_pipeline_run_items.dimension IS '归入的研究维度；未归类为空';
+COMMENT ON COLUMN collection_pipeline_run_items.created_by IS '写入该条目的操作者或服务身份；未知为空';
+COMMENT ON COLUMN collection_pipeline_run_items.created_at IS '条目明细首次写入时间';
+COMMENT ON COLUMN collection_pipeline_run_items.updated_by IS '最近一次修改的操作者；通常为空';
+COMMENT ON COLUMN collection_pipeline_run_items.updated_at IS '最近一次实际修改时间；通常为空';
+COMMENT ON COLUMN collection_pipeline_run_items.data_timestamp IS '源数据时间：取 published_at，缺失时回退为运行开始时间';
+COMMENT ON COLUMN collection_pipeline_run_items.is_deleted IS '逻辑删除标记：false 有效，true 已删除';
