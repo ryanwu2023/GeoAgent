@@ -21,13 +21,14 @@ export type Pipeline = PipelineRow & {
 export type PipelineVersion = {pipeline_id: string; version: number; config: PipelineConfig; change_note: string; source_channel: string; created_by: string | null; created_at: string};
 export type PipelineRun = {
   run_id: string; pipeline_id: string; trigger: "batch" | "trial"; status: string; snapshot_id: string | null;
-  stats: Record<string, unknown> | null; error: string | null; started_at: string; finished_at: string | null;
+  version: number; stats: Record<string, unknown> | null; error: string | null; started_at: string; finished_at: string | null;
 };
 export type PipelineRunItem = {
   title: string; summary: string | null; source_id: string; source_type: string; published_at: string | null;
   language: string | null; matched_terms: string[]; dimensions: Record<string, unknown>; evidence_id: string | null;
 };
-export type PreviewResult = Record<string, unknown>;
+export type PreviewCandidate = {title: string; url: string; accepted: boolean; reason: string; matched: string[]};
+export type PreviewResult = {sources: Array<{source_id: string; state: string; error: string | null; candidates: Array<{title: string; url: string; accepted: boolean; reason: string; matched: string[]}>}>};
 export type PipelineDraft = {row: PipelineRow; config: PipelineConfig};
 export type PipelineWriteBody = {row: Partial<PipelineRow>; config: PipelineConfig | null; change_note?: string};
 export type ListParams = {topic?: string; status?: string; kind?: string; q?: string; changed_since?: string};
@@ -122,3 +123,37 @@ export function readSeen(): Record<string, string> {
 export function writeSeen(seen: Record<string, string>) {
   try { localStorage.setItem(SEEN_KEY, JSON.stringify(seen)); } catch { /* 隐私模式或存储已满时忽略 */ }
 }
+
+export const latestTrial = <T extends {trigger: string}>(runs: T[]): T | null => runs.find((r) => r.trigger === "trial") ?? null;
+export function newItemsOf(run: {stats: Record<string, unknown> | null}): number | null {
+  const n = run.stats?.new_items;
+  return typeof n === "number" ? n : null;
+}
+/** 422 的 detail.field 是否落在某个输入框上：同一字段、其子路径，或它的父级（如 filters 合计超限）。 */
+export function fieldHit(errField: string | undefined | null, field: string): boolean {
+  if (!errField) return false;
+  return errField === field || errField.startsWith(field + ".") || errField.startsWith(field + "[") || field.startsWith(errField + ".");
+}
+export type DetailTab = "basic" | "sources" | "keywords" | "items" | "versions" | "runs";
+export function tabForField(field: string | undefined | null): DetailTab | null {
+  if (!field) return null;
+  if (field.startsWith("row.")) return "basic";
+  if (field === "sources" || field.startsWith("sources[") || field.startsWith("request.")) return "sources";
+  if (field === "filters" || field.startsWith("filters.")) return "keywords";
+  return null;
+}
+export function hostsFromUrls(urls: string[]): string[] {
+  const hosts = urls.map((u) => { try { const url = new URL(u); return /^https?:$/.test(url.protocol) ? url.hostname.toLowerCase() : ""; } catch { return ""; } });
+  return [...new Set(hosts.filter(Boolean))];
+}
+export function draftOf(p: PipelineRow & {config?: PipelineConfig}): PipelineDraft {
+  return {
+    row: {name: p.name, description: p.description ?? "", topics: [...p.topics]},
+    config: p.config ? JSON.parse(JSON.stringify(p.config)) : emptyDraft([]).config,
+  };
+}
+/** 列表行只带 last_run_id：整批运行记录 ID 为 “<整批 run_id>:<管线 id>”，测试运行没有冒号。 */
+export const lastRunTrigger = (p: {last_run_id: string | null}): "batch" | "trial" | null =>
+  p.last_run_id ? (p.last_run_id.includes(":") ? "batch" : "trial") : null;
+export const recentlyUpdated = (rows: {last_new_items: number; last_finished_at: string | null}[], now = Date.now()): number =>
+  rows.filter((p) => p.last_new_items > 0 && p.last_finished_at && now - Date.parse(p.last_finished_at) <= 86_400_000).length;

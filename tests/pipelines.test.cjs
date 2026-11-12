@@ -121,3 +121,67 @@ test("错误响应抛 PipelineApiError", async () => {
   await assert.rejects(b.getPipeline("p"), (e) => e.status === 502 && e.message === "bad gateway");
   b.restore();
 });
+test("latestTrial 取最近一次测试运行", () => {
+  const runs = [{run_id: "b", trigger: "batch"}, {run_id: "t2", trigger: "trial"}, {run_id: "t1", trigger: "trial"}];
+  assert.equal(m.latestTrial(runs).run_id, "t2");
+  assert.equal(m.latestTrial([{run_id: "b", trigger: "batch"}]), null);
+  assert.equal(m.latestTrial([]), null);
+});
+test("newItemsOf 读取 stats.new_items", () => {
+  assert.equal(m.newItemsOf({stats: {new_items: 3}}), 3);
+  assert.equal(m.newItemsOf({stats: null}), null);
+  assert.equal(m.newItemsOf({stats: {new_items: "x"}}), null);
+});
+test("fieldHit 匹配字段及其子路径", () => {
+  assert.equal(m.fieldHit("row.name", "row.name"), true);
+  assert.equal(m.fieldHit("sources[0].entry_urls[1]", "sources[0].entry_urls"), true);
+  assert.equal(m.fieldHit("sources[0].id", "sources[0]"), true);
+  assert.equal(m.fieldHit("sources[1].id", "sources[0]"), false);
+  assert.equal(m.fieldHit("sources[10].id", "sources[1]"), false);
+  assert.equal(m.fieldHit("row.names", "row.name"), false);
+  assert.equal(m.fieldHit(undefined, "row.name"), false);
+  assert.equal(m.fieldHit("filters", "filters.include_any"), true, "合计超限时三个词框都标红");
+});
+test("tabForField 定位到所在详情页签", () => {
+  assert.equal(m.tabForField("row.topics"), "basic");
+  assert.equal(m.tabForField("sources[2].feed_url"), "sources");
+  assert.equal(m.tabForField("sources"), "sources");
+  assert.equal(m.tabForField("request.max_pages_per_source"), "sources");
+  assert.equal(m.tabForField("filters.exclude"), "keywords");
+  assert.equal(m.tabForField("filters"), "keywords");
+  assert.equal(m.tabForField(undefined), null);
+  assert.equal(m.tabForField("exclude_ids"), null);
+});
+test("hostsFromUrls 提取小写主机名", () => {
+  assert.deepEqual(m.hostsFromUrls(["https://WWW.Reuters.com/world", "http://www.reuters.com/x", "bad", "ftp://a.b/c"]), ["www.reuters.com"]);
+  assert.deepEqual(m.hostsFromUrls([]), []);
+});
+test("draftOf 深拷贝管线为可编辑草稿", () => {
+  const p = {name: "n", description: "d", topics: ["usiran"], config: m.emptyDraft(["usiran"]).config};
+  const d = m.draftOf(p);
+  assert.deepEqual(d.row, {name: "n", description: "d", topics: ["usiran"]});
+  d.config.filters.exclude.push("x"); d.row.topics.push("ukraine");
+  assert.deepEqual(p.config.filters.exclude, []); assert.deepEqual(p.topics, ["usiran"]);
+  const b = m.draftOf({name: "b", description: "", topics: ["ukraine"]});
+  assert.deepEqual(b.config, m.emptyDraft([]).config, "内置管线没有 config 时用空骨架");
+});
+test("类型与后端形态一致", () => {
+  const src = fs.readFileSync(path.join(__dirname, "..", "src", "pipelines.ts"), "utf8");
+  assert.ok(/export type PreviewResult = \{sources: Array<\{source_id: string; state: string; error: string \| null; candidates: Array<\{title: string; url: string; accepted: boolean; reason: string; matched: string\[\]\}>\}>\}/.test(src));
+  assert.ok(/export type PipelineRun = \{[^}]*version: number/.test(src));
+});
+test("lastRunTrigger 按运行 ID 区分整批与测试", () => {
+  assert.equal(m.lastRunTrigger({last_run_id: "20261111T000000Z-abc:p-1a2b"}), "batch");
+  assert.equal(m.lastRunTrigger({last_run_id: "pipeline-p-1a2b-20261111T000000Z-abc123"}), "trial");
+  assert.equal(m.lastRunTrigger({last_run_id: null}), null);
+});
+test("recentlyUpdated 统计最近 24 小时有新增的管线", () => {
+  const now = Date.parse("2026-11-12T12:00:00Z");
+  const rows = [
+    {last_new_items: 3, last_finished_at: "2026-11-12T01:00:00+00:00"},
+    {last_new_items: 0, last_finished_at: "2026-11-12T01:00:00+00:00"},
+    {last_new_items: 5, last_finished_at: "2026-11-10T01:00:00+00:00"},
+    {last_new_items: 2, last_finished_at: null},
+  ];
+  assert.equal(m.recentlyUpdated(rows, now), 1);
+});

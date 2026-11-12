@@ -51,6 +51,7 @@ import MetricChart from "./MetricChart";
 import {canImportNews, reconcileNewsServer, titleTranslationLabel} from "./source_status";
 import MetricGuide from "./MetricGuide";
 import CollectorMonitor from "./CollectorMonitor";
+import { isAccessDenied, listPipelines } from "./pipelines";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import BriefViewer from "./BriefViewer";
@@ -61,6 +62,9 @@ import { metricCategory } from "./metric_category";
 import { clearRunId, mergeAnalysisTrace, normalizeAnswer, normalizeAnswerMarkdown, qaRunStorageKey, saveRunId, storedRunId } from "./qa_ui";
 
 const MapView = lazy(() => import("./MapView"));
+const PipelineWorkbench = lazy(() => import("./PipelineWorkbench"));
+// 这些页签不依赖研究快照：不显示快照筛选、导入引导与快照内容区。
+const snapshotFreeTabs = new Set(["pipeline", "pipeline-config"]);
 
 const tierName = (tier: string) =>
   ({ T1: "一级来源", T2: "二级来源", T3: "三级来源", T4: "四级来源" })[tier] ||
@@ -123,7 +127,8 @@ export default function App() {
     [asset, setAsset] = useState<Asset | null>(null),
     [sourcesOpen, setSourcesOpen] = useState(false),
     [search, setSearch] = useState(""),
-    [tab, setTab] = useState("map");
+    [tab, setTab] = useState("map"),
+    [pipelinesAvailable, setPipelinesAvailable] = useState(false);
   const [evidenceRows, setEvidenceRows] = useState<Evidence[]>([]),
     [evidenceTotal, setEvidenceTotal] = useState(0),
     [evidenceMore, setEvidenceMore] = useState(false),
@@ -150,6 +155,17 @@ export default function App() {
     // from an empty/transient snapshot and never recapture it on tab changes.
     setEmbedWorkspaceScope(current => panelEntryScope(current, !!current, workingSid));
   }, [workingSid]);
+  useEffect(() => {
+    // 采集管线配置仅管理员可用：探测 /api/pipelines，403（非管理员）或 404（功能关闭）时不显示页签。
+    let cancelled = false;
+    listPipelines({ kind: "configurable" })
+      .then(() => { if (!cancelled) setPipelinesAvailable(true); })
+      .catch((e) => { if (!cancelled) setPipelinesAvailable(!isAccessDenied(e)); });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    if (tab === "pipeline-config" && !pipelinesAvailable) setTab("map");
+  }, [tab, pipelinesAvailable]);
   const [briefs, setBriefs] = useState<Brief[]>([]),
     [brief, setBrief] = useState<Brief | null>(null),
     [generating, setGenerating] = useState(false),
@@ -930,10 +946,11 @@ export default function App() {
               ["scenarios", "情景推演"],
               ["sources", "数据源"],
               ["pipeline", "采集管线监控"],
+              ["pipeline-config", "采集管线配置"],
               ["metrics", "量化指标"],
               ["assets", "资产关联"],
               ["briefs", "研究简报"],
-            ].map(([id, label]) => (
+            ].map(([id, label]) => (id === "pipeline-config" && !pipelinesAvailable) ? null : (
               <button
                 key={id}
                 className={
@@ -957,7 +974,7 @@ export default function App() {
               </button>
             ))}
           </div>
-          {page !== "briefs" && !["pipeline", "meetings"].includes(tab) && (
+          {page !== "briefs" && !["pipeline", "pipeline-config", "meetings"].includes(tab) && (
             <div className="compact-filters">
               <select
                 aria-label="跟踪维度"
@@ -1005,7 +1022,7 @@ export default function App() {
               )}
             </div>
           )}
-          {!sid && tab !== "pipeline" && (
+          {!sid && !snapshotFreeTabs.has(tab) && (
             <div className="empty landing">
               <Database size={38} />
               <h2>接入真实爬虫数据</h2>
@@ -1041,7 +1058,12 @@ export default function App() {
               }}
             />
           )}
-          {work && page !== "briefs" && tab !== "pipeline" && (
+          {tab === "pipeline-config" && pipelinesAvailable && (
+            <Suspense fallback={<div className="empty"><RefreshCw className="spin" />正在加载采集管线配置…</div>}>
+              <PipelineWorkbench onOpenEvidence={(evidenceId, snapshotId) => void openEvidence(evidenceId, null, snapshotId)} />
+            </Suspense>
+          )}
+          {work && page !== "briefs" && !snapshotFreeTabs.has(tab) && (
             <div
               className={
                 "center-view " + (tab === "map" ? "map-view" : "scroll-view")

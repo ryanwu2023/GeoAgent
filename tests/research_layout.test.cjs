@@ -184,7 +184,7 @@ test('left business menu includes the meeting calendar and has no chat route', (
     assert.ok(ts.isStringLiteral(item.elements[0]));
     return item.elements[0].text;
   });
-  assert.deepEqual(ids, ['map', 'meetings', 'evidence', 'scenarios', 'sources', 'pipeline', 'metrics', 'assets', 'briefs']);
+  assert.deepEqual(ids, ['map', 'meetings', 'evidence', 'scenarios', 'sources', 'pipeline', 'pipeline-config', 'metrics', 'assets', 'briefs']);
   assert.equal(calls(menus[0], 'setChatOpen').length, 0);
 });
 
