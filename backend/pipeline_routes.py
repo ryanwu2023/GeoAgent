@@ -34,13 +34,6 @@ def _feature_enabled(response: Response) -> None:
     response.headers["Cache-Control"] = "no-store"
 
 
-router = APIRouter(prefix="/api/pipelines", tags=["pipelines"], dependencies=[Depends(_feature_enabled)])
-
-
-def _preflight() -> None:
-    collector_jobs._preflight_lock()
-
-
 def actor_of(request: Request) -> Actor:
     if not web_auth.enabled():
         return Actor("local", True)
@@ -48,6 +41,19 @@ def actor_of(request: Request) -> Actor:
     if not username:
         raise HTTPException(401, "请先登录")
     return Actor(username, username in web_auth.users())
+
+
+def require_admin(request: Request, _flag: None = Depends(_feature_enabled)) -> None:
+    """所有 /api/pipelines* 仅管理员可用（含只读）；排在功能开关之后、同源与远端检查之前。"""
+    if not actor_of(request).is_admin:
+        raise HTTPException(403, "仅管理员可以管理采集管线")
+
+
+router = APIRouter(prefix="/api/pipelines", tags=["pipelines"], dependencies=[Depends(require_admin)])
+
+
+def _preflight() -> None:
+    collector_jobs._preflight_lock()
 
 
 def _write(request: Request) -> Actor:

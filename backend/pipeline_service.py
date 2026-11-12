@@ -39,11 +39,8 @@ class Actor:
 
 
 def can_edit(actor: Actor, pipeline: dict) -> bool:
-    if actor.is_admin:
-        return True
-    if pipeline.get("kind") == "builtin":
-        return False
-    return pipeline.get("owner") == actor.username
+    """管线功能仅管理员可用；owner 只记录创建人，不再授予编辑权。"""
+    return actor.is_admin
 
 
 def _invalid(exc: PipelineConfigError) -> PipelineError:

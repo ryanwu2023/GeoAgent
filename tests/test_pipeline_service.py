@@ -92,9 +92,13 @@ def test_update_rejects_unknown_patch_and_invalid_schedule():
     assert e.value.code == "INVALID" and e.value.details["field"] == "row.interval_sec"
 
 
-def test_non_owner_cannot_edit_admin_can():
+def test_service_rejects_non_admin_even_as_owner():
     p = make(ALICE)
-    assert can_edit(ALICE, p) and can_edit(ADMIN, p) and not can_edit(BOB, p)
+    assert p["owner"] == "alice"
+    assert not can_edit(ALICE, p) and can_edit(ADMIN, p) and not can_edit(BOB, p)
+    with pytest.raises(PipelineError) as e:
+        upd(p["id"], ALICE, expected_version=1, row_patch={"description": "x"})
+    assert e.value.code == "FORBIDDEN"
     for fn in (lambda: upd(p["id"], BOB, expected_version=1, row_patch={"description": "x"}),
                lambda: set_enabled(BOB, p["id"], True), lambda: delete_pipeline(BOB, p["id"]),
                lambda: rollback(BOB, p["id"], to_version=1, expected_version=1)):
@@ -171,6 +175,12 @@ def _builtin(pid="b-news"):
         conn.execute("INSERT INTO collection_pipelines(id,kind,name,topic,current_version,owner,interval_sec) "
                      "VALUES (%s,'builtin','内置新闻','usiran',1,'system',3600)", (pid,))
     return pid
+
+
+def test_admin_can_edit_pipeline_created_by_other_admin():
+    p = make(Actor("admin2", True))
+    assert p["owner"] == "admin2" and can_edit(ADMIN, p)
+    assert upd(p["id"], ADMIN, expected_version=1, row_patch={"description": "x"})["description"] == "x"
 
 
 def test_builtin_only_schedule_editable():

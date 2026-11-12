@@ -247,23 +247,76 @@ def authed(monkeypatch, tmp_path):
     return path
 
 
-def test_web_auth_actor_and_permissions(authed, monkeypatch):
+ADMIN_ONLY = "仅管理员可以管理采集管线"
+
+
+def _web_client(monkeypatch, sessions):
     from backend import web_auth
-    sessions = {"ca": "admin", "cb": "alice"}
     monkeypatch.setattr(web_auth, "session_user", lambda request: sessions.get(request.cookies.get("s")))
+    return TestClient(app, base_url="https://testserver")
+
+
+def test_web_auth_admin_creates_and_owner_recorded(authed, monkeypatch):
     h = {"Origin": "https://testserver"}
-    with TestClient(app, base_url="https://testserver") as c:
-        mine = c.post("/api/pipelines", json=body(), headers=h, cookies={"s": "cb"})
-        assert mine.status_code == 201 and mine.json()["owner"] == "alice"
-        other = c.post("/api/pipelines", json=body(name="管理员的"), headers=h, cookies={"s": "ca"}).json()
-        r = c.post(f"/api/pipelines/{other['id']}/enable", headers=h, cookies={"s": "cb"})
-        assert r.status_code == 403 and r.json()["detail"]["code"] == "FORBIDDEN"
-        r = c.post(f"/api/pipelines/{mine.json()['id']}/enable", headers=h, cookies={"s": "ca"})
-        assert r.status_code == 200
-        # 他人的管线不能手动运行
+    with _web_client(monkeypatch, {"ca": "admin"}) as c:
+        c.cookies.set("s", "ca")
+        mine = c.post("/api/pipelines", json=body(), headers=h)
+        assert mine.status_code == 201 and mine.json()["owner"] == "admin"
+        assert c.post(f"/api/pipelines/{mine.json()['id']}/enable", headers=h).status_code == 200
         monkeypatch.setattr(pipeline_routes, "run_pipeline", lambda *a, **k: None)
-        assert c.post(f"/api/pipelines/{other['id']}/run", headers=h, cookies={"s": "cb"}).status_code == 403
-        assert c.post(f"/api/pipelines/{mine.json()['id']}/run", headers=h, cookies={"s": "cb"}).status_code == 202
+        assert c.post(f"/api/pipelines/{mine.json()['id']}/run", headers=h).status_code == 202
+
+
+def test_non_admin_gets_403_on_every_pipeline_route(authed, monkeypatch):
+    h = {"Origin": "https://testserver"}
+    with _web_client(monkeypatch, {"ca": "admin", "cb": "alice"}) as c:
+        c.cookies.set("s", "ca")
+        p = c.post("/api/pipelines", json=body(), headers=h).json()
+        seed_run(p["id"])
+        c.cookies.clear()
+        c.cookies.set("s", "cb")
+        pid = p["id"]
+        calls = [("get", "/api/pipelines", {}), ("get", f"/api/pipelines/{pid}", {}),
+                 ("get", f"/api/pipelines/{pid}/versions", {}), ("get", f"/api/pipelines/{pid}/runs", {}),
+                 ("get", f"/api/pipelines/{pid}/runs/r1/items", {}),
+                 ("post", "/api/pipelines", {"json": body(name="x")}),
+                 ("post", "/api/pipelines/preview", {"json": body()}),
+                 ("patch", f"/api/pipelines/{pid}", {"json": {"row": {}}, "headers": {"If-Match": "1"}}),
+                 ("delete", f"/api/pipelines/{pid}", {}),
+                 ("post", f"/api/pipelines/{pid}/enable", {}), ("post", f"/api/pipelines/{pid}/disable", {}),
+                 ("post", f"/api/pipelines/{pid}/run", {}),
+                 ("post", f"/api/pipelines/{pid}/rollback", {"json": {"to_version": 1, "expected_version": 1}})]
+        for method, url, kw in calls:
+            kw = {**kw, "headers": {**h, **kw.get("headers", {})}}
+            r = getattr(c, method)(url, **kw)
+            assert r.status_code == 403 and r.json()["detail"] == ADMIN_ONLY, (method, url, r.status_code, r.text)
+        # 管理员未受影响，且非管理员没有改动数据
+        c.cookies.clear()
+        c.cookies.set("s", "ca")
+        assert c.get(f"/api/pipelines/{pid}").json()["enabled"] is False
+
+
+def test_non_admin_403_precedes_remote_409(authed, monkeypatch):
+    monkeypatch.setenv("GEO_COLLECTION_MODE", "remote")
+    with _web_client(monkeypatch, {"cb": "alice"}) as c:
+        c.cookies.set("s", "cb")
+        r = c.post("/api/pipelines", json=body(), headers={"Origin": "https://testserver"})
+        assert r.status_code == 403 and r.json()["detail"] == ADMIN_ONLY
+
+
+def test_unauthenticated_gets_401_and_flag_off_stays_404(authed, monkeypatch):
+    with _web_client(monkeypatch, {"cb": "alice"}) as c:
+        assert c.get("/api/pipelines").status_code == 401  # 未登录
+        c.cookies.set("s", "cb")
+        monkeypatch.setenv("GEO_PIPELINES_ENABLED", "false")
+        assert c.get("/api/pipelines").status_code == 404  # 开关先于权限
+
+
+def test_web_login_disabled_local_actor_is_admin(client):
+    p = create(client)
+    assert p["owner"] == "local"
+    assert client.get("/api/pipelines").status_code == 200
+    assert client.post(f"/api/pipelines/{p['id']}/enable").status_code == 200
 
 
 def test_actor_requires_login_when_auth_enabled(authed):
