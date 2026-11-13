@@ -269,9 +269,16 @@ async def protect_local_mutations(request: Request, call_next):
     return response
 
 VIEW_CACHE_TTL = 60
+VIEW_STALE_MAX = 3600  # 超过一小时没人看的视图不再当旧值返回，避免内存长期占用
 _view_cache: dict = {}
 _view_locks: dict = {}
+_view_latest: dict = {}      # (name, snapshot, params) -> (完整 key, 计算时刻, 值)
+_view_refreshing: set = set()
 _view_guard = threading.Lock()
+
+
+def _spawn_refresh(fn):
+    threading.Thread(target=fn, name="view-refresh", daemon=True).start()
 
 
 def _review_marker(snapshot_id):
@@ -284,30 +291,69 @@ def cached_view(name, snapshot_id, params, compute):
     """Short-lived cache for views that walk every record of a snapshot.
 
     Snapshots are immutable, but /workspace, /map-records and /evidence re-project all
-    ~12k records (translation, events, risk counts) on each call: 5-8 s apiece, and a
-    snapshot switch fires several at once into a 2-core Pod. Reviews are part of the
-    key so a researcher's verdict shows at once; new translations appear within the TTL.
+    ~12k records (translation, events, risk counts) on each call: 12-19 s apiece online.
+    Reviews are part of the key so a researcher's verdict shows at once (computed
+    synchronously). When only the TTL or local translations changed, the previous result
+    is returned immediately and one background refresh replaces it: an expired cache used
+    to make the next visitor wait for the whole recomputation and the page looked frozen.
     A per-key lock makes concurrent identical requests wait for one computation.
     """
     from . import chinese
-    key = (name, snapshot_id, params, _review_marker(snapshot_id), chinese.local_translation_epoch)
+    view = (name, snapshot_id, params)
+    key = view + (_review_marker(snapshot_id), chinese.local_translation_epoch)
     with _view_guard:
-        lock = _view_locks.setdefault(key[:3], threading.Lock())
+        lock = _view_locks.setdefault(view, threading.Lock())
+        hit = _view_cache.get(key)
+        latest = _view_latest.get(view)
+    now_at = time.monotonic()
+    if hit and now_at - hit[0] < VIEW_CACHE_TTL:
+        return hit[1]
+    if latest and latest[0][3] == key[3] and now_at - latest[1] < VIEW_STALE_MAX:
+        _refresh_view(view, key, lock, compute)
+        return latest[2]
     with lock:
         hit = _view_cache.get(key)
         if hit and time.monotonic() - hit[0] < VIEW_CACHE_TTL:
             return hit[1]
         value = compute()
-        with _view_guard:
-            stale = [k for k, (at, _) in _view_cache.items() if time.monotonic() - at >= VIEW_CACHE_TTL]
-            for k in stale:
-                _view_cache.pop(k, None)
-            _view_cache[key] = (time.monotonic(), value)
-            if len(_view_locks) > 256:  # free-text evidence queries would grow this forever
-                live = {k[:3] for k in _view_cache}
-                for k in [k for k, l in _view_locks.items() if k not in live and not l.locked()]:
-                    _view_locks.pop(k, None)
+        _store_view(view, key, value)
         return value
+
+
+def _refresh_view(view, key, lock, compute):
+    with _view_guard:
+        if view in _view_refreshing:
+            return
+        _view_refreshing.add(view)
+
+    def run():
+        try:
+            with lock:
+                hit = _view_cache.get(key)
+                if not (hit and time.monotonic() - hit[0] < VIEW_CACHE_TTL):
+                    _store_view(view, key, compute())
+        except Exception:
+            logging.getLogger(__name__).exception("view refresh failed for %s", view[:2])
+        finally:
+            with _view_guard:
+                _view_refreshing.discard(view)
+    _spawn_refresh(run)
+
+
+def _store_view(view, key, value):
+    at = time.monotonic()
+    with _view_guard:
+        stale = [k for k, (cached_at, _) in _view_cache.items() if at - cached_at >= VIEW_CACHE_TTL]
+        for k in stale:
+            _view_cache.pop(k, None)
+        for v in [v for v, (_, cached_at, _) in _view_latest.items() if at - cached_at >= VIEW_STALE_MAX]:
+            _view_latest.pop(v, None)
+        _view_cache[key] = (at, value)
+        _view_latest[view] = (key, at, value)
+        if len(_view_locks) > 256:  # free-text evidence queries would grow this forever
+            live = set(_view_latest)
+            for k in [k for k, l in _view_locks.items() if k not in live and not l.locked()]:
+                _view_locks.pop(k, None)
 
 
 _warmed: set = set()

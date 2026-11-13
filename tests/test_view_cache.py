@@ -10,6 +10,9 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("GEO_DATA_DIR", str(tmp_path))
     monkeypatch.setattr(A, "_view_cache", {})
     monkeypatch.setattr(A, "_view_locks", {})
+    monkeypatch.setattr(A, "_view_latest", {})
+    monkeypatch.setattr(A, "_view_refreshing", set())
+    monkeypatch.setattr(A, "_spawn_refresh", lambda fn: fn())  # 后台刷新在用例里同步执行
     monkeypatch.setattr(chinese, "_translation_memory", None)
 
 
@@ -28,6 +31,8 @@ def test_cached_view_reuses_result_until_reviews_or_local_translations_change(mo
     marker[0] = (1, "2026-11-06T08:00:00")  # a researcher saved a review
     assert A.cached_view("workspace", "s1", ("usiran",), compute) == {"n": 3}
     monkeypatch.setattr(chinese, "local_translation_epoch", chinese.local_translation_epoch + 1)
+    # 新译文不阻塞页面：先返回上一份结果，后台重算后下一次拿到新值。
+    assert A.cached_view("workspace", "s1", ("usiran",), compute) == {"n": 3}
     assert A.cached_view("workspace", "s1", ("usiran",), compute) == {"n": 4}
 
 
@@ -40,6 +45,35 @@ def test_cached_view_expires_after_ttl(monkeypatch):
     clock[0] += A.VIEW_CACHE_TTL + 1
     A.cached_view("map-records", "s1", (), lambda: calls.append(1))
     assert len(calls) == 2
+
+
+def test_expired_view_is_served_stale_while_refreshing(monkeypatch):
+    """线上缓存过期后下一个访问者要等 12–19 秒重算；改为先返回旧值、后台刷新。"""
+    monkeypatch.setattr(A, "_review_marker", lambda sid: (0, ""))
+    clock = [1000.0]
+    monkeypatch.setattr(A.time, "monotonic", lambda: clock[0])
+    pending = []
+    monkeypatch.setattr(A, "_spawn_refresh", pending.append)
+    values = iter([{"v": 1}, {"v": 2}])
+    compute = lambda: next(values)
+    assert A.cached_view("workspace", "s1", (), compute) == {"v": 1}
+    clock[0] += A.VIEW_CACHE_TTL + 1
+    assert A.cached_view("workspace", "s1", (), compute) == {"v": 1}   # 立即返回旧值
+    assert A.cached_view("workspace", "s1", (), compute) == {"v": 1}
+    assert len(pending) == 1                                            # 同一视图只起一个刷新
+    pending[0]()
+    assert A.cached_view("workspace", "s1", (), compute) == {"v": 2}
+
+
+def test_new_review_still_recomputes_synchronously(monkeypatch):
+    marker = [(0, "")]
+    monkeypatch.setattr(A, "_review_marker", lambda sid: marker[0])
+    monkeypatch.setattr(A, "_spawn_refresh", lambda fn: pytest.fail("审核变化不能走后台刷新"))
+    values = iter([{"v": 1}, {"v": 2}])
+    compute = lambda: next(values)
+    assert A.cached_view("evidence", "s1", (), compute) == {"v": 1}
+    marker[0] = (1, "2026-11-13T08:00:00")
+    assert A.cached_view("evidence", "s1", (), compute) == {"v": 2}
 
 
 def _insert(text, chinese_text, method="模型翻译"):
