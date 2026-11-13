@@ -399,7 +399,7 @@ def create_server(*, auth_config: AuthConfig | None = None, project_transport: b
     auth_config = auth_config or AuthConfig.from_env()
     server = FastMCP(
         "GeoAgent MCP",
-        instructions="只读访问 GeoAgent 快照、证据和业务分析。所有结果带 snapshot provenance。本周默认按所选快照导入日所在周周一至导入日，见 relative_time_basis，不按今天猜测。区分事实、规则条件和假设；描述某字段可以更新，不证明本次发生过更新。没有前后同口径数据及变更证据，不得确定归因或对原因排序。候选覆盖不等于数据完整，情景候选证据不等于已核验反证。冻结运行记录不能证明之后没有新事件；当前管线必须读取 live 状态及其时间。",
+        instructions="访问 GeoAgent 快照、证据和业务分析；数据工具只读，采集管线工具可新建和修改采集源。用户说“加个源”“加一个某某的新闻源”“新增 RSS”“采集某网站”时，是要新建采集管线，不是查询证据库里有没有该来源的内容：先用 geo_pipeline_list 看有无同名或同地址管线，没有就自行找到该站 RSS 或栏目页，按 geo_pipeline_preview 试跑→geo_pipeline_create 新建（默认停用）→geo_pipeline_trial 测试运行→geo_pipeline_run_items 展示新增条目的顺序完成，最后请用户确认，用户明确同意后才调用 geo_pipeline_set_enabled；证据库已有该来源的内容也不代表不需要建管线。所有结果带 snapshot provenance。本周默认按所选快照导入日所在周周一至导入日，见 relative_time_basis，不按今天猜测。区分事实、规则条件和假设；描述某字段可以更新，不证明本次发生过更新。没有前后同口径数据及变更证据，不得确定归因或对原因排序。候选覆盖不等于数据完整，情景候选证据不等于已核验反证。冻结运行记录不能证明之后没有新事件；当前管线必须读取 live 状态及其时间。",
         host=os.getenv("GEOAGENT_MCP_HOST", "127.0.0.1"),
         port=int(os.getenv("GEOAGENT_MCP_PORT", "8401")),
         streamable_http_path="/mcp",

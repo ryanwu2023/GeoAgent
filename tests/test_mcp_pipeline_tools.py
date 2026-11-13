@@ -159,6 +159,9 @@ def test_registered_on_server():
     assert found["geo_pipeline_set_enabled"].annotations.destructiveHint is True
     assert "启用前先向用户展示最近一次测试运行结果并取得明确同意" in found["geo_pipeline_set_enabled"].description
     assert "默认停用" in found["geo_pipeline_create"].description
+    # 普通用户只会说“加个源”：说明里要把这类说法指向管线工具，而不是证据检索（线上实测曾误判为查数据）。
+    for name in ("geo_pipeline_list", "geo_pipeline_preview", "geo_pipeline_create"):
+        assert "加个源" in found[name].description and "不是查询证据" in found[name].description
     for tool in found.values():
         assert tool.description
         for parameter in tool.inputSchema.get("properties", {}).values():
@@ -484,3 +487,11 @@ def test_runs_projection_includes_error_message(principal):
                      "VALUES ('r-e',%s,1,'trial','success',now(),now(),%s,now())", (p["id"], json.dumps(stats)))
     source = tools.pipeline_runs(principal, p["id"])[0]["stats"]["sources"]["rss-a"]
     assert source["error"] == "LINKS_OUTSIDE_ALLOWED_HOSTS" and "x（2 条）" in source["error_message"]
+
+
+def test_server_instructions_route_add_source_to_pipelines():
+    from backend.geo_mcp.server import create_server
+    text = create_server().instructions
+    assert "加个源" in text and "geo_pipeline_preview" in text and "geo_pipeline_set_enabled" in text
+    assert "只读访问" not in text  # 已有写入类管线工具，不能再自称只读
+

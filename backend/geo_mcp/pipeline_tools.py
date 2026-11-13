@@ -345,7 +345,7 @@ def register_pipeline_tools(server, run_tool=None) -> None:
             return call(principal), PROVENANCE, []
         return await run_tool(ctx=ctx, tool=name, handler=handler)
 
-    @tool("geo_pipeline_list", "列出采集管线（含内置与自定义），每条含启用状态、来源数、当前版本和最近一次运行结果。可按主题、状态(enabled/disabled/success/partial/failed等)、类型(configurable/builtin)、名称或描述关键词过滤；最多返回50条，total 为过滤后总数。")
+    @tool("geo_pipeline_list", "用户说“加个源”“加某某新闻源”“新增 RSS/网页采集”时用采集管线工具，不是查询证据。列出采集管线（含内置与自定义），每条含启用状态、来源数、当前版本和最近一次运行结果。可按主题、状态(enabled/disabled/success/partial/failed等)、类型(configurable/builtin)、名称或描述关键词过滤；最多返回50条，total 为过滤后总数。")
     async def geo_pipeline_list(
         ctx: Context,
         topic: Annotated[str, Field(max_length=40, description="主题机器值，空串为全部。")] = "",
@@ -390,14 +390,14 @@ def register_pipeline_tools(server, run_tool=None) -> None:
     ) -> str:
         return await run(ctx, "geo_pipeline_recent_results", lambda p: pipeline_recent_results(p, hours))
 
-    @write_tool("geo_pipeline_preview", "试跑：按给定配置对每个来源抓取前几个候选并显示过滤结果，不写库、不落文件、不进快照。用于新建或修改前确认来源能抓到内容、过滤词合理；耗时可能达数十秒。" + CONFIG_SHAPE)
+    @write_tool("geo_pipeline_preview", "用户说“加个源”“加某某新闻源”“新增 RSS/网页采集”时用采集管线工具，不是查询证据。试跑：按给定配置对每个来源抓取前几个候选并显示过滤结果，不写库、不落文件、不进快照。用于新建或修改前确认来源能抓到内容、过滤词合理；耗时可能达数十秒。" + CONFIG_SHAPE)
     async def geo_pipeline_preview(
         ctx: Context, row: Row, config: Config,
         limit: Annotated[int, Field(description="每个来源最多展示的候选数，1到20，默认5。")] = 5,
     ) -> str:
         return await run(ctx, "geo_pipeline_preview", lambda p: pipeline_preview(p, row, config, limit), write=True)
 
-    @write_tool("geo_pipeline_create", "新建采集管线。新管线默认停用，不参与整批采集；推荐流程：新建→geo_pipeline_preview 试跑→geo_pipeline_trial 测试运行→geo_pipeline_runs/geo_pipeline_run_items 展示结果→用户明确同意→geo_pipeline_set_enabled 启用。dry_run=true 只校验并返回规范化后的 row/config，不写库，也不检查同名管线是否已存在。" + CONFIG_SHAPE)
+    @write_tool("geo_pipeline_create", "用户说“加个源”“加某某新闻源”“新增 RSS/网页采集”时用采集管线工具，不是查询证据。新建采集管线。新管线默认停用，不参与整批采集；推荐流程：新建→geo_pipeline_preview 试跑→geo_pipeline_trial 测试运行→geo_pipeline_runs/geo_pipeline_run_items 展示结果→用户明确同意→geo_pipeline_set_enabled 启用。dry_run=true 只校验并返回规范化后的 row/config，不写库，也不检查同名管线是否已存在。" + CONFIG_SHAPE)
     async def geo_pipeline_create(
         ctx: Context, row: Row, config: Config, change_note: Note = "",
         dry_run: Annotated[bool, Field(description="true 时只校验并返回规范化结果，不创建。")] = False,
