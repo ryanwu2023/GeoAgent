@@ -99,3 +99,22 @@ def test_translation_cache_applies_background_writes_incrementally(monkeypatch):
     assert second[digest("Oman hosts envoys")] == "阿曼接待特使"
     assert digest("Iran talks resume") not in second
     assert digest("Iran talks resume") in first           # earlier callers keep their dict
+
+
+def test_heavy_views_encode_json_once(monkeypatch):
+    """/map-records 线上约 11 MB：每次请求都重新转 JSON 要 3 秒多；缓存里存编码好的文本。"""
+    import json
+    from fastapi.testclient import TestClient
+    monkeypatch.setattr(A, "_review_marker", lambda sid: (0, ""))
+    monkeypatch.setattr(A, "snapshot_or_404", lambda sid: {"id": sid})
+    monkeypatch.setattr(A, "validate_range", lambda start, end: None)
+    monkeypatch.setattr(A, "_map_records", lambda *a: [{"id": "r1", "title": "伊朗"}])
+    encoded = []
+    real = A._encode_view
+    monkeypatch.setattr(A, "_encode_view", lambda value: encoded.append(1) or real(value))
+    client = TestClient(A.app)
+    for _ in range(3):
+        response = client.get("/api/map-records", params={"snapshot_id": "s1", "topic": "usiran"})
+        assert response.status_code == 200 and response.headers["content-type"].startswith("application/json")
+        assert json.loads(response.content) == [{"id": "r1", "title": "伊朗"}]
+    assert len(encoded) == 1

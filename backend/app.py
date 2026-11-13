@@ -12,7 +12,8 @@ from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response, StreamingResponse
 import asyncio
 import logging
 import threading
@@ -275,6 +276,16 @@ _view_locks: dict = {}
 _view_latest: dict = {}      # (name, snapshot, params) -> (完整 key, 计算时刻, 值)
 _view_refreshing: set = set()
 _view_guard = threading.Lock()
+
+
+def _encode_view(value) -> bytes:
+    """与 FastAPI 默认 JSONResponse 相同的编码；整份视图只编码一次随缓存保存。"""
+    return json.dumps(jsonable_encoder(value), ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
+
+
+def cached_json(name, snapshot_id, params, compute) -> Response:
+    """/map-records 线上约 11 MB，每次请求重新转 JSON 要 3 秒多；命中缓存时直接返回编码好的文本。"""
+    return Response(cached_view(name, snapshot_id, params, lambda: _encode_view(compute())), media_type="application/json")
 
 
 def _spawn_refresh(fn):
@@ -1088,7 +1099,7 @@ def import_data():
 def workspace(snapshot_id: str, topic: Topic = "all", dimension: str = "", include_records: bool = True, start: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$"), end: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")):
     s = snapshot_or_404(snapshot_id)
     validate_range(start, end)
-    return cached_view("workspace", snapshot_id, (topic, dimension, include_records, start, end),
+    return cached_json("workspace", snapshot_id, (topic, dimension, include_records, start, end),
                        lambda: _workspace(s, snapshot_id, topic, dimension, include_records, start, end))
 
 
@@ -1108,7 +1119,7 @@ def map_records(snapshot_id: str, topic: Topic = "all", dimension: str = "", sta
     """Return map-only evidence on demand instead of attaching it to every page."""
     s = snapshot_or_404(snapshot_id)
     validate_range(start, end)
-    return cached_view("map-records", snapshot_id, (topic, dimension, start, end),
+    return cached_json("map-records", snapshot_id, (topic, dimension, start, end),
                        lambda: _map_records(s, snapshot_id, topic, dimension, start, end))
 
 
@@ -1135,7 +1146,7 @@ async def generate_page_summary(body: PageSummaryRequest):
 def evidence_page(snapshot_id: str, topic: Topic = "all", dimension: str = "", q: str = Query("", max_length=300), offset: int = Query(0, ge=0), limit: int = Query(30, ge=1, le=100), start: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$"), end: str = Query("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")):
     s = snapshot_or_404(snapshot_id)
     validate_range(start, end)
-    return cached_view("evidence", snapshot_id, (topic, dimension, q, offset, limit, start, end),
+    return cached_json("evidence", snapshot_id, (topic, dimension, q, offset, limit, start, end),
                        lambda: _evidence_page(s, snapshot_id, topic, dimension, q, offset, limit, start, end))
 
 
