@@ -278,6 +278,7 @@ def load_runs(runs_root: Path, registry_path: Path, limit: int = 20, *, run_id: 
         reports.sort(key=sort_key, reverse=True)
     labels = _registry_labels(registry_path)
     ledger = _ledger(runs_root)
+    ledger_runs = ledger.runs_by_id([report.parent.name for report in reports]) if ledger is not None else {}
     runs: list[dict[str, Any]] = []
     # Parse the full persisted history before applying the response limit. A
     # failed current run needs an older successful run to populate
@@ -292,7 +293,7 @@ def load_runs(runs_root: Path, registry_path: Path, limit: int = 20, *, run_id: 
             # `ensure_run()` also creates a `historical` placeholder for old
             # reports so reviews can be stored; that placeholder must not
             # overwrite the report's actual success/partial/failed status.
-            ledger_run = ledger.run(parsed["run_id"]) if ledger is not None else None
+            ledger_run = ledger_runs.get(parsed["run_id"])
             lifecycle_statuses = {"running", "success", "partial", "failed", "abandoned"}
             if (
                 ledger_run is not None

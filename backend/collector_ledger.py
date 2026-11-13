@@ -278,6 +278,17 @@ class CollectorLedger:
             ).fetchone()
         return dict(row) if row is not None else None
 
+    def runs_by_id(self, run_ids: list[str]) -> dict[str, dict]:
+        """One query for many runs; load_runs used to open a connection per report."""
+        if not run_ids:
+            return {}
+        with connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM collector_runs WHERE run_id = ANY(%s)",
+                (list(run_ids),),
+            ).fetchall()
+        return {row["run_id"]: dict(row) for row in rows}
+
     def runs(self, limit: int = 20) -> list[dict]:
         with connect() as connection:
             rows = connection.execute(

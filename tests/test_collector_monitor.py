@@ -2,7 +2,7 @@ import json
 import os
 
 from backend.collector_ledger import CollectorLedger
-from backend.collector_monitor import load_latest_run, load_ledger_events, load_ledger_runs, load_source_status
+from backend.collector_monitor import load_latest_run, load_ledger_events, load_ledger_runs, load_runs, load_source_status
 
 
 def test_load_latest_run_projects_report_without_claiming_missing_data(tmp_path):
@@ -181,6 +181,33 @@ def test_load_runs_uses_ledger_terminal_status_when_state_file_is_stale(tmp_path
     assert result["collectors"][0]["status"] == "failed"
     assert result["collectors"][0]["stage"] == "运行中断"
     assert result["collectors"][0]["error_type"] == "SERVICE_INTERRUPTED"
+
+
+def test_load_runs_reads_ledger_once_for_all_reports(tmp_path, monkeypatch):
+    """台账状态按批取一次；逐份报告各连一次库，200 多份报告时汇总接口要 3 秒以上。"""
+    from backend import collector_ledger
+    root = tmp_path / "collection-runs"
+    registry = tmp_path / "collectors.json"
+    registry.write_text(json.dumps({"collectors": []}), encoding="utf-8")
+    ledger = CollectorLedger()
+    for index in range(5):
+        run_id = f"run-{index}"
+        (root / run_id).mkdir(parents=True)
+        (root / run_id / "state.json").write_text(json.dumps({
+            "run_id": run_id, "status": "running", "started_at": f"2026-10-02T0{index}:00:00+00:00",
+            "results": [{"id": "demo", "status": "running"}]}), encoding="utf-8")
+        ledger.run_started(run_id=run_id, run_kind="scheduled-service",
+                           started_at=f"2026-10-02T0{index}:00:00+00:00", topic=None, timeout_sec=30)
+    ledger.recover_unfinished(finished_at="2026-10-02T09:05:00+00:00")
+    calls = []
+    real_connect = collector_ledger.connect
+    monkeypatch.setattr(collector_ledger, "connect", lambda *a, **k: calls.append(1) or real_connect(*a, **k))
+
+    runs = load_runs(root, registry, limit=20)
+
+    assert len(calls) == 2  # 构造台账时探测一次连接 + 批量取状态一次，与报告数无关
+    assert [run["run_id"] for run in runs] == [f"run-{i}" for i in range(4, -1, -1)]
+    assert {run["run_status"] for run in runs} == {"abandoned"}
 
 
 def test_load_runs_sorts_by_batch_start_time_not_live_file_mtime(tmp_path):
