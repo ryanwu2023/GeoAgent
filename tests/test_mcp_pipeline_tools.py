@@ -394,7 +394,10 @@ def test_doc_example_config_is_valid():
     import re
     from pathlib import Path
     from backend.pipeline_config import validate_pipeline
-    doc = (Path(__file__).resolve().parents[1] / "docs/agent/geo-pipeline-mcp.md").read_text(encoding="utf-8")
+    path = Path(__file__).resolve().parents[1] / "docs/agent/geo-pipeline-mcp.md"
+    if not path.exists():
+        pytest.skip("镜像内不含 docs/（.dockerignore 排除）")
+    doc = path.read_text(encoding="utf-8")
     example = json.loads(re.search(r"```json\n(.*?)\n```", doc, re.S).group(1))
     row, config = validate_pipeline(example["row"], example["config"], resolve=resolve)
     assert row["topics"] == ["usiran"] and len(config["sources"]) == 2
@@ -428,7 +431,10 @@ def test_write_tools_survive_real_envelope(principal, monkeypatch):
     import socket
     from mcp.server.fastmcp import FastMCP
     from backend.geo_mcp import server as srv
-    monkeypatch.setattr(socket, "getaddrinfo", lambda host, *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
+    # 只替换来源主机的解析；CI 的数据库按主机名（postgres）连接，不能被一起改掉。
+    real_getaddrinfo = socket.getaddrinfo
+    monkeypatch.setattr(socket, "getaddrinfo", lambda host, *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))]
+                        if host == "example.com" else real_getaddrinfo(host, *a, **k))
     monkeypatch.setattr(srv, "_context_principal", lambda ctx: principal)
     monkeypatch.setattr(srv, "request_id_from_context", lambda ctx: "req-1")
     monkeypatch.setattr(tools._runs_module, "execute_trial", lambda claim, *, actor: None)
