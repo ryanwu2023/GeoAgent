@@ -96,6 +96,7 @@ async def lifespan(app):
     start_remote_collection()
     _start_pipelines()
     start_collector_schedule()
+    threading.Thread(target=warm_startup, name="warm-startup", daemon=True).start()
     mcp_app = create_mcp_app(auth_config=mcp_config, managed_keys=True, project_transport=True)
     app.state.geo_mcp = mcp_app
     async with mcp_app.router.lifespan_context(mcp_app):
@@ -331,6 +332,16 @@ def warm_views(snapshot_id):
             except Exception:
                 logging.getLogger(__name__).exception("view warm-up failed for %s", snapshot_id)
     threading.Thread(target=run, name=f"warm-{snapshot_id[:8]}", daemon=True).start()
+
+
+def warm_startup():
+    """新进程第一次 /api/status 要统计整份快照的译文，线上约 11 秒，首页因此空白；启动时在后台先算好。"""
+    try:
+        translation_status(None)
+        snapshots()
+        warm_views(get_working_snapshot_id())
+    except Exception:
+        logging.getLogger(__name__).exception("startup warm-up failed")
 
 
 def snapshot_or_404(sid):

@@ -854,6 +854,32 @@ export default function App() {
     disabled: "已停用",
     "fail-http": "采集失败",
   };
+  // 地图只依赖快照 ID 和 /map-records，不等 /workspace，先出地图再补数据。
+  const mapPane = (
+                <div
+                  style={{ height: "100%", width: "100%", minWidth: 0, flex: 1 }}
+                >
+                  <Suspense fallback={<div className="empty"><RefreshCw className="spin" />正在加载地图…</div>}>
+                    <MapView
+                      records={mapRecords}
+                      meetings={mapMeetings}
+                      topic={topic}
+                      resetKey={resetKey}
+                      onTranslateTitles={status?.model.configured ? translateMapTitles : undefined}
+                      translationStatus={status?.translation?.snapshot_id===sid ? status.translation : undefined}
+                      onSelect={(r) => {
+                        openEvidence(r.id);
+                        setAsset(null);
+                      }}
+                      onMeetingSelect={(meeting) => {
+                        openEvidence(meeting.evidence_id);
+                        setAsset(null);
+                      }}
+                    />
+                    {mapLoading && <div className="map-data-loading"><RefreshCw className="spin" size={14}/>正在加载地图动态…</div>}
+                  </Suspense>
+                </div>
+  );
   return (
     <div ref={shellRef} className={`prototype-shell research-layout${chatExpanded ? " research-expanded" : ""}`}
       style={{ "--research-dock-width": `${researchWidth}%` } as CSSProperties}>
@@ -1037,10 +1063,16 @@ export default function App() {
               </button>
             </div>
           )}
-          {loading && (
+          {loading && !(tab === "map" && sid) && (
             <div className="empty">
               <RefreshCw className="spin" />
               正在加载快照…
+            </div>
+          )}
+          {!status && !error && page !== "briefs" && !snapshotFreeTabs.has(tab) && (
+            <div className="empty">
+              <RefreshCw className="spin" />
+              正在读取快照列表…
             </div>
           )}
           {tab === "pipeline" && (
@@ -1066,6 +1098,9 @@ export default function App() {
                   pichatFrameRef.current?.contentWindow?.postMessage(askMessage(text), pichatOrigin);
                 } : undefined} />
             </Suspense>
+          )}
+          {!work && sid && tab === "map" && page !== "briefs" && (
+            <div className="center-view map-view">{mapPane}</div>
           )}
           {work && page !== "briefs" && !snapshotFreeTabs.has(tab) && (
             <div
@@ -1104,31 +1139,7 @@ export default function App() {
                   )}
                 </section>
               )}
-              {tab === "map" &&
-                <div
-                  style={{ height: "100%", width: "100%", minWidth: 0, flex: 1 }}
-                >
-                  <Suspense fallback={<div className="empty"><RefreshCw className="spin" />正在加载地图…</div>}>
-                    <MapView
-                      records={mapRecords}
-                      meetings={mapMeetings}
-                      topic={topic}
-                      resetKey={resetKey}
-                      onTranslateTitles={status?.model.configured ? translateMapTitles : undefined}
-                      translationStatus={status?.translation?.snapshot_id===sid ? status.translation : undefined}
-                      onSelect={(r) => {
-                        openEvidence(r.id);
-                        setAsset(null);
-                      }}
-                      onMeetingSelect={(meeting) => {
-                        openEvidence(meeting.evidence_id);
-                        setAsset(null);
-                      }}
-                    />
-                    {mapLoading && <div className="map-data-loading"><RefreshCw className="spin" size={14}/>正在加载地图动态…</div>}
-                  </Suspense>
-                </div>
-              }
+              {tab === "map" && mapPane}
               {tab === "meetings" && (
                 <MeetingCalendar
                   snapshotId={sid}
