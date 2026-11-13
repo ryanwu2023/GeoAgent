@@ -224,3 +224,20 @@ test("draftOf 去掉已移除的翻页项", () => {
   assert.deepEqual(d.config.request, {timeout_seconds: 25, rate_limit_seconds: 1.5});
   assert.equal(config.request.max_pages_per_source, 3, "不修改入参");
 });
+
+test("addSourcePrompt 把一句话补成线上验证过的完整说法", () => {
+  const text = m.addSourcePrompt("  半岛电视台 ");
+  assert.match(text, /^在采集管线配置里新建一条「半岛电视台」的采集管线/);
+  for (const part of ["试跑", "保持停用", "测试运行", "不要启用"]) assert.ok(text.includes(part), part);
+  assert.equal(m.addSourcePrompt("   "), "");
+});
+
+test("ASK_EXAMPLES 每条都能直接发给 PiChat", () => {
+  assert.ok(m.ASK_EXAMPLES.length >= 3);
+  for (const ex of m.ASK_EXAMPLES) {
+    assert.ok(ex.label && ex.label.length <= 12, ex.label);
+    assert.ok(ex.text.includes("采集管线"), ex.text);
+    assert.ok(!/启用它|并启用|直接启用/.test(ex.text), "示例不得要求启用：" + ex.text);
+  }
+  assert.deepEqual(m.askMessage("你好"), {type: "finance:agent:sendMessage", text: "你好"});
+});

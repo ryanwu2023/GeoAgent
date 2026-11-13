@@ -1,9 +1,9 @@
 import "./pipelines.css";
 import {useCallback, useEffect, useRef, useState} from "react";
-import {FlaskConical, Play, Plus, RefreshCw, Save, Search, Trash2, Workflow} from "lucide-react";
+import {FlaskConical, Play, Plus, RefreshCw, Save, Search, Send, Trash2, Workflow} from "lucide-react";
 import {dateText} from "./api";
 import {
-  conflictMessage, createPipeline, deletePipeline, draftOf, emptyDraft, sourceCountOf, fieldHit, getPipeline, latestTrial,
+  addSourcePrompt, ASK_EXAMPLES, conflictMessage, createPipeline, deletePipeline, draftOf, emptyDraft, sourceCountOf, fieldHit, getPipeline, latestTrial,
   listPipelines, listRunItems, listRuns, listVersions, newItemsOf, PipelineApiError, previewPipeline, readSeen, recentlyUpdated,
   rollbackPipeline, runLabel, setPipelineEnabled, tabForField, trialOutcome, trialPipeline, unseenCount, updatePipeline, writeSeen,
   type DetailTab, type Pipeline, type PipelineDraft, type PipelineRun, type PipelineRunItem, type PipelineVersion, type PreviewResult,
@@ -35,7 +35,13 @@ const withCount = (p: Pipeline): Pipeline => ({...p, source_count: sourceCountOf
 /** changed_since 往前留 2 秒余量，避免查询与 server_time 之间提交的修改被漏掉（重复条目按 id 合并）。 */
 const since = (t: string) => { const ms = Date.parse(t); return Number.isNaN(ms) ? t : new Date(ms - 2000).toISOString(); };
 
-export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (evidenceId: string, snapshotId: string) => void}) {
+export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
+  onOpenEvidence?: (evidenceId: string, snapshotId: string) => void;
+  /** 把一句完整的话发给右侧 PiChat；未连接时为空。 */
+  onAsk?: (text: string) => void;
+}) {
+  const [askText, setAskText] = useState("");
+  const [askNotice, setAskNotice] = useState("");
   const [rows, setRows] = useState<Pipeline[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState("");
@@ -337,6 +343,15 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
   const tabs = TABS.filter(([id]) => !isBuiltin || BUILTIN_TABS.has(id)).filter(([id]) => !isNew || ["basic", "sources", "keywords"].includes(id));
   const lastTrial = toggle?.runs ? latestTrial(toggle.runs) : null;
 
+  const ask = (text: string) => {
+    if (!onAsk || !text) return;
+    onAsk(text);
+    setAskText("");
+    setAskNotice("已发给右侧助手。它会试跑、新建（不启用）并测试运行，约 2 分钟后左侧列表会出现新管线。");
+    // PiChat 建好管线后列表不会自己刷新：过一会儿各拉一次。
+    for (const delay of [60_000, 150_000]) window.setTimeout(() => void loadList(), delay);
+  };
+
   return (
     <section className="collector-monitor pipeline-workbench" aria-label="采集管线配置">
       <div className="collector-command-bar">
@@ -350,6 +365,21 @@ export default function PipelineWorkbench({onOpenEvidence}: {onOpenEvidence?: (e
           <button onClick={() => void loadList()} disabled={listLoading}><RefreshCw size={14} /> 刷新</button>
           <button className="primary" onClick={startNew}><Plus size={14} /> 新建管线</button>
         </div>
+      </div>
+
+      <div className="pipeline-ask">
+        <form onSubmit={(e) => { e.preventDefault(); ask(addSourcePrompt(askText)); }}>
+          <label htmlFor="pipeline-ask-input">让 AI 加源</label>
+          <input id="pipeline-ask-input" value={askText} maxLength={80} onChange={(e) => setAskText(e.target.value)}
+            placeholder="输入网站名或网址，如：半岛电视台" disabled={!onAsk} />
+          <button type="submit" className="primary" disabled={!onAsk || !askText.trim()}><Send size={14} /> 发给右侧助手</button>
+        </form>
+        <div className="pipeline-ask-examples">
+          <span>试试：</span>
+          {ASK_EXAMPLES.map((ex) => <button key={ex.label} type="button" title={ex.text} disabled={!onAsk} onClick={() => ask(ex.text)}>{ex.label}</button>)}
+          {!onAsk && <small>右侧助手未连接，连接后可用</small>}
+        </div>
+        {askNotice && <p className="pipeline-hint" role="status">{askNotice}</p>}
       </div>
 
       <div className="pipeline-filters">

@@ -51,7 +51,7 @@ import MetricChart from "./MetricChart";
 import {canImportNews, reconcileNewsServer, titleTranslationLabel} from "./source_status";
 import MetricGuide from "./MetricGuide";
 import CollectorMonitor from "./CollectorMonitor";
-import { isAccessDenied, listPipelines } from "./pipelines";
+import { askMessage, isAccessDenied, listPipelines } from "./pipelines";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import BriefViewer from "./BriefViewer";
@@ -1060,7 +1060,11 @@ export default function App() {
           )}
           {tab === "pipeline-config" && pipelinesAvailable && (
             <Suspense fallback={<div className="empty"><RefreshCw className="spin" />正在加载采集管线配置…</div>}>
-              <PipelineWorkbench onOpenEvidence={(evidenceId, snapshotId) => void openEvidence(evidenceId, null, snapshotId)} />
+              <PipelineWorkbench onOpenEvidence={(evidenceId, snapshotId) => void openEvidence(evidenceId, null, snapshotId)}
+                onAsk={pichatReady ? (text) => {
+                  setChatOpen(true);
+                  pichatFrameRef.current?.contentWindow?.postMessage(askMessage(text), pichatOrigin);
+                } : undefined} />
             </Suspense>
           )}
           {work && page !== "briefs" && !snapshotFreeTabs.has(tab) && (

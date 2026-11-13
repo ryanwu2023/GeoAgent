@@ -134,6 +134,14 @@
 .pipeline-workbench .pipeline-list{max-height:320px;border-right:0;border-bottom:1px solid #263a56}
 .pipeline-workbench .pipeline-search input{width:140px}
 }
+.pipeline-workbench .pipeline-ask{display:flex;flex-direction:column;gap:7px;padding:10px 16px;border-bottom:1px solid #263a56;background:#0f1d2f}
+.pipeline-workbench .pipeline-ask form{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pipeline-workbench .pipeline-ask label{color:#9fc6e6;font-size:12px;font-weight:600}
+.pipeline-workbench .pipeline-ask input{flex:1;min-width:160px;font-size:12px;padding:6px 8px;color:#dce6ef;background:#0d1926;border:1px solid #344759;border-radius:5px}
+.pipeline-workbench .pipeline-ask form button{font-size:12px;padding:6px 11px}
+.pipeline-workbench .pipeline-ask-examples{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:#819ab7;font-size:11px}
+.pipeline-workbench .pipeline-ask-examples button{padding:3px 10px;border:1px solid #365373;border-radius:12px;background:#13253a;color:#9fc6e6;font-size:11px}
+.pipeline-workbench .pipeline-ask-examples button:hover:not(:disabled){border-color:#5ea7ff;color:#dcefff}
 /* 研究台左半栏可能很窄：按工作台自身宽度收窄列表，保证右侧标签与表单可用。 */
 .pipeline-workbench{container-type:inline-size}
 @container (max-width:760px){

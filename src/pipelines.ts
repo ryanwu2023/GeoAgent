@@ -182,3 +182,19 @@ export function trialOutcome(runs: {run_id: string; trigger: string; status: str
   if (!t || t.run_id === before) return "waiting";
   return t.status === "running" ? "running" : "finished";
 }
+
+/** 普通用户只会说“加个源”；PiChat 自身规则偏只读，需写明“在采集管线配置里新建…采集管线”才会调用管线工具（线上已验证）。 */
+export function addSourcePrompt(name: string): string {
+  const target = name.trim();
+  if (!target) return "";
+  return `在采集管线配置里新建一条「${target}」的采集管线：自己找到它的 RSS 或新闻栏目页，先试跑，`
+    + "再新建（保持停用），做一次测试运行，把新增的新闻列给我看，不要启用。";
+}
+export const ASK_EXAMPLES: {label: string; text: string}[] = [
+  {label: "半岛电视台", text: addSourcePrompt("半岛电视台")},
+  {label: "BBC 中东", text: addSourcePrompt("BBC 中东新闻")},
+  {label: "基辅独立报", text: addSourcePrompt("基辅独立报 Kyiv Independent（俄乌新闻）")},
+  {label: "看测试结果", text: "查看采集管线配置里各条自建采集管线最近一次测试运行的结果：列出管线名、新增条数和前 10 条标题。"},
+];
+/** 宿主替用户向嵌入的 PiChat 发一条消息（PiChat 嵌入契约 finance:agent:sendMessage）。 */
+export const askMessage = (text: string) => ({type: "finance:agent:sendMessage", text});
