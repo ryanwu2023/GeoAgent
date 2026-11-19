@@ -5,7 +5,7 @@ import os
 import httpx
 from .store import ROOT
 from . import model_settings
-from .integrations import pichat_tls_context
+from .integrations import pichat_client_options
 from .qa_model_client import ModelReply, ToolProtocolUnsupported
 
 def config():
@@ -161,13 +161,12 @@ async def complete_response(
         raise ValueError("后台模型已停用")
     if not c["api_key"]:
         raise ValueError("尚未配置后台模型 API Key")
-    verify = pichat_tls_context() if c["provider"] == "pichat" else True
     if c["provider"] == "pichat":
         if tools:
             raise ToolProtocolUnsupported("PiChat嵌入接口不提供本地原生工具协议")
         prompt='\n\n'.join(f"[{str(item.get('role','user')).upper()}]\n{item.get('content','')}" for item in messages)
         request_timeout = min(float(c["timeout_seconds"]), float(timeout_seconds or c["timeout_seconds"]))
-        async with httpx.AsyncClient(timeout=request_timeout, verify=verify, follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=request_timeout, follow_redirects=False, **pichat_client_options()) as client:
             response=await client.post(model_settings.endpoint_for(c),headers={'Authorization':'Bearer '+c["api_key"]},json={'message':prompt,'stream':False})
             response.raise_for_status()
             content=response.json().get('text')
@@ -177,7 +176,7 @@ async def complete_response(
                 model='Pi Chat Agent', finish_reason='stop', request_id=str(response.headers.get("x-request-id") or ""),
             )
     request_timeout = min(float(c["timeout_seconds"]), float(timeout_seconds or c["timeout_seconds"]))
-    async with httpx.AsyncClient(timeout=request_timeout, verify=verify, follow_redirects=False) as client:
+    async with httpx.AsyncClient(timeout=request_timeout, follow_redirects=False) as client:
         model=await resolve_model(client,c)
         selected = role_model(model_role, fallback=model) if model_role in {"fast", "reasoning"} else model
         model = selected or model

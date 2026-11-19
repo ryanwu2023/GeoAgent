@@ -23,7 +23,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .database import connect
-from .integrations import embed_identity_payload, pichat_tls_context, settings as integration_settings
+from .integrations import embed_identity_payload, pichat_client_options, settings as integration_settings
 
 router = APIRouter(prefix="/api/auth")
 COOKIE = "geoagent_session"
@@ -237,7 +237,7 @@ def provision_pichat(product_user_id, phone, display_name):
     if not cfg["app_key"]:
         raise HTTPException(503, "未配置 PiChat 应用 Key，无法在 PiChat 同步创建用户")
     try:
-        with httpx.Client(timeout=10, verify=pichat_tls_context()) as client:
+        with httpx.Client(timeout=10, **pichat_client_options()) as client:
             response = client.post(
                 f"{cfg['origin'].rstrip('/')}/api/v1/embed/identity",
                 headers={"Authorization": f"Bearer {cfg['app_key']}"},

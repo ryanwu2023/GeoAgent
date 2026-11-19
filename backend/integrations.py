@@ -22,6 +22,11 @@ def pichat_tls_context():
     context.verify_flags &= ~ssl.VERIFY_X509_STRICT
     return context
 
+def pichat_client_options():
+    """PiChat 只部署在国内或内网；线上 Pod 的 HTTPS_PROXY 是出境采集隧道，绕过去每次多约 2 秒
+    （面板身份签发 2.2 秒 → 直连 0.15 秒），所以连 PiChat 不读代理环境变量。"""
+    return {"verify": pichat_tls_context(), "trust_env": False}
+
 def embed_identity_payload(cfg, product_user_id, phone, display_name):
     """Body for PiChat POST /api/v1/embed/identity; PiChat materializes a
     shadow user per (app, productUserId/phone) on first call."""

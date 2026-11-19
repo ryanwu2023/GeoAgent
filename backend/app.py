@@ -58,7 +58,7 @@ def load_env():
                     os.environ.setdefault(key.strip(), value.strip().strip('"'))
 
 load_env()
-from .integrations import router as integrations_router, settings as integration_settings, pichat_tls_context, embed_identity_payload
+from .integrations import router as integrations_router, settings as integration_settings, pichat_client_options, embed_identity_payload
 from .geo_mcp.server import create_app as create_mcp_app
 from .geo_mcp.auth import AuthConfig, BearerAuthMiddleware
 from starlette.routing import Route
@@ -176,7 +176,7 @@ async def pichat_embed_identity(request: Request, agent_id: str = "geo-research-
     subject = await run_in_threadpool(pichat_subject, getattr(request.state, "web_user", ""))
     payload = embed_identity_payload(cfg, *(subject or (cfg["product_user_id"], phone, "GeoAgent 本地研究用户")))
     try:
-        async with httpx.AsyncClient(timeout=10, verify=pichat_tls_context()) as client:
+        async with httpx.AsyncClient(timeout=10, **pichat_client_options()) as client:
             response = await client.post(
                 f"{base_url}/api/v1/embed/identity",
                 headers={"Authorization": f"Bearer {app_key}"},

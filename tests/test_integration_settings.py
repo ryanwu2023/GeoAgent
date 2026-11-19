@@ -200,6 +200,22 @@ def test_identity_uses_saved_config_without_restart(client, monkeypatch):
     assert "pk-private" not in result.text
 
 
+def test_pichat_requests_bypass_outbound_proxy(client, monkeypatch):
+    """线上 HTTPS_PROXY 是出境采集隧道；国内的 PiChat 走它每次多约 2 秒，面板因此出得慢。"""
+    seen = []
+    original_client = httpx.AsyncClient
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"ok": True, "data": {"token": "t"}}))
+    def make(**kwargs):
+        seen.append(kwargs)
+        return original_client(transport=transport, **kwargs)
+    monkeypatch.setattr("backend.app.httpx.AsyncClient", make)
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")
+    client.put("/api/integrations/pichat", json=dict(origin="https://pichat.example.com", agent_id="geo",
+               app_key="pk-private", phone="13000000000", entry="", product_user_id="geo-test"))
+    assert client.get("/api/pichat/embed-identity").status_code == 200
+    assert seen and seen[0]["trust_env"] is False
+
+
 @pytest.mark.parametrize('status,code', [(401, 'PICHAT_APP_KEY_REJECTED'), (403, 'PICHAT_EMBED_FORBIDDEN')])
 def test_identity_rejection_is_classified_without_upstream_private_body(client, monkeypatch, status, code):
     original_client = httpx.AsyncClient

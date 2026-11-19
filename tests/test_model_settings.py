@@ -331,18 +331,19 @@ def test_deepseek_uses_explicit_fast_nonstreaming_request(monkeypatch):
         }
         return httpx.Response(200, json={"choices": [{"message": {"content": "连接成功"}}]})
 
-    monkeypatch.setattr(llm, "pichat_tls_context", lambda: pytest.fail("DeepSeek must not use PiChat CA"))
+    monkeypatch.setattr(llm, "pichat_client_options", lambda: pytest.fail("DeepSeek must not use PiChat options"))
     options = mock_http(monkeypatch, handler)
     assert asyncio.run(llm.complete([{"role": "user", "content": "测试"}])) == ("连接成功", "deepseek-flash")
     assert len(calls) == 1
-    assert options[0]["verify"] is True
+    assert options[0].get("verify", True) is True
+    assert options[0].get("trust_env", True) is True  # 境外模型仍走出境代理
     assert options[0]["follow_redirects"] is False
 
 
 def test_pichat_transport_uses_pichat_tls_only(monkeypatch):
     model_settings.save_settings(deepseek(provider="pichat", base_url="https://pichat.example"))
     tls_calls = []
-    monkeypatch.setattr(llm, "pichat_tls_context", lambda: tls_calls.append(True) or True)
+    monkeypatch.setattr(llm, "pichat_client_options", lambda: tls_calls.append(True) or {"verify": True, "trust_env": False})
 
     def handler(request):
         assert request.url.path == "/api/v1/chat"
@@ -352,6 +353,7 @@ def test_pichat_transport_uses_pichat_tls_only(monkeypatch):
     options = mock_http(monkeypatch, handler)
     assert asyncio.run(llm.complete([{"role": "user", "content": "测试"}])) == ("连接成功", "Pi Chat Agent")
     assert tls_calls == [True]
+    assert options[0]["trust_env"] is False  # PiChat 在国内，不绕出境代理
     assert options[0]["follow_redirects"] is False
 
 
