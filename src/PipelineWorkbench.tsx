@@ -11,6 +11,7 @@ import {
 import SourceEditor from "./pipeline/SourceEditor";
 import TermsArea, {FieldError} from "./pipeline/TermsArea";
 import {NewItems, RunList, statusLabel, VersionList} from "./pipeline/RunPanels";
+import {BuiltinSourceEditor, BuiltinTermsEditor} from "./pipeline/BuiltinEditor";
 import {Modal, PreviewDrawer, Warning} from "./pipeline/Dialogs";
 
 const TOPICS: [string, string][] = [["usiran", "美伊"], ["ukraine", "俄乌"]];
@@ -21,7 +22,9 @@ const TRIAL_START_TIMEOUT_MS = 60_000;
 const MAX_TERMS = 200;
 const TABS: [DetailTab, string][] = [["basic", "基本信息"], ["sources", "来源"], ["keywords", "关键词"], ["items", "本次新增"], ["versions", "版本历史"], ["runs", "运行记录"]];
 const BUILTIN_TABS = new Set<DetailTab>(["basic", "sources"]);
+const BUILTIN_EDIT_TABS = new Set<DetailTab>(["basic", "sources", "keywords", "versions"]);
 const BUILTIN_NOTE = "内置采集器随整批采集运行，来源由代码维护";
+const BUILTIN_EDIT_NOTE = "内置采集器随整批采集运行。这里改的来源和关键词保存后从下一次运行起生效；分桶、立场、打分等采集逻辑仍由代码维护";
 
 type Filters = {topic: string; status: string; kind: string; q: string};
 type SaveError = {message: string; field?: string; conflict?: boolean};
@@ -83,7 +86,10 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
 
   const isNew = selectedId === "new";
   const isBuiltin = detail?.kind === "builtin";
+  const builtinEditable = isBuiltin && !!detail?.builtin?.editable;
   const editable = isNew || detail?.kind === "configurable";
+  /** 内置采集器也能改名称、说明（主题由代码决定）。 */
+  const rowEditable = editable || isBuiltin;
   const sourceNames = Object.fromEntries((draft?.config.sources || []).map((s) => [s.id, s.name || s.id]));
   const hit = (field: string) => fieldHit(saveError?.field, field);
 
@@ -158,7 +164,7 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
       if (background && dirtyRef.current) { setStaleVersion(p.current_version); upsertRows([p]); return; }
       applyLoaded(p); upsertRows([p]);
       void loadRuns(id);
-      if (p.kind === "configurable") void loadVersions(id); else setVersions([]);
+      if (p.kind === "configurable" || p.builtin?.editable) void loadVersions(id); else setVersions([]);
     } catch (e) { if (seq === detailSeq.current) setDetailError(errText(e)); }
   }, [applyLoaded, upsertRows, loadRuns, loadVersions]);
 
@@ -243,6 +249,7 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
   }
   const patchRow = (change: Partial<PipelineDraft["row"]>) => setDraft((d) => d && {...d, row: {...d.row, ...change}});
   const patchConfig = (fn: (c: PipelineDraft["config"]) => PipelineDraft["config"]) => setDraft((d) => d && {...d, config: fn(d.config)});
+  const patchBuiltin = (change: Partial<NonNullable<PipelineDraft["builtin"]>>) => setDraft((d) => d && d.builtin ? {...d, builtin: {...d.builtin, ...change}} : d);
   const patchFilters = (change: Partial<PipelineDraft["config"]["filters"]>) => patchConfig((c) => ({...c, filters: {...c.filters, ...change}}));
 
   function writeFailed(e: unknown) {
@@ -259,11 +266,14 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
   }
 
   async function save() {
-    if (!draft || !editable) return;
+    if (!draft || !rowEditable) return;
     setSaving(true); setSaveError(null);
     try {
       const body = {row: draft.row, config: draft.config, change_note: changeNote.trim()};
-      const saved = isNew ? await createPipeline(body) : await updatePipeline(detail!.id, detail!.current_version, body);
+      const saved = isNew ? await createPipeline(body)
+        : await updatePipeline(detail!.id, detail!.current_version, isBuiltin
+          ? {row: {name: draft.row.name, description: draft.row.description}, config: draft.builtin ?? null, change_note: body.change_note}
+          : body);
       detailSeq.current++;
       applyLoaded(saved); upsertRows([saved]); setSelectedId(saved.id); setChangeNote("");
       setNotice(isNew ? "已创建管线（默认未启用）。建议先测试运行，确认结果后再启用。" : `已保存为第 ${saved.current_version} 版`);
@@ -340,7 +350,7 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
 
   const recent = recentlyUpdated(rows);
   const terms = draft ? draft.config.filters.include_any.length + draft.config.filters.include_strong.length + draft.config.filters.exclude.length : 0;
-  const tabs = TABS.filter(([id]) => !isBuiltin || BUILTIN_TABS.has(id)).filter(([id]) => !isNew || ["basic", "sources", "keywords"].includes(id));
+  const tabs = TABS.filter(([id]) => !isBuiltin || (builtinEditable ? BUILTIN_EDIT_TABS : BUILTIN_TABS).has(id)).filter(([id]) => !isNew || ["basic", "sources", "keywords"].includes(id));
   const lastTrial = toggle?.runs ? latestTrial(toggle.runs) : null;
 
   const ask = (text: string) => {
@@ -406,7 +416,7 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
             return <div key={p.id} className={`pipeline-row ${p.id === selectedId ? "selected" : ""} ${p.enabled ? "" : "is-disabled"}`}>
               <button type="button" className="pipeline-row-main" onClick={() => select(p.id)}>
                 <strong>{p.name}<span className={`pipeline-tag ${p.kind}`}>{p.kind === "builtin" ? "内置" : "配置"}</span>{unseen > 0 && <span className="pipeline-new">新增 {unseen} 条</span>}</strong>
-                <small>{p.topics.map((t) => TOPIC_LABEL[t] || t).join("、") || "未设主题"} · {p.kind === "builtin" ? "来源由代码维护" : `${p.source_count} 个来源`}</small>
+                <small>{p.topics.map((t) => TOPIC_LABEL[t] || t).join("、") || "未设主题"} · {p.kind === "builtin" && !p.builtin_editable ? "来源由代码维护" : `${p.source_count} 个来源`}</small>
                 <small className={`status-${p.last_status || "none"}`}>{p.last_status ? `${trigger ? runLabel({trigger}) : "最近运行"} · ${statusLabel(p.last_status)} · ${dateText(p.last_finished_at)}` : "尚未运行"}</small>
               </button>
               <label className="pipeline-switch" title={p.kind === "builtin" ? "切换即修改采集监控页的排除列表" : p.enabled ? "停用" : "启用前需确认"}>
@@ -427,16 +437,16 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
               <div><h2>{isNew ? "新建管线" : detail?.name}</h2>
                 <small>{isNew ? "保存后默认未启用" : `${detail?.kind === "builtin" ? "内置" : "配置"} · 第 ${detail?.current_version} 版 · ${detail?.enabled ? "已启用" : "未启用"}`}{dirty ? " · 有未保存修改" : ""}</small></div>
             </header>
-            {isBuiltin && <Warning>{BUILTIN_NOTE}。在这里切换启用状态等同于修改采集监控页的“排除采集器”。运行情况见‘采集管线监控’页。</Warning>}
+            {isBuiltin && <Warning>{builtinEditable ? BUILTIN_EDIT_NOTE : `${BUILTIN_NOTE}（${detail?.builtin?.reason || "不可编辑"}）`}。在这里切换启用状态等同于修改采集监控页的“排除采集器”。运行情况见‘采集管线监控’页。</Warning>}
             {staleVersion != null && <div className="pipeline-banner" role="status">已有新版本（第 {staleVersion} 版），可能由 PiChat 或其他管理员修改。当前表单有未保存修改，未自动刷新。<button type="button" onClick={reload}>重新加载</button></div>}
             <nav className="pipeline-tabs" role="tablist">
               {tabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "selected" : ""} onClick={() => setTab(id)}>{label}</button>)}
             </nav>
             <div className="pipeline-tab-body">
               {tab === "basic" && <div className="pipeline-form-grid">
-                <label className="wide">名称<input className={hit("row.name") ? "invalid" : ""} disabled={!editable} maxLength={100} value={draft.row.name} onChange={(e) => patchRow({name: e.target.value})} placeholder="如：路透社中东新闻" />
+                <label className="wide">名称<input className={hit("row.name") ? "invalid" : ""} disabled={!rowEditable} maxLength={100} value={draft.row.name} onChange={(e) => patchRow({name: e.target.value})} placeholder="如：路透社中东新闻" />
                   <FieldError show={hit("row.name")} message={saveError?.message} /></label>
-                <label className="wide">说明<textarea className={hit("row.description") ? "invalid" : ""} disabled={!editable} rows={3} maxLength={2000} value={draft.row.description} onChange={(e) => patchRow({description: e.target.value})} />
+                <label className="wide">说明<textarea className={hit("row.description") ? "invalid" : ""} disabled={!rowEditable} rows={3} maxLength={2000} value={draft.row.description} onChange={(e) => patchRow({description: e.target.value})} />
                   <FieldError show={hit("row.description")} message={saveError?.message} /></label>
                 <fieldset className={`wide pipeline-topics ${hit("row.topics") ? "invalid" : ""}`}><legend>主题（可多选，至少一个）</legend>
                   {TOPICS.map(([id, label]) => {
@@ -448,10 +458,15 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
                 </fieldset>
               </div>}
               {tab === "sources" && (isBuiltin
-                ? <p className="pipeline-empty">内置采集器，来源由代码维护。</p>
+                ? (draft.builtin
+                  ? <BuiltinSourceEditor sources={draft.builtin.sources} tiers={detail?.builtin?.tiers || []} onChange={(sources) => patchBuiltin({sources})}
+                      errField={saveError?.field} errMessage={saveError?.message} />
+                  : <p className="pipeline-empty">内置采集器，来源由代码维护。</p>)
                 : <SourceEditor sources={draft.config.sources} onChange={(sources) => patchConfig((c) => ({...c, sources}))}
                     errField={saveError?.field} errMessage={saveError?.message} />)}
-              {tab === "keywords" && <div className="pipeline-form-grid">
+              {tab === "keywords" && draft.builtin && <BuiltinTermsEditor groups={detail?.builtin?.term_groups || []} terms={draft.builtin.terms}
+                onChange={(path, next) => patchBuiltin({terms: {...draft.builtin!.terms, [path]: next}})} errField={saveError?.field} errMessage={saveError?.message} />}
+              {tab === "keywords" && !isBuiltin && <div className="pipeline-form-grid">
                 <p className="wide pipeline-hint">每行一个词，也可用逗号或顿号分隔。锚词需命中标题或至少两个；强锚词命中一个即可；排除词命中即剔除。合计 {terms} / {MAX_TERMS}。</p>
                 <label>锚词<TermsArea label="锚词" value={draft.config.filters.include_any} invalid={hit("filters.include_any")} onChange={(v) => patchFilters({include_any: v})} placeholder="伊朗&#10;Iran" /></label>
                 <label>强锚词<TermsArea label="强锚词" value={draft.config.filters.include_strong} invalid={hit("filters.include_strong")} onChange={(v) => patchFilters({include_strong: v})} placeholder="霍尔木兹" /></label>
@@ -470,6 +485,10 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
             {saveError && !saveError.field && <div className="pipeline-banner error" role="alert">{saveError.message}
               {saveError.conflict && <button type="button" onClick={reload}>重新加载</button>}</div>}
             {saveError?.field && !tabForField(saveError.field) && <div className="pipeline-banner error" role="alert">{saveError.message}</div>}
+            {isBuiltin && <footer className="pipeline-footer">
+              <input aria-label="修改说明" placeholder="修改说明（可选，记入版本历史）" value={changeNote} maxLength={200} onChange={(e) => setChangeNote(e.target.value)} />
+              <button type="button" className="primary" disabled={saving || !dirty} onClick={() => void save()}><Save size={14} /> {saving ? "保存中…" : "保存"}</button>
+            </footer>}
             {editable && <footer className="pipeline-footer">
               <input aria-label="修改说明" placeholder="修改说明（可选，记入版本历史）" value={changeNote} maxLength={200} onChange={(e) => setChangeNote(e.target.value)} />
               <button type="button" disabled={!draft.config.sources.length || preview?.loading} onClick={() => void runPreview()} title="按当前表单抓取少量候选，不写任何数据"><FlaskConical size={14} /> 试跑</button>

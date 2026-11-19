@@ -38,7 +38,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 BASE = os.path.dirname(os.path.abspath(__file__))
 OUTPUT = os.environ.get("COLLECTOR_OUTPUT_ROOT", os.path.join(BASE, "output"))
 STATE = os.environ.get("COLLECTOR_STATE_ROOT", os.path.join(BASE, "state"))
-CFG_PATH = os.path.join(BASE, "config.json")
+# 页面改过来源或词表时，采集服务经 GEO_COLLECTOR_CONFIG 传入合并后的配置。
+CFG_PATH = os.environ.get("GEO_COLLECTOR_CONFIG") or os.path.join(BASE, "config.json")
 
 CST = timezone(timedelta(hours=8))
 TODAY: date = datetime.now(CST).date()

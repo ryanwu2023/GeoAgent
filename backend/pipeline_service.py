@@ -20,7 +20,7 @@ from typing import Any, Callable
 
 import psycopg
 
-from backend import collector_config
+from backend import builtin_config, collector_config
 from backend.paths import collector_data_root, project_root
 from backend.pipeline_config import PipelineConfigError, default_resolve, validate_pipeline, validate_row
 from backend.store import db
@@ -28,6 +28,7 @@ from scripts.integrate_collectors import load_registry
 
 STATUSES = ("enabled", "disabled", "running", "success", "partial", "failed")
 ROW_FIELDS = ("name", "description", "topics")
+BUILTIN_ROW_FIELDS = ("name", "description")  # 内置采集器的主题由注册表决定
 REGISTRY_DISABLED = "注册表已停用该采集器，不能在此启用"
 CONFIG_UNREADABLE = "采集配置文件无法读取，请先在采集监控页修复"
 RETIRED_DIR = ".pipeline-retired"
@@ -165,12 +166,18 @@ def list_pipelines(*, topic: str | None = None, status: str | None = None, kind:
     if changed_since is not None:
         where.append("(p.created_at > %s OR p.updated_at > %s OR p.last_finished_at > %s)")
         params += [changed_since] * 3
-    sql = ("SELECT p.*, COALESCE(jsonb_array_length(v.config->'sources'),0) AS source_count "
+    sql = ("SELECT p.*, COALESCE(jsonb_array_length(v.config->'sources'),0) AS source_count, "
+           "CASE WHEN p.kind='builtin' THEN v.config END AS builtin_version_config "
            "FROM collection_pipelines p LEFT JOIN collection_pipeline_versions v "
            "ON v.pipeline_id=p.id AND v.version=p.current_version AND NOT v.is_deleted "
            "WHERE " + " AND ".join(where) + " ORDER BY p.name, p.id")
     with db() as conn:
         rows = _with_effective_enabled([dict(r) for r in conn.execute(sql, params).fetchall()])
+    for row in rows:
+        version_config = row.pop("builtin_version_config", None)
+        if row["kind"] == "builtin":
+            row["builtin_editable"] = builtin_config.editable(row["id"])
+            row["source_count"] = builtin_config.source_count(row["id"], version_config) or 0
     if status in ("enabled", "disabled"):
         rows = [r for r in rows if r["enabled"] == (status == "enabled")]
     return rows
@@ -182,6 +189,10 @@ def get_pipeline(pipeline_id: str) -> dict:
         if not row:
             raise PipelineError("NOT_FOUND", "管线不存在或已删除", {"id": pipeline_id})
         row = _with_config(conn, row)
+    if row["kind"] == "builtin":
+        row["builtin"] = builtin_config.view(row["id"], row["config"])
+        row["builtin_editable"] = row["builtin"]["editable"]
+        row["source_count"] = len(row["builtin"].get("sources") or [])
     return _with_effective_enabled([row])[0]
 
 
@@ -226,7 +237,7 @@ def update_pipeline(actor: Actor, pipeline_id: str, *, expected_version: int, ro
             cur = _lock(conn, pipeline_id)
             _check_edit(actor, cur)
             if cur["kind"] == "builtin":
-                raise PipelineError("BUILTIN_READONLY", "内置管线只允许修改启停", {"fields": sorted(row_patch)})
+                return _update_builtin(conn, actor, cur, expected_version, row_patch, config, change_note, resolve)
             _check_version(cur, expected_version)
             merged = {k: cur[k] for k in ROW_FIELDS}
             merged.update(row_patch)
@@ -286,6 +297,40 @@ def retire_pipeline_output(pipeline_id: str) -> Path | None:
     return target
 
 
+def _builtin_version(overlay: dict) -> dict:
+    return {"schema_version": "pipeline/1", "builtin": True, **({"overlay": overlay} if overlay else {})}
+
+
+def _update_builtin(conn, actor: Actor, cur: dict, expected_version: int, row_patch: dict, config: dict | None,
+                    change_note: str, resolve: Callable[[str], list[str]]) -> dict:
+    """内置采集器：名称、说明可改；来源与词表以覆盖层存为新版本，下次运行该采集器起生效。"""
+    pipeline_id = cur["id"]
+    readonly = set(row_patch) - set(BUILTIN_ROW_FIELDS)
+    if readonly:
+        raise PipelineError("BUILTIN_READONLY", "内置采集器的主题由代码决定，不能修改", {"field": f"row.{sorted(readonly)[0]}"})
+    if config is not None and not builtin_config.editable(pipeline_id):
+        raise PipelineError("BUILTIN_READONLY", builtin_config.READONLY_REASON, {"field": "config"})
+    _check_version(cur, expected_version)
+    merged = {k: cur[k] for k in ROW_FIELDS}
+    merged.update(row_patch)
+    try:
+        clean_row = validate_row(merged)
+        version_config = None
+        if config is not None:
+            version_config = _builtin_version(builtin_config.build_overlay(pipeline_id, config, resolve=resolve))
+    except PipelineConfigError as exc:
+        raise _invalid(exc) from exc
+    new_version = cur["current_version"]
+    if version_config is not None and version_config != _config(conn, pipeline_id, new_version):
+        new_version += 1
+        _add_version(conn, actor, pipeline_id, new_version, version_config, change_note)
+    conn.execute("UPDATE collection_pipelines SET name=%s,description=%s,current_version=%s,updated_by=%s,updated_at=%s "
+                 "WHERE id=%s", (clean_row["name"], clean_row["description"], new_version, actor.username,
+                                 datetime.now(timezone.utc), pipeline_id))
+    conn.commit()
+    return get_pipeline(pipeline_id)
+
+
 def delete_pipeline(actor: Actor, pipeline_id: str) -> None:
     with db() as conn:
         cur = _lock(conn, pipeline_id)
@@ -303,7 +348,7 @@ def rollback(actor: Actor, pipeline_id: str, *, to_version: int, expected_versio
     with db() as conn:
         cur = _lock(conn, pipeline_id)
         _check_edit(actor, cur)
-        if cur["kind"] == "builtin":
+        if cur["kind"] == "builtin" and not builtin_config.editable(pipeline_id):
             raise PipelineError("BUILTIN_READONLY", "内置管线没有可回滚的配置版本")
         _check_version(cur, expected_version)
         old = _config(conn, pipeline_id, to_version)
@@ -311,9 +356,11 @@ def rollback(actor: Actor, pipeline_id: str, *, to_version: int, expected_versio
             raise PipelineError("NOT_FOUND", f"版本 {to_version} 不存在", {"version": to_version})
         if to_version == cur["current_version"]:
             raise PipelineError("INVALID", "不能回滚到当前版本", {"field": "to_version"})
-        row = {k: cur[k] for k in ROW_FIELDS}
         try:
-            _, old = validate_pipeline(row, old, resolve=resolve)
+            if cur["kind"] == "builtin":
+                old = _builtin_version(builtin_config.validate_overlay(pipeline_id, builtin_config.overlay_of(old)))
+            else:
+                _, old = validate_pipeline({k: cur[k] for k in ROW_FIELDS}, old, resolve=resolve)
         except PipelineConfigError as exc:
             raise _invalid(exc) from exc
         new_version = cur["current_version"] + 1

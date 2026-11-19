@@ -50,7 +50,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 BASE_DIR = Path(__file__).resolve().parent
-CONFIG_PATH = BASE_DIR / "config.json"
+# 页面改过来源或词表时，采集服务经 GEO_COLLECTOR_CONFIG 传入合并后的配置。
+CONFIG_PATH = Path(os.environ.get("GEO_COLLECTOR_CONFIG") or BASE_DIR / "config.json")
 STATE_DIR = BASE_DIR / "state"
 OUTPUT_DIR = BASE_DIR / "output"
 SEEN_PATH = STATE_DIR / "seen.json"

@@ -91,6 +91,13 @@ export function NewItems({run, items, total, loading, error, sourceNames, onMore
 }
 
 function versionSummary(v: PipelineVersion) {
+  const builtin = v.config as unknown as {builtin?: boolean; overlay?: {sources?: {set?: object; add?: unknown[]; remove?: unknown[]}; terms?: object}} | null;
+  if (builtin?.builtin) {
+    const o = builtin.overlay;
+    if (!o) return "与代码配置一致";
+    const changedSources = Object.keys(o.sources?.set || {}).length + (o.sources?.add?.length || 0) + (o.sources?.remove?.length || 0);
+    return `改动 ${changedSources} 个来源 · ${Object.keys(o.terms || {}).length} 个词表`;
+  }
   const f = v.config?.filters;
   const terms = f ? f.include_any.length + f.include_strong.length + f.exclude.length : 0;
   return `${v.config?.sources?.length ?? 0} 个来源 · ${terms} 个关键词`;

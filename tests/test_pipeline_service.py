@@ -192,19 +192,21 @@ def test_admin_can_edit_pipeline_created_by_other_admin():
     assert upd(p["id"], ADMIN, expected_version=1, row_patch={"description": "x"})["description"] == "x"
 
 
-def test_builtin_is_readonly_except_enable(registry):
+def test_builtin_without_source_list_is_readonly_except_name_and_enable(registry):
     registry.append(reg_item("b-news"))
     pid = _builtin()
     assert get_pipeline(pid)["config"] is None
+    assert get_pipeline(pid)["builtin"]["editable"] is False
     assert not can_edit(ALICE, get_pipeline(pid)) and can_edit(ADMIN, get_pipeline(pid))
     with pytest.raises(PipelineError) as e:
         upd(pid, ALICE, expected_version=1, row_patch={"description": "x"})
     assert e.value.code == "FORBIDDEN"
-    for kw in ({"row_patch": {"name": "x"}}, {"row_patch": {"topics": ["ukraine"]}},
-               {"row_patch": {"description": "x"}}, {"config": cfg()}):
+    for kw in ({"row_patch": {"topics": ["ukraine"]}}, {"config": {"sources": []}}):
         with pytest.raises(PipelineError) as e:
             upd(pid, expected_version=1, **kw)
         assert e.value.code == "BUILTIN_READONLY"
+    renamed = upd(pid, expected_version=1, row_patch={"name": "新闻（内置）", "description": "x"})
+    assert renamed["name"] == "新闻（内置）" and renamed["current_version"] == 1
     assert set_enabled(ADMIN, pid, True)["enabled"] is True
     for fn in (lambda: delete_pipeline(ADMIN, pid), lambda: rollback(ADMIN, pid, to_version=1, expected_version=1)):
         with pytest.raises(PipelineError) as e:
@@ -375,3 +377,67 @@ def test_list_filter_topic_matches_any():
     assert {p["name"] for p in list_pipelines(topic="ukraine")} == {"Alpha", "Beta"}
     assert {p["name"] for p in list_pipelines(topic="usiran")} == {"Alpha"}
     assert get_pipeline(a["id"])["topics"] == ["usiran", "ukraine"]
+
+
+def _naval():
+    with db() as conn:
+        conn.execute("INSERT INTO collection_pipelines(id,kind,name,topics,current_version,owner) "
+                     "VALUES ('naval-monitor','builtin','海军监测',ARRAY['usiran'],1,'system')")
+        conn.execute("INSERT INTO collection_pipeline_versions(pipeline_id,version,config,change_note,source_channel,created_by) "
+                     "VALUES ('naval-monitor',1,%s,'内置采集器同步','migration','system')",
+                     ('{"schema_version": "pipeline/1", "builtin": true}',))
+    return "naval-monitor"
+
+
+def test_builtin_sources_and_terms_save_as_overlay_versions_and_roll_back(registry):
+    """BC-01/03/04/05/06/08：内置采集器的来源和词表以覆盖层存版本，可回滚到与代码一致。"""
+    from backend import builtin_config
+    registry.append({**reg_item("naval-monitor")})
+    pid = _naval()
+    view = get_pipeline(pid)["builtin"]
+    assert view["editable"] and len(view["sources"]) == len(builtin_config.base_config(pid)["sources"])
+    listed = [p for p in list_pipelines(kind="builtin") if p["id"] == pid][0]
+    assert listed["builtin_editable"] and listed["source_count"] == len(view["sources"])
+    sources = [dict(s) for s in view["sources"]]
+    sources[0]["url"] = "https://news.example.com/feed"
+    removed = sources.pop()["id"]
+    sources.append({"id": "new-feed", "name": "新增源", "url": "https://feeds.example.com/x.xml", "tier": "T2",
+                    "enabled": True, "template": sources[0]["id"]})
+    group = view["term_groups"][0]
+    saved = upd(pid, expected_version=1, change_note="换源",
+                config={"sources": sources, "terms": {group["path"]: ["carrier", "Hormuz"]}})
+    assert saved["current_version"] == 2
+    overlay = saved["config"]["overlay"]
+    assert overlay["sources"]["set"][sources[0]["id"]]["url"] == "https://news.example.com/feed"
+    assert overlay["sources"]["remove"] == [removed] and overlay["sources"]["add"][0]["id"] == "new-feed"
+    assert overlay["terms"] == {group["path"]: ["carrier", "Hormuz"]}
+    # 新增来源继承模板的专有字段（如 type、priority）
+    template = next(s for s in builtin_config.base_config(pid)["sources"] if s["id"] == sources[0]["id"])
+    assert overlay["sources"]["add"][0]["type"] == template["type"]
+    # 同样内容再保存不产生新版本
+    assert upd(pid, expected_version=2, config={"sources": sources, "terms": {group["path"]: ["carrier", "Hormuz"]}})["current_version"] == 2
+    back = rollback(ADMIN, pid, to_version=1, expected_version=2)
+    assert back["current_version"] == 3 and "overlay" not in back["config"]
+    assert [v["version"] for v in list_versions(pid)] == [3, 2, 1]
+
+
+@pytest.mark.parametrize("change, field", [
+    (lambda s, t: s[0].update(url="http://127.0.0.1/feed"), "sources[0].url"),
+    (lambda s, t: s[0].update(name=" "), "sources[0].name"),
+    (lambda s, t: s.append({**s[0], "template": s[0]["id"]}), "sources[7].id"),
+    (lambda s, t: t.update({"relevance_keywords": ["(unclosed"]}), "terms.relevance_keywords"),
+    (lambda s, t: t.update({"relevance_keywords": []}), "terms.relevance_keywords"),
+    (lambda s, t: t.update({"no/such/path": ["x"]}), "terms.no/such/path"),
+])
+def test_builtin_invalid_edits_are_rejected_without_new_version(registry, change, field):
+    """BC-07：内网网址、未知等级、重复 ID、坏正则、空词表、未知词表都报 422 并定位字段。"""
+    def private(host):
+        return ["127.0.0.1"] if host == "127.0.0.1" else ["93.184.216.34"]
+    pid = _naval()
+    sources = [dict(s) for s in get_pipeline(pid)["builtin"]["sources"]]
+    terms: dict = {}
+    change(sources, terms)
+    with pytest.raises(PipelineError) as e:
+        upd(pid, expected_version=1, config={"sources": sources, "terms": terms}, resolve=private)
+    assert e.value.code == "INVALID" and e.value.details["field"] == field
+    assert get_pipeline(pid)["current_version"] == 1

@@ -450,7 +450,8 @@ def selftest() -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selftest", action="store_true")
-    parser.add_argument("--config", type=Path, default=HERE / "config.json")
+    # 页面改过来源或词表时，采集服务经 GEO_COLLECTOR_CONFIG 传入合并后的配置。
+    parser.add_argument("--config", type=Path, default=Path(os.getenv("GEO_COLLECTOR_CONFIG") or HERE / "config.json"))
     parser.add_argument("--output", type=Path, default=Path(os.getenv("COLLECTOR_OUTPUT_ROOT", HERE / "output")))
     args = parser.parse_args()
     if args.selftest:

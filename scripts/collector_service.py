@@ -100,6 +100,16 @@ def _effective_exclusions(exclude_ids: list[str] | None) -> list[str]:
     return list(dict.fromkeys([*given, *configured]))
 
 
+def _with_builtin_overrides(registry: list[dict]) -> list[dict]:
+    """页面改过来源或词表的内置采集器改读合并后的配置（延迟导入；失败时按代码配置运行）。"""
+    try:
+        from backend.builtin_config import with_overrides
+        return with_overrides(registry)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("加载内置采集器覆盖配置失败，本次按代码配置运行：%s", exc)
+        return registry
+
+
 def _batch_pipeline_items() -> list[dict]:
     """已启用的配置化管线（延迟导入，避免与 backend.pipeline_runs 循环引用）。"""
     try:
@@ -242,6 +252,7 @@ def execute_once(
             selected_registry = registry
             if selected_registry is None:
                 selected_registry = load_registry(project_root() / "collectors" / "collectors.json")
+            selected_registry = _with_builtin_overrides(selected_registry)
             if full_batch:
                 selected_registry = [*selected_registry, *_batch_pipeline_items()]
             if runner is run_collectors:

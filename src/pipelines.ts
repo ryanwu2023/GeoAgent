@@ -13,10 +13,16 @@ export type PipelineConfig = {
   request: {timeout_seconds: number; rate_limit_seconds: number};
 };
 export type PipelineRow = {name: string; description: string; topics: string[]};
+/** 内置采集器的来源（合并了页面改动）；template 只在新增时用，指定复制哪个已有来源的专有字段。 */
+export type BuiltinSource = {id: string; name: string; url: string; tier: string; enabled: boolean; note: string; added?: boolean; changed?: boolean; template?: string};
+export type BuiltinTermGroup = {path: string; label: string; terms: string[]; changed?: boolean};
+export type BuiltinView = {editable: boolean; reason?: string; sources?: BuiltinSource[]; term_groups?: BuiltinTermGroup[]; tiers?: string[]; removed?: string[]};
+export type BuiltinDraft = {sources: BuiltinSource[]; terms: Record<string, string[]>};
 export type Pipeline = PipelineRow & {
   id: string; kind: "builtin" | "configurable"; enabled: boolean; current_version: number; owner: string | null;
   last_run_id: string | null; last_trigger: "batch" | "trial" | null; last_status: string | null; last_finished_at: string | null; last_new_items: number;
   source_count: number; config?: PipelineConfig; updated_at?: string | null; created_at?: string;
+  builtin?: BuiltinView; builtin_editable?: boolean;
 };
 export type PipelineVersion = {pipeline_id: string; version: number; config: PipelineConfig; change_note: string; source_channel: string; created_by: string | null; created_at: string};
 export type PipelineRun = {
@@ -28,8 +34,8 @@ export type PipelineRunItem = {
   language: string | null; matched_terms: string[]; dimensions: Record<string, unknown>; evidence_id: string | null;
 };
 export type PreviewResult = {sources: Array<{source_id: string; state: string; error: string | null; error_message?: string; candidates: Array<{title: string; url: string; accepted: boolean; reason: string; matched: string[]}>}>};
-export type PipelineDraft = {row: PipelineRow; config: PipelineConfig};
-export type PipelineWriteBody = {row: Partial<PipelineRow>; config: PipelineConfig | null; change_note?: string};
+export type PipelineDraft = {row: PipelineRow; config: PipelineConfig; builtin?: BuiltinDraft};
+export type PipelineWriteBody = {row: Partial<PipelineRow>; config: PipelineConfig | BuiltinDraft | null; change_note?: string};
 export type ListParams = {topic?: string; status?: string; kind?: string; q?: string; changed_since?: string};
 
 export class PipelineApiError extends Error {
@@ -138,7 +144,7 @@ export function tabForField(field: string | undefined | null): DetailTab | null 
   if (!field) return null;
   if (field.startsWith("row.")) return "basic";
   if (field === "sources" || field.startsWith("sources[") || field.startsWith("request.")) return "sources";
-  if (field === "filters" || field.startsWith("filters.")) return "keywords";
+  if (field === "filters" || field.startsWith("filters.") || field === "terms" || field.startsWith("terms.")) return "keywords";
   return null;
 }
 export function hostsFromUrls(urls: string[]): string[] {
@@ -150,11 +156,27 @@ const isEditableConfig = (config: unknown): config is PipelineConfig =>
   !!config && Array.isArray((config as PipelineConfig).sources) && !!(config as PipelineConfig).filters;
 export const sourceCountOf = (p: {config?: PipelineConfig; source_count?: number}): number | undefined =>
   isEditableConfig(p.config) ? p.config.sources.length : p.source_count;
-export function draftOf(p: PipelineRow & {config?: PipelineConfig}): PipelineDraft {
-  return {
+export function draftOf(p: PipelineRow & {config?: PipelineConfig; builtin?: BuiltinView}): PipelineDraft {
+  const draft: PipelineDraft = {
     row: {name: p.name, description: p.description ?? "", topics: [...p.topics]},
     config: isEditableConfig(p.config) ? withoutRemovedKeys(JSON.parse(JSON.stringify(p.config))) : emptyDraft([]).config,
   };
+  if (p.builtin?.editable) draft.builtin = builtinDraftOf(p.builtin);
+  return draft;
+}
+/** 内置采集器的可编辑部分：来源去掉展示用标记，词表按路径全量带上（保存时整体提交，后端只记与代码不同的部分）。 */
+export function builtinDraftOf(view: BuiltinView): BuiltinDraft {
+  return {
+    sources: (view.sources || []).map(({id, name, url, tier, enabled, note}) => ({id, name, url, tier, enabled, note})),
+    terms: Object.fromEntries((view.term_groups || []).map((g) => [g.path, [...g.terms]])),
+  };
+}
+/** 新增内置来源的 ID：custom-1、custom-2……避开已有 ID。 */
+export function newBuiltinSourceId(sources: BuiltinSource[]): string {
+  const used = new Set(sources.map((s) => s.id));
+  let n = 1;
+  while (used.has(`custom-${n}`)) n++;
+  return `custom-${n}`;
 }
 /** 早期版本可能带已移除的翻页项（max_pages_per_source），后端现按未知字段拒绝，载入时去掉。 */
 function withoutRemovedKeys(config: PipelineConfig): PipelineConfig {

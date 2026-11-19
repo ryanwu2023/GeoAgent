@@ -2809,7 +2809,8 @@ def main() -> int:
 
     ap = argparse.ArgumentParser(
         description="美军战备表态 × 伊朗革命卫队表态 交叉验证监测")
-    ap.add_argument("--config", default=os.path.join(ROOT, "config.json"))
+    # 页面改过来源或词表时，采集服务经 GEO_COLLECTOR_CONFIG 传入合并后的配置。
+    ap.add_argument("--config", default=os.environ.get("GEO_COLLECTOR_CONFIG") or os.path.join(ROOT, "config.json"))
     ap.add_argument("--days", type=int, help="回溯天数（覆盖配置 lookback_hours）")
     ap.add_argument("--sources", help="只跑指定源（逗号分隔）")
     ap.add_argument("--backfill", action="store_true",

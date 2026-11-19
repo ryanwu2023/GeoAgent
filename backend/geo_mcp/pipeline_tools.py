@@ -268,10 +268,13 @@ def pipeline_update(principal, pipeline_id: str, expected_version: int, row_patc
     patch = {} if row_patch is None else _object(row_patch, "row_patch")
     if config is not None:
         _object(config, "config")
+    current = _write(pipeline_service.get_pipeline, pipeline_id)
     if dry_run:
-        current = _write(pipeline_service.get_pipeline, pipeline_id)
         changes = _write(_update_changes, current, version, patch, config, resolve)
         return {"dry_run": True, "current_version": current["current_version"], "changes": changes}
+    if current["kind"] == "builtin":
+        # 内置采集器的来源与词表只在页面由管理员修改；PiChat 只管理配置化管线
+        _write(_update_changes, current, version, patch, config, resolve)
     return _project(_write(pipeline_service.update_pipeline, _actor(principal), pipeline_id, expected_version=version,
                            row_patch=patch, config=config, change_note=change_note or "", resolve=resolve))
 

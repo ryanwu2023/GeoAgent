@@ -28,7 +28,8 @@ from scripts.collector_http_runtime import HttpRuntime, prepare_output, source_r
 from scripts.google_news import annotate_outlets, is_google_news, prefer_direct, resolve_records, split_outlet
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-CFG_PATH = os.path.join(BASE, "config.json")
+# 页面改过来源或词表时，采集服务经 GEO_COLLECTOR_CONFIG 传入合并后的配置。
+CFG_PATH = os.environ.get("GEO_COLLECTOR_CONFIG") or os.path.join(BASE, "config.json")
 SUF = r"(?:s|es|ed|ing|d|er|ers|ation|ions?|ism)?"
 EPOCH = date(1970, 1, 1)
 MIN_YEAR, MAX_YEAR_SLACK = 2000, 1
