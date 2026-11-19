@@ -166,20 +166,21 @@ def test_existing_snapshot_is_not_downloaded_again(remote):  # RC-14
     assert chunk_calls(remote) == []
 
 
-def test_periodic_sync_keeps_a_users_other_selection(remote):  # RC-15
+def test_periodic_sync_keeps_selection_until_a_new_snapshot_arrives(remote):  # RC-15
     first = seed_remote(remote)
     rc.pull_snapshot(remote.client, switch="auto")
     assert store.get_working_snapshot_id() == first
     chosen = store.save_snapshot(payload("analyst choice", "y"))[0]
     store.set_working_snapshot_id(chosen)
+    # Nothing new upstream: the analyst's pick stays.
+    result = rc.pull_snapshot(remote.client, switch="auto")
+    assert result["status"] == "unchanged" and result["switched"] is False
+    assert store.get_working_snapshot_id() == chosen
+    # A new upstream snapshot becomes the default view again.
     second = seed_remote(remote, "newer", "b")
     result = rc.pull_snapshot(remote.client, switch="auto")
-    assert result["snapshot_id"] == second and result["switched"] is False
-    assert store.get_working_snapshot_id() == chosen
-    store.set_working_snapshot_id(second)
-    third = seed_remote(remote, "newest", "c")
-    assert rc.pull_snapshot(remote.client, switch="auto")["switched"]
-    assert store.get_working_snapshot_id() == third
+    assert result["snapshot_id"] == second and result["switched"]
+    assert store.get_working_snapshot_id() == second
 
 
 # -------------------------------------------------------- remote batches

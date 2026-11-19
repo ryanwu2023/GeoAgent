@@ -204,7 +204,11 @@ def _import_translations(payload: dict, translations: list) -> int:
 
 
 def pull_snapshot(client: RemoteClient, snapshot_id: str = "", *, switch: str = "always") -> dict:
-    """Mirror one remote snapshot; ``switch='auto'`` keeps a user's other selection."""
+    """Mirror one remote snapshot.
+
+    ``switch='auto'`` (periodic sync) keeps a user's other selection only until a new
+    snapshot arrives; the page should open on the latest data by default.
+    """
     with _pull_lock:
         checked_at = _now()
         try:
@@ -235,7 +239,7 @@ def pull_snapshot(client: RemoteClient, snapshot_id: str = "", *, switch: str = 
                     (_sync_dir() / name).unlink(missing_ok=True)
             working = store.get_working_snapshot_id()
             previous = sync_state().get("snapshot_id")
-            switched = working != sid and (switch == "always" or working in (None, previous))
+            switched = working != sid and (switch == "always" or created or working in (None, previous))
             if switched:
                 store.set_working_snapshot_id(sid)
             _write_state(last_checked_at=checked_at, last_success_at=_now(), snapshot_id=sid,
