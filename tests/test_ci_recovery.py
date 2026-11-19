@@ -28,6 +28,34 @@ def test_backup_uses_postgres_dump_and_does_not_overwrite(tmp_path, monkeypatch)
         backup(tmp_path, "123")
 
 
+def test_backup_keeps_only_latest_two_complete_backups(tmp_path, monkeypatch):
+    def run(args, **kwargs):
+        if args[0] == "pg_dump":
+            Path(args[-1]).write_bytes(b"PGDMP-test")
+        return subprocess.CompletedProcess(args, 0)
+    monkeypatch.setattr("scripts.ci.backup.subprocess.run", run)
+    base = tmp_path / "release-backups"
+    for index, name in enumerate(["7685", "7687", "7689"]):
+        (base / name).mkdir(parents=True)
+        (base / name / "manifest.json").write_text("{}")
+        os.utime(base / name / "manifest.json", (1000 + index, 1000 + index))
+    (base / "8091").mkdir()  # 失败发布留下的空目录
+    backup(tmp_path, "8096")
+    assert sorted(p.name for p in base.iterdir()) == ["7689", "8096"]
+
+
+def test_failed_backup_keeps_old_backups(tmp_path, monkeypatch):
+    def fail(args, **kwargs):
+        raise subprocess.CalledProcessError(1, args)
+    monkeypatch.setattr("scripts.ci.backup.subprocess.run", fail)
+    old = tmp_path / "release-backups/7689"
+    old.mkdir(parents=True)
+    (old / "manifest.json").write_text("{}")
+    with pytest.raises(RuntimeError):
+        backup(tmp_path, "8096")
+    assert (old / "manifest.json").exists()
+
+
 def test_backup_environment_decodes_password_and_preserves_tls(monkeypatch):
     with monkeypatch.context() as pg_env:
         pg_env.setenv("PGHOSTADDR", "203.0.113.1")

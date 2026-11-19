@@ -4,6 +4,7 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 from psycopg.conninfo import conninfo_to_dict
@@ -60,7 +61,25 @@ def backup(root: Path, release_id: str) -> Path:
     manifest.write_text(json.dumps({"release": release_id, "format": "postgresql-custom", "files": ["database.dump"],
                                    "sha256": {"database.dump": checksum}, "bytes": dump.stat().st_size}))
     manifest.chmod(0o600)
+    prune(root, destination)
     return destination
+
+
+KEEP_BACKUPS = 2
+
+
+def prune(root: Path, current: Path, keep: int = KEEP_BACKUPS) -> list[str]:
+    """数据盘只有 20G，每份备份约 700M 且逐次增大；只保留最近 keep 份完整备份（含本次）。
+
+    只在本次备份成功后清理，失败时旧备份原样保留；没有 manifest 的残留目录（失败的发布）一并清掉。
+    """
+    others = [p for p in (root / "release-backups").iterdir() if p.is_dir() and p != current]
+    complete = sorted((p for p in others if (p / "manifest.json").is_file()),
+                      key=lambda p: (p / "manifest.json").stat().st_mtime)
+    stale = [p for p in others if not (p / "manifest.json").is_file()] + complete[:max(0, len(complete) - (keep - 1))]
+    for path in stale:
+        shutil.rmtree(path)
+    return sorted(p.name for p in stale)
 
 
 if __name__ == "__main__":
