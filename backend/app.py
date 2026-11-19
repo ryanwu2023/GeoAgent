@@ -98,6 +98,7 @@ async def lifespan(app):
     _start_pipelines()
     start_collector_schedule()
     threading.Thread(target=warm_startup, name="warm-startup", daemon=True).start()
+    threading.Thread(target=keep_views_warm, name="keep-views-warm", daemon=True).start()
     mcp_app = create_mcp_app(auth_config=mcp_config, managed_keys=True, project_transport=True)
     app.state.geo_mcp = mcp_app
     async with mcp_app.router.lifespan_context(mcp_app):
@@ -399,6 +400,31 @@ def warm_startup():
         warm_views(get_working_snapshot_id())
     except Exception:
         logging.getLogger(__name__).exception("startup warm-up failed")
+
+
+VIEW_KEEP_WARM_SEC = 600
+
+
+def refresh_warm_views():
+    """刷新首页最先要的视图与译文统计；过期的缓存先返回旧值并在后台重算，冷缓存在这里同步算好。"""
+    translation_status(None)
+    sid = get_working_snapshot_id()
+    if not sid:
+        return
+    for topic in ("usiran", "ukraine"):
+        workspace(sid, topic, "", False, "", "")
+        map_records(sid, topic, "", "", "")
+
+
+def keep_views_warm():
+    """视图缓存一小时没人看就丢弃，下一位访客要等整份快照重算（首页约 20 秒）；新导入的快照也要等
+    第一位访客触发预热。后台每 10 分钟刷新一次，让任何时候打开首页都命中缓存。"""
+    while True:
+        time.sleep(VIEW_KEEP_WARM_SEC)
+        try:
+            refresh_warm_views()
+        except Exception:
+            logging.getLogger(__name__).exception("keep-warm refresh failed")
 
 
 def snapshot_or_404(sid):
