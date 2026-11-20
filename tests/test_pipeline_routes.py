@@ -201,7 +201,7 @@ def test_trial_route_rejects_builtin_and_concurrent(client, monkeypatch):
     started = []
     monkeypatch.setattr(pipeline_routes, "execute_trial", lambda claim, **k: started.append(claim))
     r = client.post("/api/pipelines/bi1/trial")
-    assert r.status_code == 422 and r.json()["detail"]["message"] == "内置采集器随整批运行，不支持测试运行"
+    assert r.status_code == 422 and r.json()["detail"]["message"] == "该内置采集器由代码维护，不支持测试运行"
     assert client.post("/api/pipelines/nope/trial").status_code == 404
     p = create(client)
     seed_run(p["id"], "r1", status="running")

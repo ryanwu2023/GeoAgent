@@ -192,7 +192,7 @@ def test_trial_rejects_builtin_and_concurrent(data_root):
     _builtin()
     with pytest.raises(PipelineError) as e:
         run_trial("bi1", actor="admin", runner=fake_run_one([]))
-    assert e.value.code == "INVALID" and e.value.message == "内置采集器随整批运行，不支持测试运行"
+    assert e.value.code == "INVALID" and e.value.message == "该内置采集器由代码维护，不支持测试运行"
 
     p = make()
     started = datetime(2026, 11, 11, 1, 0, tzinfo=timezone.utc)

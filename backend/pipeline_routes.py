@@ -12,7 +12,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from . import web_auth
+from . import builtin_runs, web_auth
+from .builtin_config import BuiltinConfigError
 from .pipeline_config import default_resolve
 from .pipeline_runs import claim_trial, execute_trial, list_run_items, list_runs, preview_pipeline
 from .pipeline_scheduler import pipelines_enabled
@@ -83,6 +84,12 @@ class PreviewBody(BaseModel):
     limit: int = Field(5, ge=1, le=20)
 
 
+class BuiltinPreviewBody(BaseModel):
+    config: dict[str, Any]
+    source_ids: list[str] | None = Field(None, max_length=builtin_runs.PREVIEW_SOURCES)
+    limit: int = Field(5, ge=1, le=20)
+
+
 class RollbackBody(BaseModel):
     to_version: int
     expected_version: int
@@ -123,6 +130,28 @@ def preview(body: PreviewBody, actor: Actor = Depends(_write)):
         return preview_pipeline(body.row, body.config, limit=body.limit)
     except PipelineError as exc:
         raise _http(exc) from exc
+
+
+@router.post("/{pipeline_id}/preview")
+def preview_builtin(pipeline_id: str, body: BuiltinPreviewBody, actor: Actor = Depends(_write)):
+    """内置采集器试跑：按页面草稿（含未保存修改）只跑改动过的来源，不写任何数据。"""
+    try:
+        pipeline = get_pipeline(pipeline_id)
+    except PipelineError as exc:
+        raise _http(exc) from exc
+    if pipeline["kind"] != "builtin":
+        raise HTTPException(422, {"code": "INVALID", "message": "配置化管线请用 /api/pipelines/preview 试跑"})
+    try:
+        return builtin_runs.preview(pipeline_id, body.config, pipeline.get("config"), source_ids=body.source_ids,
+                                    limit=body.limit, resolve=default_resolve)
+    except BuiltinConfigError as exc:
+        raise HTTPException(422, {"code": "INVALID", "message": exc.message, "field": exc.field}) from exc
+    except builtin_runs.BuiltinRunError as exc:
+        if exc.message == builtin_runs.PREVIEW_BUSY:
+            raise HTTPException(409, exc.message) from exc
+        if exc.field:
+            raise HTTPException(422, {"code": "INVALID", "message": exc.message, "field": exc.field}) from exc
+        raise HTTPException(502, {"message": exc.message}) from exc
 
 
 @router.get("/{pipeline_id}")

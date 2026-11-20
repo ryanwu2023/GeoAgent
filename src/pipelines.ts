@@ -33,7 +33,8 @@ export type PipelineRunItem = {
   title: string; summary: string | null; source_id: string; source_type: string; published_at: string | null;
   language: string | null; matched_terms: string[]; dimensions: Record<string, unknown>; evidence_id: string | null;
 };
-export type PreviewResult = {sources: Array<{source_id: string; state: string; error: string | null; error_message?: string; candidates: Array<{title: string; url: string; accepted: boolean; reason: string; matched: string[]}>}>};
+export type PreviewResult = {builtin?: boolean; sources: Array<{source_id: string; state: string; error: string | null; error_message?: string; fetched?: number | null;
+  candidates: Array<{title: string; url: string; accepted: boolean; reason: string; matched: string[]}>}>};
 export type PipelineDraft = {row: PipelineRow; config: PipelineConfig; builtin?: BuiltinDraft};
 export type PipelineWriteBody = {row: Partial<PipelineRow>; config: PipelineConfig | BuiltinDraft | null; change_note?: string};
 export type ListParams = {topic?: string; status?: string; kind?: string; q?: string; changed_since?: string};
@@ -88,6 +89,9 @@ export const deletePipeline = (id: string) => request<unknown>(`/${enc(id)}`, {m
 export const setPipelineEnabled = (id: string, on: boolean) => request<Pipeline>(`/${enc(id)}/${on ? "enable" : "disable"}`, {method: "POST"});
 export const trialPipeline = (id: string) => request<{pipeline_id: string; accepted: boolean; run_id?: string}>(`/${enc(id)}/trial`, {method: "POST"});
 export const previewPipeline = (body: {row: PipelineRow; config: PipelineConfig; limit?: number}) => request<PreviewResult>("/preview", jsonInit("POST", body));
+/** 内置采集器试跑：按草稿（含未保存修改）只跑改动过的来源；不传 source_ids 时由后端挑选。 */
+export const previewBuiltin = (id: string, body: {config: BuiltinDraft; source_ids?: string[]; limit?: number}) =>
+  request<PreviewResult>(`/${enc(id)}/preview`, jsonInit("POST", body));
 export const rollbackPipeline = (id: string, to: number, expected: number) =>
   request<Pipeline>(`/${enc(id)}/rollback`, jsonInit("POST", {to_version: to, expected_version: expected}));
 export const listVersions = (id: string) => request<PipelineVersion[]>(`/${enc(id)}/versions`);

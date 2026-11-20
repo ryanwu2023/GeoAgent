@@ -4,7 +4,7 @@ import {FlaskConical, Play, Plus, RefreshCw, Save, Search, Send, Trash2, Workflo
 import {dateText} from "./api";
 import {
   addSourcePrompt, ASK_EXAMPLES, conflictMessage, createPipeline, deletePipeline, draftOf, emptyDraft, sourceCountOf, fieldHit, getPipeline, latestTrial,
-  listPipelines, listRunItems, listRuns, listVersions, newItemsOf, PipelineApiError, previewPipeline, readSeen, recentlyUpdated,
+  listPipelines, listRunItems, listRuns, listVersions, newItemsOf, PipelineApiError, previewBuiltin, previewPipeline, readSeen, recentlyUpdated,
   rollbackPipeline, runLabel, setPipelineEnabled, tabForField, trialOutcome, trialPipeline, unseenCount, updatePipeline, writeSeen,
   type DetailTab, type Pipeline, type PipelineDraft, type PipelineRun, type PipelineRunItem, type PipelineVersion, type PreviewResult,
 } from "./pipelines";
@@ -22,9 +22,9 @@ const TRIAL_START_TIMEOUT_MS = 60_000;
 const MAX_TERMS = 200;
 const TABS: [DetailTab, string][] = [["basic", "基本信息"], ["sources", "来源"], ["keywords", "关键词"], ["items", "本次新增"], ["versions", "版本历史"], ["runs", "运行记录"]];
 const BUILTIN_TABS = new Set<DetailTab>(["basic", "sources"]);
-const BUILTIN_EDIT_TABS = new Set<DetailTab>(["basic", "sources", "keywords", "versions"]);
+const BUILTIN_EDIT_TABS = new Set<DetailTab>(["basic", "sources", "keywords", "items", "versions", "runs"]);
 const BUILTIN_NOTE = "内置采集器随整批采集运行，来源由代码维护";
-const BUILTIN_EDIT_NOTE = "内置采集器随整批采集运行。这里改的来源和关键词保存后从下一次运行起生效；分桶、立场、打分等采集逻辑仍由代码维护";
+const BUILTIN_EDIT_NOTE = "内置采集器随整批采集运行。这里改的来源和关键词保存后从下一次运行起生效；分桶、立场、打分等采集逻辑仍由代码维护。可先“试跑”改动过的来源，保存后“测试运行”整个采集器，结果都不进快照";
 
 type Filters = {topic: string; status: string; kind: string; q: string};
 type SaveError = {message: string; field?: string; conflict?: boolean};
@@ -90,7 +90,7 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
   const editable = isNew || detail?.kind === "configurable";
   /** 内置采集器也能改名称、说明（主题由代码决定）。 */
   const rowEditable = editable || isBuiltin;
-  const sourceNames = Object.fromEntries((draft?.config.sources || []).map((s) => [s.id, s.name || s.id]));
+  const sourceNames = Object.fromEntries([...(draft?.config.sources || []), ...(draft?.builtin?.sources || [])].map((s) => [s.id, s.name || s.id]));
   const hit = (field: string) => fieldHit(saveError?.field, field);
 
   const upsertRows = useCallback((changed: Pipeline[]) => setRows((list) => {
@@ -285,7 +285,12 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
   async function runPreview() {
     if (!draft) return;
     setPreview({loading: true, result: null, error: ""}); setSaveError(null);
-    try { setPreview({loading: false, result: await previewPipeline({row: draft.row, config: draft.config, limit: 5}), error: ""}); }
+    try {
+      const result = draft.builtin && detail
+        ? await previewBuiltin(detail.id, {config: draft.builtin, limit: 5})
+        : await previewPipeline({row: draft.row, config: draft.config, limit: 5});
+      setPreview({loading: false, result, error: ""});
+    }
     catch (e) {
       if (e instanceof PipelineApiError && e.status === 422 && e.field) { setPreview(null); writeFailed(e); return; }
       setPreview({loading: false, result: null, error: errText(e)});
@@ -487,7 +492,11 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
             {saveError?.field && !tabForField(saveError.field) && <div className="pipeline-banner error" role="alert">{saveError.message}</div>}
             {isBuiltin && <footer className="pipeline-footer">
               <input aria-label="修改说明" placeholder="修改说明（可选，记入版本历史）" value={changeNote} maxLength={200} onChange={(e) => setChangeNote(e.target.value)} />
+              {builtinEditable && draft.builtin && <button type="button" disabled={!draft.builtin.sources.some((s) => s.enabled) || preview?.loading} onClick={() => void runPreview()}
+                title="按当前表单（含未保存修改）只抓改动过的来源（没有改动时取前 5 个启用来源），不写任何数据"><FlaskConical size={14} /> 试跑</button>}
               <button type="button" className="primary" disabled={saving || !dirty} onClick={() => void save()}><Save size={14} /> {saving ? "保存中…" : "保存"}</button>
+              {builtinEditable && <button type="button" disabled={trialStarting || dirty || trialRunning} onClick={() => void startTrial()}
+                title={dirty ? "有未保存修改，请先保存再测试运行" : "按已保存版本完整运行一次这个采集器，结果进“本次新增”，不进快照"}><Play size={14} /> {trialRunning ? "测试运行中…" : "测试运行"}</button>}
             </footer>}
             {editable && <footer className="pipeline-footer">
               <input aria-label="修改说明" placeholder="修改说明（可选，记入版本历史）" value={changeNote} maxLength={200} onChange={(e) => setChangeNote(e.target.value)} />
@@ -501,7 +510,7 @@ export default function PipelineWorkbench({onOpenEvidence, onAsk}: {
         </div>
       </div>
 
-      {preview && <PreviewDrawer loading={preview.loading} result={preview.result} error={preview.error} sourceNames={sourceNames} onClose={() => setPreview(null)} />}
+      {preview && <PreviewDrawer loading={preview.loading} result={preview.result} error={preview.error} sourceNames={sourceNames} builtin={isBuiltin} onClose={() => setPreview(null)} />}
 
       {toggle && (toggle.on
         ? <Modal title={`确认启用“${toggle.pipeline.name}”`} kicker="启用即同意加入整批采集" busy={toggling === toggle.pipeline.id} onClose={() => setToggle(null)}

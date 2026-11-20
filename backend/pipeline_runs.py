@@ -29,6 +29,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
+from backend import builtin_config, builtin_runs
 from backend.adapters import normalize
 from backend.paths import collector_data_root, collector_source_root
 from backend.pipeline_config import PipelineConfigError, default_resolve, to_monitor_config, validate_pipeline
@@ -49,7 +50,7 @@ SUMMARY_LIMIT = 1000
 TRIAL_DIR = ".pipeline-trials"
 TRIAL_TIMEOUT_SEC = 900
 BATCH_ACTOR = "system"
-BUILTIN_NO_TRIAL = "内置采集器随整批运行，不支持测试运行"
+BUILTIN_NO_TRIAL = "该内置采集器由代码维护，不支持测试运行"
 TRIAL_CONFLICT = "该管线正在测试运行"
 UNPUBLISHED = "采集产物未通过发布门禁"
 RUN_META = "pipeline-run.json"
@@ -103,10 +104,12 @@ def _parse_time(value: Any) -> datetime | None:
 
 
 def record_new_items(conn, *, pipeline_id: str, run_id: str, records: list[dict],
-                     source_types: dict[str, str], write_ledger: bool = True) -> int:
+                     source_types: dict[str, str], write_ledger: bool = True,
+                     known: set[str] | None = None, monitor: str | None = None) -> int:
     """登记本次首次出现的记录；返回新增数。重复调用不会重复登记。
 
     write_ledger=False（测试运行）：只对照去重台账判断新增并写本次新增条目，不写台账。
+    known（内置采集器测试运行）：不查台账，正式产物里没有的条目算新增；monitor 为证据 ID 所用的采集器 ID。
     """
     run = conn.execute("SELECT started_at, created_by FROM collection_pipeline_runs WHERE run_id=%s",
                        (run_id,)).fetchone()
@@ -122,7 +125,9 @@ def record_new_items(conn, *, pipeline_id: str, run_id: str, records: list[dict]
         if not record_id or record_id in seen_now:
             continue
         seen_now.add(record_id)
-        if write_ledger:
+        if known is not None:
+            is_new = record_id not in known
+        elif write_ledger:
             is_new = conn.execute(
                 "INSERT INTO pipeline_seen_items(pipeline_id,record_id,first_run_id,created_by,data_timestamp) "
                 "VALUES (%s,%s,%s,%s,%s) ON CONFLICT (pipeline_id,record_id) DO NOTHING RETURNING record_id",
@@ -138,7 +143,7 @@ def record_new_items(conn, *, pipeline_id: str, run_id: str, records: list[dict]
                         (run_id,)).fetchone()["n"]
     floor = datetime.min.replace(tzinfo=timezone.utc)
     fresh.sort(key=lambda r: _parse_time(r.get("published")) or floor, reverse=True)
-    monitor = collector_id(pipeline_id)
+    monitor = monitor or collector_id(pipeline_id)
     for offset, record in enumerate(fresh, start=1):
         published = _parse_time(record.get("published"))
         terms = list(dict.fromkeys([*(record.get("matched_discovery_terms") or []),
@@ -213,11 +218,12 @@ def _outcome(result: dict | None, output: Path, stats: dict) -> tuple[str, dict,
 
 def _complete(conn, pipeline_id: str, run_id: str, *, status: str, stats: dict, snapshot_id: str | None,
               error: str | None, actor: str | None, records: list[dict] | None, source_types: dict[str, str],
-              write_ledger: bool, finished: datetime, trigger: str) -> dict:
+              write_ledger: bool, finished: datetime, trigger: str, known: set[str] | None = None,
+              monitor: str | None = None) -> dict:
     new_items = 0
     if records:
         new_items = record_new_items(conn, pipeline_id=pipeline_id, run_id=run_id, records=records,
-                                     source_types=source_types, write_ledger=write_ledger)
+                                     source_types=source_types, write_ledger=write_ledger, known=known, monitor=monitor)
     stats = {**stats, "new_items": new_items}
     conn.execute(
         "UPDATE collection_pipeline_runs SET status=%s,finished_at=%s,stats=%s,snapshot_id=%s,error=%s,"
@@ -406,11 +412,12 @@ def _discard(pipeline_id: str, run_id: str, previous: dict) -> None:
 
 
 def _finish_trial(pipeline_id: str, run_id: str, *, status: str, stats: dict, error: str | None,
-                  actor: str | None, records: list[dict] | None, source_types: dict[str, str]) -> dict:
+                  actor: str | None, records: list[dict] | None, source_types: dict[str, str],
+                  known: set[str] | None = None, monitor: str | None = None) -> dict:
     with db() as conn:
         return _complete(conn, pipeline_id, run_id, status=status, stats=stats, snapshot_id=None, error=error,
                          actor=actor, records=records, source_types=source_types, write_ledger=False,
-                         finished=_now(), trigger="trial")
+                         finished=_now(), trigger="trial", known=known, monitor=monitor)
 
 
 def claim_trial(pipeline_id: str, *, actor: str | None) -> dict:
@@ -419,7 +426,8 @@ def claim_trial(pipeline_id: str, *, actor: str | None) -> dict:
     同一管线已有测试运行、或全局测试运行已达上限时抛 PipelineError("CONFLICT")。
     """
     pipeline = get_pipeline(pipeline_id)
-    if pipeline["kind"] != "configurable" or not pipeline.get("config"):
+    builtin = pipeline["kind"] == "builtin"
+    if (builtin and not builtin_config.editable(pipeline_id)) or (not builtin and not pipeline.get("config")):
         raise PipelineError("INVALID", BUILTIN_NO_TRIAL, {"id": pipeline_id})
     started = _now()
     run_id = _new_run_id(pipeline_id, started)
@@ -431,6 +439,8 @@ def execute_trial(claim: dict, *, actor: str | None, runner: Callable[..., dict]
                   timeout: int = TRIAL_TIMEOUT_SEC) -> dict:
     """执行 claim_trial 占位的测试运行并返回运行行。"""
     pipeline, pipeline_id, run_id, previous = claim["pipeline"], claim["pipeline_id"], claim["run_id"], claim["previous"]
+    if pipeline["kind"] == "builtin":
+        return _execute_builtin_trial(pipeline, run_id, actor=actor, timeout=timeout)
     source_types = _source_types(pipeline["config"])
     root = trial_root()
     stats: dict[str, Any] = {"import_status": "not_imported"}
@@ -450,6 +460,37 @@ def execute_trial(claim: dict, *, actor: str | None, runner: Callable[..., dict]
     status, stats, error, records = _outcome(result, root / item["id"] / "output", stats)
     return _finish_trial(pipeline_id, run_id, status=status, stats=stats, error=error, actor=actor,
                          records=records, source_types=source_types)
+
+
+def _execute_builtin_trial(pipeline: dict, run_id: str, *, actor: str | None, timeout: int,
+                           runner: Callable[..., dict] | None = None) -> dict:
+    """内置采集器测试运行：用已保存版本的配置在 .pipeline-trials/<id>/ 隔离运行原采集代码。"""
+    pipeline_id = pipeline["id"]
+    stats: dict[str, Any] = {"import_status": "not_imported"}
+    source_types: dict[str, str] = {}
+    try:
+        config = builtin_runs.current_config(pipeline_id, pipeline.get("config"))
+        source_types = {str(s.get("id")): builtin_runs.source_type(s) for s in config.get("sources", [])}
+        result = (runner or builtin_runs.run_collector)(pipeline_id, config, trial_root() / pipeline_id, timeout=timeout)
+    except Exception as exc:  # noqa: BLE001 - 失败也要落运行记录
+        return _finish_trial(pipeline_id, run_id, status="failed", stats=stats,
+                             error=f"{type(exc).__name__}: {exc}", actor=actor, records=None, source_types=source_types)
+    if result["returncode"] != 0:
+        detail = (result["stderr"] or result["stdout"]).strip()[-500:]
+        return _finish_trial(pipeline_id, run_id, status="failed", stats=stats,
+                             error=f"采集器退出码 {result['returncode']}" + (f"：{detail}" if detail else ""),
+                             actor=actor, records=None, source_types=source_types)
+    found = builtin_runs.read_results(pipeline_id, result["output"])
+    accepted = [i for i in found["items"] if i["accepted"]]
+    failed = sorted(k for k, v in found["statuses"].items() if v.get("state") == "failed")
+    stats.update({"records": len(accepted), "candidates": len(found["items"]),
+                  "excluded": len(found["items"]) - len(accepted), "errors": len(failed),
+                  "sources": found["statuses"]})
+    status = "partial" if failed and accepted else "failed" if failed and not accepted else "success"
+    return _finish_trial(pipeline_id, run_id, status=status, stats=stats,
+                         error=f"{len(failed)} 个来源抓取失败" if failed else None, actor=actor, records=accepted,
+                         source_types=source_types, known=builtin_runs.known_record_ids(pipeline_id),
+                         monitor=pipeline_id)
 
 
 def run_trial(pipeline_id: str, *, actor: str | None, runner: Callable[..., dict] = run_one,
