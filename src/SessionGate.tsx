@@ -30,6 +30,8 @@ export default function SessionGate({children}:{children:ReactNode}){
   useEffect(()=>{let live=true;auth('session').then(value=>{if(live)accept(value)}).catch(e=>{if(live)setError(e.message)}).finally(()=>{if(live)setChecking(false)});const expired=()=>{accept({enabled:true,authenticated:false,username:''});setError('登录已过期，请重新登录')};window.addEventListener('geoagent-session-expired',expired);return()=>{live=false;window.removeEventListener('geoagent-session-expired',expired)}},[]);
   async function login(event:FormEvent){event.preventDefault();setBusy(true);setError('');try{accept(await auth('login',{username,password}))}catch(e){setPassword('');setError((e as Error).message)}finally{setBusy(false)}}
   async function logout(){setBusy(true);try{await auth('logout',{});accept({enabled:true,authenticated:false,username:''})}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
+  // 核对登录状态时先不出登录页，免得已登录用户刷新时看到登录页一闪；0.3 秒内没结果才显示转圈。
+  if(checking&&!session)return <main className="session-splash" role="status" aria-label="正在检查登录状态"><LoaderCircle className="spin"/></main>;
   if(session?.authenticated)return <SessionContext.Provider value={{session,logout,busy}}>{error&&<div className="session-error" role="alert">{error}<button onClick={()=>setError('')}>关闭</button></div>}{children}</SessionContext.Provider>;
   return <main className="login-page">
     <section className="login-story" aria-label="GeoAgent 地缘政治研究工作台">
