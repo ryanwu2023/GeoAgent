@@ -330,5 +330,26 @@ def test_release_guard_holds_collector_lock_until_released(tmp_path, monkeypatch
         assert released.returncode == 0
         process.wait(timeout=5)
         assert_idle()
+        # 备份脚本只看锁文件是否存在：释放后不能留下残留锁文件。
+        assert not (tmp_path / 'collection-runs/.collector-service.lock').exists()
     finally:
         if process.poll() is None: process.terminate(); process.wait(timeout=5)
+
+
+def test_release_guard_reclaims_stale_lock_of_killed_holder(tmp_path, monkeypatch):
+    """持有进程已被强杀时，--release 回收残留锁文件；令牌不符时不动别人的锁。"""
+    import json
+    import subprocess
+    monkeypatch.setenv('GEO_DATA_DIR', str(tmp_path))
+    script = ROOT / 'scripts/ci/assert_collectors_idle.py'
+    lock = tmp_path / 'collection-runs/.collector-service.lock'
+    lock.parent.mkdir(parents=True)
+    dead = subprocess.Popen([sys.executable, '-c', 'pass'])
+    dead.wait()
+    env = {**os.environ, 'PYTHONPATH': str(ROOT), 'GEO_DATA_DIR': str(tmp_path)}
+    lock.write_text(json.dumps({'pid': dead.pid, 'process': 'gone', 'deployment_token': 'other'}))
+    subprocess.run([sys.executable, str(script), '--release', 'mine'], check=True, env=env)
+    assert lock.exists()
+    lock.write_text(json.dumps({'pid': dead.pid, 'process': 'gone', 'deployment_token': 'mine'}))
+    subprocess.run([sys.executable, str(script), '--release', 'mine'], check=True, env=env)
+    assert not lock.exists()

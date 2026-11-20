@@ -73,7 +73,7 @@ elif args[0]=="run":
   field=k[-1]
   if "owner" in field: print("123" if {action!r}=="rollback" else "122")
   elif "sequence" in field: print("123" if {action!r}=="rollback" else "122")
-  elif "resourceVersion" in field: print("42")
+  elif "generation" in field: print("42")
   elif ".name" in field and "range" in field: print("gateway\\ngeoagent\\nproxy-tunnel")
   elif ".image" in field: print(repo+"@sha256:"+("b" if {action!r}=="rollback" else "a")*64)
   elif "annotations" in field: print('{{"existing":"preserve"}}')
@@ -127,7 +127,7 @@ elif args[0]=="run":
     assert any("--release" in c for c in commands)
     assert len(patches) == 1  # Failed health checks do not silently alter data or rollback.
     patch = json.loads(patches[0][-1])
-    assert patch[0] == {"op": "test", "path": "/metadata/resourceVersion", "value": "42"}
+    assert patch[0] == {"op": "test", "path": "/metadata/generation", "value": 42}
     assert patch[1]["path"] == "/spec/template/spec/containers/1/image"
     assert patch[1]["value"] == REPO + "@sha256:" + ("a" if action == "rollback" else "b") * 64
     if action == "deploy":

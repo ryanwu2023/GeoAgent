@@ -85,7 +85,10 @@ case ${1:-} in
     record="geoagent-release-${CI_PIPELINE_ID}"
     current_owner=$(kubectl -n "$namespace" get deployment geoagent -o jsonpath='{.metadata.annotations.geoagent-release-owner}')
     sequence=$(kubectl -n "$namespace" get deployment geoagent -o jsonpath='{.metadata.annotations.geoagent-release-sequence}')
-    revision=$(kubectl -n "$namespace" get deployment geoagent -o jsonpath='{.metadata.resourceVersion}')
+    # generation only moves on spec changes; resourceVersion also moves on status updates
+    # (e.g. one failed readiness probe while the backup loads the Pod), which is not a conflict.
+    generation=$(kubectl -n "$namespace" get deployment geoagent -o jsonpath='{.metadata.generation}')
+    [[ $generation =~ ^[0-9]+$ ]] || { echo 'Invalid deployment generation'; exit 1; }
     # Container order may change when sidecars are added; resolve the application index.
     names=$(kubectl -n "$namespace" get deployment geoagent -o jsonpath='{range .spec.template.spec.containers[*]}{.name}{"\n"}{end}')
     index=0
@@ -127,11 +130,11 @@ case ${1:-} in
     # A historical pre-login image would expose APIs behind the new gateway.
     # Such rollbacks require restoring the matching old gateway/pod template.
     docker run --rm --entrypoint python "$digest" -c 'import importlib.util; assert importlib.util.find_spec("backend.web_auth"), "Restore the matching Basic-auth gateway before rolling back a pre-login image"'
-    # CAS prevents an out-of-band deployment/config change being overwritten.
+    # CAS prevents an out-of-band deployment spec change being overwritten.
     annotations=$(kubectl -n "$namespace" get deployment geoagent -o jsonpath='{.metadata.annotations}')
     init_annotations=''
     [[ -n $annotations ]] || init_annotations='{"op":"add","path":"/metadata/annotations","value":{}},'
-    patch="[{\"op\":\"test\",\"path\":\"/metadata/resourceVersion\",\"value\":\"$revision\"},${init_annotations}{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/$index/image\",\"value\":\"$digest\"},{\"op\":\"add\",\"path\":\"/metadata/annotations/geoagent-release-owner\",\"value\":\"$next_owner\"},{\"op\":\"add\",\"path\":\"/metadata/annotations/geoagent-release-sequence\",\"value\":\"$next_sequence\"}]"
+    patch="[{\"op\":\"test\",\"path\":\"/metadata/generation\",\"value\":$generation},${init_annotations}{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/$index/image\",\"value\":\"$digest\"},{\"op\":\"add\",\"path\":\"/metadata/annotations/geoagent-release-owner\",\"value\":\"$next_owner\"},{\"op\":\"add\",\"path\":\"/metadata/annotations/geoagent-release-sequence\",\"value\":\"$next_sequence\"}]"
     if [[ $action == deploy ]]; then
       env_names=$(kubectl -n "$namespace" get deployment geoagent -o jsonpath="{range .spec.template.spec.containers[$index].env[*]}{.name}{'\n'}{end}")
       for setting in GEOAGENT_TRUST_AUTHENTICATED_GATEWAY GEO_WEB_AUTH_ENABLED PICHAT_EMBED_BASE_URL; do

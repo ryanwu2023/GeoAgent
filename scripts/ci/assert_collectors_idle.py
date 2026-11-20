@@ -35,6 +35,9 @@ def hold_release(token):
     lock = _lock_path()
     # Same atomic acquisition used by both the manual API and scheduled service.
     # Old images already implement this lock, so first rollout is protected too.
+    # SIGTERM from --release must unwind the context manager so the lock file is removed;
+    # the default handler would kill the process and leave a stale file that blocks backups.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     with service_lock(lock):
         _assert_ledger_idle()
         owner = _lock_owner(lock)
@@ -45,12 +48,23 @@ def hold_release(token):
 
 
 def release(token):
-    from backend.collector_ledger import _lock_owner, _pid_alive
-    owner = _lock_owner(_lock_path())
+    from backend.collector_ledger import _lock_owner, _pid_alive, service_lock
+    lock = _lock_path()
+    owner = _lock_owner(lock) if lock.exists() else {}
     pid = owner.get('pid')
-    if owner.get('deployment_token') == token and isinstance(pid, int) and _pid_alive(pid):
+    if owner.get('deployment_token') != token or not isinstance(pid, int):
+        return
+    if _pid_alive(pid):
         os.kill(pid, signal.SIGTERM)
-    # SIGTERM leaves a stale lock; service_lock safely reclaims it after PID exit.
+        for _ in range(100):
+            if not _pid_alive(pid):
+                break
+            time.sleep(0.1)
+    # The holder normally removes the file on SIGTERM. If it was killed harder, reclaim the
+    # stale lock the same way the collector service does, so backups do not see it.
+    if lock.exists() and not _pid_alive(pid):
+        with service_lock(lock):
+            pass
 
 
 if __name__ == '__main__':
