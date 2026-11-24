@@ -234,3 +234,13 @@ def test_held_location_comes_from_the_meeting_clause():
     item["title"] = "Trump called Zelensky after meeting with Putin in Shenzhen"
     [sig], _ = monitor.build_signals([item], monitor.load_cfg())
     assert sig["persons"] == ["putin", "trump"] and sig["location"] == "深圳"
+
+
+def test_unnamed_meeting_partner_does_not_pull_in_every_name_in_the_headline():
+    monitor = load_monitor()
+    headline = ("'For us he is a killer': Zelensky rebukes Trump for calling Putin his 'friend' - as it's claimed "
+                "Russian leader increases strikes on Ukraine after every meeting with President")
+    assert len(monitor.held_participants(headline)) < 2
+    assert monitor.held_participants("Putin and Pezeshkian held talks at the Kremlin") == {"putin", "pezeshkian"}
+    assert monitor.held_participants("Erdoğan wants to discuss ending the war with Putin after meeting with Zelenskyy") \
+        == {"erdogan", "zelensky"}

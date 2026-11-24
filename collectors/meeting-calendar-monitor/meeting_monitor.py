@@ -754,6 +754,8 @@ _PROXY = re.compile(r"\b[\w.\-]+(?:['’]s)?\s+(?:special\s+|peace\s+|top\s+|for
 _QUOTED = re.compile(r"(?<![A-Za-z])'[^']{2,60}'(?![A-Za-z])|‘[^’]{2,60}’|[\"“][^\"”]{2,80}[\"”]")
 
 
+# 这些会晤词后面必须跟着见面的对象；对象没点名（「after every meeting with President」）就不能拿整句的人名凑
+_NEEDS_OBJECT = {"met with", "meeting with", "meeting between", "meets", "received"}
 _CLAUSE_END = re.compile(r"\b(?:after|before|following|ahead\s+of|amid|while|then|as)\b|[;:|]|\.\s|\s[—–-]\s", re.I)
 # 证据摘录可能从引号中间截断：「on killing Zelensky' after …」开头那段是被引的话
 _CUT_QUOTE = re.compile(r"^[^'‘’\"“”]{0,60}['’\"”](?=\s)")
@@ -828,10 +830,11 @@ def held_participants(headline: str) -> Set[str]:
     before = text[:hit.start()]
     # 会晤对象只看到下一个从句为止：「meets with 特使 in Dublin after their summit with Putin」里的普京不在场
     after = extract_persons(_CLAUSE_END.split(text[hit.end():], 1)[0], PERSONS)
-    # 「X … after meeting with Y」主语在主句；「… as he meets Y」主语在本从句
-    clause = before if _PARTICIPLE.search(before) else _CLAUSE_END.split(before)[-1]
+    # 「X … after meeting with Y」主语在紧挨着的主句；「… as he meets Y」主语在本从句
+    clauses = _CLAUSE_END.split(before)
+    clause = clauses[-2] if _PARTICIPLE.search(before) and len(clauses) >= 2 else clauses[-1]
     found = _subject(clause) | after
-    if not after:
+    if not after and hit.group(0).lower() not in _NEEDS_OBJECT:
         # 「Putin and Pezeshkian held talks」：会晤词前面就是双方
         found = extract_persons(clause, PERSONS)
     return found
