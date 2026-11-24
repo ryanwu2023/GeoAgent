@@ -106,3 +106,28 @@ def test_month_window_needs_named_people_on_both_sides():
     assert monitor.consolidate([month, other], []) == 0
     assert monitor.detect_status("Modi to meet Trump in Manila")[0] == "arranged"
     assert monitor.extract_location("Quad leaders gather in Manila", monitor.LOCS)[0] == "马尼拉"
+
+
+def test_range_signal_refines_dated_event_without_type_error():
+    """2026-11-22 起：区间日期信号更新单日事件时 str 与 date 混比，采集器整轮崩溃。"""
+    monitor = load_monitor()
+    ev = _event(monitor, "EV-1", ["modi", "trump"], "2026-11-17", "2026-11-17", "day")
+    sig = {"status": "arranged", "rank": 65, "tier": 3, "source_name": "Google News", "source_id": "q",
+           "outlet": "x", "link": "https://example.test/r", "persons": ["modi", "trump"], "actors": [],
+           "location": "马尼拉", "location_raw": "Manila", "published": "2026-11-15", "quote": "talks Nov 16-18",
+           "date_start": "2026-11-16", "date_end": "2026-11-18", "precision": "range", "date_raw": "Nov 16-18",
+           "family": "bilateral", "title": "Modi Trump talks Nov 16-18 in Manila"}
+    assert monitor.upsert(sig, [ev], [2], []) is ev
+    assert (ev["date_start"], ev["date_end"], ev["precision"]) == ("2026-11-16", "2026-11-18", "range")
+
+
+def test_same_day_duplicates_merge_when_one_side_names_more_people():
+    """同一场四方会谈：一条写莫迪+特朗普，一条还写了高市早苗，都在 11-17，应合并成旧编号那条。"""
+    monitor = load_monitor()
+    older = _event(monitor, "EV-0036", ["modi", "trump"], "2026-11-17", "2026-11-17", "day",
+                   claims=[_claim("held", 95, "Trump meets Modi in Manila", "2026-11-17")])
+    newer = _event(monitor, "EV-0065", ["modi", "trump", "takaichi"], "2026-11-17", "2026-11-17", "day",
+                   claims=[_claim("held", 95, "Trump meets Quad leaders Modi, Takaichi", "2026-11-17")])
+    events, transitions = [older, newer], []
+    assert monitor.consolidate(events, transitions) == 1
+    assert events == [older] and transitions[0]["id"] == "EV-0065"

@@ -1430,7 +1430,10 @@ def upsert(sig: dict, events: List[dict], next_id: List[int], transitions: List[
         ev["date_start"], ev["date_end"] = sig["date_start"], sig["date_end"]
         ev["precision"], ev["date_raw"] = sig["precision"], sig["date_raw"]
     elif sig["date_start"] and ev["date_start"] and sig["precision"] == "range" and ev["precision"] != "range":
-        if sig["date_start"] <= ev["date_start"] <= (d(sig["date_end"]) or d(sig["date_start"])):
+        # ★ 日期都是 ISO 字符串，必须解析后再比（2026-11-22 起这里把 str 和 date 混比，
+        #   整个采集器崩溃，会晤日历连续多轮没有更新）。
+        (sig_start, sig_end), ev_start = _window(sig), d(ev["date_start"])
+        if sig_start and ev_start and sig_start <= ev_start <= sig_end:
             ev["date_start"], ev["date_end"], ev["precision"] = sig["date_start"], sig["date_end"], "range"
 
     if sig["location"] and not ev["location"]:
@@ -1459,16 +1462,30 @@ def upsert(sig: dict, events: List[dict], next_id: List[int], transitions: List[
 
 
 def consolidate(events: List[dict], transitions: List[dict]) -> int:
-    """把「某月内」的事件并进同人同期、日期更精确的事件（修复以前被拆开的重复行）。"""
+    """合并同人同期的重复事件（以前「某月内」和具体日期被拆成两行，月份那条细化后仍是两行）。
+
+    日期不精确的并进精确的；同样精确时新编号并进旧编号。只合并日期窗口重叠、
+    点名人物对得上的事件，基线（命名峰会）不被并走。
+    """
+    precise = {"day": 2, "range": 1}
+    num = lambda e: int(re.sub(r"\D", "", e["id"]) or 0)
     merged = 0
-    for ev in [e for e in events if e.get("precision") == "month" and not e.get("archived")
-               and not e.get("anchor_id")]:
-        others = [o for o in events if o is not ev and not o.get("archived")
-                  and o.get("precision") in ("day", "range")]
+    order = sorted((e for e in events if not e.get("archived") and not e.get("anchor_id") and e.get("date_start")),
+                   key=lambda e: (precise.get(e.get("precision"), 0), -num(e)))
+    for ev in order:
+        if ev not in events:
+            continue
+        rank = precise.get(ev.get("precision"), 0)
+        others = [o for o in events if o is not ev and not o.get("archived") and o.get("date_start")
+                  and (precise.get(o.get("precision"), 0), -num(o)) > (rank, -num(ev))]
         probe = {k: ev.get(k) for k in ("family", "persons", "actors", "location", "date_start", "date_end", "precision")}
         target = find_match(probe, others)
-        core = core_persons(ev)
-        if target is None or not core or not core <= set(target["persons"]) | core_persons(target):
+        if target is None or _window_gap(ev, target):
+            continue
+        # 一方的点名人物被另一方包含即可：同一场四方会谈，有的稿子只写莫迪和特朗普。
+        mine, theirs = core_persons(ev), core_persons(target)
+        if not (mine and theirs) or not (mine <= set(target["persons"]) | theirs
+                                         or theirs <= set(ev["persons"]) | mine):
             continue
         old = target["status"]
         target["claims"].extend(ev["claims"])
@@ -1478,7 +1495,7 @@ def consolidate(events: List[dict], transitions: List[dict]) -> int:
         events.remove(ev)
         merged += 1
         transitions.append({"id": ev["id"], "title": ev["title"], "from": ev["status"], "to": "merged",
-                            "at": RUN_AT, "evidence": f"与 {target['id']} 同人同期，并入日期更精确的一条",
+                            "at": RUN_AT, "evidence": f"与 {target['id']} 同人同期，合并为一条",
                             "url": "", "outlet": "", "tier": 0})
         target["updates"].append({"at": RUN_AT, "from": old, "to": target["status"],
                                   "evidence": f"并入 {ev['id']}", "url": ""})
@@ -1935,7 +1952,7 @@ def run() -> int:
     print(f"      吸附到已知峰会 {snapped} 条")
     merged = consolidate(events, transitions)
     if merged:
-        print(f"      合并同人同期的「某月内」重复事件 {merged} 条")
+        print(f"      合并同人同期的重复事件 {merged} 条")
     for ev in events:
         update_lifecycle(ev, TODAY, transitions)
     for ev in events:
