@@ -605,7 +605,7 @@ def _alias_hit(text: str, alias: str) -> bool:
 
 
 _LOC_BLOCK = {"times", "post", "examiner", "institute", "news", "university",
-              "bureau", "journal", "tribune", "herald"}
+              "bureau", "journal", "tribune", "herald", "signal"}  # Brussels Signal 是媒体名
 
 
 # ★ 发言方不是会晤地点：「…, Kremlin says」「Beijing confirms …」里的城市是谁在说话。
@@ -729,7 +729,7 @@ _NOUN_HELD = {"meeting with", "meeting between"}
 _SOON = re.compile(r"\b(?:will|to\s+(?:host|hold|meet|attend|have)|set\s+to|ahead\s+of|arriv\w*|"
                    r"heads?\s+(?:to|for)|heading|lands?\s+in|en\s+route|next\s+week)\b", re.I)
 _MAYBE = re.compile(r"\b(?:discuss\w*|possib\w*|potential|left\s+open|upcoming|hints?|expect\w*|soon|would|could|"
-                    r"might|wants?|seeks?|eyes|hopes?|ready|prepar\w*|plan\w*|propos\w*|"
+                    r"might|wants?|seeks?|eyes|hopes?|dreams?|wish\w*|if|ready|prepar\w*|plan\w*|propos\w*|"
                     r"under\s+discussion|no\s+final|no\s+clarity)\b"
                     r"|\b(?:on|about|over)\s+(?:a|an|the)\s+(?:\w+\s+)?meeting\b", re.I)
 _AFTER_MEETING = re.compile(r"\b(?:after|following)\s+(?:[\w$-]+\s+){0,3}(?:meeting|talks|summit)\b", re.I)
@@ -814,6 +814,15 @@ def rebuild_headline(quote: str) -> str:
     return quote
 
 
+def _object_list(text: str) -> str:
+    """会晤对象到「and + 另一个动词」为止：「Meets Zelensky and Condemns Putin」里普京是被谴责的，不在场。"""
+    for m in re.finditer(r"\b(?:and|but)\s+([A-Za-z]+)", text):
+        word = m.group(1)
+        if re.fullmatch(r"[A-Za-z]+(?:s|ed)", word) and not extract_persons(word, PERSONS):
+            return text[:m.start()]
+    return text
+
+
 def held_participants(headline: str) -> Set[str]:
     """「已举行」标题里真正见了面的人：主语 + 会晤词后面同一从句里的人。
     「Trump called Zelensky after meeting with Putin」→ {trump, putin}；
@@ -829,7 +838,7 @@ def held_participants(headline: str) -> Set[str]:
         return extract_persons(text, PERSONS)
     before = text[:hit.start()]
     # 会晤对象只看到下一个从句为止：「meets with 特使 in Dublin after their summit with Putin」里的普京不在场
-    after = extract_persons(_CLAUSE_END.split(text[hit.end():], 1)[0], PERSONS)
+    after = extract_persons(_object_list(_CLAUSE_END.split(text[hit.end():], 1)[0]), PERSONS)
     # 「X … after meeting with Y」主语在紧挨着的主句；「… as he meets Y」主语在本从句
     clauses = _CLAUSE_END.split(before)
     clause = clauses[-2] if _PARTICIPLE.search(before) and len(clauses) >= 2 else clauses[-1]
@@ -1656,6 +1665,15 @@ def recheck_claims(events: List[dict], transitions: List[dict]) -> int:
             continue
         pair = set(rank_persons(ev, 2 if ev.get("family") == "bilateral" else 3))
         touched = False
+        # 地点原文按现行规则已不算地点（「Brussels Signal」是媒体名）：引文里也没有这座城的证据一并清掉
+        raw, bad = ev.get("location_raw") or "", ev.get("location") or ""
+        if raw and bad and extract_location(raw, LOCS)[0] != bad:
+            aliases = next((x["aliases"] for x in LOCS if x["zh"] == bad), [])
+            for c in ev.get("claims", []):
+                if c.get("location") == bad and not any(
+                        _alias_hit(rebuild_headline(c.get("quote") or ""), al) for al in aliases):
+                    c["location"], touched = "", True
+            ev["location_raw"] = ""
         for c in ev.get("claims", []):
             quote = rebuild_headline(c.get("quote") or "")
             # 旧规则把发言方城市当成会晤地点（「…, Kremlin says」→ 莫斯科）：引文里那座城确实是发言方时改掉

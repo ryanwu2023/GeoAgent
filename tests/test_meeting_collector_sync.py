@@ -244,3 +244,12 @@ def test_unnamed_meeting_partner_does_not_pull_in_every_name_in_the_headline():
     assert monitor.held_participants("Putin and Pezeshkian held talks at the Kremlin") == {"putin", "pezeshkian"}
     assert monitor.held_participants("Erdoğan wants to discuss ending the war with Putin after meeting with Zelenskyy") \
         == {"erdogan", "zelensky"}
+
+
+def test_second_verb_object_dreams_and_outlet_city_are_not_held_evidence():
+    monitor = load_monitor()
+    assert monitor.held_participants("Wes Streeting Meets Zelensky and Condemns Putin in Kyiv") == {"zelensky"}
+    assert monitor.held_participants("Trump meets Xi and Putin in Shenzhen") == {"trump", "xi", "putin"}
+    assert monitor.detect_status("Zelensky dreams of meeting with Putin and Trump at the G20, if he is called there")[0] \
+        != "held"
+    assert monitor.extract_location("Xi-Trump-Putin summit: nuclear arms on agenda Brussels Signal", monitor.LOCS)[0] == ""
