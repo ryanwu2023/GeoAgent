@@ -131,3 +131,106 @@ def test_same_day_duplicates_merge_when_one_side_names_more_people():
     events, transitions = [older, newer], []
     assert monitor.consolidate(events, transitions) == 1
     assert events == [older] and transitions[0]["id"] == "EV-0065"
+
+
+def test_meeting_noun_phrase_about_a_future_or_possible_meeting_is_not_held():
+    monitor = load_monitor()
+    prospective = {
+        "China discussing possible meeting between Xi, Putin, Trump, says Beijing": "proposed",
+        "Trump hints at upcoming meeting with Putin, Zelensky amid Ukraine peace push": "proposed",
+        "Trump says his potential meeting with Putin, Xi in China would be interesting": "proposed",
+        "Trump talks about the meeting between Putin and Zelensky": "proposed",
+        "Xi Jinping to hold trilateral meeting with Putin, Trump on November 19": "arranged",
+        "Trump arrives in China for historic meeting with Xi, Putin": "arranged",
+        "Putin says EU is losing industry, ahead of meeting with Trump and Xi": "arranged",
+    }
+    for headline, want in prospective.items():
+        assert monitor.detect_status(headline)[0] == want, headline
+    for headline in ("Trump touts meeting with Xi and Putin but offers few results",
+                     "Trump to hold press conference after meeting with Xi and Putin",
+                     "Masoud Pezeshkian Meets Qatar Emir Tamim Al Thani in Moscow"):
+        assert monitor.detect_status(headline)[0] == "held", headline
+
+
+def test_held_needs_two_people_who_actually_met():
+    monitor = load_monitor()
+    assert monitor.held_participants("Trump met with Putin’s envoy at the White House") == {"trump"}
+    assert monitor.held_participants("Russia 'lifts ban on killing Zelensky' after high-stakes meeting with Putin") == {"putin"}
+    assert monitor.held_participants("Trump called Zelensky after meeting with Putin") == {"trump", "putin"}
+    assert monitor.held_participants("During Meeting with Pezeshkian, Putin Expects 'Positive Developments'") == {"pezeshkian", "putin"}
+
+    item = {"title": "Zelensky meets with Trump's envoys in Dublin after their summit with Putin",
+            "link": "https://x.example/1", "source_id": "q", "source_name": "q", "tier": 3,
+            "published": monitor.TODAY, "desc": ""}
+    signals, rejects = monitor.build_signals([item], monitor.load_cfg())
+    assert all(s["status"] != "held" for s in signals)
+
+
+def test_speaker_city_is_not_the_meeting_location():
+    monitor = load_monitor()
+    loc = lambda text: monitor.extract_location(text, monitor.LOCS)[0]
+    assert loc("Putin, Xi and Trump to meet in Shenzhen on November 19, Kremlin says") == "深圳"
+    assert loc("Moscow confirms Trump, Xi, Putin meeting in China's Shenzhen") == "深圳"
+    assert loc("China discussing possible meeting between Xi, Putin, Trump, says Beijing") == ""
+    assert loc("Putin met with Pezeshkian in Moscow") == "莫斯科"
+
+
+def test_stored_false_held_claims_are_rechecked_and_event_lapses():
+    monitor = load_monitor()
+    day = (monitor.TODAY - timedelta(days=10)).isoformat()
+    claim = lambda quote, status="held", rank=95: {
+        "status": status, "rank": rank, "tier": 3, "source": "q", "source_id": "q", "outlet": "",
+        "url": "u" + quote[:8], "persons": ["putin", "zelensky"], "location": "", "published": day,
+        "quote": quote, "date_start": day, "precision": "day", "anchor_snap": ""}
+    ev = {"id": "EV-0001", "family": "bilateral", "title": "", "title_raw": "x", "date_start": day,
+          "date_end": day, "precision": "day", "date_raw": "", "location": "", "location_raw": "",
+          "persons": ["putin", "zelensky"], "actors": [], "track": "ru-ua", "status": "held",
+          "conflict": False, "claims": [
+              claim("Trump says a meeting between Putin and Zelensky to end Ukraine war will happen"),
+              claim("Russia 'lifts ban on killing Zelensky' after high-stakes meeting with Putin"),
+              claim("Zelensky says he's ready to meet Putin in Turkey", "arranged", 65)],
+          "sources": [], "first_seen": day, "last_seen": day, "updates": [], "baseline": False,
+          "baseline_ids": [], "days_seen": 1}
+    transitions = []
+    assert monitor.recheck_claims([ev], transitions) == 1
+    monitor.update_lifecycle(ev, monitor.TODAY, transitions)
+    assert ev["status"] == "lapsed"
+    assert all(c["status"] != "held" for c in ev["claims"])
+
+
+def test_truncated_evidence_quote_is_rebuilt_before_rechecking():
+    monitor = load_monitor()
+    quote = ("urges immediate Iran-US peace talks in meeting with Pezeshkian at COP31. "
+             "Erdogan urges immediate Iran")
+    rebuilt = monitor.rebuild_headline(quote)
+    assert rebuilt.startswith("Erdogan urges immediate Iran-US peace talks")
+    assert monitor.held_participants(rebuilt) == {"erdogan", "pezeshkian"}
+    assert monitor.held_participants("Wes Streeting calls Putin a killer as he meets Zelensky in Kyiv") == {"zelensky"}
+
+
+def test_held_report_attaches_only_to_event_with_both_principals():
+    monitor = load_monitor()
+    day = (monitor.TODAY - timedelta(days=5)).isoformat()
+    def event(eid, persons, claims_persons, family="bilateral", date=day, precision="day"):
+        return {"id": eid, "family": family, "persons": persons, "actors": [], "location": "",
+                "date_start": date, "date_end": date, "precision": precision,
+                "claims": [{"persons": p} for p in claims_persons]}
+    merz = event("EV-0001", ["merz", "putin", "trump"], [["merz", "putin"], ["merz", "putin", "trump"]])
+    summit = event("EV-0002", ["putin", "trump", "xi"], [["putin", "trump", "xi"]] * 3, family="trilateral",
+                   date=(monitor.TODAY - timedelta(days=6)).isoformat())
+    undated = event("EV-0003", ["putin", "trump"], [["putin", "trump"]], date="", precision="tbd")
+    sig = {"family": "bilateral", "persons": ["putin", "trump"], "status": "held", "date_approx": True,
+           "date_start": day, "date_end": day, "precision": "day", "location": ""}
+    assert monitor.find_match(sig, [merz, summit, undated])["id"] == "EV-0002"
+
+
+def test_held_location_comes_from_the_meeting_clause():
+    monitor = load_monitor()
+    item = {"title": "Trump meets Putin and Xi in China, while European imperialists plot escalation at Berlin summit",
+            "link": "https://x.example/2", "source_id": "q", "source_name": "q", "tier": 3,
+            "published": monitor.TODAY, "desc": ""}
+    [sig], _ = monitor.build_signals([item], monitor.load_cfg())
+    assert sig["status"] == "held" and sig["location"] == ""
+    item["title"] = "Trump called Zelensky after meeting with Putin in Shenzhen"
+    [sig], _ = monitor.build_signals([item], monitor.load_cfg())
+    assert sig["persons"] == ["putin", "trump"] and sig["location"] == "深圳"

@@ -592,23 +592,37 @@ _LOC_BLOCK = {"times", "post", "examiner", "institute", "news", "university",
               "bureau", "journal", "tribune", "herald"}
 
 
+# ★ 发言方不是会晤地点：「…, Kremlin says」「Beijing confirms …」里的城市是谁在说话。
+#   实测：深圳三方会晤被克里姆林宫的表态投成了「莫斯科」，北京的「正在讨论」成了「北京已举行」。
+_SPEAKER_AFTER = re.compile(r"^['’]?s?\s*(?:says?|said|confirm\w*|announc\w*|reveal\w*|denie?s?|deny|"
+                            r"rules?\s+out|spokes\w*|reports?|:)", re.I)
+_SPEAKER_BEFORE = re.compile(r"(?:\bsays?|\bsaid|\baccording to|[—–]|\s-)\s*(?:the\s+)?$", re.I)
+_VENUE_BEFORE = re.compile(r"\b(?:in|at|to)\s+(?:the\s+)?(?:[A-Z][\w.]*['’]s\s+)?$")
+
+
 def extract_location(text: str, locs: Sequence[dict]) -> Tuple[str, str]:
     """返回 (中文名, 原文片段)。★要排除 "Tehran Times" / "Washington Post" 这类
-    媒体名——否则每篇《德黑兰时报》的稿子都会被判成「地点在德黑兰」。"""
+    媒体名——否则每篇《德黑兰时报》的稿子都会被判成「地点在德黑兰」。
+    发言方城市跳过；多个城市时优先「in/at 某地」那个。"""
+    first = None
     for loc in locs:
         for al in loc["aliases"]:
             if not _alias_hit(text, al):
                 continue
             pat = re.compile(r"(?<![A-Za-z0-9])" + re.escape(al) + r"(?![A-Za-z0-9])", re.I)
-            m = pat.search(text)
-            if not m:
-                continue
-            after = text[m.end(): m.end() + 16].strip().lower()
-            nxt = re.match(r"[a-z']+", after)
-            if nxt and nxt.group(0) in _LOC_BLOCK:
-                continue
-            return loc["zh"], text[max(0, m.start() - 12): m.end() + 12]
-    return "", ""
+            for m in pat.finditer(text):
+                after = text[m.end(): m.end() + 16].strip().lower()
+                nxt = re.match(r"[a-z']+", after)
+                if nxt and nxt.group(0) in _LOC_BLOCK:
+                    continue
+                before = text[max(0, m.start() - 24): m.start()]
+                if _SPEAKER_AFTER.match(text[m.end():]) or _SPEAKER_BEFORE.search(before):
+                    continue
+                hit = (loc["zh"], text[max(0, m.start() - 12): m.end() + 12])
+                if _VENUE_BEFORE.search(before):
+                    return hit
+                first = first or hit
+    return first or ("", "")
 
 
 def extract_persons(text: str, persons: Sequence[dict]) -> Set[str]:
@@ -692,6 +706,121 @@ _NOT_ATTEND = re.compile(
     re.I)
 
 
+# ★「meeting with / meeting between」是名词，不是动词：「discussing possible meeting
+#   between Xi, Putin, Trump」「ahead of meeting with Trump」讲的都是还没开的会。
+#   实测：深圳三方会晤在敲定前两周就被这类标题判成了「11-04 北京 已举行」。
+_NOUN_HELD = {"meeting with", "meeting between"}
+_SOON = re.compile(r"\b(?:will|to\s+(?:host|hold|meet|attend|have)|set\s+to|ahead\s+of|arriv\w*|"
+                   r"heads?\s+(?:to|for)|heading|lands?\s+in|en\s+route|next\s+week)\b", re.I)
+_MAYBE = re.compile(r"\b(?:discuss\w*|possib\w*|potential|left\s+open|upcoming|hints?|expect\w*|soon|would|could|"
+                    r"might|wants?|seeks?|eyes|hopes?|ready|prepar\w*|plan\w*|propos\w*|"
+                    r"under\s+discussion|no\s+final|no\s+clarity)\b"
+                    r"|\b(?:on|about|over)\s+(?:a|an|the)\s+(?:\w+\s+)?meeting\b", re.I)
+_AFTER_MEETING = re.compile(r"\b(?:after|following)\s+(?:[\w$-]+\s+){0,3}(?:meeting|talks|summit)\b", re.I)
+
+
+def prospective_status(headline: str) -> Optional[str]:
+    """名词式「会晤」标题讲的是将来/可能的会时，返回 arranged 或 proposed；讲已开过的会返回 None。"""
+    if _AFTER_MEETING.search(headline):
+        return None
+    if _SOON.search(headline):
+        return "arranged"
+    if _MAYBE.search(headline):
+        return "proposed"
+    return None
+
+
+# ★「Trump's envoys」「Trump envoy」是特使，不是特朗普本人；引号里的名字是被引用的话。
+#   实测：「Zelensky meets with Trump's envoys」「Russia 'lifts ban on killing Zelensky'
+#   after meeting with Putin」把从没见过面的普京和泽连斯基判成了「已举行」。
+_PROXY = re.compile(r"\b[\w.\-]+(?:['’]s)?\s+(?:special\s+|peace\s+|top\s+|foreign\s+)?"
+                    r"(?:envoys?|emissar(?:y|ies)|delegations?|negotiators?|aides?|representatives?|team)\b", re.I)
+_QUOTED = re.compile(r"(?<![A-Za-z])'[^']{2,60}'(?![A-Za-z])|‘[^’]{2,60}’|[\"“][^\"”]{2,80}[\"”]")
+
+
+_CLAUSE_END = re.compile(r"\b(?:after|before|following|ahead\s+of|amid|while|then|as)\b|[;:|]|\.\s|\s[—–-]\s", re.I)
+# 证据摘录可能从引号中间截断：「on killing Zelensky' after …」开头那段是被引的话
+_CUT_QUOTE = re.compile(r"^[^'‘’\"“”]{0,60}['’\"”](?=\s)")
+
+
+def meeting_clause(headline: str, phrase: str) -> str:
+    """会晤词所在的那个从句。「Trump meets Putin and Xi in China, while Europeans plot … at Berlin summit」
+    的地点只能从前半句找，后半句的柏林是另一件事。"""
+    m = re.search(r"(?<![A-Za-z0-9])" + re.escape(phrase) + r"(?![A-Za-z0-9])", headline, re.I) if phrase else None
+    if m is None:
+        return headline
+    start = 0
+    for b in _CLAUSE_END.finditer(headline[:m.start()]):
+        start = b.end()
+    # 「after meeting with …」这种分词短语从句很短，连主句一起算
+    if _PARTICIPLE.search(headline[:m.start()]):
+        start = 0
+    end = _CLAUSE_END.search(headline, m.end())
+    return headline[start: end.start() if end else len(headline)]
+
+
+def actor_text(text: str) -> str:
+    """去掉特使/代表团的所属人名，用于抽取「谁在场」。"""
+    return _PROXY.sub(" ", text or "")
+
+
+_PREP_BEFORE = re.compile(r"\b(?:with|to|on|about|for|against|from|by|of|at)\s+(?:\w+\s+)?$", re.I)
+_PARTICIPLE = re.compile(r"(?:after|following|before|ahead\s+of)\s+(?:[\w$-]+\s+){0,3}$", re.I)
+
+
+def _subject(text: str) -> Set[str]:
+    """从句里第一个不在介词后面的人：「wants to discuss … with Putin」里的普京是宾语，不是主语。"""
+    best: Optional[Tuple[int, str]] = None
+    for pid in extract_persons(text, PERSONS):
+        p = next(x for x in PERSONS if x["id"] == pid)
+        for a in p.get("aliases", []) + p.get("weak", []):
+            for m in re.finditer(r"(?<![A-Za-z0-9])" + re.escape(a) + r"(?![A-Za-z0-9])", text, re.I):
+                # 「Trump's meeting with Xi」里所有格的那位也在场
+                own = re.match(r"['’]s\s+(?:\w+\s+)?(?:(?:meeting|talks|summit)\b|$)", text[m.end():], re.I)
+                if _PREP_BEFORE.search(text[:m.start()]) and not own:
+                    continue
+                if best is None or m.start() < best[0]:
+                    best = (m.start(), pid)
+    return {best[1]} if best else set()
+
+
+def rebuild_headline(quote: str) -> str:
+    """证据摘录是「标题后半. 正文开头」，正文开头又是标题本身：把两段拼回完整标题，
+    否则「Erdogan urges … in meeting with Pezeshkian」会丢掉主语埃尔多安。"""
+    head, sep, tail = quote.partition(". ")
+    if not sep:
+        return quote
+    for k in range(len(tail), 5, -1):
+        if head.startswith(tail[-k:]):
+            return tail[:-k] + head
+    return quote
+
+
+def held_participants(headline: str) -> Set[str]:
+    """「已举行」标题里真正见了面的人：主语 + 会晤词后面同一从句里的人。
+    「Trump called Zelensky after meeting with Putin」→ {trump, putin}；
+    「Streeting calls Putin a killer as he meets Zelensky」→ 只有泽连斯基。"""
+    text = _QUOTED.sub(" ", actor_text(_CUT_QUOTE.sub(" ", headline)))
+    hit = None
+    for ph in STATUS_SPEC["held"]["phrases"]:
+        pat = re.compile(r"(?<![A-Za-z0-9])" + re.escape(ph) + r"(?![A-Za-z0-9])", re.I)
+        m = pat.search(text)
+        if m and (hit is None or m.start() < hit.start()):
+            hit = m
+    if hit is None:
+        return extract_persons(text, PERSONS)
+    before = text[:hit.start()]
+    # 会晤对象只看到下一个从句为止：「meets with 特使 in Dublin after their summit with Putin」里的普京不在场
+    after = extract_persons(_CLAUSE_END.split(text[hit.end():], 1)[0], PERSONS)
+    # 「X … after meeting with Y」主语在主句；「… as he meets Y」主语在本从句
+    clause = before if _PARTICIPLE.search(before) else _CLAUSE_END.split(before)[-1]
+    found = _subject(clause) | after
+    if not after:
+        # 「Putin and Pezeshkian held talks」：会晤词前面就是双方
+        found = extract_persons(clause, PERSONS)
+    return found
+
+
 def detect_status(headline: str, desc: str = "") -> Tuple[str, str, int]:
     """★ 标题优先，且 **「已举行」只允许来自标题**。
 
@@ -708,6 +837,10 @@ def detect_status(headline: str, desc: str = "") -> Tuple[str, str, int]:
         code, phrase, rank = hit
         if code in ("confirmed", "arranged") and _HEDGE.search(headline):
             return "proposed", phrase + "（情态降级）", STATUS_SPEC["proposed"]["rank"]
+        if code == "held" and phrase.lower() in _NOUN_HELD:
+            prospective = prospective_status(headline)
+            if prospective:
+                return prospective, phrase + "（尚未举行）", STATUS_SPEC[prospective]["rank"]
         return code, phrase, rank
     if _NOT_ATTEND.search(headline):
         return "denied", "not-attend", STATUS_SPEC["denied"]["rank"]
@@ -958,10 +1091,10 @@ def build_signals(items: List[dict], cfg: dict) -> Tuple[List[dict], List[dict]]
             continue
 
         # ---- 人物：标题优先；标题不足两人时才由正文补
-        p_title = extract_persons(headline, PERSONS)
+        p_title = extract_persons(actor_text(headline), PERSONS)
         persons = set(p_title)
         if len(persons) < 2 and desc:
-            persons |= extract_persons(desc, PERSONS)
+            persons |= extract_persons(actor_text(desc), PERSONS)
 
         # ---- 会晤词：标题命中，或正文命中且标题已点名至少两人
         meet_t = any(phrase_hit(headline, t) for t in cfg["meeting_terms"])
@@ -1002,6 +1135,16 @@ def build_signals(items: List[dict], cfg: dict) -> Tuple[List[dict], List[dict]]
 
         dt = parse_date_text(headline, pub) or (parse_date_text(desc, pub) if desc else None)
         status, phrase, rank = detect_status(headline, desc)
+        # 「已举行」必须在标题里点名至少两位真正见面的人；凑不齐两人只算媒体报道
+        if status == "held" and phrase != "readout-title" and len(persons) >= 2:
+            met = held_participants(headline)
+            if len(met) >= 2:
+                persons = met
+                if loc_src == "title":
+                    loc_zh, loc_raw = extract_location(meeting_clause(headline, phrase), LOCS)
+                    loc_src = "title" if loc_zh else ""
+            else:
+                status, phrase, rank = "reported", phrase + "（见面双方不明）", STATUS_SPEC["reported"]["rank"]
 
         # ★ 只是「放风/传闻」时，不要给出确定地点 —— 地点若只来自正文，
         #   多半是背景陈述（"他在莫斯科表示愿意…"），不是会晤地点。
@@ -1230,6 +1373,11 @@ def find_match(sig: dict, events: List[dict]) -> Optional[dict]:
         if not fam_ok:
             continue
         ep = core_persons(ev)
+        # 「已举行」只能落到双方都对得上的双边会晤：事件人物是报道人名的并集，
+        # 「普京—特朗普 已举行」不能因为「默茨—普京」那条也提过特朗普就并进去。
+        if sig.get("status") == "held" and ev["family"] == "bilateral" and len(sp) >= 2 \
+                and not set(rank_persons(ev, 2)) <= sp:
+            continue
 
         if sp and ep:
             inter = len(ep & sp)
@@ -1260,7 +1408,16 @@ def find_match(sig: dict, events: List[dict]) -> Optional[dict]:
                 #   整月窗口很宽，只在两边都有点名人物时才放开，否则一个月里的事会被吸成一条。
                 if not (sp and ep):
                     continue
+                # 发稿日近似的「已举行」不能把「某月内」的计划钉成具体日期：
+                # 「Trump called Zelensky after meeting with Putin」（11-20 发稿）讲的是前一天深圳那场，
+                # 不是本月挂着的「普京—威特科夫 基辅」。
+                if sig.get("date_approx"):
+                    continue
                 delta = _window_gap(ev, sig)
+            elif sig.get("date_approx"):
+                # 发稿日近似：会是在发稿前几天开的，落在 [发稿日-3, 发稿日] 内都算同一天
+                delta = 0 if sd - timedelta(days=3) <= ed <= sd else min(abs((ed - sd).days),
+                                                                        abs((ed - sd + timedelta(days=3)).days))
             else:
                 delta = abs((ed - sd).days)
             if delta > 5:
@@ -1275,6 +1432,10 @@ def find_match(sig: dict, events: List[dict]) -> Optional[dict]:
         else:
             # tbd 不是万能胶水：至少一方无日期时，必须人物集高度重合
             if not (ep and sp) or contain < 0.99 or jac < 0.66:
+                continue
+            # 带近似日期的「已举行」只落到有日期的那场，不去点亮挂着「待定」的计划
+            #（深圳三方会晤后的稿子曾把一条日期待定的「普京—特朗普 布鲁塞尔」点成已举行）
+            if sig.get("date_approx") and sig.get("status") == "held":
                 continue
             dscore = 0.4
 
@@ -1461,6 +1622,63 @@ def upsert(sig: dict, events: List[dict], next_id: List[int], transitions: List[
     return ev
 
 
+_READOUT = re.compile(r"^\s*(meeting|talks|phone call|press conference|readout)\s+with\b", re.I)
+
+
+def recheck_claims(events: List[dict], transitions: List[dict]) -> int:
+    """按当前规则复核已落盘的「已举行」证据，返回状态被纠正的事件数。
+
+    旧规则下误判的 held 证据会一直留在 claims 里，事件永远是「已举行」；
+    新规则只管新抓的标题不够，存量也要回头改。基线事件由人工维护，不动。
+    """
+    fixed = 0
+    for ev in events:
+        if ev.get("anchor_id"):
+            continue
+        pair = set(rank_persons(ev, 2 if ev.get("family") == "bilateral" else 3))
+        touched = False
+        for c in ev.get("claims", []):
+            quote = rebuild_headline(c.get("quote") or "")
+            # 旧规则把发言方城市当成会晤地点（「…, Kremlin says」→ 莫斯科）：引文里那座城确实是发言方时改掉
+            loc = c.get("location") or ""
+            if loc:
+                now = extract_location(quote, LOCS)[0]
+                aliases = next((x["aliases"] for x in LOCS if x["zh"] == loc), [])
+                if now != loc and any(_alias_hit(quote, al) for al in aliases):
+                    c["location"], touched = now, True
+            if c.get("status") != "held" or _READOUT.match(quote) or len(c.get("persons") or []) < 2:
+                continue
+            new = None
+            if any(phrase_hit(quote, ph) for ph in _NOUN_HELD) and not any(
+                    phrase_hit(quote, ph) for ph in STATUS_SPEC["held"]["phrases"] if ph not in _NOUN_HELD):
+                new = prospective_status(quote)
+            if new is None:
+                # 见面的人凑不齐两位，或者见面的不是本事件的双方（「特朗普见普京后给泽连斯基打电话」）
+                met = held_participants(quote)
+                if len(met) < 2 or len(met & pair) < min(2, len(pair)) or (len(pair) == 2 and not pair <= met):
+                    new = "reported"
+            if new:
+                c["status"], c["rank"] = new, STATUS_SPEC[new]["rank"]
+                touched = True
+        if not touched:
+            continue
+        old = ev["status"]
+        ev["status"], ev["conflict"] = _recompute(ev)
+        end = d(ev.get("date_end") or ev.get("date_start") or "")
+        if ev.get("archived") and end and end < TODAY and ev["status"] not in (
+                "held", "canceled", "postponed", "denied", "lapsed"):
+            # 归档事件不再走生命周期，日期已过又没有举行证据，直接记为过期未证实
+            ev["status"] = "lapsed"
+        if ev["status"] != old:
+            fixed += 1
+            transitions.append({"id": ev["id"], "title": ev["title"], "from": old, "to": ev["status"],
+                                "at": RUN_AT, "evidence": "复核：已举行证据讲的是计划中的会或见面双方不明",
+                                "url": "", "outlet": "", "tier": 0})
+            ev["updates"].append({"at": RUN_AT, "from": old, "to": ev["status"],
+                                  "evidence": "复核已举行证据", "url": ""})
+    return fixed
+
+
 def consolidate(events: List[dict], transitions: List[dict]) -> int:
     """合并同人同期的重复事件（以前「某月内」和具体日期被拆成两行，月份那条细化后仍是两行）。
 
@@ -1480,7 +1698,11 @@ def consolidate(events: List[dict], transitions: List[dict]) -> int:
                   and (precise.get(o.get("precision"), 0), -num(o)) > (rank, -num(ev))]
         probe = {k: ev.get(k) for k in ("family", "persons", "actors", "location", "date_start", "date_end", "precision")}
         target = find_match(probe, others)
-        if target is None or _window_gap(ev, target):
+        # 同城同人的会差一天也是同一场：「抵达」稿的发稿日常比会晤早一天
+        if target is None:
+            continue
+        slack = 1 if ev.get("location") and ev.get("location") == target.get("location") else 0
+        if _window_gap(ev, target) > slack:
             continue
         # 一方的点名人物被另一方包含即可：同一场四方会谈，有的稿子只写莫迪和特朗普。
         mine, theirs = core_persons(ev), core_persons(target)
@@ -1490,6 +1712,8 @@ def consolidate(events: List[dict], transitions: List[dict]) -> int:
         old = target["status"]
         target["claims"].extend(ev["claims"])
         target["actors"] = sorted(set(target["actors"]) | set(ev["actors"]))
+        if ev.get("family") == "trilateral" and target.get("family") == "bilateral":
+            target["family"] = "trilateral"  # 双边稿并进三方会晤后，标题要写全三方
         target["first_seen"] = min(target.get("first_seen") or RUN_AT, ev.get("first_seen") or RUN_AT)
         target["status"], target["conflict"] = _recompute(target)
         events.remove(ev)
@@ -1942,6 +2166,9 @@ def run() -> int:
 
     print("[3/5] 归并与状态机")
     added_anchor = seed_anchors(cfg, events, next_id)
+    rechecked = recheck_claims(events, transitions)
+    if rechecked:
+        print(f"      复核纠正已举行误判 {rechecked} 条")
     before = len(events)
     snapped = 0
     for sig in signals:
