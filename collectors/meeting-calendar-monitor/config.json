@@ -1247,6 +1247,70 @@
       "aliases": [
         "Warsaw"
       ]
+    },
+    {
+      "zh": "马尼拉",
+      "en": "Manila",
+      "country": "菲律宾",
+      "aliases": [
+        "Manila"
+      ]
+    },
+    {
+      "zh": "吉隆坡",
+      "en": "Kuala Lumpur",
+      "country": "马来西亚",
+      "aliases": [
+        "Kuala Lumpur"
+      ]
+    },
+    {
+      "zh": "曼谷",
+      "en": "Bangkok",
+      "country": "泰国",
+      "aliases": [
+        "Bangkok"
+      ]
+    },
+    {
+      "zh": "河内",
+      "en": "Hanoi",
+      "country": "越南",
+      "aliases": [
+        "Hanoi"
+      ]
+    },
+    {
+      "zh": "堪培拉",
+      "en": "Canberra",
+      "country": "澳大利亚",
+      "aliases": [
+        "Canberra"
+      ]
+    },
+    {
+      "zh": "庆州",
+      "en": "Gyeongju",
+      "country": "韩国",
+      "aliases": [
+        "Gyeongju"
+      ]
+    },
+    {
+      "zh": "釜山",
+      "en": "Busan",
+      "country": "韩国",
+      "aliases": [
+        "Busan"
+      ]
+    },
+    {
+      "zh": "上海",
+      "en": "Shanghai",
+      "country": "中国",
+      "aliases": [
+        "Shanghai"
+      ]
     }
   ],
   "families": [
@@ -1439,7 +1503,13 @@
         "concluded talks",
         "hosted talks",
         "received",
-        "signed an agreement"
+        "signed an agreement",
+        "meets",
+        "hold talks",
+        "holds talks",
+        "joint statement",
+        "joint press release",
+        "joint declaration"
       ]
     },
     "confirmed": {

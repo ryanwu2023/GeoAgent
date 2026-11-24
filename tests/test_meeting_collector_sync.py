@@ -60,3 +60,49 @@ def test_collector_keeps_runtime_output_and_state_overrides(monkeypatch, tmp_pat
 
     assert Path(monitor.OUTPUT) == tmp_path / "published"
     assert Path(monitor.STATE) == tmp_path / "state"
+
+
+def _event(monitor, eid, persons, start, end, precision, status="arranged", claims=None):
+    ev = {"id": eid, "family": "bilateral", "title": "", "title_raw": "", "date_start": start, "date_end": end,
+          "precision": precision, "date_raw": "", "location": "", "location_raw": "", "persons": persons,
+          "actors": [], "track": "asia", "status": status, "conflict": False, "claims": claims or [], "sources": [],
+          "first_seen": "2026-10-31 10:00:00", "last_seen": "", "updates": [], "baseline": False,
+          "baseline_ids": [], "days_seen": 1}
+    return ev
+
+
+def _claim(status, rank, quote, published):
+    return {"status": status, "rank": rank, "tier": 3, "source": "Google News", "source_id": "q", "outlet": "x",
+            "url": "https://example.test/" + quote[:8], "persons": ["modi", "trump"], "location": "",
+            "published": published, "quote": quote, "date_start": "", "precision": "tbd", "anchor_snap": ""}
+
+
+def test_month_window_event_merges_into_dated_meeting_with_location_and_held():
+    """2026-11-23：「11 月在马尼拉见」与「11 月 17 日在马尼拉见」被拆成两条，前者一直显示 11 月内、地点待定。"""
+    from datetime import date
+    monitor = load_monitor()
+    monitor.TODAY = date(2026, 11, 23)
+    month = _event(monitor, "EV-1", ["modi", "trump"], "2026-11-01", "2026-11-30", "month",
+                   claims=[_claim("arranged", 65, "PM Modi, Trump to meet in Manila next month?", "2026-10-17")])
+    day = _event(monitor, "EV-2", ["modi", "trump", "takaichi"], "2026-11-17", "2026-11-17", "day",
+                 claims=[_claim("arranged", 65, "PM Modi, Trump to meet in Manila on November 17", "2026-11-14")])
+    events, transitions = [month, day], []
+    assert monitor.consolidate(events, transitions) == 1
+    assert events == [day] and day["location"] == "马尼拉"
+    assert [q["q"] for q in monitor.verify_queries(events, monitor.TODAY)] == [
+        "Modi Trump (met OR meets OR talks OR meeting) when:7d"]
+    status, _, rank = monitor.detect_status("Read Modi's 'magic' in Manila: PM Modi meets Donald Trump")
+    assert status == "held"
+    day["claims"].append({**_claim(status, rank, "PM Modi meets Donald Trump", "2026-11-18"), "location": "马尼拉"})
+    day["status"], _ = monitor._recompute(day)
+    monitor.update_lifecycle(day, monitor.TODAY, transitions)
+    assert day["status"] == "held"
+
+
+def test_month_window_needs_named_people_on_both_sides():
+    monitor = load_monitor()
+    month = _event(monitor, "EV-1", ["putin", "zelensky"], "2026-11-01", "2026-11-30", "month")
+    other = _event(monitor, "EV-2", [], "2026-11-10", "2026-11-11", "range")
+    assert monitor.consolidate([month, other], []) == 0
+    assert monitor.detect_status("Modi to meet Trump in Manila")[0] == "arranged"
+    assert monitor.extract_location("Quad leaders gather in Manila", monitor.LOCS)[0] == "马尼拉"

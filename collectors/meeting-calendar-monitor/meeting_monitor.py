@@ -1194,6 +1194,21 @@ def core_persons(ev: dict) -> Set[str]:
     return set(ev.get("persons") or [])
 
 
+def _window(x: dict) -> Tuple[Optional[date], Optional[date]]:
+    start = d(x.get("date_start", ""))
+    return start, d(x.get("date_end", "")) or start
+
+
+def _window_gap(a: dict, b: dict) -> int:
+    """两个日期窗口的间隔天数；有重叠时为 0。"""
+    (a0, a1), (b0, b1) = _window(a), _window(b)
+    if not (a0 and b0):
+        return 0
+    if a0 <= b1 and b0 <= a1:
+        return 0
+    return min(abs((a0 - b1).days), abs((b0 - a1).days))
+
+
 def find_match(sig: dict, events: List[dict]) -> Optional[dict]:
     best, best_score = None, 0.0
     sd = d(sig.get("date_start", ""))
@@ -1239,7 +1254,15 @@ def find_match(sig: dict, events: List[dict]) -> Optional[dict]:
 
         ed = d(ev.get("date_start", ""))
         if ed and sd:
-            delta = abs((ed - sd).days)
+            if ev.get("precision") == "month" or sig.get("precision") == "month":
+                # ★ 月精度只知道「某月内」，不能当成 1 号比（2026-11-23 实测：「11 月在马尼拉见」
+                #   和「11 月 17 日在马尼拉见」差 16 天，被拆成两条，前者一直挂着「11 月内」）。
+                #   整月窗口很宽，只在两边都有点名人物时才放开，否则一个月里的事会被吸成一条。
+                if not (sp and ep):
+                    continue
+                delta = _window_gap(ev, sig)
+            else:
+                delta = abs((ed - sd).days)
             if delta > 5:
                 continue
             # ★ 月份精度是磁铁：两条都只精确到月时，允许「子集合并」
@@ -1318,6 +1341,50 @@ def snap_to_anchor(sig: dict, cfg: dict) -> Optional[dict]:
     return a
 
 
+def _recompute(ev: dict) -> Tuple[str, bool]:
+    """claims 变化后重算人物、地点、状态、标题；返回 (状态, 是否冲突)，由调用方写回。"""
+    # 同一来源重复报道只保留最新一条，防止 20 家转载把 rank 抬成「已确认」
+    dedup: Dict[str, dict] = {}
+    for c in ev["claims"]:
+        k = (c["source_id"], c["outlet"] or c["source"], c["quote"][:40])
+        if k not in dedup or c["published"] > dedup[k]["published"]:
+            dedup[k] = c
+    ev["claims"] = list(dedup.values())
+    # ★ 展示用人物按报道频次取前 4，而不是并集 —— 并集会随转载无限膨胀
+    ev["persons"] = rank_persons(ev, limit=4)
+    # ★ 地点按「多少条独立报道这么说」投票，不取第一条。
+    #   首条定终身会让一个引用背景的段落永久决定会晤地点。
+    #   ★ 只采信「已安排」及以上等级报道给出的地点：放风阶段的稿子里，
+    #     莫斯科/迈阿密往往是「他此前在哪里说过话」，不是会晤地点
+    #     （实测：一场 11 月的特朗普—习近平会晤被 38 篇稿子投成了莫斯科）。
+    if not ev.get("anchor_id"):
+        # 地点词典后来补的城市（如马尼拉）对旧报道也生效：claim 没记地点时从引文里再找一次。
+        locs = [c.get("location") or extract_location(c.get("quote", ""), LOCS)[0]
+                for c in ev["claims"] if c.get("rank", 0) >= 60]
+        locs = [x for x in locs if x]
+        ev["location"] = Counter(locs).most_common(1)[0][0] if locs else ""
+
+    new_status, conflict = choose_status(ev["claims"])
+    # ★ 基线对「峰会本身」是有权威的：APEC 的会期与「已定档」不该被
+    #   某家媒体一句 "could meet at APEC" 降级成「已预告」。
+    if ev.get("anchor_id") and ev.get("anchor_status"):
+        if STATUS_RANK.get(new_status, 0) < STATUS_RANK.get(ev["anchor_status"], 0):
+            new_status = ev["anchor_status"]
+    # 「已举行」不能用在未来事件上（标题里的 met 可能是别的会晤）
+    if new_status == "held" and ev["date_start"] and d(ev["date_start"]) and d(ev["date_start"]) > TODAY:
+        new_status = "arranged"
+
+    if ev.get("anchor_id"):
+        # 基线标题是人工录入的，不能被通用模板覆盖
+        ev["title"] = ev.get("title") or build_title(ev["family"], rank_persons(ev, 3),
+                                                    ev["location"], ev["title_raw"], anchored=True)
+    else:
+        ev["title"] = build_title(ev["family"], rank_persons(ev, 3),
+                                  ev["location"], ev["title_raw"])
+    ev["track"] = track_of(ev["persons"], ev["actors"], ev["location"])
+    return new_status, conflict
+
+
 def upsert(sig: dict, events: List[dict], next_id: List[int], transitions: List[dict]) -> dict:
     ev = find_match(sig, events)
     claim = {
@@ -1358,6 +1425,10 @@ def upsert(sig: dict, events: List[dict], next_id: List[int], transitions: List[
         ev["date_end"] = sig["date_end"]
         ev["precision"] = sig["precision"]
         ev["date_raw"] = sig["date_raw"]
+    elif sig["date_start"] and ev["date_start"] and ev["precision"] == "month" \
+            and sig["precision"] in ("day", "range") and _window_gap(ev, sig) == 0:
+        ev["date_start"], ev["date_end"] = sig["date_start"], sig["date_end"]
+        ev["precision"], ev["date_raw"] = sig["precision"], sig["date_raw"]
     elif sig["date_start"] and ev["date_start"] and sig["precision"] == "range" and ev["precision"] != "range":
         if sig["date_start"] <= ev["date_start"] <= (d(sig["date_end"]) or d(sig["date_start"])):
             ev["date_start"], ev["date_end"], ev["precision"] = sig["date_start"], sig["date_end"], "range"
@@ -1369,46 +1440,9 @@ def upsert(sig: dict, events: List[dict], next_id: List[int], transitions: List[
     ev["persons"] = sorted(set(ev["persons"]) | set(sig["persons"]))
     ev["actors"] = sorted(set(ev["actors"]) | set(sig["actors"]))
     ev["claims"].append(claim)
-
-    # 同一来源重复报道只保留最新一条，防止 20 家转载把 rank 抬成「已确认」
-    dedup: Dict[str, dict] = {}
-    for c in ev["claims"]:
-        k = (c["source_id"], c["outlet"] or c["source"], c["quote"][:40])
-        if k not in dedup or c["published"] > dedup[k]["published"]:
-            dedup[k] = c
-    ev["claims"] = list(dedup.values())
-    # ★ 展示用人物按报道频次取前 4，而不是并集 —— 并集会随转载无限膨胀
-    ev["persons"] = rank_persons(ev, limit=4)
-    # ★ 地点按「多少条独立报道这么说」投票，不取第一条。
-    #   首条定终身会让一个引用背景的段落永久决定会晤地点。
-    #   ★ 只采信「已安排」及以上等级报道给出的地点：放风阶段的稿子里，
-    #     莫斯科/迈阿密往往是「他此前在哪里说过话」，不是会晤地点
-    #     （实测：一场 11 月的特朗普—习近平会晤被 38 篇稿子投成了莫斯科）。
-    if not ev.get("anchor_id"):
-        locs = [c["location"] for c in ev["claims"]
-                if c.get("location") and c.get("rank", 0) >= 60]
-        ev["location"] = Counter(locs).most_common(1)[0][0] if locs else ""
-
-    new_status, conflict = choose_status(ev["claims"])
-    # ★ 基线对「峰会本身」是有权威的：APEC 的会期与「已定档」不该被
-    #   某家媒体一句 "could meet at APEC" 降级成「已预告」。
-    if ev.get("anchor_id") and ev.get("anchor_status"):
-        if STATUS_RANK.get(new_status, 0) < STATUS_RANK.get(ev["anchor_status"], 0):
-            new_status = ev["anchor_status"]
-    # 「已举行」不能用在未来事件上（标题里的 met 可能是别的会晤）
-    if new_status == "held" and ev["date_start"] and d(ev["date_start"]) and d(ev["date_start"]) > TODAY:
-        new_status = "arranged"
+    new_status, conflict = _recompute(ev)
     ev["status"] = new_status
     ev["conflict"] = conflict
-
-    if ev.get("anchor_id"):
-        # 基线标题是人工录入的，不能被通用模板覆盖
-        ev["title"] = ev.get("title") or build_title(ev["family"], rank_persons(ev, 3),
-                                                    ev["location"], ev["title_raw"], anchored=True)
-    else:
-        ev["title"] = build_title(ev["family"], rank_persons(ev, 3),
-                                  ev["location"], ev["title_raw"])
-    ev["track"] = track_of(ev["persons"], ev["actors"], ev["location"])
     ev["last_seen"] = RUN_AT
     ev["days_seen"] = int(ev.get("days_seen", 0)) + (1 if is_new else 0)
 
@@ -1422,6 +1456,56 @@ def upsert(sig: dict, events: List[dict], next_id: List[int], transitions: List[
         ev["updates"].append({"at": RUN_AT, "from": old_status, "to": new_status,
                               "evidence": sig["quote"], "url": sig["link"]})
     return ev
+
+
+def consolidate(events: List[dict], transitions: List[dict]) -> int:
+    """把「某月内」的事件并进同人同期、日期更精确的事件（修复以前被拆开的重复行）。"""
+    merged = 0
+    for ev in [e for e in events if e.get("precision") == "month" and not e.get("archived")
+               and not e.get("anchor_id")]:
+        others = [o for o in events if o is not ev and not o.get("archived")
+                  and o.get("precision") in ("day", "range")]
+        probe = {k: ev.get(k) for k in ("family", "persons", "actors", "location", "date_start", "date_end", "precision")}
+        target = find_match(probe, others)
+        core = core_persons(ev)
+        if target is None or not core or not core <= set(target["persons"]) | core_persons(target):
+            continue
+        old = target["status"]
+        target["claims"].extend(ev["claims"])
+        target["actors"] = sorted(set(target["actors"]) | set(ev["actors"]))
+        target["first_seen"] = min(target.get("first_seen") or RUN_AT, ev.get("first_seen") or RUN_AT)
+        target["status"], target["conflict"] = _recompute(target)
+        events.remove(ev)
+        merged += 1
+        transitions.append({"id": ev["id"], "title": ev["title"], "from": ev["status"], "to": "merged",
+                            "at": RUN_AT, "evidence": f"与 {target['id']} 同人同期，并入日期更精确的一条",
+                            "url": "", "outlet": "", "tier": 0})
+        target["updates"].append({"at": RUN_AT, "from": old, "to": target["status"],
+                                  "evidence": f"并入 {ev['id']}", "url": ""})
+    return merged
+
+
+def verify_queries(events: List[dict], today: date, limit: int = 8) -> List[dict]:
+    """日期刚过或将至的会晤，按人名专门搜一次「已举行」的报道。
+
+    常规检索按主题撒网，会后报道（"Modi meets Trump in Manila"）不一定落进来；
+    没有已举行报道，事件就会被判「过期未证实」。
+    """
+    alias = {p["id"]: next((a for a in p.get("aliases", []) if " " not in a), (p.get("aliases") or [p["id"]])[0])
+             for p in PERSONS}
+    picked = []
+    for ev in events:
+        if ev.get("archived") or ev["status"] not in ("proposed", "arranged", "scheduled", "confirmed", "lapsed"):
+            continue
+        _, end = _window(ev)
+        names = [alias[p] for p in rank_persons(ev, 2) if p in alias]
+        if not end or len(names) < 2 or not (today - timedelta(days=7) <= end <= today + timedelta(days=1)):
+            continue
+        picked.append((end, ev, names))
+    picked.sort(key=lambda x: x[0], reverse=True)
+    return [{"id": f"verify_{ev['id']}", "track": ev.get("track", ""),
+             "q": f"{names[0]} {names[1]} (met OR meets OR talks OR meeting) when:7d"}
+            for _, ev, names in picked[:limit]]
 
 
 def update_lifecycle(ev: dict, today: date, transitions: List[dict]) -> None:
@@ -1818,9 +1902,13 @@ def run() -> int:
     day_dir = os.path.join(OUTPUT, day)
     os.makedirs(day_dir, exist_ok=True)
 
+    st = read_json(os.path.join(STATE, "events.json"),
+                   {"next_id": 1, "events": [], "archived": [], "updated": ""})
+    events: List[dict] = st.get("events", [])
+    checks = verify_queries(events, TODAY, int(cfg.get("verify_max", 8)))
     print(f"[1/5] 抓取：{len([s for s in cfg['sources'] if s.get('kind') != 'query'])} 个直连源 + "
-          f"{len(cfg['queries'])} 条检索")
-    items, health = source_items(cfg, day_dir)
+          f"{len(cfg['queries'])} 条检索 + {len(checks)} 条到期核验")
+    items, health = source_items({**cfg, "queries": cfg["queries"] + checks}, day_dir)
     print(f"      原始条目 {len(items)}")
 
     print("[2/5] 抽取：人物 / 地点 / 日期 / 确认度")
@@ -1832,9 +1920,6 @@ def run() -> int:
     if rejects:
         n_rej_daily = merge_jsonl(os.path.join(day_dir, "rejects.jsonl"), rejects)
 
-    st = read_json(os.path.join(STATE, "events.json"),
-                   {"next_id": 1, "events": [], "archived": [], "updated": ""})
-    events: List[dict] = st.get("events", [])
     next_id = [int(st.get("next_id", 1))]
     transitions: List[dict] = []
 
@@ -1848,6 +1933,9 @@ def run() -> int:
         upsert(sig, events, next_id, transitions)
     new_events = len(events) - before
     print(f"      吸附到已知峰会 {snapped} 条")
+    merged = consolidate(events, transitions)
+    if merged:
+        print(f"      合并同人同期的「某月内」重复事件 {merged} 条")
     for ev in events:
         update_lifecycle(ev, TODAY, transitions)
     for ev in events:
