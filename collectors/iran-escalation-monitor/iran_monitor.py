@@ -629,6 +629,19 @@ def _proxy_deep_score(p, timeout=6):
             pass
     return good
 
+def _managed_egress():
+    """采集服务托管运行且配置了环境代理时，出口只用环境代理：不探测、不摘除、不回落直连。
+
+    线上 Pod 的网络策略禁止直连。以前一次代理超时就把它摘掉、回落直连，
+    请求随即报 Errno 101 Network is unreachable（2026-11-24 nyt/bbc 实测）。
+    同一代理放两次：它后面是负载均衡的多条隧道，「换下一个出口」就是经另一条隧道重试。
+    """
+    if os.getenv("GEO_COLLECTOR_MANAGED") != "true":
+        return []
+    env = urllib.request.getproxies()
+    found = [env.get(k) for k in ("https", "http")]
+    return list(dict.fromkeys(u for u in found if isinstance(u, str) and u.startswith("http"))) * 2
+
 def live_proxies():
     """存活出口列表，按「真实目标可用性」降序（缓存 10 分钟）。
 
@@ -637,14 +650,12 @@ def live_proxies():
     """
     if PROXY_OVERRIDE:
         return [None if PROXY_OVERRIDE == "direct" else PROXY_OVERRIDE]
+    managed = _managed_egress()
+    if managed:
+        return managed
     now = time.time()
     if _EGRESS_CACHE["ok"] and now - _EGRESS_CACHE["at"] < 600:
         return list(_EGRESS_CACHE["ok"])
-    if os.getenv("GEO_COLLECTOR_MANAGED") == "true":
-        # Server deployment already supplies a reviewed egress endpoint. Do not
-        # repeatedly probe unrelated localhost ports/Yahoo/Google per source.
-        configured = [u for u in proxy_candidates() if u is None or u in urllib.request.getproxies().values()]
-        return configured or [None]
     scored = []
     for u in proxy_candidates():
         if not _proxy_alive(u):
