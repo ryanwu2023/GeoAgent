@@ -249,12 +249,14 @@ def _opener(proxy: Optional[str]):
 
 
 def _alive(proxy: Optional[str], timeout: int = 5) -> bool:
-    for probe in ("http://www.gstatic.com/generate_204",
-                  "https://www.cloudflare.com/cdn-cgi/trace"):
+    # 各探针要求确切状态码：本 Pod 的网页网关（127.0.0.1:8080）会把任意路径转成 200 的页面，
+    # 若 200 也算 gstatic 通过，网关就会被误判成可用代理（2026-11-23 线上实测）。
+    for probe, expected in (("http://www.gstatic.com/generate_204", 204),
+                            ("https://www.cloudflare.com/cdn-cgi/trace", 200)):
         try:
             r = _opener(proxy).open(
                 urllib.request.Request(probe, headers=BROWSER_HEADERS), timeout=timeout)
-            if r.status in (200, 204):
+            if r.status == expected:
                 return True
         except Exception:  # noqa: BLE001
             continue

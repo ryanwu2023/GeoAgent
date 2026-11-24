@@ -129,11 +129,13 @@ def _proxy_alive(proxy, timeout=5):
       排查方向会被带到「源挂了」，而真相是「这个出口被目标站拉黑」。
       → 真实可用性交给 _proxy_deep_score() 排序判断。
     """
-    for probe in ("http://www.gstatic.com/generate_204",
-                  "https://www.cloudflare.com/cdn-cgi/trace"):
+    # 各探针要求确切状态码：本 Pod 的网页网关（127.0.0.1:8080）会把任意路径转成 200 的页面，
+    # 若 200 也算 gstatic 通过，网关就会被误判成可用代理（2026-11-23 线上实测）。
+    for probe, expected in (("http://www.gstatic.com/generate_204", 204),
+                            ("https://www.cloudflare.com/cdn-cgi/trace", 200)):
         try:
             r = _opener_for(proxy).open(probe, timeout=timeout)
-            if r.status in (200, 204):
+            if r.status == expected:
                 return True
         except Exception:
             continue

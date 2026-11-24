@@ -296,10 +296,12 @@ def _proxy_alive(p, timeout=5.0):
       Yahoo chart → 403（JS 挑战页）、Google News → 超时。
       它是「半死」出口：连得上，但被目标站风控。
     """
-    for probe in ("http://www.gstatic.com/generate_204",
-                  "https://www.cloudflare.com/cdn-cgi/trace"):
+    # 各探针要求确切状态码：本 Pod 的网页网关（127.0.0.1:8080）会把任意路径转成 200 的页面，
+    # 若 200 也算 gstatic 通过，网关就会被误判成可用代理（2026-11-23 线上实测）。
+    for probe, expected in (("http://www.gstatic.com/generate_204", 204),
+                            ("https://www.cloudflare.com/cdn-cgi/trace", 200)):
         try:
-            if _egress_opener(p).open(probe, timeout=timeout).status in (200, 204):
+            if _egress_opener(p).open(probe, timeout=timeout).status == expected:
                 return True
         except Exception:
             continue
