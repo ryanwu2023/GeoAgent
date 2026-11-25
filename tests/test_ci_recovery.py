@@ -28,7 +28,7 @@ def test_backup_uses_postgres_dump_and_does_not_overwrite(tmp_path, monkeypatch)
         backup(tmp_path, "123")
 
 
-def test_backup_keeps_only_latest_two_complete_backups(tmp_path, monkeypatch):
+def test_backup_keeps_only_this_release_backup(tmp_path, monkeypatch):
     def run(args, **kwargs):
         if args[0] == "pg_dump":
             Path(args[-1]).write_bytes(b"PGDMP-test")
@@ -41,7 +41,21 @@ def test_backup_keeps_only_latest_two_complete_backups(tmp_path, monkeypatch):
         os.utime(base / name / "manifest.json", (1000 + index, 1000 + index))
     (base / "8091").mkdir()  # 失败发布留下的空目录
     backup(tmp_path, "8096")
-    assert sorted(p.name for p in base.iterdir()) == ["7689", "8096"]
+    assert sorted(p.name for p in base.iterdir()) == ["8096"]
+
+
+def test_retry_replaces_leftover_of_failed_backup(tmp_path, monkeypatch):
+    def run(args, **kwargs):
+        if args[0] == "pg_dump":
+            Path(args[-1]).write_bytes(b"PGDMP-test")
+        return subprocess.CompletedProcess(args, 0)
+    monkeypatch.setattr("scripts.ci.backup.subprocess.run", run)
+    leftover = tmp_path / "release-backups/9004"
+    leftover.mkdir(parents=True)
+    (leftover / "database.dump.partial").write_bytes(b"half")
+    target = backup(tmp_path, "9004")
+    assert (target / "manifest.json").is_file()
+    assert not (target / "database.dump.partial").exists()
 
 
 def test_failed_backup_keeps_old_backups(tmp_path, monkeypatch):

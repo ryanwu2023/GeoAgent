@@ -42,6 +42,8 @@ def backup(root: Path, release_id: str) -> Path:
     if not dsn.startswith(("postgresql://", "postgres://")):
         raise RuntimeError("GEO_DATABASE_URL must be configured for PostgreSQL backup")
     destination = root / "release-backups" / release_id
+    if destination.is_dir() and not (destination / "manifest.json").exists():
+        shutil.rmtree(destination)  # 同一流水线上次备份失败留下的残留，重跑时清掉；完整备份仍不覆盖
     destination.mkdir(parents=True, exist_ok=False, mode=0o700)
     temporary = destination / "database.dump.partial"
     # Supply individual libpq environment variables, keeping credentials out of argv/logs.
@@ -65,11 +67,11 @@ def backup(root: Path, release_id: str) -> Path:
     return destination
 
 
-KEEP_BACKUPS = 2
+KEEP_BACKUPS = 1
 
 
 def prune(root: Path, current: Path, keep: int = KEEP_BACKUPS) -> list[str]:
-    """数据盘只有 20G，每份备份约 700M 且逐次增大；只保留最近 keep 份完整备份（含本次）。
+    """每份备份约 2.5G 且逐次增大；只保留最近 keep 份完整备份（含本次），默认只留本次发布前那份。
 
     只在本次备份成功后清理，失败时旧备份原样保留；没有 manifest 的残留目录（失败的发布）一并清掉。
     """
