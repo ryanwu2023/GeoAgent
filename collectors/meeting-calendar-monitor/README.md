@@ -49,6 +49,12 @@ python meeting_monitor.py --today 2026-10-30               # 覆盖运行日（�
 
 定时任务请设 `RM_NO_PAUSE=1`（否则结尾会等回车）。
 
+**「已举行」由模型终审**（`held_review.py`）：标题命中已举行关键字、且点名至少两人的报道，
+交给后台「模型设置」里配置的模型（经 `backend/llm.py`）判断是否真的当面见过，并给出实际日期和城市。
+结论按链接和标题缓存在 `state/held_reviews.json`，每篇只问一次；每轮最多问 40 次
+（`GEO_MEETING_REVIEW_MAX_CALLS`），单次超时 20 秒（`GEO_MEETING_REVIEW_TIMEOUT`），失败重问一次，连续两条失败本轮停问。
+模型不可用时回退到关键字规则。只在线上托管运行时开启；本地用 `GEO_MEETING_MODEL_REVIEW=on` 打开，`off` 关闭。
+
 **建议每天北京时间 08:30 之后跑一次。** 早于此，欧美前一日的稿件尚未完全入库。
 
 ---

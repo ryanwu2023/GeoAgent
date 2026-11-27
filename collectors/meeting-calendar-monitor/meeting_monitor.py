@@ -35,6 +35,9 @@ from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import held_review  # noqa: E402  同目录模块；测试里按文件路径加载本脚本时也要能找到
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 OUTPUT = os.environ.get("COLLECTOR_OUTPUT_ROOT", os.path.join(BASE, "output"))
 STATE = os.environ.get("COLLECTOR_STATE_ROOT", os.path.join(BASE, "state"))
@@ -1163,6 +1166,7 @@ def build_signals(items: List[dict], cfg: dict) -> Tuple[List[dict], List[dict]]
 
         dt = parse_date_text(headline, pub) or (parse_date_text(desc, pub) if desc else None)
         status, phrase, rank = detect_status(headline, desc)
+        named = set(persons)
         # 「已举行」必须在标题里点名至少两位真正见面的人；凑不齐两人只算媒体报道
         if status == "held" and phrase != "readout-title" and len(persons) >= 2:
             met = held_participants(headline)
@@ -1173,6 +1177,26 @@ def build_signals(items: List[dict], cfg: dict) -> Tuple[List[dict], List[dict]]
                     loc_src = "title" if loc_zh else ""
             else:
                 status, phrase, rank = "reported", phrase + "（见面双方不明）", STATUS_SPEC["reported"]["rank"]
+
+        # 标题命中已举行关键字的，交给模型终审；模型拿不出结论时保留上面的规则结果
+        review = None
+        if phrase != "readout-title" and len(named) >= 2 and any(
+                phrase_hit(headline, ph) for ph in STATUS_SPEC["held"]["phrases"]):
+            review = held_review.review(headline, desc, it.get("link", ""), pub,
+                                        held_review.candidate_names(sorted(named), PERSONS))
+        if review is not None:
+            if review["held"]:
+                status, rank = "held", STATUS_SPEC["held"]["rank"]
+                phrase = phrase.split("（")[0] + "（模型确认）"
+                persons = set(review["participants"])
+                model_loc = extract_location(review["location"], LOCS) if review["location"] else ("", "")
+                if model_loc[0]:
+                    loc_zh, loc_raw, loc_src = model_loc[0], model_loc[1], "model"
+                if review["date"]:
+                    day_ = d(review["date"])
+                    dt = {"start": day_, "end": day_, "precision": "day", "raw": "模型据原文"}
+            elif status == "held":
+                status, phrase, rank = "reported", phrase + "（模型：未当面举行）", STATUS_SPEC["reported"]["rank"]
 
         # ★ 只是「放风/传闻」时，不要给出确定地点 —— 地点若只来自正文，
         #   多半是背景陈述（"他在莫斯科表示愿意…"），不是会晤地点。
@@ -1239,8 +1263,16 @@ def build_signals(items: List[dict], cfg: dict) -> Tuple[List[dict], List[dict]]
             "quote": ctx,
             "desc_excerpt": desc[:160],
             "track": track_of(persons, actors, loc_zh),
+            **({"review": review_note(review)} if review is not None else {}),
         })
     return signals, rejects
+
+
+def review_note(review: dict) -> dict:
+    """落在证据上的模型结论摘要：复核时据此跳过规则，页面上也能看到依据。"""
+    return {"by": review.get("by", "model"), "held": review["held"],
+            "participants": review["participants"], "date": review["date"],
+            "evidence": review["evidence"]}
 
 
 def _evidence_quote(text: str, phrase: str) -> str:
@@ -1585,6 +1617,7 @@ def upsert(sig: dict, events: List[dict], next_id: List[int], transitions: List[
         "published": sig["published"], "quote": sig["quote"],
         "date_start": sig["date_start"], "precision": sig["precision"],
         "anchor_snap": sig.get("anchor_snap", ""),
+        **({"review": sig["review"]} if sig.get("review") else {}),
     }
     is_new = ev is None
     if is_new:
@@ -1684,6 +1717,25 @@ def recheck_claims(events: List[dict], transitions: List[dict]) -> int:
                 if now != loc and any(_alias_hit(quote, al) for al in aliases):
                     c["location"], touched = now, True
             if c.get("status") != "held" or _READOUT.match(quote) or len(c.get("persons") or []) < 2:
+                continue
+            if c.get("review"):
+                continue  # 模型已终审过这条证据
+            named = extract_persons(actor_text(quote), PERSONS) | set(c.get("persons") or [])
+            review = held_review.review(quote, "", c.get("url") or "", d(c.get("published") or "") or TODAY,
+                                        held_review.candidate_names(sorted(named), PERSONS))
+            if review is not None:
+                c["review"], touched = review_note(review), True
+                met = set(review["participants"])
+                if not review["held"] or len(met & pair) < min(2, len(pair)) or (len(pair) == 2 and not pair <= met):
+                    c["status"], c["rank"] = "reported", STATUS_SPEC["reported"]["rank"]
+                    continue
+                c["persons"] = sorted(met)
+                if review["date"]:
+                    c["date_start"], c["precision"] = review["date"], "day"
+                    # 发稿日近似出来的日期换成原文里的会晤日期（「10-27 在莫斯科」被记成发稿那天 11-16）
+                    if ev.get("date_raw") == "发稿日近似":
+                        ev["date_start"] = ev["date_end"] = review["date"]
+                        ev["precision"], ev["date_raw"] = "day", "模型据原文"
                 continue
             new = None
             if any(phrase_hit(quote, ph) for ph in _NOUN_HELD) and not any(
@@ -2103,6 +2155,10 @@ def render_md(events: List[dict], stats: dict, ctx: dict) -> str:
     A("")
     A(f"- 本轮抓取条目 {stats['items']}，入信号 {stats['signals']}，拒收 {stats['rejected']}。"
       f"拒收原因：{stats['reject_breakdown'] or '—'}。")
+    mr = stats.get("model_review")
+    if mr:
+        A(f"- 「已举行」由模型终审：本轮新问 {mr['asked']} 条、读缓存 {mr['cached']} 条，"
+          f"其中判为未当面举行 {mr['rejected']} 条；模型不可用而回退关键字规则 {mr['fallback']} 条。")
     A(f"- **当日快照与本轮口径不同**：`signals.jsonl` / `rejects.jsonl` 是**当天历次运行合并去重**后的结果"
       f"（当前唯一 {stats.get('signals_daily_unique', 0)} / {stats.get('rejects_daily_unique', 0)} 条），"
       "而上面这行的数字只算**本轮一次**。数文件行数会得到合并值，两者不要混读。")
@@ -2180,6 +2236,8 @@ def run() -> int:
     day_dir = os.path.join(OUTPUT, day)
     os.makedirs(day_dir, exist_ok=True)
 
+    held_review.load(STATE)
+    held_review.reset_run()
     st = read_json(os.path.join(STATE, "events.json"),
                    {"next_id": 1, "events": [], "archived": [], "updated": ""})
     events: List[dict] = st.get("events", [])
@@ -2222,6 +2280,12 @@ def run() -> int:
     for ev in events:
         attach_sources(ev)
     archived_now = archive_old(events, TODAY, cfg["retention_days"])
+    held_review.save()
+    review_stats = held_review.stats()
+    print(f"      模型复核已举行：新问 {review_stats['asked']} 条，读缓存 {review_stats['cached']} 条，"
+          f"判为未举行 {review_stats['rejected']} 条，回退规则 {review_stats['fallback']} 条")
+    for problem in held_review.errors():
+        print(f"      模型调用失败：{problem}")
 
     # 生命周期/归档也要回写
     active = [e for e in events if not e.get("archived")]
@@ -2251,6 +2315,7 @@ def run() -> int:
         # 本轮的 signals/rejected 是单次口径，两者不要混读
         "signals_daily_unique": n_sig_daily,
         "rejects_daily_unique": n_rej_daily,
+        "model_review": review_stats,
     }
     ctx = {
         "title": cfg["report"]["title"], "horizon": cfg["horizon_days"],
@@ -2298,6 +2363,8 @@ class _Checker:
 
 
 def selftest() -> int:
+    os.environ["GEO_MEETING_MODEL_REVIEW"] = "off"  # 自检离线，不问模型
+    held_review.reset_run()
     cfg = load_cfg()
     bind_globals(cfg)
     c = _Checker()

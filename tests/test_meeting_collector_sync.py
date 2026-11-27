@@ -253,3 +253,113 @@ def test_second_verb_object_dreams_and_outlet_city_are_not_held_evidence():
     assert monitor.detect_status("Zelensky dreams of meeting with Putin and Trump at the G20, if he is called there")[0] \
         != "held"
     assert monitor.extract_location("Xi-Trump-Putin summit: nuclear arms on agenda Brussels Signal", monitor.LOCS)[0] == ""
+
+
+def _model(monitor, tmp_path, replies):
+    """把模型换成按顺序吐答案的假函数；列表里的 Exception 表示这次调用失败。"""
+    calls = []
+
+    def caller(messages):
+        calls.append(messages[-1]["content"])
+        reply = replies[len(calls) - 1]
+        if isinstance(reply, Exception):
+            raise reply
+        return json.dumps(reply)
+
+    monitor.held_review.load(str(tmp_path))
+    monitor.held_review.reset_run(caller)
+    return calls
+
+
+def _item(monitor, title, link="https://x.example/m"):
+    return {"title": title, "link": link, "source_id": "q", "source_name": "q", "tier": 3,
+            "published": monitor.TODAY, "desc": ""}
+
+
+def test_model_overrules_keyword_held_and_answers_are_cached(tmp_path):
+    monitor = load_monitor()
+    calls = _model(monitor, tmp_path, [{"held": False, "participants": [], "date": "", "location": "",
+                                        "evidence": "only envoys met"}])
+    item = _item(monitor, "Putin met with Modi in Moscow")
+    signals, rejects = monitor.build_signals([item], monitor.load_cfg())
+    # 模型说没见成，降为媒体报道；没有日期的媒体报道不进日历
+    assert not signals and rejects[0]["reason"] == "no_date_weak"
+    assert monitor.held_review.stats()["rejected"] == 1
+    monitor.held_review.save()
+
+    monitor.held_review.load(str(tmp_path))
+    monitor.held_review.reset_run(lambda messages: (_ for _ in ()).throw(AssertionError("should hit cache")))
+    again, _ = monitor.build_signals([item], monitor.load_cfg())
+    assert not again and len(calls) == 1
+    assert monitor.held_review.stats()["cached"] == 1
+
+
+def test_model_confirms_meeting_with_its_real_date_and_place(tmp_path):
+    monitor = load_monitor()
+    day = (monitor.TODAY - timedelta(days=20)).isoformat()
+    _model(monitor, tmp_path, [{"held": True, "participants": ["putin", "pezeshkian"], "date": day,
+                                "location": "Moscow", "evidence": "talks in Moscow"}])
+    signals, _ = monitor.build_signals(
+        [_item(monitor, "During Meeting with Pezeshkian, Putin Expects 'Positive Developments'")], monitor.load_cfg())
+    sig = signals[0]
+    assert sig["status"] == "held" and sig["persons"] == ["pezeshkian", "putin"]
+    assert sig["date_start"] == day and not sig["date_approx"]
+    assert sig["location"] == "莫斯科"
+
+
+def test_model_failure_falls_back_to_rules_and_stops_asking(tmp_path):
+    monitor = load_monitor()
+    calls = _model(monitor, tmp_path, [TimeoutError(), ValueError("empty"), TimeoutError(), ValueError("bad json")])
+    items = [_item(monitor, "Putin met with Modi in Moscow", "https://x.example/1"),
+             _item(monitor, "Putin met with Pezeshkian in Moscow", "https://x.example/2"),
+             _item(monitor, "Erdogan met with Pezeshkian in Ankara", "https://x.example/3")]
+    signals, _ = monitor.build_signals(items, monitor.load_cfg())
+    assert [s["status"] for s in signals] == ["held", "held", "held"]
+    assert len(calls) == 4  # 每条重问一次，连续两条都失败后本轮不再问
+    assert monitor.held_review.stats()["fallback"] == 3
+    assert monitor.held_review.errors()[0].startswith("ValueError")
+
+
+def test_one_empty_reply_is_retried(tmp_path):
+    monitor = load_monitor()
+    calls = _model(monitor, tmp_path, [ValueError("empty"), {"held": False, "participants": [], "date": "",
+                                                              "location": "", "evidence": "planned"}])
+    monitor.build_signals([_item(monitor, "Putin met with Modi in Moscow")], monitor.load_cfg())
+    assert len(calls) == 2 and monitor.held_review.stats()["rejected"] == 1
+
+
+def test_model_review_is_off_outside_managed_runs(monkeypatch):
+    monitor = load_monitor()
+    monitor.held_review.reset_run()
+    monkeypatch.delenv("GEO_COLLECTOR_MANAGED", raising=False)
+    monkeypatch.delenv("GEO_MEETING_MODEL_REVIEW", raising=False)
+    assert not monitor.held_review.enabled()
+    monkeypatch.setenv("GEO_COLLECTOR_MANAGED", "true")
+    assert monitor.held_review.enabled()
+    monkeypatch.setenv("GEO_MEETING_MODEL_REVIEW", "off")
+    assert not monitor.held_review.enabled()
+
+
+def test_recheck_asks_model_about_stored_held_claims_and_fixes_approx_date(tmp_path):
+    monitor = load_monitor()
+    pub = (monitor.TODAY - timedelta(days=3)).isoformat()
+    real = (monitor.TODAY - timedelta(days=23)).isoformat()
+    _model(monitor, tmp_path, [
+        {"held": True, "participants": ["putin", "pezeshkian"], "date": real, "location": "", "evidence": "met"},
+        {"held": False, "participants": [], "date": "", "location": "", "evidence": "planned"}])
+    claim = lambda quote, url: {
+        "status": "held", "rank": 95, "tier": 3, "source": "q", "source_id": "q", "outlet": "", "url": url,
+        "persons": ["pezeshkian", "putin"], "location": "", "published": pub, "quote": quote,
+        "date_start": pub, "precision": "day", "anchor_snap": ""}
+    ev = {"id": "EV-0071", "family": "bilateral", "title": "", "title_raw": "x", "date_start": pub,
+          "date_end": pub, "precision": "day", "date_raw": "发稿日近似", "location": "莫斯科", "location_raw": "",
+          "persons": ["pezeshkian", "putin"], "actors": [], "track": "mideast", "status": "held",
+          "conflict": False, "claims": [claim("Putin held talks with Pezeshkian", "u1"),
+                                        claim("Pezeshkian meets Putin", "u2")],
+          "sources": [], "first_seen": pub, "last_seen": pub, "updates": [], "baseline": False,
+          "baseline_ids": [], "days_seen": 1}
+    monitor.recheck_claims([ev], [])
+    assert ev["date_start"] == real and ev["date_raw"] == "模型据原文"
+    assert [c["status"] for c in ev["claims"]] == ["held", "reported"]
+    assert all(c["review"]["by"].startswith("model") for c in ev["claims"])
+    assert ev["status"] == "held"
