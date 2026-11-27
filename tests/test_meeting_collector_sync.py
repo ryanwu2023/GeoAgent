@@ -264,7 +264,7 @@ def _model(monitor, tmp_path, replies):
         reply = replies[len(calls) - 1]
         if isinstance(reply, Exception):
             raise reply
-        return json.dumps(reply)
+        return reply if isinstance(reply, str) else json.dumps(reply)
 
     monitor.held_review.load(str(tmp_path))
     monitor.held_review.reset_run(caller)
@@ -363,3 +363,11 @@ def test_recheck_asks_model_about_stored_held_claims_and_fixes_approx_date(tmp_p
     assert [c["status"] for c in ev["claims"]] == ["held", "reported"]
     assert all(c["review"]["by"].startswith("model") for c in ev["claims"])
     assert ev["status"] == "held"
+
+
+def test_template_control_tokens_in_reply_are_ignored(tmp_path):
+    monitor = load_monitor()
+    calls = _model(monitor, tmp_path, ['{"held":<|endoftext|>false, "participants": [], "date": "", '
+                                       '"location": "", "evidence": "planned"}<|im_end|>'])
+    monitor.build_signals([_item(monitor, "Putin met with Modi in Moscow")], monitor.load_cfg())
+    assert len(calls) == 1 and monitor.held_review.stats()["rejected"] == 1

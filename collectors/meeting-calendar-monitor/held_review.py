@@ -24,6 +24,7 @@ TIMEOUT = float(os.getenv("GEO_MEETING_REVIEW_TIMEOUT", "20"))
 # 单条失败后重问的次数；重问后仍连续失败到 MAX_FAILURES 条就本轮停用，免得每条都等满超时
 RETRIES = 1
 MAX_FAILURES = 2
+_CONTROL_TOKEN = re.compile(r"<\|[A-Za-z0-9_▁\-]{1,40}\|>")
 
 SYSTEM = (
     "你是外交新闻核查员。只根据给出的英文新闻标题和摘要判断，不使用外部知识。"
@@ -108,7 +109,9 @@ def _backend_call(messages: List[dict]) -> str:
 
 
 def _parse(text: str, candidates: Dict[str, str], published: date) -> Optional[dict]:
-    match = re.search(r"\{.*\}", text or "", re.S)
+    # 自建网关偶尔把模板控制符漏进正文：{"held":<|endoftext|>true}
+    text = _CONTROL_TOKEN.sub("", text or "")
+    match = re.search(r"\{.*\}", text, re.S)
     if not match:
         return None
     try:
