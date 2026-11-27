@@ -103,7 +103,8 @@ def _backend_call(messages: List[dict]) -> str:
     if (root / "backend" / "llm.py").is_file() and str(root) not in sys.path:
         sys.path.insert(0, str(root))
     from backend import llm  # noqa: PLC0415  只在线上运行时才需要
-    text, _model = asyncio.run(llm.complete(messages, model_role="fast", temperature=0,
+    # 必须关掉思考：开着时 400 个 token 全花在思考上，正文回空（「模型未返回文本内容」）
+    text, _model = asyncio.run(llm.complete(messages, model_role="fast", temperature=0, reasoning=False,
                                             max_output_tokens=400, timeout_seconds=TIMEOUT))
     return text
 
